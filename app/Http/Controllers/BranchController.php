@@ -19,8 +19,7 @@ class BranchController extends Controller
                   ->orWhere('branch_code', 'like', "%{$search}%");
         }
 
-        return Inertia::render('branches/Index', [
-            'branches' => $query->paginate(5)->through(function ($branch) {
+        $branches = $query->paginate(5)->withQueryString()->through(function ($branch) {
                 return [
                     'id' => $branch->id,
                     'branch_code' => $branch->branch_code,
@@ -29,7 +28,11 @@ class BranchController extends Controller
                     'created_at' => $branch->created_at->format('d-m-Y'),
                     'departments' => $branch->departments->pluck('name')
                 ];
-            }),
+        });
+
+        return Inertia::render('branches/Index', [
+            'branches' => $branches,
+            'request' => request()->only('search'),
         ]);
     }
 

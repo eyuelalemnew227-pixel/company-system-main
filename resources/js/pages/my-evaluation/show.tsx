@@ -11,20 +11,23 @@ type Period = { id: number; evaluation_period_name: string };
 type Evaluatee = { user_id?: number | null; name: string; email?: string | null };
 type Question = { id: number; question_text: string };
 
-export default function MyEvaluationShow({ evaluation, evaluationPeriods, evaluatees, evaluableType, alreadyEvaluatedIds, questions }: {
+export default function MyEvaluationShow({ evaluation, evaluationPeriods, evaluatees, evaluableType, alreadyEvaluatedByPeriod, questions }: {
   evaluation: { id: number; name?: string };
   evaluationPeriods: Period[];
   evaluatees: { id: number; label: string }[];
   evaluableType: 'employee' | 'department' | 'branch' | 'other';
-  alreadyEvaluatedIds: number[];
+  alreadyEvaluatedByPeriod: Record<string, number[]>;
   questions: Question[];
 }) {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
 
   const pendingEvaluatees = useMemo(() => {
-    return (evaluatees || []).filter((e) => !alreadyEvaluatedIds.includes(e.id));
-  }, [evaluatees, alreadyEvaluatedIds]);
+    const periodKey = selectedPeriodId || '';
+    const alreadyForPeriod = new Set((alreadyEvaluatedByPeriod?.[periodKey] || []));
+    const list = Array.isArray(evaluatees) ? evaluatees : [];
+    return list.filter((e) => !alreadyForPeriod.has(e.id));
+  }, [evaluatees, alreadyEvaluatedByPeriod, selectedPeriodId]);
 
   const { data, setData, post, processing, errors, reset } = useForm({
     evaluation_period_id: '',

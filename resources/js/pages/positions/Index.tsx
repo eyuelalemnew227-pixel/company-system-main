@@ -7,7 +7,7 @@ import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Position } from '@/types/positions';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -18,9 +18,9 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function Positions({ positions }: { positions: { data: Position[], total: number, from: number, to: number, links: any[] } }) {
+export default function Positions({ positions, request }: { positions: { data: Position[], total: number, from: number, to: number, links: any[] }, request?: { search?: string } }) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
-    const [search, setSearch] = useState<string>('');
+    const [search, setSearch] = useState<string>(request?.search ?? '');
     const { can } = usePermission();
 
     useEffect(() => {
@@ -29,7 +29,10 @@ export default function Positions({ positions }: { positions: { data: Position[]
         }
     }, [flash.message]);
 
-    // Frontend-only search: filter current page rows in-memory
+    function submitSearch(e: React.FormEvent) {
+        e.preventDefault();
+        router.get('/positions', { search }, { preserveState: true, replace: true });
+    }
 
     function deletePosition(id: number) {
         if (confirm('Are you sure you want to delete this position?')) {
@@ -44,13 +47,14 @@ export default function Positions({ positions }: { positions: { data: Position[]
                 <Card>
                     <CardHeader className="flex items-center justify-between">
                         <CardTitle>Positions Management</CardTitle>
-                        <div className="ml-4">
+                        <form className="ml-4 flex gap-2" onSubmit={submitSearch}>
                             <Input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search positions..."
                             />
-                        </div>
+                            <Button type="submit" variant="outline">Search</Button>
+                        </form>
                         <CardAction>
                             {can('create positions') && (
                                 <Link href="/positions/create">
@@ -74,7 +78,6 @@ export default function Positions({ positions }: { positions: { data: Position[]
                             </TableHeader>
                             <TableBody>
                                 {positions.data
-                                    .filter((p) => !search || p.title.toLowerCase().includes(search.toLowerCase()) || (p.level || '').toLowerCase().includes(search.toLowerCase()))
                                     .map((position, index) => (
                                     <TableRow key={position.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
                                         <TableCell>{index + 1}</TableCell>

@@ -7,7 +7,7 @@ import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { type EvaluatorGroupPagination } from '@/types/evaluator-group.d';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -20,7 +20,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function EvaluatorGroups({ evaluatorGroups }: { evaluatorGroups: EvaluatorGroupPagination }) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
-    const [search, setSearch] = useState<string>('');
+    const initialSearch = (usePage().props as any)?.request?.search ?? '';
+    const [search, setSearch] = useState<string>(initialSearch);
     const { can } = usePermission();
 
     useEffect(() => {
@@ -29,7 +30,9 @@ export default function EvaluatorGroups({ evaluatorGroups }: { evaluatorGroups: 
         }
     }, [flash.message]);
 
-    // Frontend-only search: filter current page rows in-memory
+    function handleSearch() {
+        router.get('/evaluator-groups', { search: search ?? '' }, { preserveState: true, replace: true });
+    }
 
     function deleteEvaluatorGroup(id: number) {
         if (confirm('Are you sure you want to delete this evaluator group?')) {
@@ -44,12 +47,14 @@ export default function EvaluatorGroups({ evaluatorGroups }: { evaluatorGroups: 
                 <Card>
                     <CardHeader className="flex items-center justify-between">
                         <CardTitle>Evaluator Groups Management</CardTitle>
-                        <div className="ml-4">
+                        <div className="ml-4 flex gap-2">
                             <Input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search evaluator groups..."
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
                             />
+                            <Button variant={'secondary'} onClick={handleSearch}>Search</Button>
                         </div>
                         <CardAction>
                             {can('create evaluator groups') && (
@@ -74,7 +79,6 @@ export default function EvaluatorGroups({ evaluatorGroups }: { evaluatorGroups: 
                             </TableHeader>
                             <TableBody>
                                 {evaluatorGroups.data
-                                    .filter((g) => !search || g.name.toLowerCase().includes(search.toLowerCase()) || (g.question_group?.name || '').toLowerCase().includes(search.toLowerCase()))
                                     .map((group, index) => (
                                     <TableRow key={group.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
                                         <TableCell>{index + 1}</TableCell>

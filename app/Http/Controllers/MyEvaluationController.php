@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Evaluation;
+use App\Models\Employee;
 use App\Models\EvaluationPeriod;
 use App\Models\EvaluationResponse;
 use App\Models\Question;
@@ -58,9 +59,16 @@ class MyEvaluationController extends Controller
                     $evaluatees = $evaluation->evaluatesGroup->employees()
                         ->with(['user:id,employee_id,name'])
                         ->get(['employees.id', 'first_name', 'last_name', 'email']);
+                    // Exclude self
+                    $evaluatees = $evaluatees->filter(fn ($emp) => (int) $emp->id !== (int) $user->employee_id);
                     break;
                 case 'department':
                     $evaluatees = $evaluation->evaluatesGroup->departments()->get(['departments.id', 'name']);
+                    // Exclude own department if available
+                    $evaluatorDeptId = optional(Employee::find($user->employee_id))->department_id;
+                    if ($evaluatorDeptId) {
+                        $evaluatees = $evaluatees->filter(fn ($dept) => (int) $dept->id !== (int) $evaluatorDeptId);
+                    }
                     break;
                 case 'branch':
                     $evaluatees = $evaluation->evaluatesGroup->branches()->get(['branches.id', 'name']);
@@ -71,11 +79,19 @@ class MyEvaluationController extends Controller
             }
         }
 
-        // Already evaluated evaluate ids by this evaluator for this evaluation
-        $alreadyEvaluatedIds = EvaluationResponse::where('evaluation_id', $evaluation->id)
+        // Already evaluated evaluate ids grouped by evaluation_period_id for this evaluator and evaluation
+        $responsesByPeriod = EvaluationResponse::where('evaluation_id', $evaluation->id)
             ->where('evaluator_id', $user->id)
             ->where('evaluable_type', $evaluableType ?? '')
-            ->pluck('evaluate_id');
+            ->get(['evaluate_id', 'evaluation_period_id']);
+        $alreadyEvaluatedByPeriod = [];
+        foreach ($responsesByPeriod as $resp) {
+            $pid = (string) ($resp->evaluation_period_id ?? '');
+            if (!isset($alreadyEvaluatedByPeriod[$pid])) {
+                $alreadyEvaluatedByPeriod[$pid] = [];
+            }
+            $alreadyEvaluatedByPeriod[$pid][] = $resp->evaluate_id;
+        }
 
         // Questions come from the evaluates group's question group
         $questions = $evaluation->evaluatesGroup && $evaluation->evaluatesGroup->questionGroup
@@ -94,8 +110,8 @@ class MyEvaluationController extends Controller
                     ];
                 }
                 return [ 'id' => $ent->id, 'label' => $ent->name ];
-            }),
-            'alreadyEvaluatedIds' => $alreadyEvaluatedIds,
+            })->values(),
+            'alreadyEvaluatedByPeriod' => $alreadyEvaluatedByPeriod,
             'questions' => $questions->map(fn ($q) => [ 'id' => $q->id, 'question_text' => $q->question_text ]),
         ]);
     }
@@ -121,11 +137,23 @@ class MyEvaluationController extends Controller
             'question_responses.*.score' => 'required|integer|min:1|max:5',
         ]);
 
+        // Prevent self-evaluation and own-department evaluation
+        if ($validated['evaluable_type'] === 'employee' && (int) $validated['evaluate_id'] === (int) $user->employee_id) {
+            return back()->withErrors(['evaluate_id' => 'You cannot evaluate yourself.']);
+        }
+        if ($validated['evaluable_type'] === 'department') {
+            $evaluatorDeptId = optional(Employee::find($user->employee_id))->department_id;
+            if ($evaluatorDeptId && (int) $validated['evaluate_id'] === (int) $evaluatorDeptId) {
+                return back()->withErrors(['evaluate_id' => 'You cannot evaluate your own department.']);
+            }
+        }
+
         // Ensure not already evaluated
         $existing = EvaluationResponse::where('evaluation_id', $evaluation->id)
             ->where('evaluator_id', $user->id)
             ->where('evaluable_type', $validated['evaluable_type'])
             ->where('evaluate_id', $validated['evaluate_id'])
+            ->where('evaluation_period_id', $validated['evaluation_period_id'])
             ->first();
         if ($existing) {
             return back()->withErrors(['evaluate_id' => 'You have already evaluated this item.']);
@@ -263,6 +291,21 @@ class MyEvaluationController extends Controller
         }
 
         return back()->with('message', 'Evaluation updated successfully!');
+    }
+
+    public function destroyResponse(EvaluationResponse $evaluationResponse)
+    {
+        $user = Auth::user();
+        if ($evaluationResponse->evaluator_id !== $user->id) {
+            abort(403);
+        }
+        if (optional($evaluationResponse->evaluationPeriod)->status !== 'active') {
+            abort(403, 'Evaluation period is not active.');
+        }
+
+        $evaluationResponse->delete();
+
+        return back()->with('message', 'Evaluation deleted successfully!');
     }
 }
 

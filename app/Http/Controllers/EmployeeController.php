@@ -29,7 +29,7 @@ class EmployeeController extends Controller
         }
 
         return Inertia::render('employees/index', [
-            'employees' => $query->paginate(15)->through(function ($employee) {
+            'employees' => $query->paginate(15)->withQueryString()->through(function ($employee) {
                 return [
                     'id' => $employee->id,
                     'employee_code' => $employee->employee_code,
@@ -43,6 +43,7 @@ class EmployeeController extends Controller
                     'image_path' => $employee->image ? $employee->image->path : null,
                 ];
             }),
+            'request' => request()->only('search'),
         ]);
     }
 

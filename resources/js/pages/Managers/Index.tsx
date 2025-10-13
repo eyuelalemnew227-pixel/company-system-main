@@ -7,7 +7,7 @@ import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { ManagersPaginated, Manager } from '@/types/managers'; // Adjust import path
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -20,7 +20,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function Managers({ managers }: { managers: ManagersPaginated }) {
   const { flash } = usePage<{ flash: { message?: string } }>().props;
-  const [search, setSearch] = useState<string>('');
+  const initialSearch = ((usePage().props as any)?.request?.search) ?? '';
+  const [search, setSearch] = useState<string>(initialSearch);
   const { can } = usePermission();
 
   useEffect(() => {
@@ -29,7 +30,9 @@ export default function Managers({ managers }: { managers: ManagersPaginated }) 
     }
   }, [flash.message]);
 
-  // Frontend-only search: filter current page rows in-memory
+  function handleSearch() {
+    router.get('/managers', { search: search ?? '' }, { preserveState: true, replace: true });
+  }
 
   function deleteManager(id: number) {
     if (confirm('Are you sure you want to delete this manager?')) {
@@ -44,12 +47,16 @@ export default function Managers({ managers }: { managers: ManagersPaginated }) 
         <Card>
           <CardHeader className="flex items-center justify-between">
             <CardTitle>Managers Management</CardTitle>
-            <div className="ml-4">
+            <div className="ml-4 flex gap-2">
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search managers..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSearch();
+                }}
               />
+              <Button variant="secondary" onClick={handleSearch}>Search</Button>
             </div>
             <CardAction>
               {can('create managers') && (
@@ -71,7 +78,6 @@ export default function Managers({ managers }: { managers: ManagersPaginated }) 
               </TableHeader>
               <TableBody>
                 {managers.data
-                  .filter((m: Manager) => !search || `${m.employee.first_name} ${m.employee.last_name}`.toLowerCase().includes(search.toLowerCase()))
                   .map((manager: Manager, index: number) => (
                   <TableRow key={manager.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
                     <TableCell>{index + managers.from}</TableCell>

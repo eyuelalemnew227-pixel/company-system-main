@@ -10,7 +10,7 @@ import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Permission, SinglePermission } from '@/types/role_permission';
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -22,12 +22,12 @@ const breadcrumbs: BreadcrumbItem[] = [
 	},
 ];
 
-export default function Permissions({ permissions }: { permissions: Permission }) {
+export default function Permissions({ permissions, request }: { permissions: Permission, request?: { search?: string } }) {
 	const [openAddPermissionDialog, setOpenAddPermissionDialog] = useState(false);
 	const [openEditPermissionDialog, setOpenEditPermissionDialog] = useState(false);
 	const { flash } = usePage<{ flash: { message?: string } }>().props;
 
-    const [search, setSearch] = useState<string>('');
+    const [search, setSearch] = useState<string>(request?.search ?? '');
 
 	const { can } = usePermission();
 
@@ -39,7 +39,10 @@ export default function Permissions({ permissions }: { permissions: Permission }
 		}
 	}, [flash.message]);
 
-    // Frontend-only search: filter the current page in-memory
+    function submitSearch(e: React.FormEvent) {
+        e.preventDefault();
+        router.get('/permissions', { search }, { preserveState: true, replace: true });
+    }
 
 	const {
 		data,
@@ -86,9 +89,10 @@ export default function Permissions({ permissions }: { permissions: Permission }
 				<Card>
 					<CardHeader className="flex items-center justify-between">
 						<CardTitle>Permissions Management</CardTitle>
-						<div className="ml-4">
-							<Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search permissions..." />
-						</div>
+                        <form className="ml-4 flex gap-2" onSubmit={submitSearch}>
+                            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search permissions..." />
+                            <Button type="submit" variant="outline">Search</Button>
+                        </form>
 						<CardAction>
 							{can('create permissions') && (
 								<Button
@@ -115,7 +119,6 @@ export default function Permissions({ permissions }: { permissions: Permission }
 							</TableHeader>
                         <TableBody>
                             {permissions.data
-                                .filter((p) => !search || p.name.toLowerCase().includes(search.toLowerCase()))
                                 .map((permission, index) => (
 									<TableRow className="odd:bg-slate-100 dark:odd:bg-slate-800">
 										<TableCell>{index + 1}</TableCell>

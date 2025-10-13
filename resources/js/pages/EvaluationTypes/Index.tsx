@@ -20,7 +20,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function EvaluationTypes({ evaluationTypes }: { evaluationTypes: EvaluationType }) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
-    const initialSearch = (usePage().props as any)?.request?.query?.search ?? '';
+    const initialSearch = (usePage().props as any)?.request?.search ?? '';
     const [search, setSearch] = useState<string>(initialSearch);
     const { can } = usePermission();
 
@@ -30,12 +30,9 @@ export default function EvaluationTypes({ evaluationTypes }: { evaluationTypes: 
         }
     }, [flash.message]);
 
-    useEffect(() => {
-        const id = setTimeout(() => {
-            router.get(window.location.pathname, { search: search ?? '' }, { preserveState: true, replace: true });
-        }, 500);
-        return () => clearTimeout(id);
-    }, [search]);
+    function handleSearch() {
+        router.get('/evaluation-types', { search: search ?? '' }, { preserveState: true, replace: true });
+    }
 
     function deleteEvaluationType(id: number) {
         if (confirm('Are you sure you want to delete this evaluation type?')) {
@@ -50,12 +47,14 @@ export default function EvaluationTypes({ evaluationTypes }: { evaluationTypes: 
                 <Card>
                     <CardHeader className="flex items-center justify-between">
                         <CardTitle>Evaluation Types Management</CardTitle>
-                        <div className="ml-4">
+                        <div className="ml-4 flex gap-2">
                             <Input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search evaluation types..."
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
                             />
+                            <Button variant="secondary" onClick={handleSearch}>Search</Button>
                         </div>
                         <CardAction>
                             {can('create evaluation types') && (

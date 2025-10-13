@@ -30,12 +30,9 @@ export default function OtherEvaluables({ otherEvaluables }: { otherEvaluables: 
         }
     }, [flash.message]);
 
-    useEffect(() => {
-        const id = setTimeout(() => {
-            router.get(window.location.pathname, { search: search ?? '' }, { preserveState: true, replace: true });
-        }, 500);
-        return () => clearTimeout(id);
-    }, [search]);
+    function handleSearch() {
+        router.get('/other-evaluables', { search: search ?? '' }, { preserveState: true, replace: true });
+    }
 
     function deleteOtherEvaluable(id: number) {
         if (confirm('Are you sure you want to delete this other evaluable?')) {
@@ -50,12 +47,14 @@ export default function OtherEvaluables({ otherEvaluables }: { otherEvaluables: 
                 <Card>
                     <CardHeader className="flex items-center justify-between">
                         <CardTitle>Other Evaluables Management</CardTitle>
-                        <div className="ml-4">
+                        <div className="ml-4 flex gap-2">
                             <Input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search other evaluables..."
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
                             />
+                            <Button variant={'secondary'} onClick={handleSearch}>Search</Button>
                         </div>
                         <CardAction>
                             {can('create other evaluables') && (

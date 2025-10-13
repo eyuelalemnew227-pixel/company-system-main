@@ -17,8 +17,7 @@ class PositionController extends Controller
                   ->orWhere('description', 'like', "%{$search}%");
         }
 
-        return Inertia::render('positions/Index', [
-            'positions' => $query->paginate(5)->through(function ($position) {
+        $positions = $query->paginate(5)->withQueryString()->through(function ($position) {
                 return [
                     'id' => $position->id,
                     'title' => $position->title,
@@ -26,7 +25,11 @@ class PositionController extends Controller
                     'description' => $position->description,
                     'created_at' => $position->created_at->format('d-m-Y'),
                 ];
-            }),
+        });
+
+        return Inertia::render('positions/Index', [
+            'positions' => $positions,
+            'request' => request()->only('search'),
         ]);
     }
 

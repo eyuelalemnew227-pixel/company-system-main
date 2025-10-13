@@ -16,7 +16,7 @@ class PermissionController extends Controller {
 			$query->where('name', 'like', "%{$search}%");
 		}
 
-        $permissions = $query->latest()->paginate(5);
+        $permissions = $query->latest()->paginate(5)->withQueryString();
 		$permissions->getCollection()->transform(function ($permission) {
 			return [
 				'id' => $permission->id,
@@ -25,7 +25,8 @@ class PermissionController extends Controller {
 			];
 		});
         return Inertia::render('permissions/index', [
-            'permissions' => $permissions
+            'permissions' => $permissions,
+            'request' => request()->only('search')
         ]);
 	}
 

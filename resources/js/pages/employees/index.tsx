@@ -7,7 +7,7 @@ import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Employee } from '@/types/employees';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -18,9 +18,9 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function Employees({ employees }: { employees: { data: Employee[], total: number, from: number, to: number, links: any[] } }) {
+export default function Employees({ employees, request }: { employees: { data: Employee[], total: number, from: number, to: number, links: any[] }, request?: { search?: string } }) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
-    const [search, setSearch] = useState<string>('');
+    const [search, setSearch] = useState<string>(request?.search ?? '');
     const { can } = usePermission();
 
     useEffect(() => {
@@ -29,7 +29,10 @@ export default function Employees({ employees }: { employees: { data: Employee[]
         }
     }, [flash.message]);
 
-    // Frontend-only search: filter current page rows in-memory
+    function submitSearch(e: React.FormEvent) {
+        e.preventDefault();
+        router.get('/employees', { search }, { preserveState: true, replace: true });
+    }
 
     function deleteEmployee(id: number) {
         if (confirm('Are you sure you want to delete this employee?')) {
@@ -44,13 +47,14 @@ export default function Employees({ employees }: { employees: { data: Employee[]
                 <Card>
                     <CardHeader className="flex items-center justify-between">
                         <CardTitle>Employees Management</CardTitle>
-                        <div className="ml-4">
+                        <form className="ml-4 flex gap-2" onSubmit={submitSearch}>
                             <Input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search employees..."
                             />
-                        </div>
+                            <Button type="submit" variant="outline">Search</Button>
+                        </form>
                         <CardAction>
                             {can('create employees') && (
                                 <Link href="/employees/create">
@@ -77,19 +81,7 @@ export default function Employees({ employees }: { employees: { data: Employee[]
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {employees.data
-                                    .filter((e) => {
-                                        if (!search) return true;
-                                        const name = `${e.first_name ?? ''} ${e.last_name ?? ''}`;
-                                        return (
-                                            e.employee_code.toLowerCase().includes(search.toLowerCase()) ||
-                                            name.toLowerCase().includes(search.toLowerCase()) ||
-                                            (e.branch || '').toLowerCase().includes(search.toLowerCase()) ||
-                                            (e.department || '').toLowerCase().includes(search.toLowerCase()) ||
-                                            (e.position || '').toLowerCase().includes(search.toLowerCase())
-                                        );
-                                    })
-                                    .map((employee, index) => (
+                                {employees.data.map((employee, index) => (
                                     <TableRow key={employee.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
                                             <TableCell>{index + 1}</TableCell>
                                             <TableCell>

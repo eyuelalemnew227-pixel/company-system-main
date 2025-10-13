@@ -7,7 +7,7 @@ import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Department } from '@/types/departments';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -18,9 +18,9 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function Departments({ departments }: { departments: { data: Department[], total: number, from: number, to: number, links: any[] } }) {
+export default function Departments({ departments, request }: { departments: { data: Department[], total: number, from: number, to: number, links: any[] }, request?: { search?: string } }) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
-    const [search, setSearch] = useState<string>('');
+    const [search, setSearch] = useState<string>(request?.search ?? '');
     const { can } = usePermission();
 
     useEffect(() => {
@@ -29,7 +29,10 @@ export default function Departments({ departments }: { departments: { data: Depa
         }
     }, [flash.message]);
 
-    // Frontend-only search: filter current page rows in-memory
+    function submitSearch(e: React.FormEvent) {
+        e.preventDefault();
+        router.get('/departments', { search }, { preserveState: true, replace: true });
+    }
 
     function deleteDepartment(id: number) {
         if (confirm('Are you sure you want to delete this department?')) {
@@ -44,13 +47,14 @@ export default function Departments({ departments }: { departments: { data: Depa
                 <Card>
                     <CardHeader className="flex items-center justify-between">
                         <CardTitle>Departments Management</CardTitle>
-                        <div className="ml-4">
+                        <form className="ml-4 flex gap-2" onSubmit={submitSearch}>
                             <Input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search departments..."
                             />
-                        </div>
+                            <Button type="submit" variant="outline">Search</Button>
+                        </form>
                         <CardAction>
                             {can('create departments') && (
                                 <Link href="/departments/create">
@@ -73,7 +77,6 @@ export default function Departments({ departments }: { departments: { data: Depa
                             </TableHeader>
                             <TableBody>
                                 {departments.data
-                                    .filter((d) => !search || d.name.toLowerCase().includes(search.toLowerCase()))
                                     .map((department, index) => (
                                     <TableRow key={department.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
                                         <TableCell>{index + 1}</TableCell>

@@ -143,6 +143,12 @@ const mainNavItems: NavItem[] = [
     permission: 'view evaluations',
   },
   {
+    title: 'My Evaluation Results',
+    href: '/my-results',
+    icon: CheckSquare,
+    permission: 'view evaluations',
+  },
+  {
     title: 'Fiscal Years',
     href: '/fiscal-years',
     icon: Calendar,

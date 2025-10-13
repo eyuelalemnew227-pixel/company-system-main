@@ -8,7 +8,7 @@ import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Branch } from '@/types/branches';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -19,9 +19,9 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function Branches({ branches }: { branches: { data: Branch[], total: number, from: number, to: number, links: any[] } }) {
+export default function Branches({ branches, request }: { branches: { data: Branch[], total: number, from: number, to: number, links: any[] }, request?: { search?: string } }) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
-    const [search, setSearch] = useState<string>('');
+    const [search, setSearch] = useState<string>(request?.search ?? '');
     const { can } = usePermission();
 
     useEffect(() => {
@@ -30,7 +30,10 @@ export default function Branches({ branches }: { branches: { data: Branch[], tot
         }
     }, [flash.message]);
 
-    // Frontend-only search: filter current page rows in-memory
+    function submitSearch(e: React.FormEvent) {
+        e.preventDefault();
+        router.get('/branches', { search }, { preserveState: true, replace: true });
+    }
 
     function deleteBranch(id: number) {
         if (confirm('Are you sure you want to delete this branch?')) {
@@ -45,13 +48,14 @@ export default function Branches({ branches }: { branches: { data: Branch[], tot
                 <Card>
                     <CardHeader className="flex items-center justify-between">
                         <CardTitle>Branches Management</CardTitle>
-                        <div className="ml-4">
+                        <form className="ml-4 flex gap-2" onSubmit={submitSearch}>
                             <Input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search branches..."
                             />
-                        </div>
+                            <Button type="submit" variant="outline">Search</Button>
+                        </form>
                         <CardAction>
                             {can('create branches') && (
                                 <Link href="/branches/create">
@@ -76,7 +80,6 @@ export default function Branches({ branches }: { branches: { data: Branch[], tot
                             </TableHeader>
                             <TableBody>
                                 {branches.data
-                                    .filter((b) => !search || b.name.toLowerCase().includes(search.toLowerCase()) || (b.branch_code || '').toLowerCase().includes(search.toLowerCase()) || (b.location || '').toLowerCase().includes(search.toLowerCase()))
                                     .map((branch, index) => (
                                     <TableRow key={branch.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
                                         <TableCell>{index + 1}</TableCell>

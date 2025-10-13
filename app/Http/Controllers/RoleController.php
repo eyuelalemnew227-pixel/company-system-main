@@ -12,24 +12,27 @@ class RoleController extends Controller {
 	/**
 	 * Display a listing of the resource.
 	 */
-	public function index() {
-		$query = Role::with('permissions');
+    public function index() {
+        $query = Role::with('permissions');
 
-		if ($search = request('search')) {
-			$query->where('name', 'like', "%{$search}%");
-		}
+        if ($search = request('search')) {
+            $query->where('name', 'like', "%{$search}%");
+        }
 
-		return Inertia::render('roles/index', [
-			'roles' => $query->paginate(5)->through(function ($role) {
-				return [
-					'id' => $role->id,
-					'name' => $role->name,
-					'created_at' => $role->created_at->format('d-m-Y'),
-					'permissions' => $role->permissions->pluck('name')
-				];
-			}),
-		]);
-	}
+        $roles = $query->paginate(5)->withQueryString()->through(function ($role) {
+            return [
+                'id' => $role->id,
+                'name' => $role->name,
+                'created_at' => $role->created_at->format('d-m-Y'),
+                'permissions' => $role->permissions->pluck('name')
+            ];
+        });
+
+        return Inertia::render('roles/index', [
+            'roles' => $roles,
+            'request' => request()->only('search')
+        ]);
+    }
 
 	/**
 	 * Show the form for creating a new resource.

@@ -1,4 +1,4 @@
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -25,8 +25,8 @@ type Props = PageProps & {
 
 export default function Index({ evaluations, request }: Props) {
     const { auth } = usePage<PageProps>().props;
-    const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all');
+    const [searchQuery, setSearchQuery] = useState(request?.search ?? '');
+    const [statusFilter, setStatusFilter] = useState(request?.status ?? 'all');
 
     const handleDelete = (id: number) => {
         if (confirm('Are you sure you want to delete this evaluation?')) {
@@ -60,6 +60,10 @@ export default function Index({ evaluations, request }: Props) {
         }
     };
 
+    function handleSearch() {
+        router.get(route('evaluations.index'), { search: searchQuery ?? '', status: statusFilter ?? 'all' }, { preserveState: true, replace: true });
+    }
+
     return (
         <AppLayout>
             <Head title="Evaluations" />
@@ -87,6 +91,7 @@ export default function Index({ evaluations, request }: Props) {
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="pl-10"
+                                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }}
                             />
                         </div>
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -100,6 +105,7 @@ export default function Index({ evaluations, request }: Props) {
                                 <SelectItem value="completed">Completed</SelectItem>
                             </SelectContent>
                         </Select>
+                        <Button variant="secondary" onClick={handleSearch}>Search</Button>
                     </div>
 
                     <div className="overflow-x-auto">

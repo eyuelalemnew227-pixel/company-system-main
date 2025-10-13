@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,11 @@ type Item = {
 };
 
 export default function MyEvaluationHistory({ items }: { items: Item[] }) {
+  const handleDelete = (id: number) => {
+    if (confirm('Are you sure you want to cancel/delete this evaluation?')) {
+      router.delete(`/my-evaluation/response/${id}`);
+    }
+  };
   return (
     <AppLayout>
       <Head title="My Evaluation History" />
@@ -38,9 +43,12 @@ export default function MyEvaluationHistory({ items }: { items: Item[] }) {
                       <div className="text-sm text-gray-600">{it.evaluable_type} · {it.evaluate_label} · {it.evaluation_period || 'No period'} · {it.created_at}</div>
                     </div>
                     {it.is_editable && (
-                      <Button asChild variant="outline">
-                        <Link href={`/my-evaluation/response/${it.id}/edit`}>Edit</Link>
-                      </Button>
+                      <div className="space-x-2">
+                        <Button asChild variant="outline">
+                          <Link href={`/my-evaluation/response/${it.id}/edit`}>Edit</Link>
+                        </Button>
+                        <Button variant="destructive" onClick={() => handleDelete(it.id)}>Cancel</Button>
+                      </div>
                     )}
                   </div>
                 ))}

@@ -8,7 +8,7 @@ import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { User } from '@/types/users';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -19,9 +19,9 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function Users({ users }: { users: User }) {
+export default function Users({ users, request }: { users: User, request?: { search?: string } }) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
-    const [search, setSearch] = useState<string>('');
+    const [search, setSearch] = useState<string>(request?.search ?? '');
     const { can } = usePermission();
 
     useEffect(() => {
@@ -30,7 +30,10 @@ export default function Users({ users }: { users: User }) {
         }
     }, [flash.message]);
 
-    // Frontend-only search: filter current page rows in-memory
+    function submitSearch(e: React.FormEvent) {
+        e.preventDefault();
+        router.get('/users', { search }, { preserveState: true, replace: true });
+    }
 
     function deleteUser(id: number) {
         if (confirm('Are you sure you want to delete this user?')) {
@@ -45,13 +48,14 @@ export default function Users({ users }: { users: User }) {
                 <Card>
                     <CardHeader className="flex items-center justify-between">
                         <CardTitle>Users Management</CardTitle>
-                        <div className="ml-4">
+                        <form className="ml-4 flex gap-2" onSubmit={submitSearch}>
                             <Input
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 placeholder="Search users or employees..."
                             />
-                        </div>
+                            <Button type="submit" variant="outline">Search</Button>
+                        </form>
                         <CardAction>
                             {can('create users') && (
                                 <Link href={'/users/create'}>
@@ -76,18 +80,8 @@ export default function Users({ users }: { users: User }) {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {users.data
-                                    .filter((u) => {
-                                        if (!search) return true;
-                                        const name = u.employee ? `${u.employee.first_name ?? ''} ${u.employee.last_name ?? ''}` : '';
-                                        return (
-                                            u.name.toLowerCase().includes(search.toLowerCase()) ||
-                                            (u.email || '').toLowerCase().includes(search.toLowerCase()) ||
-                                            (u.employee?.employee_code || '').toLowerCase().includes(search.toLowerCase()) ||
-                                            name.toLowerCase().includes(search.toLowerCase())
-                                        );
-                                    })
-                                    .map((user, index) => (
+                            {users.data
+                                .map((user, index) => (
                                     <TableRow key={user.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
                                         <TableCell>{index + 1}</TableCell>
                                         <TableCell>{user.employee?.employee_code || 'N/A'}</TableCell>

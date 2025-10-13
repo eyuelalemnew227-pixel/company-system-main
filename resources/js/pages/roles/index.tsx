@@ -8,7 +8,7 @@ import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Role } from '@/types/role_permission';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -19,9 +19,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 	},
 ];
 
-export default function Roles({ roles }: { roles: Role }) {
+export default function Roles({ roles, request }: { roles: Role, request?: { search?: string } }) {
 	const { flash } = usePage<{ flash: { message?: string } }>().props;
-    const [search, setSearch] = useState<string>('');
+    const [search, setSearch] = useState<string>(request?.search ?? '');
 
 	const { can } = usePermission();
 
@@ -31,7 +31,10 @@ export default function Roles({ roles }: { roles: Role }) {
 		}
 	}, [flash.message]);
 
-    // Frontend-only search: filter current page rows in-memory
+    function submitSearch(e: React.FormEvent) {
+        e.preventDefault();
+        router.get('/roles', { search }, { preserveState: true, replace: true });
+    }
 
 	function deleteRole(id: number) {
 		if (confirm('Are you sure want to delete this role?')) {
@@ -46,9 +49,10 @@ export default function Roles({ roles }: { roles: Role }) {
 				<Card>
 					<CardHeader className="flex items-center justify-between">
 						<CardTitle>Roles Management</CardTitle>
-						<div className="ml-4">
-							<Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search roles..." />
-						</div>
+                        <form className="ml-4 flex gap-2" onSubmit={submitSearch}>
+                            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search roles..." />
+                            <Button type="submit" variant="outline">Search</Button>
+                        </form>
 						<CardAction>
 							{can('create roles') && (
 								<Link href={'roles/create'}>
@@ -71,7 +75,6 @@ export default function Roles({ roles }: { roles: Role }) {
 							</TableHeader>
                             <TableBody>
                                 {roles.data
-                                    .filter((r) => !search || r.name.toLowerCase().includes(search.toLowerCase()))
                                     .map((role, index) => (
 									<TableRow className="odd:bg-slate-100 dark:odd:bg-slate-800">
 										<TableCell>{index + 1}</TableCell>

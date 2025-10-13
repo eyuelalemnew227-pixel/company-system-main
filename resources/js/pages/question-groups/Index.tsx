@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { usePermission } from '@/hooks/user-permissions';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import React from 'react';
 import type { QuestionGroup } from '@/types/question-groups';
 
@@ -15,9 +15,12 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function QuestionGroupsIndex({ groups }: { groups: { data: QuestionGroup[]; total: number; from: number; to: number; links: any[] } }) {
     const { can } = usePermission();
-    const [search, setSearch] = React.useState('');
+    const initialSearch = ((window as any).Inertia?.page?.props?.request?.search) ?? '';
+    const [search, setSearch] = React.useState(initialSearch);
 
-    // Frontend-only search: filter current page rows in-memory
+    function handleSearch() {
+        router.get('/question-groups', { search: search ?? '' }, { preserveState: true, replace: true });
+    }
 
     function deleteGroup(id: number) {
         if (confirm('Are you sure?')) {
@@ -32,8 +35,9 @@ export default function QuestionGroupsIndex({ groups }: { groups: { data: Questi
                 <Card>
                     <CardHeader className="flex items-center justify-between">
                         <CardTitle>Question Groups</CardTitle>
-                        <div className="ml-4">
-                            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search groups..." />
+                        <div className="ml-4 flex gap-2">
+                            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search groups..." onKeyDown={(e) => { if (e.key === 'Enter') handleSearch(); }} />
+                            <Button variant="secondary" onClick={handleSearch}>Search</Button>
                         </div>
                         <CardAction>
                             {can('create question groups') && (
@@ -55,7 +59,6 @@ export default function QuestionGroupsIndex({ groups }: { groups: { data: Questi
                             </TableHeader>
                             <TableBody>
                                 {groups.data
-                                    .filter((g) => !search || g.name.toLowerCase().includes(search.toLowerCase()))
                                     .map((g) => (
                                     <TableRow key={g.id}>
                                         <TableCell>{g.name}</TableCell>

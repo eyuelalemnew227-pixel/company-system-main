@@ -42,6 +42,7 @@ class UserController extends Controller {
 
         return Inertia::render('users/index', [
             'users' => $users,
+            'request' => request()->only('search'),
         ]);
     }
 
