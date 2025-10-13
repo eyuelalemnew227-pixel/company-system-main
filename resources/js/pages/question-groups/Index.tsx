@@ -1,3 +1,4 @@
+import TablePagination from '@/components/table-pagination';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -50,20 +51,21 @@ export default function QuestionGroupsIndex({ groups }: { groups: { data: Questi
                     <hr />
                     <CardContent>
                         <Table>
-                            <TableHeader>
+                            <TableHeader className="bg-slate-500 dark:bg-slate-700">
                                 <TableRow>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>Questions</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
+                                    <TableHead className="font-bold text-white">ID</TableHead>
+                                    <TableHead className="font-bold text-white">Name</TableHead>
+                                    <TableHead className="font-bold text-white">Questions</TableHead>
+                                    <TableHead className="font-bold text-white">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {groups.data
-                                    .map((g) => (
-                                    <TableRow key={g.id}>
-                                        <TableCell>{g.name}</TableCell>
+                                {groups.data.map((g, index) => (
+                                    <TableRow key={g.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
+                                        <TableCell>{(groups.from ?? 0) + index}</TableCell>
+                                        <TableCell className="font-medium">{g.name}</TableCell>
                                         <TableCell>{g.questions_count ?? 0}</TableCell>
-                                        <TableCell className="text-right space-x-2">
+                                        <TableCell className="space-x-2">
                                             {can('update question groups') && (
                                                 <Link href={`/question-groups/${g.id}/edit`}>
                                                     <Button size="sm" variant="secondary">Edit</Button>
@@ -78,6 +80,11 @@ export default function QuestionGroupsIndex({ groups }: { groups: { data: Questi
                             </TableBody>
                         </Table>
                     </CardContent>
+                    {groups.data.length > 0 ? (
+                        <TablePagination total={groups.total} from={groups.from} to={groups.to} links={groups.links} />
+                    ) : (
+                        <div className="flex h-full items-center justify-center p-8">No Results Found!</div>
+                    )}
                 </Card>
             </div>
         </AppLayout>

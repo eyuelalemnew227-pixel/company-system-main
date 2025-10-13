@@ -1,46 +1,76 @@
-import { Head, Link, usePage } from '@inertiajs/react';
-import AppLayout from '@/layouts/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import TablePagination from '@/components/table-pagination';
 import { Button } from '@/components/ui/button';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AppLayout from '@/layouts/app-layout';
+import { type BreadcrumbItem } from '@/types';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 
-type Evaluation = {
-  id: number;
-  name?: string;
-};
+type Evaluation = { id: number; name?: string; created_at?: string; evaluator_group?: { name?: string }; evaluates_group?: { name?: string } };
 
-export default function MyEvaluationIndex({ evaluations }: { evaluations: Evaluation[] }) {
-  const { props } = usePage();
-  const { flash } = props as any;
+const breadcrumbs: BreadcrumbItem[] = [
+  { title: 'My Evaluation', href: '/my-evaluation' },
+];
+
+export default function MyEvaluationIndex({ evaluations, request }: { evaluations: { data: Evaluation[]; total: number; from: number; to: number; links: any[] }; request?: { search?: string } }) {
+  const [search, setSearch] = useState<string>(request?.search ?? '');
+
+  function submitSearch(e: React.FormEvent) {
+    e.preventDefault();
+    router.get('/my-evaluation', { search }, { preserveState: true, replace: true });
+  }
 
   return (
-    <AppLayout>
+    <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="My Evaluation" />
-
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold">My Evaluation</h1>
-        </div>
-
+      <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
         <Card>
-          <CardHeader>
-            <CardTitle>Evaluations Assigned To You</CardTitle>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle>My Evaluation</CardTitle>
+            <form className="ml-4 flex gap-2" onSubmit={submitSearch}>
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search evaluations..." />
+              <Button type="submit" variant="outline">Search</Button>
+            </form>
+            <CardAction>
+              {/* No create action for My Evaluation index */}
+            </CardAction>
           </CardHeader>
+          <hr />
           <CardContent>
-            {evaluations.length === 0 ? (
-              <p className="text-gray-500">No evaluations assigned.</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {evaluations.map((ev) => (
-                  <div key={ev.id} className="flex items-center justify-between rounded border p-3">
-                    <div className="font-medium">{ev.name || `Evaluation #${ev.id}`}</div>
-                    <Button asChild>
-                      <Link href={`/my-evaluation/${ev.id}`}>Open</Link>
-                    </Button>
-                  </div>
+            <Table>
+              <TableHeader className="bg-slate-500 dark:bg-slate-700">
+                <TableRow>
+                  <TableHead className="font-bold text-white">ID</TableHead>
+                  <TableHead className="font-bold text-white">Name</TableHead>
+                  <TableHead className="font-bold text-white">Evaluator Group</TableHead>
+                  <TableHead className="font-bold text-white">Evaluates Group</TableHead>
+                  <TableHead className="font-bold text-white">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {evaluations.data.map((ev, index) => (
+                  <TableRow key={ev.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
+                    <TableCell>{(evaluations.from ?? 0) + index}</TableCell>
+                    <TableCell className="font-medium">{ev.name || `Evaluation #${ev.id}`}</TableCell>
+                    <TableCell>{ev.evaluator_group?.name || '—'}</TableCell>
+                    <TableCell>{ev.evaluates_group?.name || '—'}</TableCell>
+                    <TableCell>
+                      <Link href={`/my-evaluation/${ev.id}`}>
+                        <Button variant="outline" size="sm">Open</Button>
+                      </Link>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </div>
-            )}
+              </TableBody>
+            </Table>
           </CardContent>
+          {evaluations.data.length > 0 ? (
+            <TablePagination total={evaluations.total} from={evaluations.from} to={evaluations.to} links={evaluations.links} />
+          ) : (
+            <div className="flex h-full items-center justify-center p-8">No Results Found!</div>
+          )}
         </Card>
       </div>
     </AppLayout>

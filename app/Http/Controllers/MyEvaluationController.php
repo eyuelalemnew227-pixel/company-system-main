@@ -13,21 +13,28 @@ use Inertia\Inertia;
 
 class MyEvaluationController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $user = Auth::user();
+
+        $search = $request->query('search', '');
 
         // Evaluations where the current user's employee is in the evaluator group
         $evaluations = Evaluation::query()
             ->whereHas('evaluatorGroup.employees', function ($query) use ($user) {
                 $query->where('employee_id', $user->employee_id);
             })
+            ->when($search, function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%");
+            })
             ->with(['evaluatorGroup', 'evaluatesGroup'])
             ->latest()
-            ->get();
+            ->paginate(10)
+            ->withQueryString();
 
         return Inertia::render('my-evaluation/index', [
             'evaluations' => $evaluations,
+            'request' => $request->only('search'),
         ]);
     }
 
@@ -179,16 +186,37 @@ class MyEvaluationController extends Controller
         return back()->with('message', 'Evaluation submitted successfully!');
     }
 
-    public function history()
+    public function history(Request $request)
     {
         $user = Auth::user();
 
+        $search = $request->query('search', '');
+        $periodId = $request->query('period_id');
+        if ($periodId === 'all' || $periodId === '') {
+            $periodId = null;
+        }
+
         $responses = EvaluationResponse::where('evaluator_id', $user->id)
             ->with(['evaluation.evaluatesGroup.questionGroup', 'evaluationPeriod'])
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($inner) use ($search) {
+                    $inner->whereHas('evaluation', function ($qq) use ($search) {
+                        $qq->where('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('evaluationPeriod', function ($qq) use ($search) {
+                        $qq->where('evaluation_period_name', 'like', "%{$search}%");
+                    })
+                    ->orWhere('evaluable_type', 'like', "%{$search}%");
+                });
+            })
+            ->when($periodId, function ($q) use ($periodId) {
+                $q->where('evaluation_period_id', $periodId);
+            })
             ->latest()
-            ->get();
+            ->paginate(10)
+            ->withQueryString();
 
-        $items = $responses->map(function (EvaluationResponse $r) {
+        $items = $responses->getCollection()->map(function (EvaluationResponse $r) {
             $label = '';
             switch ($r->evaluable_type) {
                 case 'employee':
@@ -218,12 +246,17 @@ class MyEvaluationController extends Controller
                 'evaluate_label' => $label,
                 'evaluation_period' => optional($r->evaluationPeriod)->evaluation_period_name,
                 'is_editable' => $periodActive,
-                'created_at' => $r->created_at?->toDateTimeString(),
             ];
         });
 
+        $responses->setCollection($items);
+
+        $periods = EvaluationPeriod::select('id', 'evaluation_period_name')->orderBy('id', 'desc')->get();
+
         return Inertia::render('my-evaluation/history', [
-            'items' => $items,
+            'items' => $responses,
+            'periods' => $periods,
+            'request' => $request->only('search', 'period_id'),
         ]);
     }
 

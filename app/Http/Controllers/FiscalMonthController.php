@@ -21,10 +21,7 @@ class FiscalMonthController extends Controller
                 });
         }
 
-        if ($request->has('status') && $request->status !== 'all') {
-            $isActive = $request->status === 'active' ? 1 : 0;
-            $query->where('is_active', $isActive);
-        }
+        // status filter removed
 
         if ($request->has('fiscal_year') && $request->fiscal_year !== 'all') {
             $query->where('fiscal_year_id', $request->fiscal_year);
@@ -40,13 +37,13 @@ class FiscalMonthController extends Controller
         return Inertia::render('FiscalMonths/Index', [
             'fiscalMonths' => $fiscalMonths,
             'fiscalYears' => $fiscalYears,
-            'request' => $request->only('search', 'status', 'fiscal_year'),
+            'request' => $request->only('search', 'fiscal_year'),
         ]);
     }
 
     public function create()
     {
-        $fiscalYears = FiscalYear::select('id', 'name', 'gregorian_start_date', 'gregorian_end_date', 'is_active')
+        $fiscalYears = FiscalYear::select('id', 'name', 'gregorian_start_date', 'gregorian_end_date')
             ->orderBy('name', 'desc')
             ->get();
 
@@ -64,7 +61,7 @@ class FiscalMonthController extends Controller
             'efy_month_number' => 'required|integer|min:1|max:12',
             'gregorian_start_date' => 'required|date',
             'gregorian_end_date' => 'required|date|after:gregorian_start_date',
-            'is_active' => 'required|boolean',
+            // status removed
         ]);
 
         FiscalMonth::create($validated);
@@ -74,7 +71,7 @@ class FiscalMonthController extends Controller
 
     public function edit(FiscalMonth $fiscalMonth)
     {
-        $fiscalYears = FiscalYear::select('id', 'name', 'gregorian_start_date', 'gregorian_end_date', 'is_active')
+        $fiscalYears = FiscalYear::select('id', 'name', 'gregorian_start_date', 'gregorian_end_date')
             ->orderBy('name', 'desc')
             ->get();
 
@@ -93,7 +90,7 @@ class FiscalMonthController extends Controller
             'efy_month_number' => 'required|integer|min:1|max:12',
             'gregorian_start_date' => 'required|date',
             'gregorian_end_date' => 'required|date|after:gregorian_start_date',
-            'is_active' => 'required|boolean',
+            // status removed
         ]);
 
         $fiscalMonth->update($validated);

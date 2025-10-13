@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
     Select,
     SelectContent,
@@ -29,7 +28,6 @@ export default function Edit({ fiscalMonth, fiscalYears, ethiopianMonths }: Prop
         efy_month_number: fiscalMonth.efy_month_number.toString(),
         gregorian_start_date: fiscalMonth.gregorian_start_date,
         gregorian_end_date: fiscalMonth.gregorian_end_date,
-        is_active: fiscalMonth.is_active,
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -136,17 +134,7 @@ export default function Edit({ fiscalMonth, fiscalYears, ethiopianMonths }: Prop
                             </div>
                         </div>
 
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                                id="is_active"
-                                checked={data.is_active}
-                                onCheckedChange={(checked) => setData('is_active', checked as boolean)}
-                            />
-                            <Label htmlFor="is_active" className="cursor-pointer">
-                                Set as Active
-                            </Label>
-                        </div>
-                        {errors.is_active && <p className="text-sm text-red-500">{errors.is_active}</p>}
+                        {/* Status removed */}
 
                         <div className="flex gap-4">
                             <Button type="submit" disabled={processing}>

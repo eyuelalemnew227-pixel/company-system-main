@@ -14,11 +14,9 @@ class FiscalYear extends Model
         'name', // e.g., 'EFY 2018'
         'gregorian_start_date',
         'gregorian_end_date',
-        'is_active',
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
         'gregorian_start_date' => 'date',
         'gregorian_end_date' => 'date',
     ];

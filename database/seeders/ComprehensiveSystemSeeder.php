@@ -211,19 +211,16 @@ class ComprehensiveSystemSeeder extends Seeder
                 'name' => 'EFY 2016',
                 'gregorian_start_date' => '2023-07-08',
                 'gregorian_end_date' => '2024-07-07',
-                'is_active' => false,
             ],
             [
                 'name' => 'EFY 2017',
                 'gregorian_start_date' => '2024-07-08',
                 'gregorian_end_date' => '2025-07-07',
-                'is_active' => true,
             ],
             [
                 'name' => 'EFY 2018',
                 'gregorian_start_date' => '2025-07-08',
                 'gregorian_end_date' => '2026-07-07',
-                'is_active' => false,
             ],
         ];
 
@@ -232,7 +229,7 @@ class ComprehensiveSystemSeeder extends Seeder
         }
 
         // 9. Seed Fiscal Months for active fiscal year
-        $activeFiscalYear = FiscalYear::where('is_active', true)->first();
+        $activeFiscalYear = FiscalYear::orderBy('gregorian_start_date', 'desc')->first();
         
         $ethiopianMonths = FiscalMonth::$ethiopianMonths;
         $startDate = new \DateTime($activeFiscalYear->gregorian_start_date);
@@ -250,14 +247,13 @@ class ComprehensiveSystemSeeder extends Seeder
                 'efy_month_number' => $monthNumber,
                 'gregorian_start_date' => $monthStartDate->format('Y-m-d'),
                 'gregorian_end_date' => $monthEndDate->format('Y-m-d'),
-                'is_active' => $monthNumber <= 3, // First 3 months active
             ]);
         }
 
         // 10. Seed Evaluation Periods
-        $activeFiscalYear = FiscalYear::where('is_active', true)->first();
+        $activeFiscalYear = FiscalYear::orderBy('gregorian_start_date', 'desc')->first();
         $activeFiscalMonths = FiscalMonth::where('fiscal_year_id', $activeFiscalYear->id)
-            ->where('is_active', true)
+            ->orderBy('efy_month_number')
             ->get();
 
         $evaluationPeriods = [

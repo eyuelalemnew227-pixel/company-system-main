@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowLeft } from 'lucide-react';
 
 export default function Create() {
@@ -12,7 +11,6 @@ export default function Create() {
         name: '',
         gregorian_start_date: '',
         gregorian_end_date: '',
-        is_active: true,
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -81,17 +79,7 @@ export default function Create() {
                             </div>
                         </div>
 
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                                id="is_active"
-                                checked={data.is_active}
-                                onCheckedChange={(checked) => setData('is_active', checked as boolean)}
-                            />
-                            <Label htmlFor="is_active" className="cursor-pointer">
-                                Set as Active
-                            </Label>
-                        </div>
-                        {errors.is_active && <p className="text-sm text-red-500">{errors.is_active}</p>}
+                        {/* Status removed */}
 
                         <div className="flex gap-4">
                             <Button type="submit" disabled={processing}>

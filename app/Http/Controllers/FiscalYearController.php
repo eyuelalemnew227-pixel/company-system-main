@@ -17,16 +17,13 @@ class FiscalYearController extends Controller
             $query->where('name', 'like', '%' . $request->search . '%');
         }
 
-        if ($request->has('status') && $request->status !== 'all') {
-            $isActive = $request->status === 'active' ? 1 : 0;
-            $query->where('is_active', $isActive);
-        }
+        // status filter removed
 
         $fiscalYears = $query->latest()->paginate(10)->withQueryString();
 
         return Inertia::render('FiscalYears/Index', [
             'fiscalYears' => $fiscalYears,
-            'request' => $request->only('search', 'status'),
+            'request' => $request->only('search'),
         ]);
     }
 
@@ -41,7 +38,6 @@ class FiscalYearController extends Controller
             'name' => 'required|string|max:255|unique:fiscal_years,name',
             'gregorian_start_date' => 'required|date',
             'gregorian_end_date' => 'required|date|after:gregorian_start_date',
-            'is_active' => 'required|boolean',
         ]);
 
         FiscalYear::create($validated);
@@ -62,7 +58,6 @@ class FiscalYearController extends Controller
             'name' => 'required|string|max:255|unique:fiscal_years,name,' . $fiscalYear->id,
             'gregorian_start_date' => 'required|date',
             'gregorian_end_date' => 'required|date|after:gregorian_start_date',
-            'is_active' => 'required|boolean',
         ]);
 
         $fiscalYear->update($validated);

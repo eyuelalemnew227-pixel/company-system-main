@@ -17,11 +17,9 @@ class FiscalMonth extends Model
         'efy_month_number',
         'gregorian_start_date',
         'gregorian_end_date',
-        'is_active',
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
         'gregorian_start_date' => 'date',
         'gregorian_end_date' => 'date',
         'efy_month_number' => 'integer',

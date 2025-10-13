@@ -34,8 +34,8 @@ class EvaluationPeriodController extends Controller
 
     public function create()
     {
-        $fiscalYears = FiscalYear::where('is_active', true)->get();
-        $fiscalMonths = FiscalMonth::where('is_active', true)->get();
+        $fiscalYears = FiscalYear::select('id', 'name')->orderBy('name', 'desc')->get();
+        $fiscalMonths = FiscalMonth::select('id', 'name', 'fiscal_year_id')->orderBy('fiscal_year_id', 'desc')->orderBy('efy_month_number')->get();
 
         return Inertia::render('evaluation-periods/create', [
             'fiscalYears' => $fiscalYears,
@@ -60,8 +60,8 @@ class EvaluationPeriodController extends Controller
 
     public function edit(EvaluationPeriod $evaluationPeriod)
     {
-        $fiscalYears = FiscalYear::where('is_active', true)->get();
-        $fiscalMonths = FiscalMonth::where('is_active', true)->get();
+        $fiscalYears = FiscalYear::select('id', 'name')->orderBy('name', 'desc')->get();
+        $fiscalMonths = FiscalMonth::select('id', 'name', 'fiscal_year_id')->orderBy('fiscal_year_id', 'desc')->orderBy('efy_month_number')->get();
 
         return Inertia::render('evaluation-periods/edit', [
             'evaluationPeriod' => $evaluationPeriod->load(['fiscalYear', 'fiscalMonth']),
