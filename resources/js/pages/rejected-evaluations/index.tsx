@@ -9,6 +9,14 @@ import TablePagination from '@/components/table-pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, XCircle, Trash2 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface EvaluationPeriod {
   id: number;
@@ -49,6 +57,9 @@ interface Props {
 export default function RejectedEvaluationsIndex({ items, periods, request }: Props) {
   const [search, setSearch] = useState(request.search || '');
   const [periodId, setPeriodId] = useState(request.period_id || 'all');
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const submitSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,23 +71,35 @@ export default function RejectedEvaluationsIndex({ items, periods, request }: Pr
     router.get(route('rejected-evaluations.index'), { search, period_id: value }, { preserveState: true });
   };
 
-  const handleApprove = (id: number) => {
-    if (confirm('Are you sure you want to approve this rejected evaluation? It will change the status to Accepted.')) {
-      router.post(route('rejected-evaluations.approve', id), {}, {
+  const openApproveDialog = (id: number) => {
+    setSelectedId(id);
+    setShowApproveDialog(true);
+  };
+
+  const confirmApprove = () => {
+    if (selectedId) {
+      router.post(route('rejected-evaluations.approve', selectedId), {}, {
         preserveScroll: true,
         onSuccess: () => {
-          // Success message will be shown via flash
+          setShowApproveDialog(false);
+          setSelectedId(null);
         }
       });
     }
   };
 
-  const handleCancel = (id: number) => {
-    if (confirm('Are you sure you want to cancel this evaluation? This will permanently delete it and allow the evaluator to re-evaluate.')) {
-      router.delete(route('rejected-evaluations.cancel', id), {
+  const openCancelDialog = (id: number) => {
+    setSelectedId(id);
+    setShowCancelDialog(true);
+  };
+
+  const confirmCancel = () => {
+    if (selectedId) {
+      router.delete(route('rejected-evaluations.cancel', selectedId), {
         preserveScroll: true,
         onSuccess: () => {
-          // Success message will be shown via flash
+          setShowCancelDialog(false);
+          setSelectedId(null);
         }
       });
     }
@@ -178,7 +201,7 @@ export default function RejectedEvaluationsIndex({ items, periods, request }: Pr
                         <div className="flex gap-2">
                           <Button
                             size="sm"
-                            onClick={() => handleApprove(item.id)}
+                            onClick={() => openApproveDialog(item.id)}
                             className="bg-green-600 hover:bg-green-700"
                             title="Approve and change status to Accepted"
                           >
@@ -187,7 +210,7 @@ export default function RejectedEvaluationsIndex({ items, periods, request }: Pr
                           <Button
                             size="sm"
                             variant="destructive"
-                            onClick={() => handleCancel(item.id)}
+                            onClick={() => openCancelDialog(item.id)}
                             title="Cancel evaluation (allows re-evaluation)"
                           >
                             <Trash2 className="h-4 w-4" />
@@ -209,6 +232,48 @@ export default function RejectedEvaluationsIndex({ items, periods, request }: Pr
           )}
         </CardContent>
       </Card>
+
+      {/* Approve Confirmation Dialog */}
+      <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Approve Rejected Evaluation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to approve this rejected evaluation? This will change the status to "Accepted" and keep all evaluation data intact.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowApproveDialog(false)}>
+              Cancel
+            </Button>
+            <Button onClick={confirmApprove} className="bg-green-600 hover:bg-green-700">
+              <CheckCircle className="mr-2 h-4 w-4" />
+              Approve
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Confirmation Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Evaluation</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to cancel this evaluation? This will permanently delete it and allow the evaluator to re-evaluate. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCancelDialog(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmCancel}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Permanently
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
