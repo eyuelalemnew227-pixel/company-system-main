@@ -117,16 +117,23 @@ export default function MyResultsShow({ response }: { response: any }) {
             
             {/* Accept/Reject Buttons */}
             {response.period_is_active && response.status === 'pending' && (
-              <div className="mt-4 flex gap-2">
-                <Button onClick={handleAccept} className="bg-green-600 hover:bg-green-700">
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                  Accept
-                </Button>
-                <Button onClick={() => setShowRejectDialog(true)} variant="destructive">
-                  <XCircle className="mr-2 h-4 w-4" />
-                  Reject
-                </Button>
-              </div>
+              // For department evaluations, check permission
+              (response.evaluation_type === 'Personal' || response.can_accept_reject_department) ? (
+                <div className="mt-4 flex gap-2">
+                  <Button onClick={handleAccept} className="bg-green-600 hover:bg-green-700">
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Accept
+                  </Button>
+                  <Button onClick={() => setShowRejectDialog(true)} variant="destructive">
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Reject
+                  </Button>
+                </div>
+              ) : (
+                <div className="mt-4 rounded border border-yellow-200 bg-yellow-50 p-3 text-sm dark:border-yellow-800 dark:bg-yellow-900/20">
+                  <strong>Note:</strong> You do not have permission to accept or reject department evaluations. Please contact your administrator.
+                </div>
+              )
             )}
           </CardContent>
         </Card>

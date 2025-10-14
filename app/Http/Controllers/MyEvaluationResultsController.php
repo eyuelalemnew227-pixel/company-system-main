@@ -181,6 +181,9 @@ class MyEvaluationResultsController extends Controller
         
         // Check if period is still active
         $periodIsActive = $evaluationResponse->evaluationPeriod && $evaluationResponse->evaluationPeriod->status === 'active';
+        
+        // Check if user can accept/reject department evaluations
+        $canAcceptRejectDepartment = $user->can('accept reject department evaluation');
 
         return Inertia::render('my-results/show', [
             'response' => [
@@ -195,6 +198,7 @@ class MyEvaluationResultsController extends Controller
                 'comment' => $evaluationResponse->comment,
                 'status' => $evaluationResponse->status,
                 'period_is_active' => $periodIsActive,
+                'can_accept_reject_department' => $canAcceptRejectDepartment,
                 'accepted_at' => $evaluationResponse->accepted_at?->toDateTimeString(),
                 'rejected_at' => $evaluationResponse->rejected_at?->toDateTimeString(),
                 'rejection_reason' => $evaluationResponse->rejection_reason,
@@ -220,6 +224,10 @@ class MyEvaluationResultsController extends Controller
         if ($evaluationResponse->evaluable_type === 'employee' && $evaluationResponse->evaluate_id === $user->employee_id) {
             $hasAccess = true;
         } elseif ($evaluationResponse->evaluable_type === 'department' && $departmentId && $evaluationResponse->evaluate_id === $departmentId) {
+            // For department evaluations, check if user has the permission
+            if (!$user->can('accept reject department evaluation')) {
+                return redirect()->back()->with('error', 'You do not have permission to accept department evaluations.');
+            }
             $hasAccess = true;
         }
 
@@ -253,6 +261,10 @@ class MyEvaluationResultsController extends Controller
         if ($evaluationResponse->evaluable_type === 'employee' && $evaluationResponse->evaluate_id === $user->employee_id) {
             $hasAccess = true;
         } elseif ($evaluationResponse->evaluable_type === 'department' && $departmentId && $evaluationResponse->evaluate_id === $departmentId) {
+            // For department evaluations, check if user has the permission
+            if (!$user->can('accept reject department evaluation')) {
+                return redirect()->back()->with('error', 'You do not have permission to reject department evaluations.');
+            }
             $hasAccess = true;
         }
 
