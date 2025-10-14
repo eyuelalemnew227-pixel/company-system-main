@@ -18,6 +18,55 @@ class MyEvaluationResultsController extends Controller
             $periodId = null;
         }
 
+        // Get employee and department info
+        $employee = \App\Models\Employee::with('department')->find($employeeId);
+        $departmentId = $employee?->department_id;
+
+        // Calculate Personal Average Score
+        $personalResponses = EvaluationResponse::query()
+            ->where('evaluable_type', 'employee')
+            ->where('evaluate_id', $employeeId)
+            ->with('questionResponses')
+            ->get();
+        
+        $personalScores = [];
+        foreach ($personalResponses as $response) {
+            $scores = $response->questionResponses->pluck('score')->filter();
+            if ($scores->count() > 0) {
+                $personalScores[] = $scores->avg();
+            }
+        }
+        $personalAvgScore = count($personalScores) > 0 ? round(collect($personalScores)->avg(), 2) : null;
+
+        // Calculate Department Average Score
+        $departmentAvgScore = null;
+        if ($departmentId) {
+            $departmentResponses = EvaluationResponse::query()
+                ->where('evaluable_type', 'department')
+                ->where('evaluate_id', $departmentId)
+                ->with('questionResponses')
+                ->get();
+            
+            $departmentScores = [];
+            foreach ($departmentResponses as $response) {
+                $scores = $response->questionResponses->pluck('score')->filter();
+                if ($scores->count() > 0) {
+                    $departmentScores[] = $scores->avg();
+                }
+            }
+            $departmentAvgScore = count($departmentScores) > 0 ? round(collect($departmentScores)->avg(), 2) : null;
+        }
+
+        // Calculate Combined Average
+        $combinedAvg = null;
+        if ($personalAvgScore !== null && $departmentAvgScore !== null) {
+            $combinedAvg = round(($personalAvgScore + $departmentAvgScore) / 2, 2);
+        } elseif ($personalAvgScore !== null) {
+            $combinedAvg = $personalAvgScore;
+        } elseif ($departmentAvgScore !== null) {
+            $combinedAvg = $departmentAvgScore;
+        }
+
         $responses = EvaluationResponse::query()
             ->where('evaluable_type', 'employee')
             ->where('evaluate_id', $employeeId)
@@ -64,6 +113,12 @@ class MyEvaluationResultsController extends Controller
             'items' => $responses,
             'periods' => $periods,
             'request' => $request->only('search', 'period_id'),
+            'kpi' => [
+                'personal_avg_score' => $personalAvgScore,
+                'department_avg_score' => $departmentAvgScore,
+                'combined_avg_score' => $combinedAvg,
+                'department_name' => $employee?->department?->name ?? 'N/A',
+            ],
         ]);
     }
 

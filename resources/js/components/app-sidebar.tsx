@@ -58,6 +58,7 @@ const sections: NavSection[] = [
       { title: 'Positions', href: '/positions', icon: ClipboardList, permission: 'view positions' },
       { title: 'Employees', href: '/employees', icon: Users, permission: 'view employees' },
       { title: 'Managers', href: '/managers', icon: ShieldCheck, permission: 'view managers' },
+      { title: 'Other Evaluables', href: '/other-evaluables', icon: FileText, permission: 'view other evaluables' },
     ],
   },
   {
@@ -76,7 +77,6 @@ const sections: NavSection[] = [
       { title: 'Questions', href: '/questions', icon: FileQuestion, permission: 'view questions' },
       { title: 'Evaluator Groups', href: '/evaluator-groups', icon: UserCircle, permission: 'view evaluator groups' },
       { title: 'Evaluatee Groups', href: '/evaluates-groups', icon: Target, permission: 'view evaluates groups' },
-      { title: 'Other Evaluables', href: '/other-evaluables', icon: FileText, permission: 'view other evaluables' },
       { title: 'All Evaluations', href: '/evaluations', icon: ClipboardCheck, permission: 'view evaluations' },
       { title: 'Fill Evaluation', href: '/my-evaluation', icon: ListChecks, permission: 'view evaluations' },
       { title: 'Evaluation History', href: '/my-evaluation/history', icon: History, permission: 'view evaluations' },
