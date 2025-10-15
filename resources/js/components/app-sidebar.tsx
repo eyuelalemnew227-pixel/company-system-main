@@ -38,18 +38,24 @@ import {
   FileText,
   ClipboardCheck,
   XCircle,
+  BarChart3,
+  Settings,
+  Calendar as CalendarIcon,
+  TrendingUp,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const sections: NavSection[] = [
   {
     label: 'Dashboard',
+    icon: LayoutDashboard,
     items: [
       { title: 'Overview', href: '/dashboard', icon: LayoutDashboard, permission: 'view dashboard' },
     ],
   },
   {
     label: 'System Administration',
+    icon: Settings,
     items: [
       { title: 'Permissions', href: '/permissions', icon: LockKeyhole, permission: 'view permissions' },
       { title: 'Roles', href: '/roles', icon: Shield, permission: 'view roles' },
@@ -63,7 +69,8 @@ const sections: NavSection[] = [
     ],
   },
   {
-    label: 'Fiscal Period Management',
+    label: 'Period Management',
+    icon: CalendarIcon,
     items: [
       { title: 'Fiscal Years', href: '/fiscal-years', icon: Calendar, permission: 'view fiscal years' },
       { title: 'Fiscal Months', href: '/fiscal-months', icon: CalendarDays, permission: 'view fiscal months' },
@@ -72,6 +79,7 @@ const sections: NavSection[] = [
   },
   {
     label: 'Performance Evaluation',
+    icon: TrendingUp,
     items: [
       { title: 'Evaluation Types', href: '/evaluation-types', icon: Sparkles, permission: 'view evaluation types' },
       { title: 'Question Groups', href: '/question-groups', icon: FolderKey, permission: 'view question groups' },
@@ -79,6 +87,7 @@ const sections: NavSection[] = [
       { title: 'Evaluator Groups', href: '/evaluator-groups', icon: UserCircle, permission: 'view evaluator groups' },
       { title: 'Evaluatee Groups', href: '/evaluates-groups', icon: Target, permission: 'view evaluates groups' },
       { title: 'All Evaluations', href: '/evaluations', icon: ClipboardCheck, permission: 'view evaluations' },
+      { title: 'Evaluator Completion', href: '/evaluator-completion', icon: BarChart3, permission: 'view evaluator completion' },
       { title: 'Fill Evaluation', href: '/my-evaluation', icon: ListChecks, permission: 'view evaluations' },
       { title: 'Evaluation History', href: '/my-evaluation/history', icon: History, permission: 'view evaluations' },
       { title: 'My Results', href: '/my-results', icon: Award, permission: 'view evaluations' },

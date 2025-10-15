@@ -21,6 +21,7 @@ import { useState, useEffect } from 'react';
 
 export type NavSection = {
   label: string;
+  icon?: React.ComponentType<{ className?: string }>;
   items: NavItem[];
 };
 
@@ -72,7 +73,8 @@ function NavSection({ section, visibleItems }: { section: NavSection; visibleIte
         <Collapsible open={isOpen} onOpenChange={setIsOpen} className="group/collapsible">
           <SidebarMenuItem>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton tooltip={{ children: section.label }}>
+              <SidebarMenuButton tooltip={section.label}>
+                {section.icon && <section.icon />}
                 <span className="font-semibold">{section.label}</span>
                 <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
               </SidebarMenuButton>
@@ -83,7 +85,7 @@ function NavSection({ section, visibleItems }: { section: NavSection; visibleIte
                   const href = item.href ?? '';
                   return (
                     <SidebarMenuSubItem key={`${section.label}-${item.title}`}>
-                      <SidebarMenuSubButton asChild isActive={page.url.startsWith(href)}>
+                      <SidebarMenuSubButton asChild isActive={page.url.startsWith(href)} tooltip={item.title}>
                         <Link href={href} prefetch>
                           {item.icon && <item.icon />}
                           <span>{item.title}</span>

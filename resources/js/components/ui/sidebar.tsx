@@ -665,16 +665,19 @@ function SidebarMenuSubButton({
   asChild = false,
   size = "md",
   isActive = false,
+  tooltip,
   className,
   ...props
 }: React.ComponentProps<"a"> & {
   asChild?: boolean
   size?: "sm" | "md"
   isActive?: boolean
+  tooltip?: string | React.ComponentProps<typeof TooltipContent>
 }) {
   const Comp = asChild ? Slot : "a"
+  const { isMobile, state } = useSidebar()
 
-  return (
+  const button = (
     <Comp
       data-slot="sidebar-menu-sub-button"
       data-sidebar="menu-sub-button"
@@ -690,6 +693,28 @@ function SidebarMenuSubButton({
       )}
       {...props}
     />
+  )
+
+  if (!tooltip) {
+    return button
+  }
+
+  if (typeof tooltip === "string") {
+    tooltip = {
+      children: tooltip,
+    }
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
+      <TooltipContent
+        side="right"
+        align="center"
+        hidden={state !== "collapsed" || isMobile}
+        {...tooltip}
+      />
+    </Tooltip>
   )
 }
 

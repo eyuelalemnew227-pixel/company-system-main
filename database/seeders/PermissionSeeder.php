@@ -126,5 +126,8 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'create evaluation responses']);
         Permission::firstOrCreate(['name' => 'update evaluation responses']);
         Permission::firstOrCreate(['name' => 'delete evaluation responses']);
+
+        // Evaluator Completion Tracking
+        Permission::firstOrCreate(['name' => 'view evaluator completion']);
     }
 }

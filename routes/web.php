@@ -22,7 +22,8 @@ use App\Http\Controllers\{
     BranchController,
     PositionController,
     EmployeeController,
-    RejectedEvaluationsController
+    RejectedEvaluationsController,
+    EvaluatorCompletionController
 };
 
 Route::get('/', fn () => Inertia::render('welcome'))->name('home');
@@ -110,6 +111,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('rejected-evaluations', [RejectedEvaluationsController::class, 'index'])->name('rejected-evaluations.index');
     Route::post('rejected-evaluations/{evaluationResponse}/approve', [RejectedEvaluationsController::class, 'approve'])->name('rejected-evaluations.approve');
     Route::delete('rejected-evaluations/{evaluationResponse}', [RejectedEvaluationsController::class, 'cancel'])->name('rejected-evaluations.cancel');
+
+    // Evaluator Completion Tracking
+    Route::get('evaluator-completion', [EvaluatorCompletionController::class, 'index'])->name('evaluator-completion.index');
 });
 
 require __DIR__ . '/settings.php';
