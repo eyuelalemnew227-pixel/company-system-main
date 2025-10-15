@@ -84,17 +84,19 @@ export default function EvaluatorCompletionIndex({
 }: { 
   evaluatorsByPeriod: EvaluatorsByPeriod;
   periods: EvaluationPeriod[];
-  request?: { search?: string; period_id?: string };
+  request?: { search?: string; period_id?: string; status?: string };
 }) {
   const [search, setSearch] = useState<string>(request?.search ?? '');
   const [periodId, setPeriodId] = useState<string>(request?.period_id ?? 'all');
+  const [status, setStatus] = useState<string>(request?.status ?? 'all');
   const [selectedEvaluator, setSelectedEvaluator] = useState<EvaluatorStats | null>(null);
 
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
     router.get('/evaluator-completion', { 
       search, 
-      period_id: periodId !== 'all' ? periodId : undefined 
+      period_id: periodId !== 'all' ? periodId : undefined,
+      status: status !== 'all' ? status : undefined
     }, { preserveState: true, replace: true });
   }
 
@@ -175,7 +177,7 @@ export default function EvaluatorCompletionIndex({
                   placeholder="Search by name, employee code, department..." 
                 />
               </div>
-              <div className="w-[250px]">
+              <div className="w-[200px]">
                 <label className="text-sm font-medium mb-2 block">Filter by Period</label>
                 <Select value={periodId} onValueChange={setPeriodId}>
                   <SelectTrigger>
@@ -188,6 +190,21 @@ export default function EvaluatorCompletionIndex({
                         {p.evaluation_period_name}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-[200px]">
+                <label className="text-sm font-medium mb-2 block">Filter by Status</label>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="complete">Complete</SelectItem>
+                    <SelectItem value="incomplete">Incomplete</SelectItem>
+                    <SelectItem value="partial">Partially Complete</SelectItem>
+                    <SelectItem value="not_started">Not Started</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -16,9 +16,14 @@ class EvaluatorCompletionController extends Controller
     {
         $search = $request->query('search', '');
         $periodId = $request->query('period_id');
+        $status = $request->query('status');
         
         if ($periodId === 'all' || $periodId === '') {
             $periodId = null;
+        }
+        
+        if ($status === 'all' || $status === '') {
+            $status = null;
         }
 
         // Get all evaluators (users who have evaluation responses or are in evaluator groups)
@@ -298,6 +303,24 @@ class EvaluatorCompletionController extends Controller
                 return $stat['total_evaluations'] > 0;
             });
 
+            // Apply status filter if provided
+            if ($status) {
+                $periodEvaluators = $periodEvaluators->filter(function ($stat) use ($status) {
+                    switch ($status) {
+                        case 'complete':
+                            return $stat['is_complete'];
+                        case 'incomplete':
+                            return !$stat['is_complete'];
+                        case 'partial':
+                            return !$stat['is_complete'] && $stat['completed_evaluations'] > 0;
+                        case 'not_started':
+                            return !$stat['is_complete'] && $stat['completed_evaluations'] === 0;
+                        default:
+                            return true;
+                    }
+                });
+            }
+
             // Sort by completion percentage (incomplete first)
             $periodEvaluators = $periodEvaluators->sortBy([
                 ['is_complete', 'asc'],
@@ -317,7 +340,7 @@ class EvaluatorCompletionController extends Controller
         return Inertia::render('evaluator-completion/index', [
             'evaluatorsByPeriod' => $evaluatorsByPeriod,
             'periods' => $periods,
-            'request' => $request->only('search', 'period_id'),
+            'request' => $request->only('search', 'period_id', 'status'),
         ]);
     }
 }
