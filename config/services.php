@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'powerbi' => [
+        'key' => env('POWER_BI_API_KEY'),
+    ],
+
 ];
