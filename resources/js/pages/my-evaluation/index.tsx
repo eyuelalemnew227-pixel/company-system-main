@@ -42,7 +42,7 @@ export default function MyEvaluationIndex({
 			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
 				<Card>
 					<CardHeader className="flex items-center justify-between">
-						<CardTitle>tekeyere</CardTitle>
+						<CardTitle>Fill Evaluation</CardTitle>
 						<form className="ml-4 flex gap-2" onSubmit={submitSearch}>
 							<Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search evaluations..." />
 							<Button type="submit" variant="outline">

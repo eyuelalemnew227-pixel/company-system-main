@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { MultiSelect } from '@/components/ui/multi-select';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
@@ -70,6 +71,11 @@ interface EvaluationPeriod {
   evaluation_period_name: string;
 }
 
+interface Evaluation {
+  id: number;
+  name: string;
+}
+
 interface EvaluatorsByPeriod {
   [key: number]: {
     period: EvaluationPeriod;
@@ -79,16 +85,21 @@ interface EvaluatorsByPeriod {
 
 export default function EvaluatorCompletionIndex({ 
   evaluatorsByPeriod, 
-  periods, 
+  periods,
+  evaluations,
   request 
 }: { 
   evaluatorsByPeriod: EvaluatorsByPeriod;
   periods: EvaluationPeriod[];
-  request?: { search?: string; period_id?: string; status?: string };
+  evaluations: Evaluation[];
+  request?: { search?: string; period_id?: string; status?: string; evaluation_names?: string };
 }) {
   const [search, setSearch] = useState<string>(request?.search ?? '');
   const [periodId, setPeriodId] = useState<string>(request?.period_id ?? 'all');
   const [status, setStatus] = useState<string>(request?.status ?? 'all');
+  const [selectedEvaluationNames, setSelectedEvaluationNames] = useState<string[]>(
+    request?.evaluation_names ? request.evaluation_names.split(',') : []
+  );
   const [selectedEvaluator, setSelectedEvaluator] = useState<EvaluatorStats | null>(null);
 
   function submitSearch(e: React.FormEvent) {
@@ -96,7 +107,8 @@ export default function EvaluatorCompletionIndex({
     router.get('/evaluator-completion', { 
       search, 
       period_id: periodId !== 'all' ? periodId : undefined,
-      status: status !== 'all' ? status : undefined
+      status: status !== 'all' ? status : undefined,
+      evaluation_names: selectedEvaluationNames.length > 0 ? selectedEvaluationNames.join(',') : undefined
     }, { preserveState: true, replace: true });
   }
 
@@ -168,49 +180,62 @@ export default function EvaluatorCompletionIndex({
             <CardTitle>Search & Filter</CardTitle>
           </CardHeader>
           <CardContent>
-            <form className="flex gap-4 items-end" onSubmit={submitSearch}>
-              <div className="flex-1">
-                <label className="text-sm font-medium mb-2 block">Search Evaluators</label>
-                <Input 
-                  value={search} 
-                  onChange={(e) => setSearch(e.target.value)} 
-                  placeholder="Search by name, employee code, department..." 
-                />
+            <form className="space-y-4" onSubmit={submitSearch}>
+              <div className="flex gap-4 items-end">
+                <div className="flex-1">
+                  <label className="text-sm font-medium mb-2 block">Search Evaluators</label>
+                  <Input 
+                    value={search} 
+                    onChange={(e) => setSearch(e.target.value)} 
+                    placeholder="Search by name, employee code, department..." 
+                  />
+                </div>
+                <div className="w-[200px]">
+                  <label className="text-sm font-medium mb-2 block">Filter by Period</label>
+                  <Select value={periodId} onValueChange={setPeriodId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select evaluation period" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Periods</SelectItem>
+                      {periods.map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>
+                          {p.evaluation_period_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="w-[200px]">
+                  <label className="text-sm font-medium mb-2 block">Filter by Status</label>
+                  <Select value={status} onValueChange={setStatus}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="complete">Complete</SelectItem>
+                      <SelectItem value="incomplete">Incomplete</SelectItem>
+                      <SelectItem value="partial">Partially Complete</SelectItem>
+                      <SelectItem value="not_started">Not Started</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="w-[200px]">
-                <label className="text-sm font-medium mb-2 block">Filter by Period</label>
-                <Select value={periodId} onValueChange={setPeriodId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select evaluation period" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Periods</SelectItem>
-                    {periods.map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>
-                        {p.evaluation_period_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="flex gap-4 items-end">
+                <div className="flex-1">
+                  <label className="text-sm font-medium mb-2 block">Filter by Evaluation</label>
+                  <MultiSelect
+                    options={evaluations.map((e) => ({ value: e.name, label: e.name }))}
+                    selected={selectedEvaluationNames}
+                    onChange={setSelectedEvaluationNames}
+                    placeholder="Select evaluations (e.g., Branch Managers Evaluation)..."
+                  />
+                </div>
+                <Button type="submit" variant="outline">
+                  Apply Filters
+                </Button>
               </div>
-              <div className="w-[200px]">
-                <label className="text-sm font-medium mb-2 block">Filter by Status</label>
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="complete">Complete</SelectItem>
-                    <SelectItem value="incomplete">Incomplete</SelectItem>
-                    <SelectItem value="partial">Partially Complete</SelectItem>
-                    <SelectItem value="not_started">Not Started</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="submit" variant="outline">
-                Apply Filters
-              </Button>
             </form>
           </CardContent>
         </Card>

@@ -211,7 +211,7 @@ class MyEvaluationController extends Controller
             ]);
         }
 
-        return redirect()->route('my-evaluation.index')->with('message', 'Evaluation submitted successfully!');
+        return back()->with('message', 'Evaluation submitted successfully!');
     }
 
     public function history(Request $request)

@@ -17,6 +17,7 @@ class EvaluatorCompletionController extends Controller
         $search = $request->query('search', '');
         $periodId = $request->query('period_id');
         $status = $request->query('status');
+        $evaluationNames = $request->query('evaluation_names');
         
         if ($periodId === 'all' || $periodId === '') {
             $periodId = null;
@@ -24,6 +25,12 @@ class EvaluatorCompletionController extends Controller
         
         if ($status === 'all' || $status === '') {
             $status = null;
+        }
+        
+        // Parse evaluation_names if provided (comma-separated string)
+        $selectedEvaluationNames = null;
+        if ($evaluationNames && $evaluationNames !== 'all') {
+            $selectedEvaluationNames = explode(',', $evaluationNames);
         }
 
         // Get all evaluators (users who have evaluation responses or are in evaluator groups)
@@ -47,6 +54,13 @@ class EvaluatorCompletionController extends Controller
         $periods = \App\Models\EvaluationPeriod::select('id', 'evaluation_period_name')
             ->orderBy('id', 'desc')
             ->get();
+        
+        // Get all evaluations for filter dropdown with distinct names
+        $allEvaluations = Evaluation::select('id', 'name')
+            ->orderBy('name')
+            ->get()
+            ->unique('name')
+            ->values();
 
         // Group evaluators by period - calculate stats per period
         $evaluatorsByPeriod = [];
@@ -57,11 +71,14 @@ class EvaluatorCompletionController extends Controller
                 continue;
             }
 
-            $periodEvaluators = $evaluators->map(function ($evaluator) use ($period) {
+            $periodEvaluators = $evaluators->map(function ($evaluator) use ($period, $selectedEvaluationNames) {
                 // Get all evaluations this evaluator should complete
                 $evaluations = Evaluation::query()
                     ->whereHas('evaluatorGroup.employees', function ($query) use ($evaluator) {
                         $query->where('employee_id', $evaluator->employee_id);
+                    })
+                    ->when($selectedEvaluationNames, function ($query) use ($selectedEvaluationNames) {
+                        $query->whereIn('name', $selectedEvaluationNames);
                     })
                     ->with([
                         'evaluatesGroup.employees.user', 
@@ -340,7 +357,8 @@ class EvaluatorCompletionController extends Controller
         return Inertia::render('evaluator-completion/index', [
             'evaluatorsByPeriod' => $evaluatorsByPeriod,
             'periods' => $periods,
-            'request' => $request->only('search', 'period_id', 'status'),
+            'evaluations' => $allEvaluations,
+            'request' => $request->only('search', 'period_id', 'status', 'evaluation_names'),
         ]);
     }
 }
