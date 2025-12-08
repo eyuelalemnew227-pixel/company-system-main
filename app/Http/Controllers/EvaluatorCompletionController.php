@@ -95,6 +95,11 @@ class EvaluatorCompletionController extends Controller
                 $allEvaluatees = collect();
                 
                 foreach ($evaluations as $evaluation) {
+                    // Skip if evaluatesGroup is null
+                    if (!$evaluation->evaluatesGroup) {
+                        continue;
+                    }
+                    
                     $evaluableType = $evaluation->evaluatesGroup->evaluable_type;
                     
                     // Get the appropriate evaluatees based on evaluable_type
