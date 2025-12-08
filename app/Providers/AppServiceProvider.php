@@ -22,5 +22,10 @@ class AppServiceProvider extends ServiceProvider
     {
         // Fix for older MySQL/MariaDB 'Specified key was too long' errors
         Schema::defaultStringLength(191);
+
+        // Force HTTPS when behind proxy (ngrok, cloudflare, etc)
+        if (request()->header('X-Forwarded-Proto') === 'https' || request()->header('X-Forwarded-Ssl') === 'on') {
+            \URL::forceScheme('https');
+        }
     }
 }

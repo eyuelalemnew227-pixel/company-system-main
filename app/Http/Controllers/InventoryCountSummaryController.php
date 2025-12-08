@@ -207,6 +207,7 @@ class InventoryCountSummaryController extends Controller
                 p.measurement,
                 SUM(ic.count) as total_count
             ')
+            ->where('ic.is_approved', true)
             ->when($branchId, function ($q) use ($branchId) {
                 $q->where('ic.branch_id', $branchId);
             })

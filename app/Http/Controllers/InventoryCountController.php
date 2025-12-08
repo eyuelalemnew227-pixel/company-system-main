@@ -65,8 +65,25 @@ class InventoryCountController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($subQuery) use ($search) {
                 $subQuery->where('count', 'like', "%{$search}%")
-                    ->orWhere('created_by', 'like', "%{$search}%")
-                    ->orWhere('updated_by', 'like', "%{$search}%");
+                    ->orWhereHas('product', function ($q) use ($search) {
+                        $q->where('product_name', 'like', "%{$search}%")
+                          ->orWhere('product_code', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('branch', function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('childCategory', function ($q) use ($search) {
+                        $q->where('child_name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('creator', function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('updater', function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('approver', function ($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%");
+                    });
             });
         }
 
@@ -86,7 +103,7 @@ class InventoryCountController extends Controller
         return Inertia::render('inventory-counts/index', [
             'inventoryCounts' => $inventoryCounts,
             'branches' => $canManageAllBranches ? Branch::all(['id', 'name']) : [],
-            'inventoryPeriods' => InventoryPeriod::where('status', 'active')->get(['id', 'inventory_period_name']),
+            'inventoryPeriods' => InventoryPeriod::all(['id', 'inventory_period_name', 'status']),
             'childCategories' => ChildCategory::where('status', 'Active')->get(['id', 'child_name']),
             'filters' => $request->only(['search', 'branch_id', 'inventory_period_id', 'child_category_id', 'product_id', 'approval_status', 'per_page']),
             'canManageAllBranches' => $canManageAllBranches,
@@ -109,7 +126,7 @@ class InventoryCountController extends Controller
             'branches' => $canManageAllBranches ? Branch::all(['id', 'name']) : Branch::where('id', $userBranchId)->get(['id', 'name']),
             'inventoryPeriods' => InventoryPeriod::where('status', 'active')->get(['id', 'inventory_period_name']),
             'childCategories' => ChildCategory::where('status', 'Active')->get(['id', 'child_name']),
-            'products' => Product::with('childCategory:id,child_name')->get(['id', 'product_name', 'child_category_id']),
+            'products' => Product::where('status', 'Active')->with('childCategory:id,child_name')->get(['id', 'product_name', 'child_category_id', 'min_count_threshold', 'max_count_threshold', 'status']),
             'canManageAllBranches' => $canManageAllBranches,
             'userBranchId' => $userBranchId,
         ]);
@@ -190,7 +207,7 @@ class InventoryCountController extends Controller
             'branches' => $canManageAllBranches ? Branch::all(['id', 'name']) : Branch::where('id', $userBranchId)->get(['id', 'name']),
             'inventoryPeriods' => InventoryPeriod::where('status', 'active')->get(['id', 'inventory_period_name']),
             'childCategories' => ChildCategory::where('status', 'Active')->get(['id', 'child_name']),
-            'products' => Product::with('childCategory:id,child_name')->get(['id', 'product_name', 'child_category_id']),
+            'products' => Product::where('status', 'Active')->with('childCategory:id,child_name')->get(['id', 'product_name', 'child_category_id', 'min_count_threshold', 'max_count_threshold', 'status']),
             'canManageAllBranches' => $canManageAllBranches,
         ]);
     }
@@ -272,6 +289,28 @@ class InventoryCountController extends Controller
     }
 
     /**
+     * API: Get existing counts for products in a category during a period
+     */
+    public function getExistingCounts(Request $request): JsonResponse
+    {
+        $request->validate([
+            'inventory_period_id' => ['required', 'integer', 'exists:inventory_periods,id'],
+            'child_category_id' => ['required', 'integer', 'exists:child_categories,id'],
+        ]);
+
+        $periodId = $request->query('inventory_period_id');
+        $categoryId = $request->query('child_category_id');
+
+        $existingCounts = InventoryCount::where('inventory_period_id', $periodId)
+            ->where('child_category_id', $categoryId)
+            ->with('product:id,product_name')
+            ->get(['id', 'product_id', 'count', 'is_approved'])
+            ->keyBy('product_id');
+
+        return response()->json($existingCounts);
+    }
+
+    /**
      * Store multiple inventory counts at once.
      */
     public function bulkStore(Request $request): RedirectResponse
@@ -333,15 +372,38 @@ class InventoryCountController extends Controller
         }
 
         $userId = auth()->id();
+        $createdCount = 0;
+        $updatedCount = 0;
 
         foreach ($validated as $countData) {
-            $countData['created_by'] = $userId;
-            $countData['updated_by'] = $userId;
-            
-            InventoryCount::create($countData);
+            $existingCount = InventoryCount::where('product_id', $countData['product_id'])
+                ->where('inventory_period_id', $countData['inventory_period_id'])
+                ->first();
+
+            if ($existingCount) {
+                $existingCount->update([
+                    'count' => $countData['count'],
+                    'updated_by' => $userId,
+                ]);
+                $updatedCount++;
+            } else {
+                $countData['created_by'] = $userId;
+                $countData['updated_by'] = $userId;
+                InventoryCount::create($countData);
+                $createdCount++;
+            }
         }
 
-        return back()->with('success', count($validated) . ' inventory count(s) created successfully.');
+        $message = '';
+        if ($createdCount > 0) {
+            $message .= "{$createdCount} inventory count(s) created";
+        }
+        if ($updatedCount > 0) {
+            $message .= ($createdCount > 0 ? ' and ' : '') . "{$updatedCount} inventory count(s) updated";
+        }
+        $message .= ' successfully.';
+
+        return back()->with('success', $message);
     }
 
     /**
@@ -513,13 +575,30 @@ class InventoryCountController extends Controller
             'ids.*' => ['required', 'integer', 'exists:inventory_counts,id'],
         ]);
 
-        $counts = InventoryCount::with('inventoryPeriod')
+        // Get all requested counts
+        $allCounts = InventoryCount::with('inventoryPeriod')
             ->whereIn('id', $validated['ids'])
-            ->where('is_approved', false)
             ->get();
 
+        // Check if any are already approved
+        $alreadyApproved = $allCounts->filter(function ($count) {
+            return $count->is_approved;
+        });
+
+        // Get only unapproved counts
+        $counts = $allCounts->filter(function ($count) {
+            return !$count->is_approved;
+        });
+
+        // If all selected items are already approved
+        if ($alreadyApproved->isNotEmpty() && $counts->isEmpty()) {
+            $countText = $alreadyApproved->count() === 1 ? 'item is' : 'items are';
+            return back()->withErrors(['error' => "The selected {$countText} already approved."]);
+        }
+
+        // If no valid items found at all
         if ($counts->isEmpty()) {
-            return back()->withErrors(['error' => 'No unapproved inventory counts found with the provided IDs.']);
+            return back()->withErrors(['error' => 'No valid inventory counts found to approve.']);
         }
 
         // Check if all counts are from active periods
@@ -528,7 +607,8 @@ class InventoryCountController extends Controller
         });
 
         if ($inactiveCounts->isNotEmpty()) {
-            return back()->withErrors(['error' => 'Cannot approve inventory counts from inactive periods.']);
+            $countText = $inactiveCounts->count() === 1 ? 'count is' : 'counts are';
+            return back()->withErrors(['error' => "Some selected inventory {$countText} from inactive periods and cannot be approved."]);
         }
 
         $userId = auth()->id();
@@ -599,13 +679,30 @@ class InventoryCountController extends Controller
             'ids.*' => ['required', 'integer', 'exists:inventory_counts,id'],
         ]);
 
-        $counts = InventoryCount::with('inventoryPeriod')
+        // Get all requested counts
+        $allCounts = InventoryCount::with('inventoryPeriod')
             ->whereIn('id', $validated['ids'])
-            ->where('is_approved', true)
             ->get();
 
+        // Check if any are not approved
+        $notApproved = $allCounts->filter(function ($count) {
+            return !$count->is_approved;
+        });
+
+        // Get only approved counts
+        $counts = $allCounts->filter(function ($count) {
+            return $count->is_approved;
+        });
+
+        // If all selected items are not approved
+        if ($notApproved->isNotEmpty() && $counts->isEmpty()) {
+            $countText = $notApproved->count() === 1 ? 'item is' : 'items are';
+            return back()->withErrors(['error' => "The selected {$countText} not approved yet."]);
+        }
+
+        // If no valid items found at all
         if ($counts->isEmpty()) {
-            return back()->withErrors(['error' => 'No approved inventory counts found with the provided IDs.']);
+            return back()->withErrors(['error' => 'No valid inventory counts found to unapprove.']);
         }
 
         // Check if all counts are from active periods
@@ -614,7 +711,8 @@ class InventoryCountController extends Controller
         });
 
         if ($inactiveCounts->isNotEmpty()) {
-            return back()->withErrors(['error' => 'Cannot unapprove inventory counts from inactive periods.']);
+            $countText = $inactiveCounts->count() === 1 ? 'count is' : 'counts are';
+            return back()->withErrors(['error' => "Some selected inventory {$countText} from inactive periods and cannot be unapproved."]);
         }
 
         foreach ($counts as $count) {

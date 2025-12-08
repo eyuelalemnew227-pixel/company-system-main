@@ -113,6 +113,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Inventory Counts
     Route::middleware('permission:view inventory counts')->group(function () {
+        Route::get('inventory-counts/existing', [\App\Http\Controllers\InventoryCountController::class, 'getExistingCounts'])->name('inventory-counts.existing');
         Route::post('inventory-counts/bulk', [\App\Http\Controllers\InventoryCountController::class, 'bulkStore'])->name('inventory-counts.bulk');
         Route::put('inventory-counts/{inventoryCount}/approve', [\App\Http\Controllers\InventoryCountController::class, 'approve'])->name('inventory-counts.approve');
         Route::put('inventory-counts/{inventoryCount}/unapprove', [\App\Http\Controllers\InventoryCountController::class, 'unapprove'])->name('inventory-counts.unapprove');

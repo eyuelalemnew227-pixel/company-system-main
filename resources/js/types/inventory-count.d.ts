@@ -59,6 +59,8 @@ export type Product = {
 	product_code?: string | null;
 	unit_price?: number | null;
 	child_category_id: number | null;
+	min_count_threshold?: string | null;
+	max_count_threshold?: string | null;
 };
 
 export type InventoryPeriod = {

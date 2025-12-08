@@ -55,10 +55,25 @@ export default function EditInventoryCount({
 			count: parseFloat(count),
 		}, {
 			onSuccess: () => {
-				toast.success('Inventory count updated');
+				const productName = products.find(p => p.id === Number(productId))?.product_name || 'Product';
+				toast.success(`${productName}: Count updated successfully to ${count}`, {
+					duration: 3000,
+				});
 			},
-			onError: () => {
-				toast.error('Failed to update inventory count');
+			onError: (errors) => {
+				// Extract specific error message
+				let errorMessage = 'Unable to update count';
+				
+				if (errors.count) {
+					errorMessage = errors.count;
+				} else if (errors.message) {
+					errorMessage = errors.message;
+				}
+				
+				const productName = products.find(p => p.id === Number(productId))?.product_name || 'Product';
+				toast.error(`${productName}: ${errorMessage}`, {
+					duration: 5000,
+				});
 			}
 		});
 	}
@@ -160,6 +175,24 @@ export default function EditInventoryCount({
 								</div>
 								<div className="space-y-2">
 									<Label htmlFor="count">Count *</Label>
+									{productId && (() => {
+										const selectedProduct = products.find(p => p.id === Number(productId));
+										const hasThresholds = selectedProduct?.min_count_threshold || selectedProduct?.max_count_threshold;
+										
+										return hasThresholds && (
+											<div className="text-xs text-muted-foreground mb-1">
+												{selectedProduct?.min_count_threshold && selectedProduct?.max_count_threshold && (
+													<span>Valid range: {selectedProduct.min_count_threshold} - {selectedProduct.max_count_threshold}</span>
+												)}
+												{selectedProduct?.min_count_threshold && !selectedProduct?.max_count_threshold && (
+													<span>Minimum: {selectedProduct.min_count_threshold}</span>
+												)}
+												{!selectedProduct?.min_count_threshold && selectedProduct?.max_count_threshold && (
+													<span>Maximum: {selectedProduct.max_count_threshold}</span>
+												)}
+											</div>
+										);
+									})()}
 									<Input
 										id="count"
 										type="number"

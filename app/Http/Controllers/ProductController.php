@@ -30,6 +30,10 @@ class ProductController extends Controller
             $query->where('child_category_id', $childCategoryId);
         }
 
+        if ($status = $request->query('status')) {
+            $query->where('status', $status);
+        }
+
         $perPage = (int) $request->query('per_page', 15);
         $perPage = $perPage > 0 ? $perPage : 15;
 
@@ -38,7 +42,7 @@ class ProductController extends Controller
         return Inertia::render('products/Index', [
             'products' => $products,
             'childCategories' => ChildCategory::where('status', 'Active')->get(['id', 'child_name']),
-            'filters' => $request->only(['search', 'child_category_id', 'per_page']),
+            'filters' => $request->only(['search', 'child_category_id', 'status', 'per_page']),
         ]);
     }
 
@@ -59,6 +63,7 @@ class ProductController extends Controller
     {
         $validated = $request->validate([
             'product_name' => ['required', 'string', 'max:100'],
+            'status' => ['required', Rule::in(['Active', 'Inactive'])],
             'product_code' => ['nullable', 'string', 'max:50'],
             'unit_cost' => ['nullable', 'numeric', 'min:0'],
             'child_category_id' => ['required', 'integer', 'exists:child_categories,id'],
@@ -97,6 +102,7 @@ class ProductController extends Controller
     {
         $validated = $request->validate([
             'product_name' => ['required', 'string', 'max:100'],
+            'status' => ['required', Rule::in(['Active', 'Inactive'])],
             'product_code' => ['nullable', 'string', 'max:50'],
             'unit_cost' => ['nullable', 'numeric', 'min:0'],
             'child_category_id' => ['required', 'integer', 'exists:child_categories,id'],

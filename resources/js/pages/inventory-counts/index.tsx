@@ -29,6 +29,7 @@ type Filters = {
 	branch_id?: string;
 	child_category_id?: string;
 	approval_status?: string;
+	inventory_period_id?: string;
 };
 
 type PageProps = {
@@ -63,6 +64,7 @@ export default function InventoryCountsIndex({
 	const [branchFilter, setBranchFilter] = useState<string>(filters.branch_id ?? 'all');
 	const [categoryFilter, setCategoryFilter] = useState<string>(filters.child_category_id ?? 'all');
 	const [approvalFilter, setApprovalFilter] = useState<string>(filters.approval_status ?? 'all');
+	const [periodFilter, setPeriodFilter] = useState<string>(filters.inventory_period_id ?? 'all');
 	const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
 	function handleFilter() {
@@ -71,6 +73,7 @@ export default function InventoryCountsIndex({
 		if (branchFilter !== 'all') params.branch_id = branchFilter;
 		if (categoryFilter !== 'all') params.child_category_id = categoryFilter;
 		if (approvalFilter !== 'all') params.approval_status = approvalFilter;
+		if (periodFilter !== 'all') params.inventory_period_id = periodFilter;
 		
 		router.get('/inventory-counts', params, {
 			preserveState: true,
@@ -84,7 +87,10 @@ export default function InventoryCountsIndex({
 		router.delete(route('inventory-counts.destroy', id), {
 			preserveScroll: true,
 			onSuccess: () => toast.success('Deleted successfully'),
-			onError: () => toast.error('Delete failed'),
+			onError: (errors) => {
+				const errorMessage = errors.error || 'Delete failed. Please try again.';
+				toast.error(errorMessage);
+			},
 		});
 	}
 
@@ -92,7 +98,10 @@ export default function InventoryCountsIndex({
 		router.put(route('inventory-counts.approve', id), {}, {
 			preserveScroll: true,
 			onSuccess: () => toast.success('Approved successfully'),
-			onError: () => toast.error('Approval failed'),
+			onError: (errors) => {
+				const errorMessage = errors.error || 'Approval failed. Please try again.';
+				toast.error(errorMessage);
+			},
 		});
 	}
 
@@ -101,7 +110,10 @@ export default function InventoryCountsIndex({
 		router.put(route('inventory-counts.unapprove', id), {}, {
 			preserveScroll: true,
 			onSuccess: () => toast.success('Unapproved successfully'),
-			onError: () => toast.error('Unapprove failed'),
+			onError: (errors) => {
+				const errorMessage = errors.error || 'Unapprove failed. Please try again.';
+				toast.error(errorMessage);
+			},
 		});
 	}
 
@@ -116,7 +128,10 @@ export default function InventoryCountsIndex({
 				toast.success(`${selectedIds.length} item(s) approved successfully`);
 				setSelectedIds([]);
 			},
-			onError: () => toast.error('Bulk approval failed'),
+			onError: (errors) => {
+				const errorMessage = errors.error || 'Approval failed. Please try again.';
+				toast.error(errorMessage);
+			},
 		});
 	}
 
@@ -132,7 +147,10 @@ export default function InventoryCountsIndex({
 				toast.success(`${selectedIds.length} item(s) unapproved successfully`);
 				setSelectedIds([]);
 			},
-			onError: () => toast.error('Bulk unapprove failed'),
+			onError: (errors) => {
+				const errorMessage = errors.error || 'Unapprove failed. Please try again.';
+				toast.error(errorMessage);
+			},
 		});
 	}
 
@@ -183,11 +201,11 @@ export default function InventoryCountsIndex({
 								handleFilter();
 							}}
 						>
-							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
+							<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
 								<Input 
 									value={search} 
 									onChange={(e) => setSearch(e.target.value)} 
-									placeholder="Search..." 
+									placeholder="Search by product, branch, category, or user..." 
 									className="w-full"
 								/>
 								{canManageAllBranches && (
@@ -208,6 +226,22 @@ export default function InventoryCountsIndex({
 										</SelectContent>
 									</Select>
 								)}
+								<Select
+									value={periodFilter}
+									onValueChange={setPeriodFilter}
+								>
+									<SelectTrigger className="w-full">
+										<SelectValue placeholder="Filter by period" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="all">All Periods</SelectItem>
+										{inventoryPeriods.map((period) => (
+											<SelectItem key={period.id} value={String(period.id)}>
+												{period.inventory_period_name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 								<Select
 									value={categoryFilter}
 									onValueChange={setCategoryFilter}

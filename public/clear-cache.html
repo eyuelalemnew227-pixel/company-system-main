@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear App Cache</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+        h1 { margin-bottom: 20px; }
+        button {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin: 10px;
+            font-weight: bold;
+        }
+        button:hover {
+            transform: scale(1.05);
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Clear App Cache</h1>
+        <p>If the app shows blank/empty, click below to clear cache:</p>
+        
+        <button onclick="clearEverything()">Clear All Cache</button>
+        <button onclick="unregisterServiceWorker()">Remove Service Worker</button>
+        <button onclick="location.href='/'">Go to App</button>
+        
+        <div id="status"></div>
+    </div>
+
+    <script>
+        async function clearEverything() {
+            const status = document.getElementById('status');
+            status.innerHTML = 'Clearing...';
+            
+            try {
+                // Clear all caches
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(name => caches.delete(name)));
+                status.innerHTML = '✅ Cache cleared!';
+                
+                setTimeout(() => {
+                    status.innerHTML += '<br>Reloading...';
+                    location.reload();
+                }, 1000);
+            } catch (error) {
+                status.innerHTML = '❌ Error: ' + error.message;
+            }
+        }
+
+        async function unregisterServiceWorker() {
+            const status = document.getElementById('status');
+            status.innerHTML = 'Removing service worker...';
+            
+            try {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map(reg => reg.unregister()));
+                status.innerHTML = '✅ Service worker removed!';
+                
+                setTimeout(() => {
+                    status.innerHTML += '<br>Reloading...';
+                    location.reload();
+                }, 1000);
+            } catch (error) {
+                status.innerHTML = '❌ Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -12,6 +12,7 @@ type ChildCategory = { id: number; child_name: string };
 type Product = {
 	id: number;
 	product_name: string;
+	status?: string;
 	product_code?: string | null;
 	unit_cost?: number | null;
 	child_category_id: number;
@@ -30,6 +31,7 @@ export default function EditProduct({ product, childCategories = [] }: PageProps
 	const { can } = usePermission();
 
 	const [productName, setProductName] = useState(product.product_name);
+	const [status, setStatus] = useState<string>(product.status || 'Active');
 	const [productCode, setProductCode] = useState(product.product_code ?? '');
 	const [unitCost, setUnitCost] = useState(product.unit_cost ? String(product.unit_cost) : '');
 	const [childCategoryId, setChildCategoryId] = useState<string>(String(product.child_category_id));
@@ -41,6 +43,7 @@ export default function EditProduct({ product, childCategories = [] }: PageProps
 		e.preventDefault();
 		router.put(route('products.update', product.id), {
 			product_name: productName,
+			status: status,
 			product_code: productCode || null,
 			unit_cost: unitCost ? Number(unitCost) : null,
 			child_category_id: Number(childCategoryId),
@@ -61,8 +64,20 @@ export default function EditProduct({ product, childCategories = [] }: PageProps
 					<CardContent>
 						<form className="grid max-w-xl gap-4" onSubmit={save}>
 								<div className="grid gap-2">
-									<Label htmlFor="product_name">Name</Label>
+									<Label htmlFor="product_name">Name *</Label>
 									<Input id="product_name" value={productName} onChange={(e) => setProductName(e.target.value)} required maxLength={100} />
+								</div>
+								<div className="grid gap-2">
+									<Label>Status *</Label>
+									<Select value={status} onValueChange={(v) => setStatus(v)}>
+										<SelectTrigger>
+											<SelectValue placeholder="Select status" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="Active">Active</SelectItem>
+											<SelectItem value="Inactive">Inactive</SelectItem>
+										</SelectContent>
+									</Select>
 								</div>
 								<div className="grid gap-2">
 									<Label htmlFor="product_code">Product Code</Label>

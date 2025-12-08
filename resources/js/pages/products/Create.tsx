@@ -17,6 +17,7 @@ type PageProps = {
 export default function CreateProduct({ childCategories = [] }: PageProps) {
 	const { can } = usePermission();
 	const [productName, setProductName] = useState('');
+	const [status, setStatus] = useState<string>('Active');
 	const [productCode, setProductCode] = useState('');
 	const [unitCost, setUnitCost] = useState('');
 	const [childCategoryId, setChildCategoryId] = useState<string>('');
@@ -28,6 +29,7 @@ export default function CreateProduct({ childCategories = [] }: PageProps) {
 		e.preventDefault();
 		router.post(route('products.store'), {
 			product_name: productName,
+			status: status,
 			product_code: productCode || null,
 			unit_cost: unitCost ? Number(unitCost) : null,
 			child_category_id: Number(childCategoryId),
@@ -48,8 +50,20 @@ export default function CreateProduct({ childCategories = [] }: PageProps) {
 					<CardContent>
 						<form className="grid max-w-xl gap-4" onSubmit={submit}>
 							<div className="grid gap-2">
-								<Label htmlFor="product_name">Name</Label>
+								<Label htmlFor="product_name">Name *</Label>
 								<Input id="product_name" value={productName} onChange={(e) => setProductName(e.target.value)} required maxLength={100} />
+							</div>
+							<div className="grid gap-2">
+								<Label>Status *</Label>
+								<Select value={status} onValueChange={(v) => setStatus(v)}>
+									<SelectTrigger>
+										<SelectValue placeholder="Select status" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="Active">Active</SelectItem>
+										<SelectItem value="Inactive">Inactive</SelectItem>
+									</SelectContent>
+								</Select>
 							</div>
 							<div className="grid gap-2">
 								<Label htmlFor="product_code">Product Code</Label>
