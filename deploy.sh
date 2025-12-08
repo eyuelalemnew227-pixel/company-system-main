@@ -1,43 +1,134 @@
 #!/bin/bash
 
-# Laravel + React Deployment Script for Plesk
-# Run this script on your Plesk server
+# Company Inventory System - Deployment Script
+# This script handles deployment on production servers
 
-echo "Starting deployment..."
+set -e  # Exit on any error
 
-# 1. Pull latest code from git
-echo "Pulling latest code..."
-git pull origin main
+echo "========================================"
+echo "  Deploying Company Inventory System"
+echo "========================================"
+echo ""
 
-# 2. Install/Update PHP dependencies
-echo "Installing PHP dependencies..."
-composer install --no-dev --optimize-autoloader
+# Configuration
+PROJECT_PATH=$(pwd)
+PHP_FPM_SERVICE="php8.1-fpm"  # Change to php8.2-fpm if using PHP 8.2
+WEB_SERVER="apache2"          # Change to "nginx" if using Nginx
+WEB_USER="www-data"           # Change to your web server user
 
-# 3. Install/Update Node.js dependencies
-echo "Installing Node.js dependencies..."
-npm ci
+# Step 1: Pull latest code
+echo "📥 Pulling latest code from repository..."
+git pull origin main || git pull origin abreham
+echo "✅ Code updated"
+echo ""
 
-# 4. Build React assets
-echo "Building React assets..."
+# Step 2: Install PHP dependencies
+echo "📦 Installing PHP dependencies..."
+composer install --no-dev --optimize-autoloader --no-interaction
+echo "✅ PHP dependencies installed"
+echo ""
+
+# Step 3: Install Node dependencies
+echo "📦 Installing Node dependencies..."
+npm ci --production=false
+echo "✅ Node dependencies installed"
+echo ""
+
+# Step 4: Build frontend assets
+echo "🔨 Building frontend assets for production..."
+export NODE_ENV=production
 npm run build
+echo "✅ Frontend assets built"
+echo ""
 
-# 5. Set proper permissions
-echo "Setting permissions..."
-chmod -R 755 storage bootstrap/cache
-chown -R www-data:www-data storage bootstrap/cache
+# Step 5: Remove Vite hot file (CRITICAL!)
+echo "🗑️  Removing Vite hot file..."
+rm -f public/hot
+echo "✅ Hot file removed"
+echo ""
 
-# 6. Clear and cache configurations
-echo "Optimizing Laravel..."
+# Step 6: Run database migrations
+echo "🗄️  Running database migrations..."
+php artisan migrate --force
+echo "✅ Migrations completed"
+echo ""
+
+# Step 7: Clear all caches
+echo "🧹 Clearing application caches..."
+php artisan config:clear
+php artisan cache:clear
+php artisan route:clear
+php artisan view:clear
+rm -rf bootstrap/cache/*.php
+echo "✅ Caches cleared"
+echo ""
+
+# Step 8: Optimize application
+echo "⚡ Optimizing application..."
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
+php artisan optimize
+echo "✅ Application optimized"
+echo ""
 
-# 7. Run database migrations
-echo "Running database migrations..."
-php artisan migrate --force
+# Step 9: Set proper permissions
+echo "🔒 Setting file permissions..."
+sudo chown -R $WEB_USER:$WEB_USER storage bootstrap/cache public/build
+chmod -R 755 storage
+chmod -R 755 bootstrap/cache
+chmod -R 755 public/build
+echo "✅ Permissions set"
+echo ""
 
-# 8. Clear application cache
-echo "Clearing caches..."
-php artisan cache:clear
+# Step 10: Restart services
+echo "🔄 Restarting services..."
+if [ "$WEB_SERVER" = "nginx" ]; then
+    sudo systemctl restart $PHP_FPM_SERVICE
+    sudo systemctl restart nginx
+    echo "✅ Nginx and PHP-FPM restarted"
+else
+    sudo systemctl restart apache2
+    echo "✅ Apache restarted"
+fi
+echo ""
 
-echo "Deployment completed successfully!"
+# Step 11: Verify deployment
+echo "🔍 Verifying deployment..."
+echo ""
+
+# Check if build files exist
+if [ -f "public/build/manifest.json" ]; then
+    echo "✅ Build manifest exists"
+else
+    echo "❌ WARNING: Build manifest not found!"
+fi
+
+# Check if hot file is gone
+if [ -f "public/hot" ]; then
+    echo "❌ WARNING: Hot file still exists!"
+else
+    echo "✅ Hot file removed"
+fi
+
+# Check environment
+ENV=$(php artisan env)
+echo "✅ Environment: $ENV"
+
+echo ""
+echo "========================================"
+echo "  ✅ Deployment Complete!"
+echo "========================================"
+echo ""
+echo "Next steps:"
+echo "1. Test the application in browser"
+echo "2. Check for console errors (F12)"
+echo "3. Verify PWA installation works"
+echo "4. Test on mobile devices"
+echo ""
+echo "If you see ERR_CONNECTION_REFUSED:"
+echo "  - Run: rm -f public/hot"
+echo "  - Run: npm run build"
+echo "  - Run: php artisan config:clear"
+echo "  - Restart web server"
+echo ""
