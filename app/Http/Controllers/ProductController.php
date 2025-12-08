@@ -62,7 +62,16 @@ class ProductController extends Controller
             'product_code' => ['nullable', 'string', 'max:50'],
             'unit_cost' => ['nullable', 'numeric', 'min:0'],
             'child_category_id' => ['required', 'integer', 'exists:child_categories,id'],
+            'min_count_threshold' => ['nullable', 'numeric', 'min:0'],
+            'max_count_threshold' => ['nullable', 'numeric', 'min:0'],
+            'measurement' => ['nullable', 'numeric', 'min:0.01'],
         ]);
+
+        if ($validated['min_count_threshold'] !== null && $validated['max_count_threshold'] !== null) {
+            if ($validated['max_count_threshold'] < $validated['min_count_threshold']) {
+                return back()->withErrors(['max_count_threshold' => 'The max count threshold must be greater than or equal to the min count threshold.'])->withInput();
+            }
+        }
 
         Product::create($validated);
 
@@ -91,7 +100,16 @@ class ProductController extends Controller
             'product_code' => ['nullable', 'string', 'max:50'],
             'unit_cost' => ['nullable', 'numeric', 'min:0'],
             'child_category_id' => ['required', 'integer', 'exists:child_categories,id'],
+            'min_count_threshold' => ['nullable', 'numeric', 'min:0'],
+            'max_count_threshold' => ['nullable', 'numeric', 'min:0'],
+            'measurement' => ['nullable', 'numeric', 'min:0.01'],
         ]);
+
+        if ($validated['min_count_threshold'] !== null && $validated['max_count_threshold'] !== null) {
+            if ($validated['max_count_threshold'] < $validated['min_count_threshold']) {
+                return back()->withErrors(['max_count_threshold' => 'The max count threshold must be greater than or equal to the min count threshold.'])->withInput();
+            }
+        }
 
         $product->update($validated);
 

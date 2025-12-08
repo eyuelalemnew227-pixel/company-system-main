@@ -11,7 +11,7 @@ type Product = {
 	product_id: number;
 	product_name: string;
 	product_code: string | null;
-	unit_price: string;
+	unit_cost: string;
 	count: string;
 	total_cost: string;
 };
@@ -42,8 +42,14 @@ type PageProps = {
 };
 
 export default function InventoryCountSummaryPage({ data, branches, childCategories, fiscalYears, periods, request }: PageProps) {
-	const defaultFiscalYear = fiscalYears.length > 0 ? String(fiscalYears[0].id) : '';
 	const defaultPeriod = periods.length > 0 ? String(periods[0].id) : '';
+	const defaultFiscalYear = React.useMemo(() => {
+		if (periods.length > 0) {
+			const latestPeriod = periods[0];
+			return String(latestPeriod.fiscal_year_id);
+		}
+		return fiscalYears.length > 0 ? String(fiscalYears[0].id) : '';
+	}, [periods, fiscalYears]);
 
 	const [branchId, setBranchId] = React.useState<string>(request?.branch_id ?? '');
 	const [childCategoryId, setChildCategoryId] = React.useState<string>(request?.child_category_id ?? '');
@@ -52,6 +58,15 @@ export default function InventoryCountSummaryPage({ data, branches, childCategor
 
 	const [expandedBranches, setExpandedBranches] = React.useState<Record<number, boolean>>({});
 	const [expandedCategories, setExpandedCategories] = React.useState<Record<string, boolean>>({});
+
+	React.useEffect(() => {
+		if (!request?.fiscal_year_id && defaultFiscalYear && fiscalYearId !== defaultFiscalYear) {
+			setFiscalYearId(defaultFiscalYear);
+		}
+		if (!request?.period_id && defaultPeriod && periodId !== defaultPeriod) {
+			setPeriodId(defaultPeriod);
+		}
+	}, [defaultFiscalYear, defaultPeriod, request]);
 
 	const filteredPeriods = React.useMemo(() => {
 		if (!fiscalYearId) return periods;
@@ -394,7 +409,7 @@ export default function InventoryCountSummaryPage({ data, branches, childCategor
 																<TableCell className="pl-8">{product.product_name}</TableCell>
 																<TableCell>{product.product_code || '-'}</TableCell>
 																<TableCell className="text-right">{product.count}</TableCell>
-																<TableCell className="text-right">{product.unit_price}</TableCell>
+																<TableCell className="text-right">{product.unit_cost}</TableCell>
 																<TableCell className="text-right">{product.total_cost}</TableCell>
 															</TableRow>
 														))}

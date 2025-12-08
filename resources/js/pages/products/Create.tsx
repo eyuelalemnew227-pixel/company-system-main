@@ -20,6 +20,9 @@ export default function CreateProduct({ childCategories = [] }: PageProps) {
 	const [productCode, setProductCode] = useState('');
 	const [unitCost, setUnitCost] = useState('');
 	const [childCategoryId, setChildCategoryId] = useState<string>('');
+	const [minCountThreshold, setMinCountThreshold] = useState('');
+	const [maxCountThreshold, setMaxCountThreshold] = useState('');
+	const [measurement, setMeasurement] = useState('');
 
 	function submit(e: React.FormEvent) {
 		e.preventDefault();
@@ -28,6 +31,9 @@ export default function CreateProduct({ childCategories = [] }: PageProps) {
 			product_code: productCode || null,
 			unit_cost: unitCost ? Number(unitCost) : null,
 			child_category_id: Number(childCategoryId),
+			min_count_threshold: minCountThreshold ? Number(minCountThreshold) : null,
+			max_count_threshold: maxCountThreshold ? Number(maxCountThreshold) : null,
+			measurement: measurement ? Number(measurement) : null,
 		});
 	}
 
@@ -65,6 +71,18 @@ export default function CreateProduct({ childCategories = [] }: PageProps) {
 										))}
 									</SelectContent>
 								</Select>
+							</div>
+							<div className="grid gap-2">
+								<Label htmlFor="min_count_threshold">Min Count Threshold</Label>
+								<Input id="min_count_threshold" type="number" step="0.01" min="0" value={minCountThreshold} onChange={(e) => setMinCountThreshold(e.target.value)} placeholder="Minimum allowed count" />
+							</div>
+							<div className="grid gap-2">
+								<Label htmlFor="max_count_threshold">Max Count Threshold</Label>
+								<Input id="max_count_threshold" type="number" step="0.01" min="0" value={maxCountThreshold} onChange={(e) => setMaxCountThreshold(e.target.value)} placeholder="Maximum allowed count" />
+							</div>
+							<div className="grid gap-2">
+								<Label htmlFor="measurement">Measurement (Divisor)</Label>
+								<Input id="measurement" type="number" step="0.01" min="0.01" value={measurement} onChange={(e) => setMeasurement(e.target.value)} placeholder="Measurement for inventory calculations" />
 							</div>
 							<div className="flex items-center gap-2">
 								<Button type="submit" disabled={!can('create products') || !childCategoryId}>Save</Button>

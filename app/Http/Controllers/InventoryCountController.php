@@ -7,6 +7,7 @@ use App\Models\ChildCategory;
 use App\Models\InventoryCount;
 use App\Models\InventoryPeriod;
 use App\Models\Product;
+use App\Rules\ValidateInventoryCount;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -128,7 +129,16 @@ class InventoryCountController extends Controller
             'inventory_period_id' => ['required', 'integer', 'exists:inventory_periods,id'],
             'child_category_id' => ['required', 'integer', 'exists:child_categories,id'],
             'product_id' => ['required', 'integer', 'exists:products,id'],
-            'count' => ['required', 'numeric', 'min:0'],
+            'count' => [
+                'required',
+                'numeric',
+                'min:0',
+                new ValidateInventoryCount(
+                    $request->input('product_id'),
+                    $request->input('branch_id'),
+                    $request->input('inventory_period_id')
+                )
+            ],
         ]);
 
         // Check if inventory period is active
@@ -209,7 +219,17 @@ class InventoryCountController extends Controller
             'inventory_period_id' => ['required', 'integer', 'exists:inventory_periods,id'],
             'child_category_id' => ['required', 'integer', 'exists:child_categories,id'],
             'product_id' => ['required', 'integer', 'exists:products,id'],
-            'count' => ['required', 'numeric', 'min:0'],
+            'count' => [
+                'required',
+                'numeric',
+                'min:0',
+                new ValidateInventoryCount(
+                    $request->input('product_id'),
+                    $request->input('branch_id'),
+                    $request->input('inventory_period_id'),
+                    $inventoryCount->id
+                )
+            ],
         ]);
 
         // Check if new period is active
@@ -260,17 +280,41 @@ class InventoryCountController extends Controller
         $userBranchId = $user->employee?->branch_id;
         $canManageAllBranches = $user->can('manage all branches inventory');
 
-        $validated = $request->validate([
+        $request->validate([
             'counts' => ['required', 'array', 'min:1'],
             'counts.*.branch_id' => ['required', 'integer', 'exists:branches,id'],
             'counts.*.inventory_period_id' => ['required', 'integer', 'exists:inventory_periods,id'],
             'counts.*.child_category_id' => ['required', 'integer', 'exists:child_categories,id'],
             'counts.*.product_id' => ['required', 'integer', 'exists:products,id'],
-            'counts.*.count' => ['required', 'numeric', 'min:0'],
         ]);
 
+        $counts = $request->input('counts');
+        
+        foreach ($counts as $index => $countData) {
+            $validator = validator($countData, [
+                'count' => [
+                    'required',
+                    'numeric',
+                    'min:0',
+                    new ValidateInventoryCount(
+                        $countData['product_id'],
+                        $countData['branch_id'],
+                        $countData['inventory_period_id']
+                    )
+                ],
+            ]);
+
+            if ($validator->fails()) {
+                return back()->withErrors([
+                    "counts.{$index}.count" => $validator->errors()->first('count')
+                ])->withInput();
+            }
+        }
+
+        $validated = $request->input('counts');
+
         // Check if all periods are active
-        $periodIds = array_unique(array_column($validated['counts'], 'inventory_period_id'));
+        $periodIds = array_unique(array_column($validated, 'inventory_period_id'));
         $inactivePeriods = InventoryPeriod::whereIn('id', $periodIds)
             ->where('status', '!=', 'active')
             ->exists();
@@ -281,7 +325,7 @@ class InventoryCountController extends Controller
 
         // Ensure all counts are for the user's branch unless they have permission
         if (!$canManageAllBranches) {
-            foreach ($validated['counts'] as $countData) {
+            foreach ($validated as $countData) {
                 if ($userBranchId && $countData['branch_id'] != $userBranchId) {
                     return back()->withErrors(['counts' => 'You can only create inventory counts for your own branch.']);
                 }
@@ -290,14 +334,14 @@ class InventoryCountController extends Controller
 
         $userId = auth()->id();
 
-        foreach ($validated['counts'] as $countData) {
+        foreach ($validated as $countData) {
             $countData['created_by'] = $userId;
             $countData['updated_by'] = $userId;
             
             InventoryCount::create($countData);
         }
 
-        return back()->with('success', count($validated['counts']) . ' inventory count(s) created successfully.');
+        return back()->with('success', count($validated) . ' inventory count(s) created successfully.');
     }
 
     /**

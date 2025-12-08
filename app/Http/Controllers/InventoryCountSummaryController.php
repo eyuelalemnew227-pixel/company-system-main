@@ -27,16 +27,21 @@ class InventoryCountSummaryController extends Controller
         
         $fiscalYears = \App\Models\FiscalYear::select('id', 'name')->orderByDesc('id')->get();
         
-        if (!$fiscalYearId && $fiscalYears->isNotEmpty()) {
-            $fiscalYearId = $fiscalYears->first()->id;
-        }
-        
         $periods = InventoryPeriod::select('id', 'inventory_period_name', 'fiscal_year_id')
             ->orderByDesc('id')
             ->get();
         
-        if (!$periodId) {
-            $periodId = $periods->first()?->id;
+        if (!$periodId && $periods->isNotEmpty()) {
+            $periodId = $periods->first()->id;
+        }
+        
+        if (!$fiscalYearId && $periodId && $periods->isNotEmpty()) {
+            $selectedPeriod = $periods->firstWhere('id', $periodId);
+            if ($selectedPeriod) {
+                $fiscalYearId = $selectedPeriod->fiscal_year_id;
+            }
+        } elseif (!$fiscalYearId && $fiscalYears->isNotEmpty()) {
+            $fiscalYearId = $fiscalYears->first()->id;
         }
 
         $result = $this->computeSummaryData($branchId, $childCategoryId, $fiscalYearId, $periodId);
@@ -68,7 +73,17 @@ class InventoryCountSummaryController extends Controller
             $childCategoryId = null;
         }
         
-        if (!$fiscalYearId) {
+        if (!$periodId) {
+            $latestPeriod = InventoryPeriod::orderByDesc('id')->first();
+            $periodId = $latestPeriod?->id;
+        }
+        
+        if (!$fiscalYearId && $periodId) {
+            $selectedPeriod = InventoryPeriod::find($periodId);
+            if ($selectedPeriod) {
+                $fiscalYearId = $selectedPeriod->fiscal_year_id;
+            }
+        } elseif (!$fiscalYearId) {
             $latestFiscalYear = \App\Models\FiscalYear::orderByDesc('id')->first();
             $fiscalYearId = $latestFiscalYear?->id;
         }
@@ -90,7 +105,7 @@ class InventoryCountSummaryController extends Controller
                 return;
             }
 
-            fputcsv($out, ['Branch', 'Child Category', 'Product', 'Product Code', 'Count', 'Unit Cost', 'Total Cost']);
+            fputcsv($out, ['Branch', 'Child Category', 'Product', 'Product Code', 'Count', 'Measurement', 'Adjusted Count', 'Unit Cost', 'Total Cost']);
 
             foreach ($data as $branch) {
                 $isBranchExpanded = in_array($branch['branch_id'], $expandedBranchIds);
@@ -98,6 +113,8 @@ class InventoryCountSummaryController extends Controller
                 if (!$isBranchExpanded) {
                     fputcsv($out, [
                         $branch['branch_name'],
+                        '',
+                        '',
                         '',
                         '',
                         '',
@@ -110,6 +127,8 @@ class InventoryCountSummaryController extends Controller
                 
                 fputcsv($out, [
                     $branch['branch_name'],
+                    '',
+                    '',
                     '',
                     '',
                     '',
@@ -128,6 +147,8 @@ class InventoryCountSummaryController extends Controller
                             $category['category_name'],
                             '',
                             '',
+                            '',
+                            '',
                             $category['total_count'],
                             '',
                             $category['total_cost'],
@@ -138,6 +159,8 @@ class InventoryCountSummaryController extends Controller
                     fputcsv($out, [
                         '',
                         $category['category_name'],
+                        '',
+                        '',
                         '',
                         '',
                         $category['total_count'],
@@ -152,6 +175,8 @@ class InventoryCountSummaryController extends Controller
                             $product['product_name'],
                             $product['product_code'] ?? '',
                             $product['count'],
+                            $product['measurement'],
+                            $product['adjusted_count'],
                             $product['unit_cost'],
                             $product['total_cost'],
                         ]);
@@ -179,6 +204,7 @@ class InventoryCountSummaryController extends Controller
                 p.product_name,
                 p.product_code,
                 p.unit_cost,
+                p.measurement,
                 SUM(ic.count) as total_count
             ')
             ->when($branchId, function ($q) use ($branchId) {
@@ -193,7 +219,7 @@ class InventoryCountSummaryController extends Controller
             ->when($periodId, function ($q) use ($periodId) {
                 $q->where('ic.inventory_period_id', $periodId);
             })
-            ->groupBy('b.id', 'b.name', 'cc.id', 'cc.child_name', 'p.id', 'p.product_name', 'p.product_code', 'p.unit_cost')
+            ->groupBy('b.id', 'b.name', 'cc.id', 'cc.child_name', 'p.id', 'p.product_name', 'p.product_code', 'p.unit_cost', 'p.measurement')
             ->orderBy('b.name')
             ->orderBy('cc.child_name')
             ->orderBy('p.product_name')
@@ -244,7 +270,9 @@ class InventoryCountSummaryController extends Controller
 
             $unitCost = $row->unit_cost ? (float) $row->unit_cost : 0;
             $count = (float) $row->total_count;
-            $totalCost = $unitCost * $count;
+            $measurement = $row->measurement && $row->measurement > 0 ? (float) $row->measurement : 1;
+            $adjustedCount = $count / $measurement;
+            $totalCost = $unitCost * $adjustedCount;
 
             $category['products'][] = [
                 'product_id' => $row->product_id,
@@ -252,12 +280,14 @@ class InventoryCountSummaryController extends Controller
                 'product_code' => $row->product_code,
                 'unit_cost' => number_format($unitCost, 2, '.', ''),
                 'count' => number_format($count, 2, '.', ''),
+                'measurement' => number_format($measurement, 2, '.', ''),
+                'adjusted_count' => number_format($adjustedCount, 2, '.', ''),
                 'total_cost' => number_format($totalCost, 2, '.', ''),
             ];
 
-            $category['total_count'] += $count;
+            $category['total_count'] += $adjustedCount;
             $category['total_cost'] += $totalCost;
-            $branch['total_count'] += $count;
+            $branch['total_count'] += $adjustedCount;
             $branch['total_cost'] += $totalCost;
         }
 

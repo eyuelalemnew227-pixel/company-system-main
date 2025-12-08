@@ -15,10 +15,18 @@ class Product extends Model
         'product_code',
         'unit_cost',
         'child_category_id',
+        'min_count_threshold',
+        'max_count_threshold',
+        'variance_percentage',
+        'measurement',
     ];
 
     protected $casts = [
         'unit_cost' => 'decimal:2',
+        'min_count_threshold' => 'decimal:2',
+        'max_count_threshold' => 'decimal:2',
+        'variance_percentage' => 'decimal:2',
+        'measurement' => 'decimal:2',
     ];
 
     /**
