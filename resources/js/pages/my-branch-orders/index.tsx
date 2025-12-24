@@ -291,7 +291,7 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 									<FileTextIcon className="mr-2 size-4" />
 									Export as PDF
 								</DropdownMenuItem>
-								<DropdownMenuItem onClick={() => {
+								{/* <DropdownMenuItem onClick={() => {
 									const params = new URLSearchParams();
 									if (search) params.append('search', search);
 									if (collectionDayId !== 'all') params.append('collection_day_id', collectionDayId);
@@ -305,7 +305,7 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 								}}>
 									<TableIcon className="mr-2 size-4" />
 									Export as Excel
-								</DropdownMenuItem>
+								</DropdownMenuItem> */}
 							</DropdownMenuContent>
 						</DropdownMenu>
 					</div>

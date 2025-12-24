@@ -23,6 +23,11 @@ type Props = {
 	collectionDays: CollectionDay[];
 	orderTypes: OrderType[];
 	products: PreOrderProduct[];
+	userPermissions: {
+		create_all: boolean;
+		create_walkin: boolean;
+		create_regular: boolean;
+	};
 };
 
 type OrderItem = {
@@ -30,7 +35,7 @@ type OrderItem = {
 	quantity: number;
 };
 
-export default function Create({ branches, collectionDays, orderTypes, products }: Props) {
+export default function Create({ branches, collectionDays, orderTypes, products, userPermissions }: Props) {
 	const { data, setData, post, processing, errors } = useForm<{
 		client_name: string;
 		phone_number: string;
@@ -50,6 +55,31 @@ export default function Create({ branches, collectionDays, orderTypes, products 
 		transaction_reference: '',
 		items: [],
 	});
+
+	// Handle initial order type based on permissions
+	useMemo(() => {
+		if (!userPermissions.create_all) {
+			if (userPermissions.create_walkin && !userPermissions.create_regular) {
+				const walkinType = orderTypes.find((t) => t.name === 'Walkin Customer');
+				if (walkinType && data.order_type_id !== walkinType.id.toString()) {
+					setData('order_type_id', walkinType.id.toString());
+				}
+			}
+		}
+	}, [userPermissions, orderTypes]);
+
+	const filteredOrderTypes = useMemo(() => {
+		if (userPermissions.create_all) return orderTypes;
+		if (userPermissions.create_walkin && !userPermissions.create_regular) {
+			return orderTypes.filter((t) => t.name === 'Walkin Customer');
+		}
+		if (userPermissions.create_regular && !userPermissions.create_walkin) {
+			return orderTypes.filter((t) => t.name !== 'Walkin Customer');
+		}
+		return orderTypes;
+	}, [orderTypes, userPermissions]);
+
+	const isOrderTypeDisabled = !userPermissions.create_all && userPermissions.create_walkin && !userPermissions.create_regular;
 
 	// Initialize items with all products
 	const productQuantities = useMemo(() => {
@@ -173,12 +203,16 @@ export default function Create({ branches, collectionDays, orderTypes, products 
 						<div className="grid gap-4 md:grid-cols-2">
 							<div className="grid gap-2">
 								<Label htmlFor="order_type_id">Order Type *</Label>
-								<Select value={data.order_type_id} onValueChange={(value) => setData('order_type_id', value)}>
+								<Select 
+									value={data.order_type_id} 
+									onValueChange={(value) => setData('order_type_id', value)}
+									disabled={isOrderTypeDisabled}
+								>
 									<SelectTrigger>
 										<SelectValue placeholder="Select order type" />
 									</SelectTrigger>
 									<SelectContent>
-										{orderTypes.map((type) => (
+										{filteredOrderTypes.map((type) => (
 											<SelectItem key={type.id} value={type.id.toString()}>
 												{type.name}
 											</SelectItem>

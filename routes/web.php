@@ -191,7 +191,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:view pre-orders')->group(function () {
         Route::get('pre-orders/dashboard', [PreOrderDashboardController::class, 'index'])->name('pre-orders.dashboard');
         Route::get('pre-orders/export', [\App\Http\Controllers\PreOrderController::class, 'export'])->name('pre-orders.export')->middleware('permission:view all pre-orders');
-        Route::post('pre-orders/{preOrder}/update-status', [\App\Http\Controllers\PreOrderController::class, 'updateStatus'])->name('pre-orders.update-status')->middleware('permission:update pre-order status');
+        Route::post('pre-orders/{preOrder}/update-status', [\App\Http\Controllers\PreOrderController::class, 'updateStatus'])->name('pre-orders.update-status')->middleware('permission:update pre-order status|update all pre-order status|mark pre-order as paid|cancel pre-orders');
         Route::post('pre-orders/send-bulk-sms-reminders', [\App\Http\Controllers\PreOrderController::class, 'sendBulkSmsReminders'])->name('pre-orders.send-bulk-sms-reminders')->middleware('permission:send bulk sms reminders');
         Route::resource('pre-orders', \App\Http\Controllers\PreOrderController::class);
     });

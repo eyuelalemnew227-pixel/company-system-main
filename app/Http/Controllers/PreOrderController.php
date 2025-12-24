@@ -9,6 +9,7 @@ use App\Models\PreOrder;
 use App\Models\PreOrderItem;
 use App\Models\PreOrderProduct;
 use App\Models\SmsSettings;
+use App\Notifications\PreOrderCancelledGeezSMSNotification;
 use App\Notifications\PreOrderPaidGeezSMSNotification;
 use App\Rules\EthiopianPhoneNumber;
 use App\Services\GeezSMSService;
@@ -120,8 +121,14 @@ class PreOrderController extends Controller
 
     public function create(): Response
     {
-        // Check if user can create pre-orders - requires explicit permission
-        if (!auth()->user()->can('create pre-orders')) {
+        $user = auth()->user();
+        
+        $canCreateAll = $user->can('create all pre-orders');
+        $canCreateWalkin = $user->can('create walkin pre-orders');
+        $canCreateRegular = $user->can('create regular pre-orders');
+
+        // Check if user can create at least one type of pre-order
+        if (!$canCreateAll && !$canCreateWalkin && !$canCreateRegular) {
             abort(403, 'You do not have permission to create pre-orders.');
         }
 
@@ -135,13 +142,24 @@ class PreOrderController extends Controller
             'collectionDays' => $collectionDays,
             'orderTypes' => $orderTypes,
             'products' => $products,
+            'userPermissions' => [
+                'create_all' => $canCreateAll,
+                'create_walkin' => $canCreateWalkin,
+                'create_regular' => $canCreateRegular,
+            ]
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        // Check if user can create pre-orders - requires explicit permission
-        if (!auth()->user()->can('create pre-orders')) {
+        $user = auth()->user();
+        
+        $canCreateAll = $user->can('create all pre-orders');
+        $canCreateWalkin = $user->can('create walkin pre-orders');
+        $canCreateRegular = $user->can('create regular pre-orders');
+
+        // Check if user can create at least one type of pre-order
+        if (!$canCreateAll && !$canCreateWalkin && !$canCreateRegular) {
             abort(403, 'You do not have permission to create pre-orders.');
         }
 
@@ -190,7 +208,19 @@ class PreOrderController extends Controller
 
             // Get order type to determine status
             $orderType = OrderType::find($validated['order_type_id']);
-            $status = $orderType->name === 'Walkin Customer' ? 'Paid' : 'Pending';
+            $isWalkin = $orderType->name === 'Walkin Customer';
+
+            // Additional granular permission check for the specific order type
+            if (!$canCreateAll) {
+                if ($isWalkin && !$canCreateWalkin) {
+                    abort(403, 'You do not have permission to create Walkin Customer orders.');
+                }
+                if (!$isWalkin && !$canCreateRegular) {
+                    abort(403, 'You do not have permission to create regular orders.');
+                }
+            }
+
+            $status = $isWalkin ? 'Paid' : 'Pending';
 
             // Create pre-order
             $preOrder = PreOrder::create([
@@ -222,6 +252,30 @@ class PreOrderController extends Controller
             }
 
             DB::commit();
+
+            // If it's a Walkin Customer (status is Paid), send confirmation SMS
+            if ($status === 'Paid' && SmsSettings::isActive()) {
+                try {
+                    // Reload relationships for SMS
+                    $preOrder->load(['collectionDay', 'collectionBranch', 'items.product']);
+                    
+                    $smsNotification = new PreOrderPaidGeezSMSNotification($preOrder);
+                    $smsSent = $smsNotification->sendCustomerSMS();
+                    
+                    if ($smsSent) {
+                        Log::info('SMS sent to Walkin Customer via GeezSMS on creation', [
+                            'pre_order_id' => $preOrder->id,
+                            'order_number' => $preOrder->order_number,
+                            'phone' => $preOrder->phone_number
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    Log::error('SMS notification exception for Walkin Customer creation', [
+                        'pre_order_id' => $preOrder->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
 
             return redirect()->route('pre-orders.index')
                 ->with('success', "Pre-order {$orderNumber} created successfully.");
@@ -258,29 +312,32 @@ class PreOrderController extends Controller
     {
         $user = auth()->user();
         $isOwnOrder = $preOrder->created_by === auth()->id();
+        $preOrder->load('orderType');
+        $isWalkin = $preOrder->orderType->name === 'Walkin Customer';
 
-        // Permission check logic:
-        // 1. If user has 'update pre-orders' - can edit all orders
-        // 2. If user has 'edit other users pre-orders' - can edit all orders
-        // 3. If user has 'edit own pre-orders' - can only edit their own orders
-        // 4. Otherwise - no permission to edit
+        $canEditAll = $user->can('update all pre-orders') || $user->can('edit other users pre-orders') || $user->can('update pre-orders');
+        $canEditWalkin = $user->can('update walkin pre-orders');
+        $canEditRegular = $user->can('update regular pre-orders');
+        $canEditOwn = $user->can('edit own pre-orders');
 
-        $canEdit = false;
-
-        if ($user->can('update pre-orders')) {
+        if ($canEditAll) {
             $canEdit = true;
-        } elseif ($user->can('edit other users pre-orders')) {
-            $canEdit = true;
-        } elseif ($user->can('edit own pre-orders') && $isOwnOrder) {
-            $canEdit = true;
+        } elseif ($isWalkin) {
+            if ($canEditWalkin) {
+                $canEdit = true;
+            } elseif ($canEditOwn && $isOwnOrder) {
+                $canEdit = true;
+            }
+        } else { // Regular order
+            if ($canEditRegular) {
+                $canEdit = true;
+            } elseif ($canEditOwn && $isOwnOrder) {
+                $canEdit = true;
+            }
         }
 
         if (!$canEdit) {
-            if ($user->can('edit own pre-orders') && !$isOwnOrder) {
-                abort(403, 'You can only edit orders that you created.');
-            } else {
-                abort(403, 'You do not have permission to edit this order.');
-            }
+            abort(403, 'You do not have permission to edit this order type.');
         }
 
         $preOrder->load('items');
@@ -300,6 +357,14 @@ class PreOrderController extends Controller
             'orderTypes' => $orderTypes,
             'products' => $products,
             'isRegisteringUser' => $isRegisteringUser,
+            'userPermissions' => [
+                'update_all' => $canEditAll,
+                'update_walkin' => $canEditWalkin,
+                'update_regular' => $canEditRegular,
+                'update_all_status' => $user->can('update all pre-order status') || $user->can('update pre-order status'),
+                'mark_paid' => $user->can('mark pre-order as paid'),
+                'can_cancel' => $user->can('cancel pre-orders'),
+            ]
         ]);
     }
 
@@ -307,24 +372,29 @@ class PreOrderController extends Controller
     {
         $user = auth()->user();
         $isOwnOrder = $preOrder->created_by === auth()->id();
+        $preOrder->load('orderType');
+        $isWalkinBefore = $preOrder->orderType->name === 'Walkin Customer';
 
-        // Permission check logic (same as edit method)
-        $canEdit = false;
+        $canEditAll = $user->can('update all pre-orders') || $user->can('edit other users pre-orders') || $user->can('update pre-orders');
+        $canEditWalkin = $user->can('update walkin pre-orders');
+        $canEditRegular = $user->can('update regular pre-orders');
+        $canEditOwn = $user->can('edit own pre-orders');
 
-        if ($user->can('update pre-orders')) {
+        // Permission check for the initial order
+        if ($canEditAll) {
             $canEdit = true;
-        } elseif ($user->can('edit other users pre-orders')) {
-            $canEdit = true;
-        } elseif ($user->can('edit own pre-orders') && $isOwnOrder) {
-            $canEdit = true;
+        } elseif ($isWalkinBefore) {
+            if ($canEditWalkin || ($canEditOwn && $isOwnOrder)) {
+                $canEdit = true;
+            }
+        } else {
+            if ($canEditRegular || ($canEditOwn && $isOwnOrder)) {
+                $canEdit = true;
+            }
         }
 
         if (!$canEdit) {
-            if ($user->can('edit own pre-orders') && !$isOwnOrder) {
-                abort(403, 'You can only edit orders that you created.');
-            } else {
-                abort(403, 'You do not have permission to edit this order.');
-            }
+            abort(403, 'You do not have permission to edit this order.');
         }
 
         $validated = $request->validate([
@@ -351,10 +421,51 @@ class PreOrderController extends Controller
             $preOrder->load('orderType');
 
             // Check if this is a Walkin Customer order - prevent status changes
-            if ($preOrder->orderType->name === 'Walkin Customer' && $validated['status'] !== $preOrder->status) {
+            if ($isWalkinBefore && $validated['status'] !== $preOrder->status) {
                 return back()->withErrors([
                     'status' => 'Cannot change status for Walkin Customer orders as they are already paid.',
                 ]);
+            }
+
+            // Granular status permission checks
+            if ($validated['status'] !== $preOrder->status) {
+                $user = auth()->user();
+                $canChangeAny = $user->can('update all pre-order status') || $user->can('update pre-order status');
+                $canMarkPaid = $user->can('mark pre-order as paid');
+                $canCancel = $user->can('cancel pre-orders');
+
+                $isAuthorized = false;
+
+                if ($canChangeAny) {
+                    $isAuthorized = true;
+                } elseif ($validated['status'] === 'Paid') {
+                    if ($canMarkPaid && $preOrder->status === 'Pending') {
+                        $isAuthorized = true;
+                    }
+                } elseif ($validated['status'] === 'Cancelled') {
+                    if ($canCancel) {
+                        $isAuthorized = true;
+                    }
+                }
+
+                if (!$isAuthorized) {
+                    return back()->withErrors([
+                        'status' => 'You do not have permission to change the order status to ' . $validated['status'] . ($validated['status'] === 'Paid' ? ' from ' . $preOrder->status : '') . '.',
+                    ]);
+                }
+            }
+
+            // Additional granular permission check for the final target order type
+            $targetOrderType = OrderType::find($validated['order_type_id']);
+            $isWalkinAfter = $targetOrderType->name === 'Walkin Customer';
+
+            if (!$canEditAll) {
+                if ($isWalkinAfter && !$canEditWalkin) {
+                    abort(403, 'You do not have permission to change or save orders as Walkin Customer.');
+                }
+                if (!$isWalkinAfter && !$canEditRegular) {
+                    abort(403, 'You do not have permission to change or save orders as regular types.');
+                }
             }
 
             // Calculate total
@@ -377,13 +488,11 @@ class PreOrderController extends Controller
                 'updated_by' => auth()->id(),
             ];
 
-            // Only allow voucher code update if user is not the registering user
-            if ($preOrder->created_by !== auth()->id()) {
-                $updateData['voucher_code'] = $validated['voucher_code'] ?? null;
-            }
+            $updateData['voucher_code'] = $validated['voucher_code'] ?? null;
 
-            // Track if status changed to "Paid"
+            // Track if status changed to "Paid" or "Cancelled"
             $statusChangedToPaid = ($preOrder->status !== 'Paid' && $validated['status'] === 'Paid');
+            $statusChangedToCancelled = ($preOrder->status !== 'Cancelled' && $validated['status'] === 'Cancelled');
 
             // Update pre-order
             $preOrder->update($updateData);
@@ -408,40 +517,60 @@ class PreOrderController extends Controller
                 // Check if SMS is active
                 if (!SmsSettings::isActive()) {
                     $smsSettings = SmsSettings::getInstance();
-                    return redirect()->route('pre-orders.index')
-                        ->with('success', "Pre-order {$preOrder->order_number} updated successfully.")
-                        ->with('warning', "SMS notification could not be sent because SMS service is currently deactivated. Reason: {$smsSettings->deactivation_reason}");
-                }
+                    // We don't return here because we want to finish the update flow, 
+                    // but we might want to log or warn.
+                    Log::warning("SMS notification could not be sent because SMS service is currently deactivated. Reason: {$smsSettings->deactivation_reason}");
+                } else {
+                    try {
+                        // Reload relationships for SMS
+                        $preOrder->load(['collectionDay', 'collectionBranch', 'items.product']);
 
-                try {
-                    // Reload relationships for SMS
-                    $preOrder->load(['collectionDay', 'collectionBranch', 'items.product']);
+                        $smsNotification = new PreOrderPaidGeezSMSNotification($preOrder);
+                        $smsSent = $smsNotification->sendCustomerSMS();
 
-                    $smsNotification = new PreOrderPaidGeezSMSNotification($preOrder);
-                    $smsSent = $smsNotification->sendCustomerSMS();
-
-                    if ($smsSent) {
-                        Log::info('SMS sent to customer via GeezSMS on status update', [
+                        if ($smsSent) {
+                            Log::info('SMS sent to customer via GeezSMS on status update', [
+                                'pre_order_id' => $preOrder->id,
+                                'order_number' => $preOrder->order_number,
+                                'phone' => $preOrder->phone_number
+                            ]);
+                        } else {
+                            Log::warning('SMS sending failed via GeezSMS on status update', [
+                                'pre_order_id' => $preOrder->id,
+                                'order_number' => $preOrder->order_number
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::error('SMS notification exception on status update', [
                             'pre_order_id' => $preOrder->id,
-                            'order_number' => $preOrder->order_number,
-                            'phone' => $preOrder->phone_number
+                            'error' => $e->getMessage()
                         ]);
-                        return redirect()->route('pre-orders.index')
-                            ->with('success', "Pre-order {$preOrder->order_number} updated successfully. SMS notification sent to customer.");
-                    } else {
-                        Log::warning('SMS sending failed via GeezSMS on status update', [
-                            'pre_order_id' => $preOrder->id,
-                            'order_number' => $preOrder->order_number
-                        ]);
-                        return redirect()->route('pre-orders.index')
-                            ->with('success', "Pre-order {$preOrder->order_number} updated successfully.")
-                            ->with('warning', 'SMS notification failed to send. Please check SMS configuration.');
                     }
-                } catch (\Exception $e) {
-                    Log::error('SMS notification exception on status update', [
-                        'pre_order_id' => $preOrder->id,
-                        'error' => $e->getMessage()
-                    ]);
+                }
+            }
+
+            // If status changed to "Cancelled", send SMS notification
+            if ($statusChangedToCancelled) {
+                if (SmsSettings::isActive()) {
+                    try {
+                        $preOrder->load(['collectionDay', 'collectionBranch']);
+                        $smsNotification = new PreOrderCancelledGeezSMSNotification($preOrder);
+                        $smsSent = $smsNotification->sendCustomerSMS();
+                        
+                        if ($smsSent) {
+                            Log::info('Cancellation SMS sent on update', [
+                                'pre_order_id' => $preOrder->id,
+                                'order_number' => $preOrder->order_number
+                            ]);
+                        } else {
+                            Log::warning('Cancellation SMS failed to send on update', [
+                                'pre_order_id' => $preOrder->id,
+                                'order_number' => $preOrder->order_number
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::error('Cancellation SMS exception on update', ['error' => $e->getMessage()]);
+                    }
                 }
             }
 
@@ -578,8 +707,12 @@ class PreOrderController extends Controller
     public function updateStatus(Request $request, PreOrder $preOrder): RedirectResponse
     {
         // Check if user can update status for this order - requires explicit permission
-        // This method already has middleware check for 'update pre-order status' permission
-        if (!auth()->user()->can('update pre-order status')) {
+        $user = auth()->user();
+        $canChangeAllStatus = $user->can('update all pre-order status') || $user->can('update pre-order status');
+        $canMarkPaid = $user->can('mark pre-order as paid');
+        $canCancel = $user->can('cancel pre-orders');
+
+        if (!$canChangeAllStatus && !$canMarkPaid && !$canCancel) {
             abort(403, 'You do not have permission to update the status of this order.');
         }
 
@@ -597,6 +730,23 @@ class PreOrderController extends Controller
             'status' => ['required', 'in:Pending,Paid,Collected,Cancelled'],
         ]);
 
+        // Perform specific transition checks if not authorized for all
+        if (!$canChangeAllStatus && $validated['status'] !== $preOrder->status) {
+            $msg = 'You do not have permission to change the order status to ' . $validated['status'];
+            if ($validated['status'] === 'Paid') {
+                if (!$canMarkPaid || $preOrder->status !== 'Pending') {
+                    return back()->withErrors(['status' => $msg . ($preOrder->status !== 'Pending' ? ' from ' . $preOrder->status : '') . '.']);
+                }
+            } elseif ($validated['status'] === 'Cancelled') {
+                if (!$canCancel) {
+                    return back()->withErrors(['status' => $msg . '.']);
+                }
+            } else {
+                // Trying to change to Pending or Collected without broad permission
+                return back()->withErrors(['status' => $msg . '.']);
+            }
+        }
+
         $preOrder->update([
             'status' => $validated['status'],
             'updated_by' => auth()->id(),
@@ -607,6 +757,7 @@ class PreOrderController extends Controller
         $smsStatus = null;
 
         if ($validated['status'] === 'Paid') {
+<<<<<<< HEAD
             // Reload relationships for message generation
             $preOrder->load(['collectionDay', 'collectionBranch', 'items.product']);
             $telegramMessage = $this->generateTelegramMessage($preOrder);
@@ -630,14 +781,26 @@ class PreOrderController extends Controller
                         'order_number' => $preOrder->order_number,
                         'phone' => $preOrder->phone_number
                     ]);
+=======
+            // ... (Paid SMS logic remains same) ...
+        } elseif ($validated['status'] === 'Cancelled') {
+            // Send cancellation SMS
+            if (SmsSettings::isActive()) {
+                try {
+                    $preOrder->load(['collectionDay', 'collectionBranch']);
+                    $smsNotification = new PreOrderCancelledGeezSMSNotification($preOrder);
+                    $smsSent = $smsNotification->sendCustomerSMS();
+                    
+                    if ($smsSent) {
+                        $smsStatus = 'Cancellation SMS notification sent to customer.';
+                        Log::info('Cancellation SMS sent via updateStatus', ['pre_order_id' => $preOrder->id]);
+                    } else {
+                        $smsStatus = 'Cancellation SMS notification failed.';
+                    }
+                } catch (\Exception $e) {
+                    $smsStatus = 'Cancellation SMS error: ' . $e->getMessage();
+>>>>>>> 23bea7ab10a80f0070f94ed7be963ea030be1506
                 }
-            } catch (\Exception $e) {
-                $smsStatus = 'SMS notification error via GeezSMS: ' . $e->getMessage();
-                Log::error('SMS notification exception via GeezSMS', [
-                    'pre_order_id' => $preOrder->id,
-                    'order_number' => $preOrder->order_number,
-                    'error' => $e->getMessage()
-                ]);
             }
         }
 
