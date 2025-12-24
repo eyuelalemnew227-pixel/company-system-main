@@ -191,12 +191,20 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'view pre-orders']);
         Permission::firstOrCreate(['name' => 'view all pre-orders']); // View orders created by others
         Permission::firstOrCreate(['name' => 'view pre-order details']); // View individual order details
-        Permission::firstOrCreate(['name' => 'create pre-orders']);
-        Permission::firstOrCreate(['name' => 'update pre-orders']);
+        Permission::firstOrCreate(['name' => 'create all pre-orders']);
+        Permission::firstOrCreate(['name' => 'create walkin pre-orders']);
+        Permission::firstOrCreate(['name' => 'create regular pre-orders']);
+        Permission::firstOrCreate(['name' => 'update all pre-orders']);
+        Permission::firstOrCreate(['name' => 'update walkin pre-orders']);
+        Permission::firstOrCreate(['name' => 'update regular pre-orders']);
         Permission::firstOrCreate(['name' => 'edit own pre-orders']); // Edit only orders created by themselves
         Permission::firstOrCreate(['name' => 'edit other users pre-orders']); // Edit orders created by other users
         Permission::firstOrCreate(['name' => 'delete pre-orders']);
         Permission::firstOrCreate(['name' => 'update pre-order status']);
+        Permission::firstOrCreate(['name' => 'update all pre-order status']);
+        Permission::firstOrCreate(['name' => 'mark pre-order as paid']);
+        Permission::firstOrCreate(['name' => 'cancel pre-orders']);
+        Permission::firstOrCreate(['name' => 'copy pre-order telegram message']);
         Permission::firstOrCreate(['name' => 'send bulk sms reminders']); // Send bulk SMS reminders for pending orders
         Permission::firstOrCreate(['name' => 'view pre-order audit trail']); // View created_by, updated_by, and date columns
 

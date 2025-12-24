@@ -28,17 +28,32 @@ const statusColors = {
 };
 
 export default function Show({ preOrder, userPermissions }: Props) {
-	const { flash, errors } = usePage<{
+	const { auth, flash, errors } = usePage<{
+		auth: { user: { id: number } };
 		flash: {
 			success?: string;
 			telegram_message?: string;
 		};
 		errors: Record<string, string[]>;
 	}>().props;
+	const currentUserId = auth.user.id;
 
-	// Permission checks - require explicit permissions
-	const canUpdateOrders = userPermissions?.includes('update pre-orders');
+	// Permission checks - require explicit permissions for this specific order type and ownership
+	const isWalkin = preOrder.order_type?.name === 'Walkin Customer';
+	const isOwn = preOrder.created_by === currentUserId;
+
+	const hasGlobalEdit = userPermissions?.includes('update all pre-orders') || 
+						 userPermissions?.includes('edit other users pre-orders') || 
+						 userPermissions?.includes('update pre-orders');
+
+	const hasTypePermission = isWalkin 
+		? userPermissions?.includes('update walkin pre-orders')
+		: userPermissions?.includes('update regular pre-orders');
+
+	const canUpdateOrders = hasGlobalEdit || (isOwn && userPermissions?.includes('edit own pre-orders')) || hasTypePermission;
+	
 	const canDeleteOrders = userPermissions?.includes('delete pre-orders');
+	const canCopyTelegram = userPermissions?.includes('copy pre-order telegram message');
 
 	const [telegramMessage, setTelegramMessage] = useState<string>('');
 
@@ -230,7 +245,7 @@ export default function Show({ preOrder, userPermissions }: Props) {
 				</div>
 
 				{/* Telegram Message for Paid Orders */}
-				{preOrder.status === 'Paid' && (
+				{preOrder.status === 'Paid' && canCopyTelegram && (
 					<div className="space-y-4 rounded-lg border p-6">
 						<h3 className="text-lg font-semibold">Telegram Message for Customer</h3>
 						<p className="text-sm text-muted-foreground">Copy this message and send it to the customer via Telegram</p>

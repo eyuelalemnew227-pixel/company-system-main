@@ -1,7 +1,8 @@
 import { type BreadcrumbItem } from '@/types';
 import { type PreOrder, type PreOrderProduct, type OrderType, type CollectionDay } from '@/types/pre-order';
 import { Head, useForm } from '@inertiajs/react';
-import { FormEventHandler, useMemo } from 'react';
+import { FormEventHandler, useMemo, useState } from 'react';
+import { StatusConfirmationDialog } from '@/components/pre-order/status-confirmation-dialog';
 
 import Heading from '@/components/heading';
 import InputError from '@/components/input-error';
@@ -38,6 +39,14 @@ type Props = {
     orderTypes: OrderType[];
     products: PreOrderProduct[];
     isRegisteringUser: boolean;
+    userPermissions: {
+        update_all: boolean;
+        update_walkin: boolean;
+        update_regular: boolean;
+        update_all_status: boolean;
+        mark_paid: boolean;
+        can_cancel: boolean;
+    };
 };
 
 type OrderItem = {
@@ -45,7 +54,7 @@ type OrderItem = {
     quantity: number;
 };
 
-export default function Edit({ preOrder, branches, collectionDays, orderTypes, products, isRegisteringUser }: Props) {
+export default function Edit({ preOrder, branches, collectionDays, orderTypes, products, isRegisteringUser, userPermissions }: Props) {
     const { data, setData, put, processing, errors } = useForm<{
         client_name: string;
         phone_number: string;
@@ -72,6 +81,8 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
             quantity: item.quantity,
         })) || [],
     });
+
+    const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
 
     // Initialize quantities from existing order items
     const productQuantities = useMemo(() => {
@@ -125,8 +136,72 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
         return orderType?.name === 'Walkin Customer';
     }, [data.order_type_id, orderTypes]);
 
+    const filteredOrderTypes = useMemo(() => {
+        if (userPermissions.update_all) return orderTypes;
+
+        // Start with the current order type so it's always visible/selectable
+        const currentType = orderTypes.find((t) => t.id.toString() === preOrder.order_type_id.toString());
+        const result = currentType ? [currentType] : [];
+
+        // Add Walkin types if permitted
+        if (userPermissions.update_walkin) {
+            orderTypes.filter((t) => t.name === 'Walkin Customer').forEach((t) => {
+                if (!result.find((r) => r.id === t.id)) result.push(t);
+            });
+        }
+
+        // Add Regular types if permitted
+        if (userPermissions.update_regular) {
+            orderTypes.filter((t) => t.name !== 'Walkin Customer').forEach((t) => {
+                if (!result.find((r) => r.id === t.id)) result.push(t);
+            });
+        }
+
+        return result;
+    }, [orderTypes, userPermissions, preOrder.order_type_id]);
+
+    const isOrderTypeDisabled = !userPermissions.update_all && !userPermissions.update_walkin && !userPermissions.update_regular;
+
+    const availableStatuses = [
+        { value: 'Pending', label: 'Pending' },
+        { value: 'Paid', label: 'Paid' },
+        { value: 'Collected', label: 'Collected' },
+        { value: 'Cancelled', label: 'Cancelled' },
+    ];
+
+    const filteredStatuses = availableStatuses.filter(status => {
+        // If they can change to any status, show all
+        if (userPermissions.update_all_status) return true;
+        
+        // Always show the current status
+        if (status.value === preOrder.status) return true;
+
+        // "Mark Paid" permission: only allowed if current is Pending and target is Paid
+        if (status.value === 'Paid' && userPermissions.mark_paid && preOrder.status === 'Pending') {
+            return true;
+        }
+
+        // "Cancel" permission: allowed if target is Cancelled
+        if (status.value === 'Cancelled' && userPermissions.can_cancel) {
+            return true;
+        }
+
+        return false;
+    });
+
     const handleSubmit: FormEventHandler = (e) => {
         e.preventDefault();
+        
+        // If status is changed to Cancelled, show confirmation dialog
+        if (data.status === 'Cancelled' && preOrder.status !== 'Cancelled') {
+            setShowCancelConfirmation(true);
+            return;
+        }
+
+        submitForm();
+    };
+
+    const submitForm = () => {
         put(route('pre-orders.update', preOrder.id));
     };
 
@@ -215,10 +290,11 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
                                         <SelectValue placeholder="Select status" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="Pending">Pending</SelectItem>
-                                        <SelectItem value="Paid">Paid</SelectItem>
-                                        <SelectItem value="Collected">Collected</SelectItem>
-                                        <SelectItem value="Cancelled">Cancelled</SelectItem>
+                                        {filteredStatuses.map((status) => (
+                                            <SelectItem key={status.value} value={status.value}>
+                                                {status.label}
+                                            </SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             )}
@@ -236,12 +312,13 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
                                 <Select
                                     value={data.order_type_id}
                                     onValueChange={(value) => setData('order_type_id', value)}
+                                    disabled={isOrderTypeDisabled}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select order type" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {orderTypes.map((type) => (
+                                        {filteredOrderTypes.map((type) => (
                                             <SelectItem key={type.id} value={type.id.toString()}>
                                                 {type.name}
                                             </SelectItem>
@@ -255,27 +332,15 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
                                 <div className="grid gap-2">
                                     <Label htmlFor="voucher_code">
                                         Voucher Code *
-                                        {isRegisteringUser && (
-                                            <span className="text-sm text-muted-foreground ml-2">
-                                                (You cannot edit this field)
-                                            </span>
-                                        )}
                                     </Label>
                                     <Input
                                         id="voucher_code"
                                         value={data.voucher_code}
                                         onChange={(e) => setData('voucher_code', e.target.value)}
-                                        disabled={isRegisteringUser}
-                                        placeholder={isRegisteringUser ? "Voucher code (read-only)" : "Enter voucher code"}
-                                        className={isRegisteringUser ? "bg-muted" : ""}
+                                        placeholder="Enter voucher code"
                                         required
                                     />
                                     <InputError message={errors.voucher_code} />
-                                    {isRegisteringUser && (
-                                        <p className="text-xs text-muted-foreground">
-                                            As the registering user, you cannot modify the voucher code.
-                                        </p>
-                                    )}
                                 </div>
                             ) : (
                                 <div className="grid gap-2">
@@ -421,6 +486,17 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
                     </div>
                 </form>
             </div>
+
+            <StatusConfirmationDialog
+                isOpen={showCancelConfirmation}
+                onClose={() => setShowCancelConfirmation(false)}
+                onConfirm={submitForm}
+                title="Confirm Order Cancellation"
+                description={`Are you sure you want to CANCEL order ${preOrder.order_number}? An automatic SMS notification will be sent to ${preOrder.client_name} (${preOrder.phone_number}) informing them of the cancellation.`}
+                confirmText="Yes, Cancel Order & Send SMS"
+                cancelText="Keep Order"
+                variant="destructive"
+            />
         </AppLayout>
     );
 }
