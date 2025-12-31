@@ -95,11 +95,11 @@ export default function Show({ preOrder, userPermissions }: Props) {
 		if (preOrder.items && preOrder.items.length > 0) {
 			preOrder.items.forEach((item) => {
 				const productName = item.product ? item.product.product_name : 'Product';
-				message += `• ${productName} (${item.quantity}x) - $${item.subtotal}\n`;
+				message += `• ${productName} (${item.quantity}x) - ETB ${item.subtotal}\n`;
 			});
 		}
 
-		message += `\n*Total Amount: $${preOrder.total_amount}*\n`;
+		message += `\n*Total Amount: ETB ${preOrder.total_amount}*\n`;
 		message += '\n*Payment Status: PAID*\n';
 		message += '_Thank you for your order! Please keep this message for your records._\n';
 		message += '\n---';
@@ -283,16 +283,16 @@ export default function Show({ preOrder, userPermissions }: Props) {
 										{preOrder.items.map((item) => (
 											<TableRow key={item.id}>
 												<TableCell className="font-medium">{item.product?.product_name}</TableCell>
-												<TableCell>${item.unit_price}</TableCell>
+												<TableCell>ETB {item.unit_price}</TableCell>
 												<TableCell>{item.quantity}</TableCell>
-												<TableCell className="text-right font-medium">${item.subtotal}</TableCell>
+												<TableCell className="text-right font-medium">ETB {item.subtotal}</TableCell>
 											</TableRow>
 										))}
 										<TableRow className="bg-muted/50">
 											<TableCell colSpan={3} className="text-right font-bold">
 												Total Amount:
 											</TableCell>
-											<TableCell className="text-right text-lg font-bold">${preOrder.total_amount}</TableCell>
+											<TableCell className="text-right text-lg font-bold">ETB {preOrder.total_amount}</TableCell>
 										</TableRow>
 									</>
 								) : (

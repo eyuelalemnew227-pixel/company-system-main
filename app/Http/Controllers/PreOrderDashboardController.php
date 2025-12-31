@@ -25,6 +25,10 @@ class PreOrderDashboardController extends Controller
             abort(403, 'You do not have permission to view pre-orders.');
         }
 
+        // Fetch filter options
+        $holidays = \App\Models\Holiday::orderByDesc('created_at')->get(['id', 'name', 'date']);
+        $latestHoliday = $holidays->first();
+
         // Get filters from request
         $filters = [
             'date_from' => $request->query('date_from'),
@@ -32,6 +36,7 @@ class PreOrderDashboardController extends Controller
             'branch_id' => $request->query('branch_id'),
             'product_id' => $request->query('product_id'),
             'collection_day_id' => $request->query('collection_day_id'),
+            'holiday_id' => $request->query('holiday_id', $latestHoliday ? (string)$latestHoliday->id : 'all'),
             'status' => $request->query('status'),
             'order_type_id' => $request->query('order_type_id'),
         ];
@@ -89,6 +94,7 @@ class PreOrderDashboardController extends Controller
                 'orderTypes' => $orderTypesQuery,
                 'products' => $productsQuery,
                 'statuses' => $statuses,
+                'holidays' => $holidays,
             ],
         ]);
     }
@@ -155,6 +161,12 @@ class PreOrderDashboardController extends Controller
 
         if (!empty($filters['order_type_id'])) {
             $query->where('pre_orders.order_type_id', $filters['order_type_id']);
+        }
+
+        if (!empty($filters['holiday_id']) && $filters['holiday_id'] !== 'all') {
+            $query->whereHas('collectionDay', function ($q) use ($filters) {
+                $q->where('holiday_id', $filters['holiday_id']);
+            });
         }
     }
 
@@ -451,6 +463,9 @@ class PreOrderDashboardController extends Controller
         }
         if (!empty($filters['order_type_id']) && $filters['order_type_id'] !== 'all') {
             $query->where('pre_orders.order_type_id', $filters['order_type_id']);
+        }
+        if (!empty($filters['holiday_id']) && $filters['holiday_id'] !== 'all') {
+            $query->where('collection_days.holiday_id', $filters['holiday_id']);
         }
 
         $branchData = $query->groupBy(

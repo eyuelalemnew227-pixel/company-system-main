@@ -22,6 +22,8 @@ class EvaluationResponse extends Model
         'accepted_at',
         'rejected_at',
         'rejection_reason',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
@@ -52,5 +54,15 @@ class EvaluationResponse extends Model
     public function questionResponses(): HasMany
     {
         return $this->hasMany(QuestionResponse::class);
+    }
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updater(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }

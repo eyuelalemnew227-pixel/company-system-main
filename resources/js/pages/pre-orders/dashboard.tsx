@@ -27,8 +27,24 @@ type Props = {
 			totalOrders: number;
 		}>;
 	};
-	filters: any;
-	options: any;
+	filters: {
+		date_from?: string;
+		date_to?: string;
+		branch_id?: string;
+		product_id?: string;
+		collection_day_id?: string;
+		holiday_id?: string;
+		status?: string;
+		order_type_id?: string;
+	};
+	options: {
+		branches: any[];
+		collectionDays: any[];
+		orderTypes: any[];
+		products: any[];
+		statuses: string[];
+		holidays: Array<{ id: number; name: string }>;
+	};
 };
 
 import { router } from '@inertiajs/react';

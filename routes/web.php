@@ -174,7 +174,20 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Evaluation summary report (permission-gated)
     Route::middleware('permission:view evaluation summary')->group(function () {
         Route::get('reports/evaluation-summary', [\App\Http\Controllers\EvaluationReportController::class, 'summary'])->name('reports.evaluation-summary');
+        Route::get('reports/evaluation-summary/details', [\App\Http\Controllers\EvaluationReportController::class, 'details'])->name('reports.evaluation-summary.details');
         Route::get('reports/evaluation-summary/export', [\App\Http\Controllers\EvaluationReportController::class, 'export'])->name('reports.evaluation-summary.export');
+    });
+
+    // Evaluation Records Management
+    Route::middleware('permission:view evaluation records')->group(function () {
+        Route::resource('evaluation-records', \App\Http\Controllers\EvaluationResponseController::class)
+            ->only(['index', 'edit', 'update', 'destroy'])
+            ->names([
+                'index' => 'evaluation-records.index',
+                'edit' => 'evaluation-records.edit',
+                'update' => 'evaluation-records.update',
+                'destroy' => 'evaluation-records.destroy',
+            ]);
     });
 
     // Branch Manager Evaluation summary report (permission-gated)

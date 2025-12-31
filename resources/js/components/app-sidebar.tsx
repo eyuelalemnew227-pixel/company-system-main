@@ -100,6 +100,7 @@ const sections: NavSection[] = [
       { title: 'Evaluator Groups', href: '/evaluator-groups', icon: UserCircle, permission: 'view evaluator groups' },
       { title: 'Evaluatee Groups', href: '/evaluates-groups', icon: Target, permission: 'view evaluates groups' },
       { title: 'All Evaluations', href: '/evaluations', icon: ClipboardCheck, permission: 'view evaluations' },
+      { title: 'Evaluation Records', href: '/evaluation-records', icon: ListChecks, permission: 'view evaluation records' },
       { title: 'Evaluator Completion', href: '/evaluator-completion', icon: BarChart3, permission: 'view evaluator completion' },
       { title: 'Fill Evaluation', href: '/my-evaluation', icon: ListChecks, permission: 'Fill Evaluation' },
       { title: 'Evaluation History', href: '/my-evaluation/history', icon: History, permission: 'Evaluation History' },

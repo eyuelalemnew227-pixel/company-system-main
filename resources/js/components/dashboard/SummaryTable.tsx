@@ -26,6 +26,7 @@ interface SummaryTableProps {
 		collection_day_id?: string;
 		status?: string;
 		order_type_id?: string;
+		holiday_id?: string;
 	};
 	options: {
 		branches: Array<{ id: number; name: string }>;
@@ -33,6 +34,7 @@ interface SummaryTableProps {
 		collectionDays: Array<{ id: number; name: string }>;
 		orderTypes: Array<{ id: number; name: string }>;
 		statuses: string[];
+		holidays: Array<{ id: number; name: string }>;
 	};
 }
 
@@ -53,14 +55,16 @@ export default function SummaryTable({
 		product_id: 'all',
 		collection_day_id: 'all',
 		status: 'all',
-		order_type_id: 'all'
+		order_type_id: 'all',
+		holiday_id: 'all'
 	},
 	options = {
 		branches: [],
 		products: [],
 		collectionDays: [],
 		orderTypes: [],
-		statuses: []
+		statuses: [],
+		holidays: []
 	}
 }: SummaryTableProps) {
 	const [expandedBranches, setExpandedBranches] = useState<Set<string>>(new Set());
@@ -74,6 +78,7 @@ export default function SummaryTable({
 		collection_day_id: filters?.collection_day_id || 'all',
 		status: filters?.status || 'all',
 		order_type_id: filters?.order_type_id || 'all',
+		holiday_id: filters?.holiday_id || 'all',
 	};
 
 	// Filter State
@@ -91,6 +96,7 @@ export default function SummaryTable({
 		collectionDays: options?.collectionDays || [],
 		orderTypes: options?.orderTypes || [],
 		statuses: options?.statuses || [],
+		holidays: options?.holidays || [],
 	};
 
 	const handleFilterChange = (key: string, value: string) => {
@@ -104,6 +110,7 @@ export default function SummaryTable({
 		if (filterValues.branch_id && filterValues.branch_id !== 'all') queryParams.branch_id = filterValues.branch_id;
 		if (filterValues.product_id && filterValues.product_id !== 'all') queryParams.product_id = filterValues.product_id;
 		if (filterValues.collection_day_id && filterValues.collection_day_id !== 'all') queryParams.collection_day_id = filterValues.collection_day_id;
+		if (filterValues.holiday_id && filterValues.holiday_id !== 'all') queryParams.holiday_id = filterValues.holiday_id;
 		if (filterValues.status && filterValues.status !== 'all') queryParams.status = filterValues.status;
 		if (filterValues.order_type_id && filterValues.order_type_id !== 'all') queryParams.order_type_id = filterValues.order_type_id;
 
@@ -122,6 +129,7 @@ export default function SummaryTable({
 			collection_day_id: 'all',
 			status: 'all',
 			order_type_id: 'all',
+			holiday_id: 'all',
 		});
 		router.get('/pre-orders/dashboard', {}, { preserveState: true });
 	};
@@ -296,6 +304,17 @@ export default function SummaryTable({
 								<SelectContent>
 									<SelectItem value="all">All</SelectItem>
 									{safeOptions.collectionDays.map((d) => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+								</SelectContent>
+							</Select>
+						</div>
+						{/* Holiday */}
+						<div className="space-y-2">
+							<Label htmlFor="holiday" className="text-xs font-bold text-green-700">Holiday</Label>
+							<Select value={filterValues.holiday_id} onValueChange={(val) => handleFilterChange('holiday_id', val)}>
+								<SelectTrigger className="h-8 text-sm border-green-200 focus:ring-green-500"><SelectValue placeholder="All" /></SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All Holidays</SelectItem>
+									{safeOptions.holidays.map((h) => <SelectItem key={h.id} value={String(h.id)}>{h.name}</SelectItem>)}
 								</SelectContent>
 							</Select>
 						</div>

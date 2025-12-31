@@ -49,21 +49,19 @@ export interface EmployeeOption {
 	department_id: number;
     name: string;
 }
-export interface BreadcrumbItem {
-  title: string;
-  href: string | null;
-}
-
-export interface EmployeeOption {
-  id: number;
-  name: string;
-  branch_id: number | null;
-  department_id: number | null;
-}
-
-export interface Manager {
-  id: number;
-  employee_id: number;
+export interface PaginationData<T> {
+	data: T[];
+	links: Array<{
+		url: string | null;
+		label: string;
+		active: boolean;
+	}>;
+	from: number;
+	to: number;
+	total: number;
+	current_page: number;
+	last_page: number;
+	per_page: number;
 }
 
 export interface Branch {

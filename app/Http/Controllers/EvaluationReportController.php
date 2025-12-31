@@ -9,6 +9,8 @@ use Inertia\Inertia;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\EvaluationPeriod;
+use App\Models\Evaluation;
+use App\Models\EvaluationResponse;
 
 class EvaluationReportController extends Controller
 {
@@ -86,6 +88,65 @@ class EvaluationReportController extends Controller
                 'period_id' => $periodId ? (string) $periodId : null,
             ],
         ]);
+    }
+
+    /**
+     * Get detailed evaluation response data for a specific evaluatee
+     */
+    public function details(Request $request)
+    {
+        $evaluationName = $request->query('evaluation_name');
+        $employeeId = $request->query('employee_id');
+        $departmentId = $request->query('department_id');
+        $periodId = $request->query('period_id');
+
+        if (!$evaluationName || !$periodId) {
+            return response()->json(['error' => 'Missing required parameters'], 400);
+        }
+
+        $evaluableType = $evaluationName === 'Department to department' ? 'department' : 'employee';
+        $evaluateId = $evaluableType === 'department' ? $departmentId : $employeeId;
+
+        if (!$evaluateId) {
+            return response()->json(['error' => 'Missing evaluatee ID', 'received' => $request->all()], 400);
+        }
+
+        try {
+            $responses = DB::table('evaluation_responses as er')
+                ->join('evaluations as e', 'e.id', '=', 'er.evaluation_id')
+                ->where('e.name', $evaluationName)
+                ->where('er.evaluate_id', $evaluateId)
+                ->where('er.evaluable_type', $evaluableType)
+                ->where('er.evaluation_period_id', $periodId)
+                ->leftJoin('users as u', 'u.id', '=', 'er.evaluator_id')
+                ->select('er.id as response_id', 'u.name as evaluator_name')
+                ->get();
+
+            $detailedResponses = [];
+            foreach ($responses as $resp) {
+                $questions = DB::table('question_responses as qr')
+                    ->join('questions as q', 'q.id', '=', 'qr.question_id')
+                    ->where('qr.evaluation_response_id', $resp->response_id)
+                    ->select('q.question_text', 'qr.score')
+                    ->get();
+                
+                $detailedResponses[] = [
+                    'evaluator' => $resp->evaluator_name ?? 'N/A',
+                    'questions' => $questions->map(function($q) {
+                        return [
+                            'text' => $q->question_text,
+                            'score' => $q->score
+                        ];
+                    })
+                ];
+            }
+
+            return response()->json([
+                'responses' => $detailedResponses
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
     public function export(Request $request)
@@ -174,7 +235,7 @@ class EvaluationReportController extends Controller
         // Base employees
         $employees = DB::table('employees as emp')
             ->leftJoin('departments as d', 'd.id', '=', 'emp.department_id')
-            ->selectRaw('emp.id as employee_id, COALESCE(d.name, "-") as department, CONCAT(emp.first_name, " ", emp.last_name) as employee_name, emp.department_id')
+            ->selectRaw('emp.id as employee_id, emp.department_id, COALESCE(d.name, "-") as department, CONCAT(emp.first_name, " ", emp.last_name) as employee_name')
             ->when($branchId, function ($q) use ($branchId) { $q->where('emp.branch_id', $branchId); })
             ->when($departmentId, function ($q) use ($departmentId) { $q->where('emp.department_id', $departmentId); })
             ->get();
@@ -216,7 +277,12 @@ class EvaluationReportController extends Controller
         $pivot = [];
         foreach ($employees as $emp) {
             $key = (string) $emp->employee_id;
-            $pivot[$key] = [ 'department' => $emp->department, 'employee_name' => $emp->employee_name ];
+            $pivot[$key] = [ 
+                'employee_id' => $emp->employee_id,
+                'department_id' => $emp->department_id,
+                'department' => $emp->department, 
+                'employee_name' => $emp->employee_name 
+            ];
             foreach ($evaluationNames as $name) { $pivot[$key][$name] = null; }
             $pivot[$key]['overall_avg'] = null;
         }

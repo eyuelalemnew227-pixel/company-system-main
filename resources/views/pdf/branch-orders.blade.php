@@ -115,7 +115,7 @@
             </div>
             <div class="summary-cell">
                 <span class="summary-label">Total Amount</span>
-                <span class="summary-value">{{ number_format($totalAmount, 2) }} Birr</span>
+                <span class="summary-value">{{ number_format($totalAmount, 2) }} ETB</span>
             </div>
         </div>
     </div>
@@ -156,7 +156,7 @@
                             {{ $item->product->product_name ?? 'Unknown' }} ({{ $item->quantity }})@if(!$loop->last), @endif
                         @endforeach
                     </td>
-                    <td class="text-right">{{ number_format($order->total_amount, 2) }}</td>
+                    <td class="text-right">ETB {{ number_format($order->total_amount, 2) }}</td>
                     <td class="text-center" style="border: 1px solid #333; background-color: white;">
                         <!-- Empty checkbox for manual marking -->
                     </td>

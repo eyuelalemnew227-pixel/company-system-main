@@ -437,7 +437,7 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
                                         calculations.itemDetails.map((item) => (
                                             <TableRow key={item.productId}>
                                                 <TableCell className="font-medium">{item.productName}</TableCell>
-                                                <TableCell>${item.unitPrice.toFixed(2)}</TableCell>
+                                                <TableCell>ETB {item.unitPrice.toFixed(2)}</TableCell>
                                                 <TableCell>
                                                     <Input
                                                         type="number"
@@ -450,7 +450,7 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
                                                     />
                                                 </TableCell>
                                                 <TableCell className="text-right font-medium">
-                                                    ${item.subtotal.toFixed(2)}
+                                                    ETB {item.subtotal.toFixed(2)}
                                                 </TableCell>
                                             </TableRow>
                                         ))
@@ -461,7 +461,7 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
                                                 Total Amount:
                                             </TableCell>
                                             <TableCell className="text-right font-bold text-lg">
-                                                ${calculations.totalAmount.toFixed(2)}
+                                                ETB {calculations.totalAmount.toFixed(2)}
                                             </TableCell>
                                         </TableRow>
                                     )}

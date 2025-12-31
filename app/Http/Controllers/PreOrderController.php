@@ -79,7 +79,10 @@ class PreOrderController extends Controller
         }
 
         $perPage = (int) $request->query('per_page', 15);
-        $preOrders = $query->orderBy($sortField, $sortDirection)->paginate($perPage)->withQueryString();
+        $perPage = $request->query('perPage', 15);
+        $preOrders = $query->orderBy($sortField, $sortDirection)
+            ->paginate($perPage)
+            ->withQueryString();
 
         $branches = Branch::all(['id', 'name']);
         $collectionDays = CollectionDay::where('status', 'Active')->orderBy('display_order')->get(['id', 'name']);
@@ -832,11 +835,10 @@ class PreOrderController extends Controller
 
         $message .= "*Order Items:*\n";
         foreach ($preOrder->items as $item) {
-            $productName = $item->product ? $item->product->product_name : 'Product';
-            $message .= "• {$productName} ({$item->quantity}x) - \${$item->subtotal}\n";
+            $message .= "• {$productName} ({$item->quantity}x) - ETB {$item->subtotal}\n";
         }
 
-        $message .= "\n*Total Amount: \{$preOrder->total_amount}ETB*\n";
+        $message .= "\n*Total Amount: {$preOrder->total_amount} ETB*\n";
         $message .= "_Thank you for your order! Please keep this message for your records._\n";
         $message .= "\n---";
 

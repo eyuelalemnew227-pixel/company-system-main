@@ -311,7 +311,7 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 										calculations.itemDetails.map((item) => (
 											<TableRow key={item.productId}>
 												<TableCell className="font-medium">{item.productName}</TableCell>
-												<TableCell>${item.unitPrice.toFixed(2)}</TableCell>
+												<TableCell>ETB {item.unitPrice.toFixed(2)}</TableCell>
 												<TableCell>
 													<Input
 														type="number"
@@ -321,7 +321,7 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 														className="w-full"
 													/>
 												</TableCell>
-												<TableCell className="text-right font-medium">${item.subtotal.toFixed(2)}</TableCell>
+												<TableCell className="text-right font-medium">ETB {item.subtotal.toFixed(2)}</TableCell>
 											</TableRow>
 										))
 									)}
@@ -330,7 +330,7 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 											<TableCell colSpan={3} className="text-right font-bold">
 												Total Amount:
 											</TableCell>
-											<TableCell className="text-right text-lg font-bold">${calculations.totalAmount.toFixed(2)}</TableCell>
+											<TableCell className="text-right text-lg font-bold">ETB {calculations.totalAmount.toFixed(2)}</TableCell>
 										</TableRow>
 									)}
 								</TableBody>

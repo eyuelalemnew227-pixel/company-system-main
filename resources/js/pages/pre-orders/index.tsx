@@ -182,7 +182,7 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
             message += `Registering Branch: ${preOrder.registering_branch.name}\n`;
         }
 
-        message += "*Total Amount: $" + preOrder.total_amount + "*\n";
+        message += "*Total Amount: " + preOrder.total_amount + "*\n";
         message += "\n*Payment Status: PAID*\n";
         message += "_Thank you for your order! Please keep this message for your records._\n";
         message += "\n---";
@@ -207,14 +207,14 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
         if (selectAll) {
             setSelectedOrders([]);
         } else {
-            setSelectedOrders(preOrders.data.map(order => order.id));
+            setSelectedOrders(preOrders.data.map((order: PreOrder) => order.id));
         }
         setSelectAll(!selectAll);
     };
 
     const handleBulkSmsReminder = () => {
         const pendingOrders = selectedOrders.filter(orderId => {
-            const order = preOrders.data.find(o => o.id === orderId);
+            const order = preOrders.data.find((o: PreOrder) => o.id === orderId);
             return order?.status === 'Pending';
         });
 
@@ -258,7 +258,7 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
 
     // Check if current selection includes pending orders
     const hasPendingOrders = selectedOrders.some(orderId => {
-        const order = preOrders.data.find(o => o.id === orderId);
+        const order = preOrders.data.find((o: PreOrder) => o.id === orderId);
         return order?.status === 'Pending';
     });
 
@@ -388,7 +388,7 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
                                 {hasPendingOrders && (
                                     <span className="ml-1">
                                         ({selectedOrders.filter(id => {
-                                            const order = preOrders.data.find(o => o.id === id);
+                                            const order = preOrders.data.find((o: PreOrder) => o.id === id);
                                             return order?.status === 'Pending';
                                         }).length} pending)
                                     </span>
@@ -518,7 +518,7 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                preOrders.data.map((order) => (
+                                preOrders.data.map((order: PreOrder) => (
                                     <TableRow key={order.id}>
                                         {canViewAllOrders && (
                                             <TableCell>
@@ -544,10 +544,10 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
                                         <TableCell>
                                             {order.items && order.items.length > 0 ? (
                                                 <div className="text-xs">
-                                                    {order.items.map((item, idx) => (
+                                                    {order.items.map((item: any, idx: number) => (
                                                         <span key={idx}>
                                                             {item.product?.product_name || 'Unknown'} ({item.quantity})
-                                                            {idx < order.items.length - 1 && ', '}
+                                                            {idx < order.items!.length - 1 && ', '}
                                                         </span>
                                                     ))}
                                                 </div>
@@ -557,7 +557,7 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
                                         </TableCell>
                                         <TableCell>
                                             <span
-                                                className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${statusColors[order.status]
+                                                className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${statusColors[order.status as keyof typeof statusColors]
                                                     }`}
                                             >
                                                 {order.status}
@@ -568,7 +568,7 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
                                                 </span>
                                             )}
                                         </TableCell>
-                                        <TableCell>${order.total_amount}</TableCell>
+                                        <TableCell>ETB {order.total_amount}</TableCell>
                                         {canViewAuditTrail && (
                                             <>
                                                 <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
@@ -619,6 +619,33 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
                         </TableBody>
                     </Table>
                 </div>
+
+                {/* Pagination */}
+                {preOrders.links && (
+                    <div className="flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">
+                            Showing {preOrders.from || 0} to {preOrders.to || 0} of {preOrders.total} orders
+                        </div>
+                        <div className="flex gap-2">
+                            {preOrders.links.map((link: any, index: number) => {
+                                if (!link.url) {
+                                    return (
+                                        <Button key={index} variant="outline" size="sm" disabled>
+                                            <span dangerouslySetInnerHTML={{ __html: link.label }} />
+                                        </Button>
+                                    );
+                                }
+                                return (
+                                    <Link key={index} href={link.url} preserveState>
+                                        <Button variant={link.active ? 'default' : 'outline'} size="sm">
+                                            <span dangerouslySetInnerHTML={{ __html: link.label }} />
+                                        </Button>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </div>
         </AppLayout>
     );
