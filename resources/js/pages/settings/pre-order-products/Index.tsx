@@ -44,9 +44,10 @@ type Props = {
         search?: string;
         status?: string;
     };
+    userPermissions: string[];
 };
 
-export default function Index({ products, filters }: Props) {
+export default function Index({ products, filters, userPermissions }: Props) {
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<PreOrderProduct | null>(null);
@@ -55,12 +56,14 @@ export default function Index({ products, filters }: Props) {
     const createForm = useForm({
         product_name: '',
         unit_price: '',
+        walkin_price: '',
         status: 'Active' as 'Active' | 'Inactive',
     });
 
     const editForm = useForm({
         product_name: '',
         unit_price: '',
+        walkin_price: '',
         status: 'Active' as 'Active' | 'Inactive',
     });
 
@@ -96,6 +99,7 @@ export default function Index({ products, filters }: Props) {
         editForm.setData({
             product_name: product.product_name,
             unit_price: product.unit_price,
+            walkin_price: product.walkin_price,
             status: product.status,
         });
         setIsEditOpen(true);
@@ -146,7 +150,8 @@ export default function Index({ products, filters }: Props) {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Product Name</TableHead>
-                                    <TableHead>Unit Price</TableHead>
+                                    <TableHead>Regular Price</TableHead>
+                                    <TableHead>Walk-in Price</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
@@ -162,7 +167,8 @@ export default function Index({ products, filters }: Props) {
                                     products.data.map((product) => (
                                         <TableRow key={product.id}>
                                             <TableCell className="font-medium">{product.product_name}</TableCell>
-                                            <TableCell>${product.unit_price}</TableCell>
+                                            <TableCell>{product.unit_price} ETB</TableCell>
+                                            <TableCell>{product.walkin_price} ETB</TableCell>
                                             <TableCell>
                                                 <span
                                                     className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${
@@ -220,7 +226,7 @@ export default function Index({ products, filters }: Props) {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="unit_price">Unit Price</Label>
+                                <Label htmlFor="unit_price">Regular Price (ETB)</Label>
                                 <Input
                                     id="unit_price"
                                     type="number"
@@ -231,6 +237,20 @@ export default function Index({ products, filters }: Props) {
                                     required
                                 />
                                 <InputError message={createForm.errors.unit_price} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="walkin_price">Walk-in Price (ETB)</Label>
+                                <Input
+                                    id="walkin_price"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={createForm.data.walkin_price}
+                                    onChange={(e) => createForm.setData('walkin_price', e.target.value)}
+                                    required
+                                />
+                                <InputError message={createForm.errors.walkin_price} />
                             </div>
 
                             <div className="grid gap-2">
@@ -282,7 +302,7 @@ export default function Index({ products, filters }: Props) {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="edit_unit_price">Unit Price</Label>
+                                <Label htmlFor="edit_unit_price">Regular Price (ETB)</Label>
                                 <Input
                                     id="edit_unit_price"
                                     type="number"
@@ -291,8 +311,26 @@ export default function Index({ products, filters }: Props) {
                                     value={editForm.data.unit_price}
                                     onChange={(e) => editForm.setData('unit_price', e.target.value)}
                                     required
+                                    disabled={!userPermissions.includes('update pre-order product regular price')}
+                                    className={!userPermissions.includes('update pre-order product regular price') ? 'bg-muted' : ''}
                                 />
                                 <InputError message={editForm.errors.unit_price} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit_walkin_price">Walk-in Price (ETB)</Label>
+                                <Input
+                                    id="edit_walkin_price"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={editForm.data.walkin_price}
+                                    onChange={(e) => editForm.setData('walkin_price', e.target.value)}
+                                    required
+                                    disabled={!userPermissions.includes('update pre-order product walkin price')}
+                                    className={!userPermissions.includes('update pre-order product walkin price') ? 'bg-muted' : ''}
+                                />
+                                <InputError message={editForm.errors.walkin_price} />
                             </div>
 
                             <div className="grid gap-2">

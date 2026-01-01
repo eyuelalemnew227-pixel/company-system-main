@@ -138,7 +138,7 @@ class PreOrderController extends Controller
         $branches = Branch::all(['id', 'name']);
         $collectionDays = CollectionDay::where('status', 'Active')->orderBy('display_order')->get(['id', 'name']);
         $orderTypes = OrderType::where('status', 'Active')->get(['id', 'name']);
-        $products = PreOrderProduct::where('status', 'Active')->orderBy('product_name')->get(['id', 'product_name', 'unit_price']);
+        $products = PreOrderProduct::where('status', 'Active')->orderBy('product_name')->get(['id', 'product_name', 'unit_price', 'walkin_price']);
 
         return Inertia::render('pre-orders/create', [
             'branches' => $branches,
@@ -202,16 +202,17 @@ class PreOrderController extends Controller
             // Generate order number
             $orderNumber = $this->generateOrderNumber();
 
-            // Calculate total
+            // Get order type to determine status and pricing
+            $orderType = OrderType::find($validated['order_type_id']);
+            $isWalkin = $orderType->name === 'Walkin Customer';
+
+            // Calculate total using appropriate price
             $totalAmount = 0;
             foreach ($validated['items'] as $item) {
                 $product = PreOrderProduct::find($item['product_id']);
-                $totalAmount += $product->unit_price * $item['quantity'];
+                $price = $isWalkin ? $product->walkin_price : $product->unit_price;
+                $totalAmount += $price * $item['quantity'];
             }
-
-            // Get order type to determine status
-            $orderType = OrderType::find($validated['order_type_id']);
-            $isWalkin = $orderType->name === 'Walkin Customer';
 
             // Additional granular permission check for the specific order type
             if (!$canCreateAll) {
@@ -242,15 +243,16 @@ class PreOrderController extends Controller
                 'updated_by' => auth()->id(),
             ]);
 
-            // Create order items
+            // Create order items with appropriate pricing
             foreach ($validated['items'] as $item) {
                 $product = PreOrderProduct::find($item['product_id']);
+                $price = $isWalkin ? $product->walkin_price : $product->unit_price;
                 PreOrderItem::create([
                     'pre_order_id' => $preOrder->id,
                     'pre_order_product_id' => $item['product_id'],
                     'quantity' => $item['quantity'],
-                    'unit_price' => $product->unit_price,
-                    'subtotal' => $product->unit_price * $item['quantity'],
+                    'unit_price' => $price,
+                    'subtotal' => $price * $item['quantity'],
                 ]);
             }
 
@@ -340,6 +342,11 @@ class PreOrderController extends Controller
                 $canEdit = true;
             }
         }
+        
+        // Check if order is collected and user has permission to edit collected orders
+        if ($preOrder->status === 'Collected' && !$user->can('edit collected pre-orders')) {
+            abort(403, 'You do not have permission to edit orders that have already been collected.');
+        }
 
         if (!$canEdit) {
             abort(403, 'You do not have permission to edit this order type.');
@@ -350,7 +357,7 @@ class PreOrderController extends Controller
         $branches = Branch::all(['id', 'name']);
         $collectionDays = CollectionDay::where('status', 'Active')->orderBy('display_order')->get(['id', 'name']);
         $orderTypes = OrderType::where('status', 'Active')->get(['id', 'name']);
-        $products = PreOrderProduct::where('status', 'Active')->orderBy('product_name')->get(['id', 'product_name', 'unit_price']);
+        $products = PreOrderProduct::where('status', 'Active')->orderBy('product_name')->get(['id', 'product_name', 'unit_price', 'walkin_price']);
 
         // Check if the current user is the one who created this order
         $isRegisteringUser = $preOrder->created_by === auth()->id();
@@ -397,6 +404,11 @@ class PreOrderController extends Controller
             if ($canEditRegular || ($canEditOwn && $isOwnOrder)) {
                 $canEdit = true;
             }
+        }
+        
+        // Check if order is collected and user has permission to edit collected orders
+        if ($preOrder->status === 'Collected' && !$user->can('edit collected pre-orders')) {
+            abort(403, 'You do not have permission to edit orders that have already been collected.');
         }
 
         if (!$canEdit) {
@@ -466,19 +478,23 @@ class PreOrderController extends Controller
             $isWalkinAfter = $targetOrderType->name === 'Walkin Customer';
 
             if (!$canEditAll) {
-                if ($isWalkinAfter && !$canEditWalkin) {
+                // Allow if user has permission to edit their own orders and this is their order
+                $isAuthorizedOwner = $canEditOwn && $isOwnOrder;
+
+                if ($isWalkinAfter && !$canEditWalkin && !$isAuthorizedOwner) {
                     abort(403, 'You do not have permission to change or save orders as Walkin Customer.');
                 }
-                if (!$isWalkinAfter && !$canEditRegular) {
+                if (!$isWalkinAfter && !$canEditRegular && !$isAuthorizedOwner) {
                     abort(403, 'You do not have permission to change or save orders as regular types.');
                 }
             }
 
-            // Calculate total
+            // Calculate total using appropriate price
             $totalAmount = 0;
             foreach ($validated['items'] as $item) {
                 $product = PreOrderProduct::find($item['product_id']);
-                $totalAmount += $product->unit_price * $item['quantity'];
+                $price = $isWalkinAfter ? $product->walkin_price : $product->unit_price;
+                $totalAmount += $price * $item['quantity'];
             }
 
             // Prepare update data
@@ -503,16 +519,17 @@ class PreOrderController extends Controller
             // Update pre-order
             $preOrder->update($updateData);
 
-            // Delete old items and create new ones
+            // Delete old items and create new ones with appropriate pricing
             $preOrder->items()->delete();
             foreach ($validated['items'] as $item) {
                 $product = PreOrderProduct::find($item['product_id']);
+                $price = $isWalkinAfter ? $product->walkin_price : $product->unit_price;
                 PreOrderItem::create([
                     'pre_order_id' => $preOrder->id,
                     'pre_order_product_id' => $item['product_id'],
                     'quantity' => $item['quantity'],
-                    'unit_price' => $product->unit_price,
-                    'subtotal' => $product->unit_price * $item['quantity'],
+                    'unit_price' => $price,
+                    'subtotal' => $price * $item['quantity'],
                 ]);
             }
 

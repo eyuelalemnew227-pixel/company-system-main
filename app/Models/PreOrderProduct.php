@@ -12,11 +12,13 @@ class PreOrderProduct extends Model
     protected $fillable = [
         'product_name',
         'unit_price',
+        'walkin_price',
         'status',
     ];
 
     protected $casts = [
         'unit_price' => 'decimal:2',
+        'walkin_price' => 'decimal:2',
     ];
 
     public function preOrderItems()

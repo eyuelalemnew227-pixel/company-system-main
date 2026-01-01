@@ -174,6 +174,8 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'create pre-order products']);
         Permission::firstOrCreate(['name' => 'update pre-order products']);
         Permission::firstOrCreate(['name' => 'delete pre-order products']);
+        Permission::firstOrCreate(['name' => 'update pre-order product regular price']);
+        Permission::firstOrCreate(['name' => 'update pre-order product walkin price']);
 
         // Order Types
         Permission::firstOrCreate(['name' => 'view order types']);
@@ -207,6 +209,7 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'copy pre-order telegram message']);
         Permission::firstOrCreate(['name' => 'send bulk sms reminders']); // Send bulk SMS reminders for pending orders
         Permission::firstOrCreate(['name' => 'view pre-order audit trail']); // View created_by, updated_by, and date columns
+        Permission::firstOrCreate(['name' => 'edit collected pre-orders']); // Allow editing orders even if status is Collected
 
         // SMS Balance & Management
         Permission::firstOrCreate(['name' => 'view sms balance']);

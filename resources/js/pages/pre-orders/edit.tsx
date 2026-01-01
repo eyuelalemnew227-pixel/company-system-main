@@ -109,12 +109,26 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
         setData('items', newItems);
     };
 
+    // Check if current order type is Walkin Customer
+    const isWalkinCustomer = useMemo(() => {
+        // First check the current form data
+        const orderType = orderTypes.find(type => type.id.toString() === data.order_type_id);
+        if (orderType) return orderType.name === 'Walkin Customer';
+        
+        // Fallback to the pre-order's original type if form data not ready
+        return preOrder.order_type?.name === 'Walkin Customer';
+    }, [data.order_type_id, orderTypes, preOrder.order_type]);
+
     // Calculate totals in real-time
     const calculations = useMemo(() => {
         let totalAmount = 0;
         const itemDetails = products.map((product) => {
             const quantity = productQuantities[product.id] || 0;
-            const unitPrice = parseFloat(product.unit_price);
+            
+            // Use walkin_price if order type is walkin, otherwise use unit_price
+            const price = isWalkinCustomer ? product.walkin_price : product.unit_price;
+            const unitPrice = parseFloat(price);
+            
             const subtotal = quantity * unitPrice;
             totalAmount += subtotal;
 
@@ -128,13 +142,7 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
         });
 
         return { itemDetails, totalAmount };
-    }, [products, productQuantities]);
-
-    // Check if current order type is Walkin Customer
-    const isWalkinCustomer = useMemo(() => {
-        const orderType = orderTypes.find(type => type.id.toString() === data.order_type_id);
-        return orderType?.name === 'Walkin Customer';
-    }, [data.order_type_id, orderTypes]);
+    }, [products, productQuantities, isWalkinCustomer]);
 
     const filteredOrderTypes = useMemo(() => {
         if (userPermissions.update_all) return orderTypes;
@@ -413,7 +421,9 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
                     <div className="rounded-lg border p-6 space-y-4">
                         <h3 className="text-lg font-semibold">Products *</h3>
                         <p className="text-sm text-muted-foreground">
-                            Enter quantity for each product the customer wants to order
+                            {isWalkinCustomer 
+                                ? 'Walk-in prices applied. Enter quantity for each product.' 
+                                : 'Regular prices applied. Enter quantity for each product.'}
                         </p>
 
                         <div className="rounded-lg border">

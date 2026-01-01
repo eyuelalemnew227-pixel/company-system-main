@@ -2,6 +2,7 @@ export interface PreOrderProduct {
     id: number;
     product_name: string;
     unit_price: string;
+    walkin_price: string;
     status: 'Active' | 'Inactive';
     created_at: string;
     updated_at: string;

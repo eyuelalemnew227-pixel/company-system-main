@@ -79,7 +79,14 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
     const canSendBulkSms = userPermissions?.includes('send bulk sms reminders');
     const canCopyTelegram = userPermissions?.includes('copy pre-order telegram message');
     const canViewAuditTrail = userPermissions?.includes('view pre-order audit trail');
+    const canEditCollectedOrders = userPermissions?.includes('edit collected pre-orders');
+
     const canEditOrder = (order: PreOrder) => {
+        // If order is collected, strictly require the collected edit permission
+        if (order.status === 'Collected' && !canEditCollectedOrders) {
+            return false;
+        }
+
         const isOwn = order.created_by === currentUserId;
         const isWalkin = order.order_type?.name === 'Walkin Customer';
 

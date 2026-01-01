@@ -50,7 +50,13 @@ export default function Show({ preOrder, userPermissions }: Props) {
 		? userPermissions?.includes('update walkin pre-orders')
 		: userPermissions?.includes('update regular pre-orders');
 
-	const canUpdateOrders = hasGlobalEdit || (isOwn && userPermissions?.includes('edit own pre-orders')) || hasTypePermission;
+	const canEditCollectedOrders = userPermissions?.includes('edit collected pre-orders');
+	
+	const hasBasePermission = hasGlobalEdit || (isOwn && userPermissions?.includes('edit own pre-orders')) || hasTypePermission;
+
+	const canUpdateOrders = preOrder.status === 'Collected' 
+		? (hasBasePermission && canEditCollectedOrders)
+		: hasBasePermission;
 	
 	const canDeleteOrders = userPermissions?.includes('delete pre-orders');
 	const canCopyTelegram = userPermissions?.includes('copy pre-order telegram message');

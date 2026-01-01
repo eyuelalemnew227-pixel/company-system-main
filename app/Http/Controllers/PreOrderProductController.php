@@ -35,6 +35,7 @@ class PreOrderProductController extends Controller
                 'status' => $request->query('status'),
                 'per_page' => $request->query('per_page'),
             ],
+            'userPermissions' => auth()->user()->getAllPermissions()->pluck('name')->toArray(),
         ]);
     }
 
@@ -54,6 +55,7 @@ class PreOrderProductController extends Controller
         $validated = $request->validate([
             'product_name' => ['required', 'string', 'max:255'],
             'unit_price' => ['required', 'numeric', 'min:0'],
+            'walkin_price' => ['required', 'numeric', 'min:0'],
             'status' => ['required', 'in:Active,Inactive'],
         ]);
 
@@ -91,8 +93,25 @@ class PreOrderProductController extends Controller
         $validated = $request->validate([
             'product_name' => ['required', 'string', 'max:255'],
             'unit_price' => ['required', 'numeric', 'min:0'],
+            'walkin_price' => ['required', 'numeric', 'min:0'],
             'status' => ['required', 'in:Active,Inactive'],
         ]);
+
+        // Permission Checks
+        if ($validated['unit_price'] != $preOrderProduct->unit_price) {
+            if (!auth()->user()->can('update pre-order product regular price')) {
+                // If they don't have permission, they should not be sending a different value.
+                // However, forcing them to send the old value is UI logic. 
+                // Here we block the change.
+                return back()->withErrors(['unit_price' => 'You do not have permission to update the regular price.']);
+            }
+        }
+
+        if ($validated['walkin_price'] != $preOrderProduct->walkin_price) {
+            if (!auth()->user()->can('update pre-order product walkin price')) {
+                return back()->withErrors(['walkin_price' => 'You do not have permission to update the walk-in price.']);
+            }
+        }
 
         $preOrderProduct->update($validated);
 

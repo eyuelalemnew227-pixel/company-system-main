@@ -45,6 +45,7 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 		voucher_code?: string;
 		transaction_reference?: string;
 		items: OrderItem[];
+		duplicate?: string;
 	}>({
 		client_name: '',
 		phone_number: '',
@@ -106,12 +107,22 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 		setData('items', newItems);
 	};
 
+	// Check if current order type is Walkin Customer
+	const isWalkinCustomer = useMemo(() => {
+		const orderType = orderTypes.find((type) => type.id.toString() === data.order_type_id);
+		return orderType?.name === 'Walkin Customer';
+	}, [data.order_type_id, orderTypes]);
+
 	// Calculate totals in real-time
 	const calculations = useMemo(() => {
 		let totalAmount = 0;
 		const itemDetails = products.map((product) => {
 			const quantity = productQuantities[product.id] || 0;
-			const unitPrice = parseFloat(product.unit_price);
+			
+			// Use walkin_price if order type is walkin, otherwise use unit_price
+			const price = isWalkinCustomer ? product.walkin_price : product.unit_price;
+			const unitPrice = parseFloat(price);
+			
 			const subtotal = quantity * unitPrice;
 			totalAmount += subtotal;
 
@@ -125,13 +136,7 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 		});
 
 		return { itemDetails, totalAmount };
-	}, [products, productQuantities]);
-
-	// Check if current order type is Walkin Customer
-	const isWalkinCustomer = useMemo(() => {
-		const orderType = orderTypes.find((type) => type.id.toString() === data.order_type_id);
-		return orderType?.name === 'Walkin Customer';
-	}, [data.order_type_id, orderTypes]);
+	}, [products, productQuantities, isWalkinCustomer]);
 
 	const handleSubmit: FormEventHandler = (e) => {
 		e.preventDefault();
@@ -288,7 +293,11 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 					{/* Products Section */}
 					<div className="space-y-4 rounded-lg border p-6">
 						<h3 className="text-lg font-semibold">Products *</h3>
-						<p className="text-sm text-muted-foreground">Enter quantity for each product the customer wants to order</p>
+						<p className="text-sm text-muted-foreground">
+							{isWalkinCustomer 
+								? 'Walk-in prices applied. Enter quantity for each product.' 
+								: 'Regular prices applied. Enter quantity for each product.'}
+						</p>
 
 						<div className="rounded-lg border">
 							<Table>
