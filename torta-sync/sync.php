@@ -13,17 +13,20 @@ try {
     $destOrderTypes = $destDB->query("SELECT id, name FROM order_types")->fetchAll();
     $destDays = $destDB->query("SELECT id, name FROM collection_days")->fetchAll();
 
-    // 2. Identify "Regular" order type for synced orders
-    // We prefer "Regular Order" or similar, fallback to first if not found
-    $targetTypeId = 1;
-    foreach ($destOrderTypes as $type) {
-        if (stripos($type['name'], 'Regular') !== false) {
-            $targetTypeId = $type['id'];
-            break;
-        }
+    // 3. Helper functions
+    function generateRandomOrderNumber($destDB) {
+        do {
+            $letters = chr(rand(65, 90)) . chr(rand(65, 90));
+            $numbers = str_pad(rand(0, 9999), 4, '0', STR_PAD_LEFT);
+            $orderNumber = $letters . $numbers;
+            
+            $stmt = $destDB->prepare("SELECT id FROM pre_orders WHERE order_number = ?");
+            $stmt->execute([$orderNumber]);
+        } while ($stmt->fetch());
+        return $orderNumber;
     }
 
-    // 3. Fetch all orders from source
+    // 4. Fetch all orders from source
     $srcOrders = $srcDB->query("
         SELECT o.*, c.first_name, c.last_name, b.name as branch_name 
         FROM orders o
@@ -39,11 +42,17 @@ try {
     ];
 
     foreach ($srcOrders as $order) {
-        $orderNumber = ORDER_NUMBER_PREFIX . $order['id'];
+        $sourceId = $order['id'];
+        $legacyOrderNumber = 'TOR-' . $sourceId;
+        $sidTag = "[SID:$sourceId]";
         
-        // Check if already synced
-        $exists = $destDB->prepare("SELECT id FROM pre_orders WHERE order_number = ?");
-        $exists->execute([$orderNumber]);
+        // Check if already synced (Legacy TOR-ID or New [SID:XX])
+        $exists = $destDB->prepare("
+            SELECT id FROM pre_orders 
+            WHERE order_number = ? 
+            OR transaction_reference LIKE ?
+        ");
+        $exists->execute([$legacyOrderNumber, "%$sidTag%"]);
         if ($exists->fetch()) {
             $stats['skipped']++;
             continue;
@@ -51,6 +60,9 @@ try {
 
         try {
             $destDB->beginTransaction();
+
+            // Generate new randomized order number
+            $orderNumber = generateRandomOrderNumber($destDB);
 
             // Map Status
             $statusMap = [
@@ -82,34 +94,54 @@ try {
             }
             if (!$destDayId) $destDayId = 1; // Fallback
 
+            // Map Payment Method
+            $srcPaymentMethod = $order['payment_method'];
+            $destPaymentMethod = ($srcPaymentMethod === 'Telebirr') ? 'Tele Birr' : $srcPaymentMethod;
+
+            // Prepare Transaction Reference with Sync ID tag
+            $transRef = $sidTag;
+            if (!empty($order['payment_slip'])) {
+                $transRef .= " " . $order['payment_slip'];
+            }
+
             // Insert Pre-Order
             $stmt = $destDB->prepare("
                 INSERT INTO pre_orders (
                     order_number, client_name, phone_number, order_type_id, 
                     collection_day_id, collection_branch_id, status, total_amount, 
-                    transaction_reference, notes, created_by, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    payment_method, transaction_reference, created_by, updated_by, 
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
             
             $clientName = trim($order['first_name'] . ' ' . $order['last_name']);
             if (empty($clientName)) $clientName = $order['username'] ?: 'Customer';
 
-            $notes = $order['notes'];
-            if (!empty($order['payment_method'])) {
-                $notes = "Payment Method: " . $order['payment_method'] . ($notes ? "\n" . $notes : "");
+            // Normalize phone number (remove leading 0 or +251, then prepend +251)
+            $phone = preg_replace('/[^0-9]/', '', $order['phone']);
+            if (str_starts_with($phone, '251')) {
+                $phone = substr($phone, 3);
+            } elseif (str_starts_with($phone, '0')) {
+                $phone = substr($phone, 1);
             }
+            $normalizedPhone = '+251' . $phone;
+
+            // Determine Order Type ID based on Source (hear_about)
+            $orderSource = strtolower(trim($order['hear_about'] ?? ''));
+            $targetTypeId = ($orderSource === 'sms') ? 1 : 3;
 
             $stmt->execute([
                 $orderNumber,
                 $clientName,
-                $order['phone'],
+                $normalizedPhone,
                 $targetTypeId,
                 $destDayId,
                 $destBranchId,
                 $destStatus,
                 $order['total_amount'],
-                $order['payment_slip'], // Map payment slip URL to transaction reference
-                $notes,
+                $destPaymentMethod,
+                $transRef,
+                SYNC_USER_ID,
                 SYNC_USER_ID,
                 $order['created_at'],
                 $order['updated_at']
@@ -124,7 +156,7 @@ try {
                 JOIN products p ON oi.product_id = p.id
                 WHERE oi.order_id = ?
             ");
-            $srcItems->execute([$order['id']]);
+            $srcItems->execute([$sourceId]);
             $items = $srcItems->fetchAll();
 
             foreach ($items as $item) {
@@ -160,7 +192,7 @@ try {
 
         } catch (Exception $e) {
             $destDB->rollBack();
-            $stats['errors'][] = "Order #{$order['id']}: " . $e->getMessage();
+            $stats['errors'][] = "Order #$sourceId: " . $e->getMessage();
         }
     }
 
