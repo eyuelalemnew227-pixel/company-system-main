@@ -11,7 +11,6 @@ try {
     $destBranches = $destDB->query("SELECT id, branch_code FROM branches WHERE branch_code IS NOT NULL")->fetchAll();
     $destProducts = $destDB->query("SELECT id, product_name as name, unit_price FROM pre_order_products")->fetchAll();
     $destOrderTypes = $destDB->query("SELECT id, name FROM order_types")->fetchAll();
-    $destDays = $destDB->query("SELECT id, name FROM collection_days")->fetchAll();
 
     // 3. Helper functions
     function generateRandomOrderNumber($destDB) {
@@ -85,16 +84,12 @@ try {
             }
             if (!$destBranchId) $destBranchId = 1; // Fallback to first branch
 
-            // Map Collection Day (based on pickup_date)
-            $dayName = date('l', strtotime($order['pickup_date']));
-            $destDayId = null;
-            foreach ($destDays as $d) {
-                if (strcasecmp($d['name'], $dayName) === 0) {
-                    $destDayId = $d['id'];
-                    break;
-                }
-            }
-            if (!$destDayId) $destDayId = 1; // Fallback
+            // Map Collection Day (Fixed Dates: Jan 06 -> 1, Jan 07 -> 2, Jan 08 -> 3)
+            $pickupDate = date('Y-m-d', strtotime($order['pickup_date']));
+            $destDayId = 1; // Default
+            if ($pickupDate === '2026-01-06') $destDayId = 1;
+            elseif ($pickupDate === '2026-01-07') $destDayId = 2;
+            elseif ($pickupDate === '2026-01-08') $destDayId = 3;
 
             // Map Payment Method
             $srcPaymentMethod = $order['payment_method'];
