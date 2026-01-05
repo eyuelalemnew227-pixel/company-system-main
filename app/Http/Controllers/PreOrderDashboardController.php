@@ -175,6 +175,8 @@ class PreOrderDashboardController extends Controller
      */
     private function getSummaryStats($query): array
     {
+        $totalProducts = PreOrderItem::whereIn('pre_order_id', $query->clone()->select('pre_orders.id'))->sum('quantity');
+
         $stats = $query->selectRaw("
             COUNT(*) as total_orders,
             COUNT(DISTINCT pre_orders.collection_branch_id) as unique_branches,
@@ -197,6 +199,7 @@ class PreOrderDashboardController extends Controller
             'pending_orders' => (int) $stats->pending_orders,
             'collected_orders' => (int) $stats->collected_orders,
             'cancelled_orders' => (int) $stats->cancelled_orders,
+            'total_products' => (int) $totalProducts,
         ];
     }
 

@@ -28,9 +28,10 @@ class PreOrderController extends Controller
             ->with([
                 'orderType:id,name',
                 'collectionDay:id,name',
-                'collectionBranch:id,name',
+                'collectionBranch:id,name,location',
                 'registeringBranch:id,name',
-                'creator:id,name',
+                'creator',
+                'updater',
                 'items:id,pre_order_id,pre_order_product_id,quantity',
                 'items.product:id,product_name',
             ]);
@@ -83,7 +84,6 @@ class PreOrderController extends Controller
         }
 
         $perPage = (int) $request->query('per_page', 15);
-        $perPage = $request->query('perPage', 15);
         $preOrders = $query->orderBy($sortField, $sortDirection)
             ->paginate($perPage)
             ->withQueryString();
@@ -177,8 +177,8 @@ class PreOrderController extends Controller
             'order_type_id' => ['required', 'integer', 'exists:order_types,id'],
             'collection_day_id' => ['required', 'integer', 'exists:collection_days,id'],
             'collection_branch_id' => ['required', 'integer', 'exists:branches,id'],
-            'voucher_code' => ['nullable', 'string', 'max:255'],
-            'transaction_reference' => ['nullable', 'string', 'max:255'],
+            'voucher_code' => ['nullable', 'string', 'max:255', 'unique:pre_orders,voucher_code'],
+            'transaction_reference' => ['nullable', 'string', 'max:255', 'unique:pre_orders,transaction_reference'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:pre_order_products,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
@@ -431,8 +431,8 @@ class PreOrderController extends Controller
             'order_type_id' => ['required', 'integer', 'exists:order_types,id'],
             'collection_day_id' => ['required', 'integer', 'exists:collection_days,id'],
             'collection_branch_id' => ['required', 'integer', 'exists:branches,id'],
-            'voucher_code' => ['nullable', 'string', 'max:255'],
-            'transaction_reference' => ['nullable', 'string', 'max:255'],
+            'voucher_code' => ['nullable', 'string', 'max:255', 'unique:pre_orders,voucher_code,' . $preOrder->id],
+            'transaction_reference' => ['nullable', 'string', 'max:255', 'unique:pre_orders,transaction_reference,' . $preOrder->id],
             'status' => ['required', 'in:Pending,Paid,Collected,Cancelled'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:pre_order_products,id'],
@@ -665,7 +665,7 @@ class PreOrderController extends Controller
             ->where('status', 'Pending')
             ->with([
                 'collectionDay:id,name',
-                'collectionBranch:id,name',
+                'collectionBranch:id,name,location',
                 'items.product'
             ])
             ->get();
@@ -744,7 +744,7 @@ class PreOrderController extends Controller
             ->where('status', 'Pending')
             ->with([
                 'collectionDay:id,name',
-                'collectionBranch:id,name'
+                'collectionBranch:id,name,location'
             ])
             ->get();
 
@@ -941,7 +941,12 @@ class PreOrderController extends Controller
         $message .= "የተጠቀሙት የቅናሽ አይነት፡ {$discountType}\n\n";
         $message .= "ያዘዙት ቶርታ፡ {$products}\n\n";
         $message .= "ጠቅላላ ዋጋ፡ " . number_format($preOrder->total_amount, 0) . " ETB\n\n";
-        $message .= "ቶርታውን የሚወስዱበት ቅርንጫፍ፡ {$preOrder->collectionBranch->name}\n\n";
+        $message .= "ቶርታውን የሚወስዱበት ቅርንጫፍ፡ {$preOrder->collectionBranch->name}\n";
+        if (!empty($preOrder->collectionBranch?->location)) {
+            $message .= "አድራሻ  ፡ {$preOrder->collectionBranch->location}\n\n";
+        } else {
+            $message .= "\n";
+        }
         $message .= "ቶርታውን የሚወስዱበት ቀን፡ {$preOrder->collectionDay->name}\n\n";
         $message .= "ካልዲስን ስለመረጡ እናመሰግናለን።\n\n";
         $message .= "መልካም ገና";
@@ -963,8 +968,10 @@ class PreOrderController extends Controller
             ->with([
                 'orderType:id,name',
                 'collectionDay:id,name',
-                'collectionBranch:id,name',
+                'collectionBranch:id,name,location',
                 'registeringBranch:id,name',
+                'creator',
+                'updater',
                 'items:id,pre_order_id,pre_order_product_id,quantity',
                 'items.product:id,product_name',
             ]);
@@ -1071,8 +1078,11 @@ class PreOrderController extends Controller
                 'Collection Day',
                 'Collection Branch',
                 'Total Amount',
+                'Status',
                 'Notes',
-                'Date Created'
+                'Date Created',
+                'Created By',
+                'Updated By'
             ]);
 
             // Data rows
@@ -1094,6 +1104,8 @@ class PreOrderController extends Controller
                     $order->total_amount,
                     $order->notes ?? '',
                     $order->created_at->format('Y-m-d H:i:s'),
+                    $order->creator->name ?? '-',
+                    $order->updater->name ?? '-',
                 ]);
             }
             fclose($out);

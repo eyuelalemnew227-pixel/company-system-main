@@ -190,7 +190,12 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
         message += `የተጠቀሙት የቅናሽ አይነት፡ ${discountType}\n\n`;
         message += `ያዘዙት ቶርታ፡ ${products}\n\n`;
         message += `ጠቅላላ ዋጋ፡ ETB ${Number(preOrder.total_amount).toLocaleString()}\n\n`;
-        message += `ቶርታውን የሚወስዱበት ቅርንጫፍ፡ ${preOrder.collection_branch?.name || 'N/A'}\n\n`;
+        message += `ቶርታውን የሚወስዱበት ቅርንጫፍ፡ ${preOrder.collection_branch?.name || 'N/A'}\n`;
+        if (preOrder.collection_branch?.location) {
+            message += `አድራሻ  ፡ ${preOrder.collection_branch.location}\n\n`;
+        } else {
+            message += "\n";
+        }
         message += `ቶርታውን የሚወስዱበት ቀን፡ ${preOrder.collection_day?.name || 'N/A'}\n\n`;
         message += "ካልዲስን ስለመረጡ እናመሰግናለን።\n\n";
         message += "መልካም ገና";

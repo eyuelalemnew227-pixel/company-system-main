@@ -6,6 +6,7 @@ import { Head, Link } from '@inertiajs/react';
 import SummaryCards from '@/components/dashboard/SummaryCards';
 import SummaryTable from '@/components/dashboard/SummaryTable';
 import DashboardCharts from '@/components/dashboard/DashboardCharts';
+import DashboardFilters from '@/components/dashboard/DashboardFilters';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Pre-Orders Dashboard', href: '/pre-orders/dashboard' }];
 
@@ -64,19 +65,59 @@ export default function DashboardPage({ dashboard, filters, options }: Props) {
 		}
 	}, []);
 
+	const handleExportCsv = () => {
+		if (dashboard.summaryData.length === 0) return;
+
+		// CSV Headers
+		const headers = ['Collection Branch', 'Collection Day', 'Product', 'Quantity', 'Total Amount', 'Total Orders'];
+		
+		const csvContent = [
+			headers.join(','),
+			...dashboard.summaryData.map(item => [
+				item.collectionBranch,
+				item.collectionDay,
+				item.product,
+				item.totalQuantity,
+				item.totalAmount,
+				item.totalOrders
+			].map(cell => {
+				const cellStr = String(cell);
+				if (cellStr.includes(',') || cellStr.includes('"')) {
+					return `"${cellStr.replace(/"/g, '""')}"`;
+				}
+				return cellStr;
+			}).join(','))
+		].join('\n');
+
+		const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.setAttribute('href', url);
+		link.setAttribute('download', `pre_orders_summary_${new Date().toISOString().slice(0, 10)}.csv`);
+		link.style.visibility = 'hidden';
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+	};
+
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Pre-Orders Dashboard" />
 
 			<div className="container mx-auto space-y-6 p-6">
 				{/* Page Header */}
-				<div>
+				<div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
 					<div>
 						<h1 className="text-3xl font-bold">Pre-Orders Dashboard</h1>
-						<p className="text-muted-foreground">Essential metrics and overview for pre-orders</p>
 					</div>
-
 				</div>
+
+				{/* Filters */}
+				<DashboardFilters 
+					filters={filters} 
+					options={options} 
+					onExportCsv={handleExportCsv}
+				/>
 
 				{/* Summary Cards */}
 				<SummaryCards stats={dashboard.summary} />
@@ -85,7 +126,7 @@ export default function DashboardPage({ dashboard, filters, options }: Props) {
 				<DashboardCharts data={dashboard.charts} />
 
 				{/* Summary Table */}
-				<SummaryTable data={dashboard.summaryData} filters={filters} options={options} />
+				<SummaryTable data={dashboard.summaryData} />
 			</div>
 		</AppLayout>
 	);

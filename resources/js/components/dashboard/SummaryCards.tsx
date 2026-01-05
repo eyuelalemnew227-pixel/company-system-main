@@ -12,6 +12,7 @@ interface SummaryStats {
     pending_orders: number;
     collected_orders: number;
     cancelled_orders: number;
+    total_products: number;
 }
 
 interface SummaryCardsProps {
@@ -27,6 +28,14 @@ export default function SummaryCards({ stats }: SummaryCardsProps) {
             color: 'text-blue-600',
             bgColor: 'bg-blue-50',
             borderColor: 'border-blue-200',
+        },
+        {
+            title: 'Total Products',
+            value: stats.total_products.toLocaleString(),
+            icon: TrendingUp, // Placeholder, will update if I can find a better one
+            color: 'text-orange-600',
+            bgColor: 'bg-orange-50',
+            borderColor: 'border-orange-200',
         },
         {
             title: 'Total Revenue',
@@ -70,7 +79,7 @@ export default function SummaryCards({ stats }: SummaryCardsProps) {
     return (
         <div className="space-y-6">
             {/* Main Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {cards.map((card, index) => {
                     const Icon = card.icon;
                     return (

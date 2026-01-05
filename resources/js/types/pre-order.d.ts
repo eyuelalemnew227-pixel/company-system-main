@@ -66,10 +66,12 @@ export interface PreOrder {
     collection_branch?: {
         id: number;
         name: string;
+        location?: string;
     };
     registering_branch?: {
         id: number;
         name: string;
+        location?: string;
     };
     creator?: {
         id: number;
