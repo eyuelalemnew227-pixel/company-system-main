@@ -13,13 +13,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('pre_order_products', function (Blueprint $table) {
-            $table->decimal('walkin_price', 10, 2)->after('unit_price')->default(0);
+            if (!Schema::hasColumn('pre_order_products', 'walkin_price')) {
+                $table->decimal('walkin_price', 10, 2)->after('unit_price')->default(0);
+                // Set walkin_price to match unit_price for existing products
+                DB::table('pre_order_products')->update([
+                    'walkin_price' => DB::raw('unit_price')
+                ]);
+            }
         });
-
-        // Set walkin_price to match unit_price for existing products
-        DB::table('pre_order_products')->update([
-            'walkin_price' => DB::raw('unit_price')
-        ]);
     }
 
     /**

@@ -14,8 +14,12 @@ class MyEvaluationResultsController extends Controller
         $user = Auth::user();
         $employeeId = $user->employee_id;
         $search = $request->query('search', '');
+        $periods = \App\Models\EvaluationPeriod::select('id', 'evaluation_period_name')->orderByDesc('id')->get();
         $periodId = $request->query('period_id');
-        if ($periodId === 'all' || $periodId === '') {
+
+        if ($periodId === null) {
+            $periodId = $periods->first()?->id;
+        } elseif ($periodId === 'all' || $periodId === '') {
             $periodId = null;
         }
 
@@ -32,7 +36,7 @@ class MyEvaluationResultsController extends Controller
             })
             ->with('questionResponses')
             ->get();
-        
+
         $personalScores = [];
         foreach ($personalResponses as $response) {
             $scores = $response->questionResponses->pluck('score')->filter();
@@ -53,7 +57,7 @@ class MyEvaluationResultsController extends Controller
                 })
                 ->with('questionResponses')
                 ->get();
-            
+
             $departmentScores = [];
             foreach ($departmentResponses as $response) {
                 $scores = $response->questionResponses->pluck('score')->filter();
@@ -80,13 +84,13 @@ class MyEvaluationResultsController extends Controller
                 // Personal evaluations
                 $q->where(function ($inner) use ($employeeId) {
                     $inner->where('evaluable_type', 'employee')
-                          ->where('evaluate_id', $employeeId);
+                        ->where('evaluate_id', $employeeId);
                 });
                 // Department evaluations (if employee has a department)
                 if ($departmentId) {
                     $q->orWhere(function ($inner) use ($departmentId) {
                         $inner->where('evaluable_type', 'department')
-                              ->where('evaluate_id', $departmentId);
+                            ->where('evaluate_id', $departmentId);
                     });
                 }
             })
@@ -96,12 +100,12 @@ class MyEvaluationResultsController extends Controller
                     $inner->whereHas('evaluation', function ($qq) use ($search) {
                         $qq->where('name', 'like', "%{$search}%");
                     })
-                    ->orWhereHas('evaluator', function ($qq) use ($search) {
-                        $qq->where('name', 'like', "%{$search}%");
-                    })
-                    ->orWhereHas('evaluationPeriod', function ($qq) use ($search) {
-                        $qq->where('evaluation_period_name', 'like', "%{$search}%");
-                    });
+                        ->orWhereHas('evaluator', function ($qq) use ($search) {
+                            $qq->where('name', 'like', "%{$search}%");
+                        })
+                        ->orWhereHas('evaluationPeriod', function ($qq) use ($search) {
+                            $qq->where('evaluation_period_name', 'like', "%{$search}%");
+                        });
                 });
             })
             ->when($periodId, function ($q) use ($periodId) {
@@ -114,13 +118,13 @@ class MyEvaluationResultsController extends Controller
         $items = $responses->getCollection()->map(function (EvaluationResponse $r) {
             $scores = $r->questionResponses->pluck('score');
             $avg = $scores->count() ? round($scores->avg(), 2) : null;
-            
+
             // Determine evaluation type
             $evaluationType = $r->evaluable_type === 'employee' ? 'Personal' : ucfirst($r->evaluable_type);
-            
+
             // Check if period is still active
             $periodIsActive = $r->evaluationPeriod && $r->evaluationPeriod->status === 'active';
-            
+
             return [
                 'id' => $r->id,
                 'evaluation' => [
@@ -140,12 +144,13 @@ class MyEvaluationResultsController extends Controller
         });
         $responses->setCollection($items);
 
-        $periods = \App\Models\EvaluationPeriod::select('id', 'evaluation_period_name')->orderBy('id', 'desc')->get();
-
         return Inertia::render('my-results/index', [
             'items' => $responses,
             'periods' => $periods,
-            'request' => $request->only('search', 'period_id'),
+            'request' => [
+                'search' => $search,
+                'period_id' => $request->query('period_id') === null ? (string) $periods->first()?->id : $request->query('period_id'),
+            ],
             'kpi' => [
                 'personal_avg_score' => $personalAvgScore,
                 'department_avg_score' => $departmentAvgScore,
@@ -163,7 +168,7 @@ class MyEvaluationResultsController extends Controller
 
         // Check if the user has access to this evaluation (either personal or department)
         $hasAccess = false;
-        
+
         if ($evaluationResponse->evaluable_type === 'employee' && $evaluationResponse->evaluate_id === $user->employee_id) {
             $hasAccess = true;
         } elseif ($evaluationResponse->evaluable_type === 'department' && $departmentId && $evaluationResponse->evaluate_id === $departmentId) {
@@ -178,10 +183,10 @@ class MyEvaluationResultsController extends Controller
 
         // Determine evaluation type
         $evaluationType = $evaluationResponse->evaluable_type === 'employee' ? 'Personal' : ucfirst($evaluationResponse->evaluable_type);
-        
+
         // Check if period is still active
         $periodIsActive = $evaluationResponse->evaluationPeriod && $evaluationResponse->evaluationPeriod->status === 'active';
-        
+
         // Check if user can accept/reject department evaluations
         $canAcceptRejectDepartment = $user->can('accept reject department evaluation');
 

@@ -4,7 +4,7 @@ import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Plus, Search, Pencil, Trash2, Eye } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Eye, History } from 'lucide-react';
 import type { PageProps } from '@/types';
 import { toast } from 'sonner';
 
@@ -20,6 +20,7 @@ type Props = PageProps & {
         evaluable_type?: string;
         branch_id?: string;
         department_id?: string;
+        evaluation_name?: string;
     };
     periods: any[];
     branches: any[];
@@ -27,12 +28,13 @@ type Props = PageProps & {
 };
 
 export default function Index({ auth, evaluationResponses, filters, periods, branches, departments, flash }: Props) {
-    
+
     const [searchQuery, setSearchQuery] = useState(filters.search || '');
     const [selectedPeriod, setSelectedPeriod] = useState(filters.period_id || 'all');
     const [selectedType, setSelectedType] = useState(filters.evaluable_type || 'all');
     const [selectedBranch, setSelectedBranch] = useState(filters.branch_id || 'all');
     const [selectedDepartment, setSelectedDepartment] = useState(filters.department_id || 'all');
+    const [templateFilter, setTemplateFilter] = useState(filters.evaluation_name || 'all');
 
     useEffect(() => {
         if (flash.message) {
@@ -43,12 +45,13 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
     const handleFilterChange = () => {
         router.get(
             route('evaluation-records.index'),
-            { 
+            {
                 search: searchQuery,
                 period_id: selectedPeriod === 'all' ? undefined : selectedPeriod,
                 evaluable_type: selectedType === 'all' ? undefined : selectedType,
                 branch_id: selectedBranch === 'all' ? undefined : selectedBranch,
                 department_id: selectedDepartment === 'all' ? undefined : selectedDepartment,
+                evaluation_name: templateFilter === 'all' ? undefined : templateFilter,
             },
             { preserveState: true, replace: true }
         );
@@ -69,10 +72,11 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
         if (selectedPeriod !== (filters.period_id || 'all') ||
             selectedType !== (filters.evaluable_type || 'all') ||
             selectedBranch !== (filters.branch_id || 'all') ||
-            selectedDepartment !== (filters.department_id || 'all')) {
+            selectedDepartment !== (filters.department_id || 'all') ||
+            templateFilter !== (filters.evaluation_name || 'all')) {
             handleFilterChange();
         }
-    }, [selectedPeriod, selectedType, selectedBranch, selectedDepartment]);
+    }, [selectedPeriod, selectedType, selectedBranch, selectedDepartment, templateFilter]);
 
     const handleDelete = (id: number) => {
         if (confirm('Are you sure you want to delete this evaluation? This will permanently remove all associated scores.')) {
@@ -95,6 +99,15 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
             <div className="p-4 sm:p-6 lg:p-8 space-y-6">
                 <div className="flex items-center justify-between">
                     <h1 className="text-3xl font-bold">Evaluation Management</h1>
+
+                    {auth.permissions.includes('view deleted evaluations') && (
+                        <Button variant="outline" asChild className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700">
+                            <Link href={route('deleted-evaluations.index')} className="flex items-center gap-2">
+                                <History className="h-4 w-4" />
+                                Deleted Evaluations
+                            </Link>
+                        </Button>
+                    )}
                 </div>
 
                 <Card className="p-6">
@@ -103,14 +116,15 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                             <Input
                                 type="text"
-                                placeholder="Search evaluator..."
+                                placeholder="Search evaluator or evaluatee..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleFilterChange()}
                                 className="pl-10"
                             />
                         </div>
 
-                        <select 
+                        <select
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                             value={selectedPeriod}
                             onChange={(e) => setSelectedPeriod(e.target.value)}
@@ -121,7 +135,7 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
                             ))}
                         </select>
 
-                        <select 
+                        <select
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                             value={selectedType}
                             onChange={(e) => setSelectedType(e.target.value)}
@@ -133,7 +147,7 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
                             <option value="other">Other</option>
                         </select>
 
-                        <select 
+                        <select
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                             value={selectedBranch}
                             onChange={(e) => setSelectedBranch(e.target.value)}
@@ -144,7 +158,7 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
                             ))}
                         </select>
 
-                        <select 
+                        <select
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                             value={selectedDepartment}
                             onChange={(e) => setSelectedDepartment(e.target.value)}
@@ -153,6 +167,19 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
                             {departments.map((d: any) => (
                                 <option key={d.id} value={d.id}>{d.name}</option>
                             ))}
+                        </select>
+
+                        <select
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            value={templateFilter}
+                            onChange={(e) => setTemplateFilter(e.target.value)}
+                        >
+                            <option value="all">All Evaluations</option>
+                            <option value="Peer to Peer Evaluation">Peer to Peer Evaluation</option>
+                            <option value="Bottom Up Evaluation">Bottom Up Evaluation</option>
+                            <option value="Top Down Evaluation">Top Down Evaluation</option>
+                            <option value="Department to Department">Department to Department</option>
+                            <option value="Branch Managers Evaluation">Branch Managers Evaluation</option>
                         </select>
                     </div>
 

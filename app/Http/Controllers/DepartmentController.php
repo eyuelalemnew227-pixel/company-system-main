@@ -36,6 +36,8 @@ class DepartmentController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'description' => 'nullable|string',
+            'is_active' => 'boolean',
+            'is_active_on_ticketing' => 'boolean',
         ]);
 
         Department::create($validated);
@@ -56,6 +58,8 @@ class DepartmentController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:100',
             'description' => 'nullable|string',
+            'is_active' => 'boolean',
+            'is_active_on_ticketing' => 'boolean',
         ]);
 
         $department->update($validated);

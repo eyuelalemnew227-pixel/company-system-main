@@ -16,7 +16,7 @@ class BranchManagerEvaluationSummaryController extends Controller
     {
         $employeeId = $request->query('employee_id');
         $periodId = $request->query('period_id');
-        
+
         if (!$employeeId) {
             return response()->json(['error' => 'Employee ID is required'], 400);
         }
@@ -39,8 +39,8 @@ class BranchManagerEvaluationSummaryController extends Controller
             ->whereIn('er.evaluation_id', $evaluationIds)
             ->where('er.evaluate_id', $employeeId)
             ->where('er.evaluable_type', 'employee')
-            ->when($periodId, function ($q) use ($periodId) { 
-                $q->where('er.evaluation_period_id', $periodId); 
+            ->when($periodId, function ($q) use ($periodId) {
+                $q->where('er.evaluation_period_id', $periodId);
             })
             ->select(
                 'er.id as response_id',
@@ -52,7 +52,7 @@ class BranchManagerEvaluationSummaryController extends Controller
 
         // Get all question responses for these evaluations
         $responseIds = $evaluationResponses->pluck('response_id')->toArray();
-        
+
         $questionResponses = DB::table('question_responses as qr')
             ->join('questions as q', 'q.id', '=', 'qr.question_id')
             ->whereIn('qr.evaluation_response_id', $responseIds)
@@ -95,8 +95,10 @@ class BranchManagerEvaluationSummaryController extends Controller
         })->values();
 
         // Calculate overall average
-        $allScores = $byDepartment->flatMap(fn($dept) => 
-            collect($dept['evaluations'])->flatMap(fn($e) => 
+        $allScores = $byDepartment->flatMap(
+            fn($dept) =>
+            collect($dept['evaluations'])->flatMap(
+                fn($e) =>
                 collect($e['questions'])->pluck('score')
             )
         );
@@ -111,26 +113,32 @@ class BranchManagerEvaluationSummaryController extends Controller
     public function summary(Request $request)
     {
         // Cache branches for 10 minutes
-        $branches = Cache::remember('branches_all_sorted', 600, fn() => 
+        $branches = Cache::remember(
+            'branches_all_sorted',
+            600,
+            fn() =>
             Branch::select('id', 'name')->orderBy('name')->get()
         );
-        
+
         // Cache evaluation periods for 10 minutes
-        $periods = Cache::remember('evaluation_periods_all', 600, fn() => 
+        $periods = Cache::remember(
+            'evaluation_periods_all',
+            600,
+            fn() =>
             EvaluationPeriod::select('id', 'evaluation_period_name')->orderByDesc('id')->get()
         );
-        
+
         $branchId = $request->query('branch_id');
         $periodId = $request->query('period_id');
-        
+
         if ($branchId === 'all' || $branchId === '') {
             $branchId = null;
         }
-        
+
         // Default to latest period if not specified
-        if ($periodId === null || $periodId === '') {
+        if ($periodId === null) {
             $periodId = $periods->first()?->id;
-        } elseif ($periodId === 'all') {
+        } elseif ($periodId === 'all' || $periodId === '') {
             $periodId = null;
         }
 
@@ -143,7 +151,7 @@ class BranchManagerEvaluationSummaryController extends Controller
             'periods' => $periods,
             'request' => [
                 'branch_id' => $request->query('branch_id'),
-                'period_id' => $periodId ? (string) $periodId : null,
+                'period_id' => $request->query('period_id') === null ? (string) $periods->first()?->id : $request->query('period_id'),
             ],
         ]);
     }
@@ -152,8 +160,22 @@ class BranchManagerEvaluationSummaryController extends Controller
     {
         $branchId = $request->query('branch_id');
         $periodId = $request->query('period_id');
-        if ($branchId === 'all' || $branchId === '') { $branchId = null; }
-        if ($periodId === 'all' || $periodId === '') { $periodId = null; }
+        if ($branchId === 'all' || $branchId === '') {
+            $branchId = null;
+        }
+
+        $periods = Cache::remember(
+            'evaluation_periods_all',
+            600,
+            fn() =>
+            \App\Models\EvaluationPeriod::select('id', 'evaluation_period_name')->orderByDesc('id')->get()
+        );
+
+        if ($periodId === null) {
+            $periodId = $periods->first()?->id;
+        } elseif ($periodId === 'all' || $periodId === '') {
+            $periodId = null;
+        }
 
         [$rows, $departmentNames] = $this->computeSummaryRows($branchId, $periodId);
 
@@ -175,8 +197,10 @@ class BranchManagerEvaluationSummaryController extends Controller
 
         return response()->stream(function () use ($rows, $visibleNames) {
             $out = fopen('php://output', 'w');
-            if ($out === false) { return; }
-            fputcsv($out, array_merge(['Branch', 'Manager Name'], $visibleNames, ['Overall Avg']));
+            if ($out === false) {
+                return;
+            }
+            fputcsv($out, array_merge(['Branch', 'Manager Name'], $visibleNames, ['Final Result (100%)']));
             foreach ($rows as $r) {
                 $values = [];
                 foreach ($visibleNames as $name) {
@@ -185,14 +209,21 @@ class BranchManagerEvaluationSummaryController extends Controller
                 $nonNull = array_values(array_filter($values, fn($v) => $v !== null));
                 $overall = null;
                 if (count($nonNull) > 0) {
-                    $sum = array_reduce($nonNull, function ($carry, $v) { return $carry + (float) $v; }, 0.0);
-                    $overall = round($sum / count($nonNull), 2);
+                    $sum = array_reduce($nonNull, function ($carry, $v) {
+                        return $carry + (float) $v;
+                    }, 0.0);
+                    $avg = $sum / count($nonNull);
+                    $overall = round(($avg / 5) * 100, 2) . '%';
+                } else {
+                    $overall = '';
                 }
                 fputcsv($out, array_merge([
                     (string) ($r['branch'] ?? ''),
                     (string) ($r['manager_name'] ?? ''),
-                ], array_map(function ($v) { return $v === null ? '' : $v; }, $values), [
-                    $overall === null ? '' : $overall,
+                ], array_map(function ($v) {
+                    return $v === null ? '' : $v;
+                }, $values), [
+                    $overall,
                 ]));
             }
             fclose($out);
@@ -217,8 +248,12 @@ class BranchManagerEvaluationSummaryController extends Controller
             ->leftJoin('branches as b', 'b.id', '=', 'emp.branch_id')
             ->whereIn('er.evaluation_id', $evaluations)
             ->where('er.evaluable_type', 'employee')
-            ->when($periodId, function ($q) use ($periodId) { $q->where('er.evaluation_period_id', $periodId); })
-            ->when($branchId, function ($q) use ($branchId) { $q->where('emp.branch_id', $branchId); })
+            ->when($periodId, function ($q) use ($periodId) {
+                $q->where('er.evaluation_period_id', $periodId);
+            })
+            ->when($branchId, function ($q) use ($branchId) {
+                $q->where('emp.branch_id', $branchId);
+            })
             ->groupBy('emp.id', 'b.name', 'emp.first_name', 'emp.last_name', 'emp.branch_id')
             ->selectRaw('emp.id as employee_id, COALESCE(b.name, "-") as branch, CONCAT(emp.first_name, " ", emp.last_name) as manager_name, emp.branch_id')
             ->get();
@@ -232,7 +267,9 @@ class BranchManagerEvaluationSummaryController extends Controller
             ->whereIn('er.evaluation_id', $evaluations)
             ->where('er.evaluable_type', 'employee')
             ->whereNotNull('d.id')
-            ->when($periodId, function ($q) use ($periodId) { $q->where('er.evaluation_period_id', $periodId); })
+            ->when($periodId, function ($q) use ($periodId) {
+                $q->where('er.evaluation_period_id', $periodId);
+            })
             ->when($branchId, function ($q) use ($branchId, $managers) {
                 $managerEmployeeIds = $managers->pluck('employee_id')->toArray();
                 if (!empty($managerEmployeeIds)) {
@@ -245,14 +282,14 @@ class BranchManagerEvaluationSummaryController extends Controller
         // Then get all question responses and calculate averages
         $responseIds = $evaluationResponses->pluck('response_id')->toArray();
         $questionScores = [];
-        
+
         if (!empty($responseIds)) {
             $scores = DB::table('question_responses')
                 ->whereIn('evaluation_response_id', $responseIds)
                 ->select('evaluation_response_id', DB::raw('AVG(score) as avg_score'))
                 ->groupBy('evaluation_response_id')
                 ->pluck('avg_score', 'evaluation_response_id');
-            
+
             // Map response IDs to their average scores
             foreach ($evaluationResponses as $response) {
                 $avgScore = $scores->get($response->response_id);
@@ -273,7 +310,7 @@ class BranchManagerEvaluationSummaryController extends Controller
         // Calculate final averages per employee per department
         $evaluationData = collect();
         foreach ($questionScores as $data) {
-            $evaluationData->push((object)[
+            $evaluationData->push((object) [
                 'employee_id' => $data['employee_id'],
                 'department_name' => $data['department_name'],
                 'avg_score' => round(array_sum($data['scores']) / count($data['scores']), 2)
@@ -296,20 +333,20 @@ class BranchManagerEvaluationSummaryController extends Controller
         $pivot = [];
         foreach ($managers as $mgr) {
             $key = (string) $mgr->employee_id;
-            $pivot[$key] = [ 
+            $pivot[$key] = [
                 'employee_id' => $mgr->employee_id,
-                'branch' => $mgr->branch, 
-                'manager_name' => $mgr->manager_name 
+                'branch' => $mgr->branch,
+                'manager_name' => $mgr->manager_name
             ];
-            
+
             // Get scores for this specific manager from each department
             $managerScores = $managerDepartmentScores[$mgr->employee_id] ?? [];
-            
+
             // Initialize all department columns
             foreach ($departmentNames as $deptName) {
                 $pivot[$key][$deptName] = $managerScores[$deptName] ?? null;
             }
-            
+
             $pivot[$key]['overall_avg'] = null;
         }
 
@@ -317,19 +354,22 @@ class BranchManagerEvaluationSummaryController extends Controller
         foreach ($pivot as $key => &$row) {
             $values = array_map(fn($name) => $row[$name] ?? null, $departmentNames);
             $nonNull = array_values(array_filter($values, fn($v) => $v !== null));
-            if (count($nonNull) === 0) { 
-                $row['overall_avg'] = null; 
-            } else { 
-                $sum = array_reduce($nonNull, function ($carry, $v) { return $carry + (float) $v; }, 0.0); 
-                $row['overall_avg'] = round($sum / count($nonNull), 2); 
+            if (count($nonNull) === 0) {
+                $row['overall_avg'] = null;
+            } else {
+                $sum = array_reduce($nonNull, function ($carry, $v) {
+                    return $carry + (float) $v;
+                }, 0.0);
+                $avg = $sum / count($nonNull);
+                $row['overall_avg'] = round(($avg / 5) * 100, 2);
             }
         }
         unset($row);
 
         // Sort by branch and manager name
         $result = array_values($pivot);
-        usort($result, function ($a, $b) { 
-            return [$a['branch'], $a['manager_name']] <=> [$b['branch'], $b['manager_name']]; 
+        usort($result, function ($a, $b) {
+            return [$a['branch'], $a['manager_name']] <=> [$b['branch'], $b['manager_name']];
         });
 
         return [$result, $departmentNames];

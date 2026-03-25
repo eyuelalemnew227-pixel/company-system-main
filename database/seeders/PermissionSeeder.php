@@ -60,11 +60,13 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'update managers']);
         Permission::firstOrCreate(['name' => 'delete managers']);
 
+        // Evaluation Categories
+        Permission::firstOrCreate(['name' => 'view evaluation categories']);
+        Permission::firstOrCreate(['name' => 'create evaluation categories']);
+        Permission::firstOrCreate(['name' => 'update evaluation categories']);
+        Permission::firstOrCreate(['name' => 'delete evaluation categories']);
+
         // Evaluation Types
-        Permission::firstOrCreate(['name' => 'view evaluation types']);
-        Permission::firstOrCreate(['name' => 'create evaluation types']);
-        Permission::firstOrCreate(['name' => 'update evaluation types']);
-        Permission::firstOrCreate(['name' => 'delete evaluation types']);
 
         // Question Groups
         Permission::firstOrCreate(['name' => 'view question groups']);
@@ -228,5 +230,9 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'view evaluation records']);
         Permission::firstOrCreate(['name' => 'update evaluation records']);
         Permission::firstOrCreate(['name' => 'delete evaluation records']);
+
+        // Deleted Evaluations (Audit Trail)
+        Permission::firstOrCreate(['name' => 'view deleted evaluations']);
+        Permission::firstOrCreate(['name' => 'restore deleted evaluations']);
     }
 }

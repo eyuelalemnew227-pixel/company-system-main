@@ -155,7 +155,7 @@ export default function InventoryCountSummaryPage({ data, branches, childCategor
 	};
 
 	return (
-		<AppLayout title="Inventory Count Summary">
+		<AppLayout breadcrumbs={[{ title: 'Inventory Count Summary', href: '/reports/inventory-count-summary' }]}>
 			<Head title="Inventory Count Summary" />
 			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
 				<Card>
@@ -248,7 +248,7 @@ export default function InventoryCountSummaryPage({ data, branches, childCategor
 				<Card>
 					<CardContent className="p-0">
 						<Table>
-							<TableHeader className="bg-slate-500 dark:bg-slate-700">
+							<TableHeader className="bg-slate-500 dark:bg-slate-700 sticky top-0 z-10">
 								<TableRow>
 									<TableHead className="font-bold text-white">
 										<div className="flex items-center gap-2">

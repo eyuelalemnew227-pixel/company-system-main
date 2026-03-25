@@ -10,6 +10,7 @@ use App\Models\Branch;
 use App\Models\Department;
 use App\Models\EvaluationPeriod;
 use App\Models\Evaluation;
+use App\Models\EvaluationCategory;
 use App\Models\EvaluationResponse;
 
 class EvaluationReportController extends Controller
@@ -17,63 +18,70 @@ class EvaluationReportController extends Controller
     public function summary(Request $request)
     {
         // Cache branches for 10 minutes
-        $branches = Cache::remember('branches_all_sorted', 600, fn() => 
+        $branches = Cache::remember(
+            'branches_all_sorted',
+            600,
+            fn() =>
             Branch::select('id', 'name')->orderBy('name')->get()
         );
-        
+
         // Cache departments for 10 minutes
-        $departments = Cache::remember('departments_all_sorted', 600, fn() => 
+        $departments = Cache::remember(
+            'departments_all_sorted',
+            600,
+            fn() =>
             Department::select('id', 'name')->orderBy('name')->get()
         );
-        
+
         // Cache evaluation periods for 10 minutes
-        $periods = Cache::remember('evaluation_periods_all', 600, fn() => 
+        $periods = Cache::remember(
+            'evaluation_periods_all',
+            600,
+            fn() =>
             EvaluationPeriod::select('id', 'evaluation_period_name')->orderByDesc('id')->get()
         );
 
-        $employeeEvalNames = [
-            'Peer to Peer evaluation',
-            'Bottom Up Evaluation',
-            'Top Down Evaluation',
-        ];
-        $departmentEvalName = 'Department to department';
-        $evaluationNames = array_merge($employeeEvalNames, [$departmentEvalName]);
+        $evalCategories = EvaluationCategory::where('is_active', true)->get();
+        $employeeEvalNames = $evalCategories->where('name', '!=', 'Department to Department')->pluck('name')->toArray();
+        $departmentEvalName = 'Department to Department';
+        $evaluationNames = $evalCategories->pluck('name')->toArray();
+        $categoryWeights = $evalCategories->pluck('weight', 'name')->toArray();
 
         $branchId = $request->query('branch_id');
         $departmentId = $request->query('department_id');
         $periodId = $request->query('period_id');
-        
+
         if ($branchId === 'all' || $branchId === '') {
             $branchId = null;
         }
         if ($departmentId === 'all' || $departmentId === '') {
             $departmentId = null;
         }
-        
+
         // Default to latest period if not specified
-        if ($periodId === null || $periodId === '') {
+        if ($periodId === null) {
             $periodId = $periods->first()?->id;
-        } elseif ($periodId === 'all') {
+        } elseif ($periodId === 'all' || $periodId === '') {
             $periodId = null;
         }
 
-        // Compute rows using shared method
         [$result, $evaluationNames] = $this->computeSummaryRows(
             $employeeEvalNames,
             $departmentEvalName,
             $branchId,
             $departmentId,
-            $periodId
+            $periodId,
+            $categoryWeights
         );
 
-        // keep rows only if at least one of the three employee-based evaluations has a value
-        $result = array_values(array_filter($result, function ($row) use ($employeeEvalNames) {
-            foreach ($employeeEvalNames as $name) {
+        // keep rows only if at least one evaluation has a value
+        $result = array_values(array_filter($result, function ($row) use ($evaluationNames) {
+            foreach ($evaluationNames as $name) {
                 if (array_key_exists($name, $row) && $row[$name] !== null) {
                     return true;
                 }
             }
-            return false; // all three employee-based are null → drop the row
+            return false;
         }));
 
         return Inertia::render('reports/evaluation-summary', [
@@ -85,7 +93,7 @@ class EvaluationReportController extends Controller
             'request' => [
                 'branch_id' => $request->query('branch_id'),
                 'department_id' => $request->query('department_id'),
-                'period_id' => $periodId ? (string) $periodId : null,
+                'period_id' => $request->query('period_id') === null ? (string) $periods->first()?->id : $request->query('period_id'),
             ],
         ]);
     }
@@ -104,7 +112,7 @@ class EvaluationReportController extends Controller
             return response()->json(['error' => 'Missing required parameters'], 400);
         }
 
-        $evaluableType = $evaluationName === 'Department to department' ? 'department' : 'employee';
+        $evaluableType = $evaluationName === 'Department to Department' ? 'department' : 'employee';
         $evaluateId = $evaluableType === 'department' ? $departmentId : $employeeId;
 
         if (!$evaluateId) {
@@ -129,10 +137,10 @@ class EvaluationReportController extends Controller
                     ->where('qr.evaluation_response_id', $resp->response_id)
                     ->select('q.question_text', 'qr.score')
                     ->get();
-                
+
                 $detailedResponses[] = [
                     'evaluator' => $resp->evaluator_name ?? 'N/A',
-                    'questions' => $questions->map(function($q) {
+                    'questions' => $questions->map(function ($q) {
                         return [
                             'text' => $q->question_text,
                             'score' => $q->score
@@ -151,26 +159,41 @@ class EvaluationReportController extends Controller
 
     public function export(Request $request)
     {
-        $employeeEvalNames = [
-            'Peer to Peer evaluation',
-            'Bottom Up Evaluation',
-            'Top Down Evaluation',
-        ];
-        $departmentEvalName = 'Department to department';
+        $evalCategories = EvaluationCategory::where('is_active', true)->get();
+        $employeeEvalNames = $evalCategories->where('name', '!=', 'Department to Department')->pluck('name')->toArray();
+        $departmentEvalName = 'Department to Department';
+        $categoryWeights = $evalCategories->pluck('weight', 'name')->toArray();
 
         $branchId = $request->query('branch_id');
         $departmentId = $request->query('department_id');
         $periodId = $request->query('period_id');
-        if ($branchId === 'all' || $branchId === '') { $branchId = null; }
-        if ($departmentId === 'all' || $departmentId === '') { $departmentId = null; }
-        if ($periodId === 'all' || $periodId === '') { $periodId = null; }
+        if ($branchId === 'all' || $branchId === '') {
+            $branchId = null;
+        }
+        if ($departmentId === 'all' || $departmentId === '') {
+            $departmentId = null;
+        }
+
+        $periods = Cache::remember(
+            'evaluation_periods_all',
+            600,
+            fn() =>
+            EvaluationPeriod::select('id', 'evaluation_period_name')->orderByDesc('id')->get()
+        );
+
+        if ($periodId === null) {
+            $periodId = $periods->first()?->id;
+        } elseif ($periodId === 'all' || $periodId === '') {
+            $periodId = null;
+        }
 
         [$rows, $evaluationNames] = $this->computeSummaryRows(
             $employeeEvalNames,
             $departmentEvalName,
             $branchId,
             $departmentId,
-            $periodId
+            $periodId,
+            $categoryWeights
         );
 
         // Apply same row filter: require at least one employee-based value
@@ -202,9 +225,11 @@ class EvaluationReportController extends Controller
 
         return response()->stream(function () use ($rows, $visibleNames) {
             $out = fopen('php://output', 'w');
-            if ($out === false) { return; }
+            if ($out === false) {
+                return;
+            }
             // header
-            fputcsv($out, array_merge(['Department', 'Employee Name'], $visibleNames, ['Overall Avg']));
+            fputcsv($out, array_merge(['Department', 'Employee Name'], $visibleNames, ['Final Result (100%)']));
             foreach ($rows as $r) {
                 $values = [];
                 foreach ($visibleNames as $name) {
@@ -212,15 +237,21 @@ class EvaluationReportController extends Controller
                 }
                 // compute overall average from visible, non-null
                 $nonNull = array_values(array_filter($values, fn($v) => $v !== null));
-                $overall = null;
-                if (count($nonNull) > 0) {
-                    $sum = array_reduce($nonNull, function ($carry, $v) { return $carry + (float) $v; }, 0.0);
-                    $overall = round($sum / count($nonNull), 2);
+                if (count($nonNull) >= 3) {
+                    $sum = array_reduce($nonNull, function ($carry, $v) {
+                        return $carry + (float) $v;
+                    }, 0.0);
+                    $avg = $sum / count($nonNull);
+                    $overall = round(($avg / 5) * 100, 2) . '%';
+                } else {
+                    $overall = '';
                 }
                 fputcsv($out, array_merge([
                     (string) ($r['department'] ?? ''),
                     (string) ($r['employee_name'] ?? ''),
-                ], array_map(function ($v) { return $v === null ? '' : $v; }, $values), [
+                ], array_map(function ($v) {
+                    return $v === null ? '' : $v;
+                }, $values), [
                     $overall === null ? '' : $overall,
                 ]));
             }
@@ -228,7 +259,7 @@ class EvaluationReportController extends Controller
         }, 200, $headers);
     }
 
-    private function computeSummaryRows(array $employeeEvalNames, string $departmentEvalName, $branchId, $departmentId, $periodId): array
+    private function computeSummaryRows(array $employeeEvalNames, string $departmentEvalName, $branchId, $departmentId, $periodId, array $categoryWeights): array
     {
         $evaluationNames = array_merge($employeeEvalNames, [$departmentEvalName]);
 
@@ -236,8 +267,12 @@ class EvaluationReportController extends Controller
         $employees = DB::table('employees as emp')
             ->leftJoin('departments as d', 'd.id', '=', 'emp.department_id')
             ->selectRaw('emp.id as employee_id, emp.department_id, COALESCE(d.name, "-") as department, CONCAT(emp.first_name, " ", emp.last_name) as employee_name')
-            ->when($branchId, function ($q) use ($branchId) { $q->where('emp.branch_id', $branchId); })
-            ->when($departmentId, function ($q) use ($departmentId) { $q->where('emp.department_id', $departmentId); })
+            ->when($branchId, function ($q) use ($branchId) {
+                $q->where('emp.branch_id', $branchId);
+            })
+            ->when($departmentId, function ($q) use ($departmentId) {
+                $q->where('emp.department_id', $departmentId);
+            })
             ->get();
 
         // Employee-type evaluations aggregation
@@ -245,51 +280,77 @@ class EvaluationReportController extends Controller
             ->join('evaluations as e', 'e.id', '=', 'er.evaluation_id')
             ->join('employees as emp', 'emp.id', '=', 'er.evaluate_id')
             ->join('question_responses as qr', 'qr.evaluation_response_id', '=', 'er.id')
+            ->join('evaluator_groups as eg', 'eg.id', '=', 'e.evaluator_group_id')
+            ->leftJoin('question_group_question as qgq', function ($join) {
+                $join->on('qgq.question_group_id', '=', 'eg.question_group_id')
+                    ->on('qgq.question_id', '=', 'qr.question_id');
+            })
             ->where('er.evaluable_type', 'employee')
             ->whereIn('e.name', $employeeEvalNames)
-            ->when($periodId, function ($q) use ($periodId) { $q->where('er.evaluation_period_id', $periodId); })
-            ->when($branchId, function ($q) use ($branchId) { $q->where('emp.branch_id', $branchId); })
-            ->when($departmentId, function ($q) use ($departmentId) { $q->where('emp.department_id', $departmentId); })
+            ->when($periodId, function ($q) use ($periodId) {
+                $q->where('er.evaluation_period_id', $periodId);
+            })
+            ->when($branchId, function ($q) use ($branchId) {
+                $q->where('emp.branch_id', $branchId);
+            })
+            ->when($departmentId, function ($q) use ($departmentId) {
+                $q->where('emp.department_id', $departmentId);
+            })
             ->groupBy('er.id', 'emp.id', 'e.name')
-            ->selectRaw('emp.id as employee_id, e.name as evaluation_name, AVG(qr.score) as response_avg')
+            ->selectRaw('emp.id as employee_id, e.name as evaluation_name, SUM(qr.score * COALESCE(qgq.weight, 1.0)) / NULLIF(SUM(COALESCE(qgq.weight, 1.0)), 0) as response_avg')
             ->get()
-            ->groupBy(function ($r) { return $r->employee_id . '|' . $r->evaluation_name; })
+            ->groupBy(function ($r) {
+                return $r->employee_id . '|' . $r->evaluation_name;
+            })
             ->map(function ($group) {
                 $first = $group->first();
                 $avg = round($group->avg('response_avg'), 2);
-                return (object) [ 'employee_id' => $first->employee_id, 'evaluation_name' => $first->evaluation_name, 'avg_score' => $avg ];
+                return (object) ['employee_id' => $first->employee_id, 'evaluation_name' => $first->evaluation_name, 'avg_score' => $avg];
             });
 
         // Department-type evaluation aggregation
         $departmentAgg = DB::table('evaluation_responses as er')
             ->join('evaluations as e', 'e.id', '=', 'er.evaluation_id')
             ->join('question_responses as qr', 'qr.evaluation_response_id', '=', 'er.id')
+            ->join('evaluator_groups as eg', 'eg.id', '=', 'e.evaluator_group_id')
+            ->leftJoin('question_group_question as qgq', function ($join) {
+                $join->on('qgq.question_group_id', '=', 'eg.question_group_id')
+                    ->on('qgq.question_id', '=', 'qr.question_id');
+            })
             ->where('er.evaluable_type', 'department')
             ->where('e.name', $departmentEvalName)
-            ->when($periodId, function ($q) use ($periodId) { $q->where('er.evaluation_period_id', $periodId); })
+            ->when($periodId, function ($q) use ($periodId) {
+                $q->where('er.evaluation_period_id', $periodId);
+            })
             ->groupBy('er.id', 'er.evaluate_id')
-            ->selectRaw('er.evaluate_id as department_id, AVG(qr.score) as response_avg')
+            ->selectRaw('er.evaluate_id as department_id, SUM(qr.score * COALESCE(qgq.weight, 1.0)) / NULLIF(SUM(COALESCE(qgq.weight, 1.0)), 0) as response_avg')
             ->get()
             ->groupBy('department_id')
-            ->map(function ($group, $departmentId) { return [ 'department_id' => (int) $departmentId, 'avg_score' => round(collect($group)->avg('response_avg'), 2) ]; });
+            ->map(function ($group, $departmentId) {
+                return ['department_id' => (int) $departmentId, 'avg_score' => round(collect($group)->avg('response_avg'), 2)];
+            });
 
         // Build pivot rows
         $pivot = [];
         foreach ($employees as $emp) {
             $key = (string) $emp->employee_id;
-            $pivot[$key] = [ 
+            $pivot[$key] = [
                 'employee_id' => $emp->employee_id,
                 'department_id' => $emp->department_id,
-                'department' => $emp->department, 
-                'employee_name' => $emp->employee_name 
+                'department' => $emp->department,
+                'employee_name' => $emp->employee_name
             ];
-            foreach ($evaluationNames as $name) { $pivot[$key][$name] = null; }
+            foreach ($evaluationNames as $name) {
+                $pivot[$key][$name] = null;
+            }
             $pivot[$key]['overall_avg'] = null;
         }
 
         foreach ($employeeAgg as $obj) {
             $empKey = (string) $obj->employee_id;
-            if (isset($pivot[$empKey])) { $pivot[$empKey][$obj->evaluation_name] = $obj->avg_score; }
+            if (isset($pivot[$empKey])) {
+                $pivot[$empKey][$obj->evaluation_name] = $obj->avg_score;
+            }
         }
 
         foreach ($employees as $emp) {
@@ -298,18 +359,35 @@ class EvaluationReportController extends Controller
             }
         }
 
-        // compute overall average across available
+        // compute overall weighted average
         foreach ($pivot as $key => &$row) {
-            $values = [ $row['Peer to Peer evaluation'] ?? null, $row['Bottom Up Evaluation'] ?? null, $row['Top Down Evaluation'] ?? null, $row['Department to department'] ?? null ];
-            $nonNull = array_values(array_filter($values, fn($v) => $v !== null));
-            if (count($nonNull) === 0) { $row['overall_avg'] = null; }
-            else { $sum = array_reduce($nonNull, function ($carry, $v) { return $carry + (float) $v; }, 0.0); $row['overall_avg'] = round($sum / count($nonNull), 2); }
+            $weightedSum = 0;
+            $weightTotal = 0;
+            foreach ($evaluationNames as $name) {
+                if ($row[$name] !== null) {
+                    $weight = $categoryWeights[$name] ?? 0;
+                    $weightedSum += $row[$name] * $weight;
+                    $weightTotal += $weight;
+                }
+            }
+
+            if ($weightTotal > 0) {
+                $avgScore = $weightedSum / $weightTotal;
+                $row['overall_avg'] = round(($avgScore / 5) * 100, 2);
+                // We consider it sufficient if at least 60% of total possible weight is present
+                $row['has_sufficient_data'] = $weightTotal >= 60;
+            } else {
+                $row['overall_avg'] = null;
+                $row['has_sufficient_data'] = false;
+            }
         }
         unset($row);
 
         // sort
         $result = array_values($pivot);
-        usort($result, function ($a, $b) { return [$a['department'], $a['employee_name']] <=> [$b['department'], $b['employee_name']]; });
+        usort($result, function ($a, $b) {
+            return [$a['department'], $a['employee_name']] <=> [$b['department'], $b['employee_name']];
+        });
 
         return [$result, $evaluationNames];
     }

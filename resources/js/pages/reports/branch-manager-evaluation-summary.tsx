@@ -31,7 +31,7 @@ export default function BranchManagerEvaluationSummaryPage({ rows, departmentNam
 
   const buildQuery = () => {
     const params = new URLSearchParams()
-    if (branchId) params.set('branch_id', branchId)
+    if (branchId && branchId !== 'all') params.set('branch_id', branchId)
     if (periodId) params.set('period_id', periodId)
     const s = params.toString()
     return s ? `?${s}` : ''
@@ -54,9 +54,12 @@ export default function BranchManagerEvaluationSummaryPage({ rows, departmentNam
       .filter((v) => v !== null && v !== undefined)
       .map((v) => Number(v))
       .filter((n) => !Number.isNaN(n))
-    if (values.length === 0) return '-'
+
+    if (values.length === 0) return ''
     const sum = values.reduce((acc, n) => acc + n, 0)
-    return (sum / values.length).toFixed(2)
+    const avg = sum / values.length
+    const percentage = ((avg / 5) * 100).toFixed(2)
+    return <span className="font-bold text-blue-600">{percentage}%</span>
   }, [visibleDeptNames])
 
   const handleManagerClick = async (manager: any) => {
@@ -87,7 +90,7 @@ export default function BranchManagerEvaluationSummaryPage({ rows, departmentNam
   }
 
   return (
-    <AppLayout title="Branch Managers Evaluation Summary">
+    <AppLayout breadcrumbs={[{ title: 'Branch Managers Evaluation Summary', href: '/reports/branch-manager-evaluation-summary' }]}>
       <Head title="Branch Managers Evaluation Summary" />
       <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
         <Card>
@@ -98,7 +101,7 @@ export default function BranchManagerEvaluationSummaryPage({ rows, departmentNam
             <div className="flex gap-4 items-end flex-wrap">
               <div className="w-56">
                 <label className="text-sm font-medium mb-2 block">Branch</label>
-                <Select value={branchId || 'all'} onValueChange={(v) => setBranchId(v === 'all' ? '' : v)}>
+                <Select value={branchId || 'all'} onValueChange={setBranchId}>
                   <SelectTrigger>
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
@@ -112,7 +115,7 @@ export default function BranchManagerEvaluationSummaryPage({ rows, departmentNam
               </div>
               <div className="w-56">
                 <label className="text-sm font-medium mb-2 block">Period</label>
-                <Select value={periodId || 'all'} onValueChange={(v) => setPeriodId(v === 'all' ? '' : v)}>
+                <Select value={periodId || 'all'} onValueChange={setPeriodId}>
                   <SelectTrigger>
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
@@ -167,14 +170,14 @@ export default function BranchManagerEvaluationSummaryPage({ rows, departmentNam
         <Card>
           <CardContent className="p-0">
             <Table>
-              <TableHeader className="bg-slate-500 dark:bg-slate-700">
+              <TableHeader className="bg-slate-500 dark:bg-slate-700 sticky top-0 z-10">
                 <TableRow>
                   <TableHead className="font-bold text-white">Branch</TableHead>
                   <TableHead className="font-bold text-white">Manager Name</TableHead>
                   {visibleDeptNames.map((name) => (
                     <TableHead key={name} className="font-bold text-white text-center">{name}</TableHead>
                   ))}
-                  <TableHead className="font-bold text-white text-center">Overall Avg</TableHead>
+                  <TableHead className="font-bold text-white text-center">Final Result (100%)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -204,11 +207,11 @@ export default function BranchManagerEvaluationSummaryPage({ rows, departmentNam
                             {r.manager_name}
                             <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-blue-600 dark:bg-blue-400 group-hover:w-full transition-all duration-300"></span>
                           </span>
-                          <svg 
-                            xmlns="http://www.w3.org/2000/svg" 
-                            className="h-4 w-4 opacity-0 group-hover:opacity-100 transform group-hover:translate-x-1 transition-all duration-200" 
-                            fill="none" 
-                            viewBox="0 0 24 24" 
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-4 w-4 opacity-0 group-hover:opacity-100 transform group-hover:translate-x-1 transition-all duration-200"
+                            fill="none"
+                            viewBox="0 0 24 24"
                             stroke="currentColor"
                           >
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
@@ -234,7 +237,7 @@ export default function BranchManagerEvaluationSummaryPage({ rows, departmentNam
                 {selectedManager?.manager_name} - Evaluation Details
               </DialogTitle>
             </DialogHeader>
-            
+
             {loading && (
               <div className="flex items-center justify-center py-8">
                 <div className="text-sm text-muted-foreground">Loading evaluation details...</div>

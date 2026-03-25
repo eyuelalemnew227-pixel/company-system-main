@@ -8,8 +8,11 @@ use App\Models\Evaluation;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\User;
+use App\Models\DeletedEvaluation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Models\EvaluationType;
+use App\Models\Question;
 use Inertia\Inertia;
 
 class EvaluationResponseController extends Controller
@@ -19,8 +22,45 @@ class EvaluationResponseController extends Controller
         $evaluationResponses = EvaluationResponse::query()
             ->with(['evaluator', 'evaluationPeriod', 'evaluation', 'creator', 'updater'])
             ->when($request->search, function ($query, $search) {
-                $query->whereHas('evaluator', function ($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%");
+                $query->where(function ($q) use ($search) {
+                    // Search Evaluator
+                    $q->whereHas('evaluator', function ($sq) use ($search) {
+                        $sq->where('name', 'like', "%{$search}%");
+                    })
+                        // Search Evaluatee (Employee)
+                        ->orWhere(function ($sq) use ($search) {
+                        $sq->where('evaluable_type', 'employee')
+                            ->whereIn('evaluate_id', function ($ssq) use ($search) {
+                                $ssq->select('id')->from('employees')
+                                    ->where(DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%");
+                            });
+                    })
+                        // Search Evaluatee (Department)
+                        ->orWhere(function ($sq) use ($search) {
+                        $sq->where('evaluable_type', 'department')
+                            ->whereIn('evaluate_id', function ($ssq) use ($search) {
+                                $ssq->select('id')->from('departments')->where('name', 'like', "%{$search}%");
+                            });
+                    })
+                        // Search Evaluatee (Branch)
+                        ->orWhere(function ($sq) use ($search) {
+                        $sq->where('evaluable_type', 'branch')
+                            ->whereIn('evaluate_id', function ($ssq) use ($search) {
+                                $ssq->select('id')->from('branches')->where('name', 'like', "%{$search}%");
+                            });
+                    })
+                        // Search Evaluatee (Other)
+                        ->orWhere(function ($sq) use ($search) {
+                        $sq->where('evaluable_type', 'other')
+                            ->whereIn('evaluate_id', function ($ssq) use ($search) {
+                                $ssq->select('id')->from('other_evaluables')->where('name', 'like', "%{$search}%");
+                            });
+                    });
+                });
+            })
+            ->when($request->evaluation_name, function ($query, $name) {
+                $query->whereHas('evaluation', function ($q) use ($name) {
+                    $q->where('name', 'like', "%{$name}%");
                 });
             })
             ->when($request->period_id, function ($query, $id) {
@@ -30,24 +70,24 @@ class EvaluationResponseController extends Controller
                 $query->where('evaluable_type', $type);
             })
             ->when($request->branch_id, function ($query, $id) {
-                $query->where(function($q) use ($id) {
-                    $q->where(function($sub) use ($id) {
+                $query->where(function ($q) use ($id) {
+                    $q->where(function ($sub) use ($id) {
                         $sub->where('evaluable_type', 'branch')->where('evaluate_id', $id);
-                    })->orWhere(function($sub) use ($id) {
+                    })->orWhere(function ($sub) use ($id) {
                         $sub->where('evaluable_type', 'employee')
-                            ->whereIn('evaluate_id', function($q2) use ($id) {
+                            ->whereIn('evaluate_id', function ($q2) use ($id) {
                                 $q2->select('id')->from('employees')->where('branch_id', $id);
                             });
                     });
                 });
             })
             ->when($request->department_id, function ($query, $id) {
-                $query->where(function($q) use ($id) {
-                    $q->where(function($sub) use ($id) {
+                $query->where(function ($q) use ($id) {
+                    $q->where(function ($sub) use ($id) {
                         $sub->where('evaluable_type', 'department')->where('evaluate_id', $id);
-                    })->orWhere(function($sub) use ($id) {
+                    })->orWhere(function ($sub) use ($id) {
                         $sub->where('evaluable_type', 'employee')
-                            ->whereIn('evaluate_id', function($q2) use ($id) {
+                            ->whereIn('evaluate_id', function ($q2) use ($id) {
                                 $q2->select('id')->from('employees')->where('department_id', $id);
                             });
                     });
@@ -86,7 +126,7 @@ class EvaluationResponseController extends Controller
 
         return Inertia::render('evaluation-records/index', [
             'evaluationResponses' => $evaluationResponses,
-            'filters' => $request->only(['search', 'period_id', 'evaluable_type', 'branch_id', 'department_id']),
+            'filters' => $request->only(['search', 'period_id', 'evaluable_type', 'branch_id', 'department_id', 'evaluation_name']),
             'periods' => EvaluationPeriod::select('id', 'evaluation_period_name')->get(),
             'branches' => Branch::select('id', 'name')->get(),
             'departments' => Department::select('id', 'name')->get(),
@@ -143,7 +183,7 @@ class EvaluationResponseController extends Controller
     public function edit(EvaluationResponse $evaluation_record)
     {
         $evaluation_record->load(['questionResponses.question', 'evaluator', 'evaluation.evaluatesGroup.questionGroup.questions']);
-        
+
         $label = 'N/A';
         if ($evaluation_record->evaluable_type === 'employee') {
             $emp = \App\Models\Employee::find($evaluation_record->evaluate_id);
@@ -203,6 +243,38 @@ class EvaluationResponseController extends Controller
     public function destroy(EvaluationResponse $evaluation_record)
     {
         DB::transaction(function () use ($evaluation_record) {
+            // Load question responses before deletion
+            $evaluation_record->load(['questionResponses', 'evaluator', 'evaluation', 'evaluationPeriod']);
+
+            // Capture evaluation data as snapshot
+            $evaluationData = $evaluation_record->toArray();
+
+            // Capture question responses as snapshot
+            $questionResponsesData = $evaluation_record->questionResponses->map(function ($qr) {
+                return [
+                    'id' => $qr->id,
+                    'question_id' => $qr->question_id,
+                    'score' => $qr->score,
+                    'created_at' => $qr->created_at,
+                    'updated_at' => $qr->updated_at,
+                ];
+            })->toArray();
+
+            // Create deleted evaluation record
+            DeletedEvaluation::create([
+                'evaluation_response_id' => $evaluation_record->id,
+                'evaluation_id' => $evaluation_record->evaluation_id,
+                'evaluator_id' => $evaluation_record->evaluator_id,
+                'evaluate_id' => $evaluation_record->evaluate_id,
+                'evaluable_type' => $evaluation_record->evaluable_type,
+                'evaluation_period_id' => $evaluation_record->evaluation_period_id,
+                'evaluation_data' => $evaluationData,
+                'question_responses_data' => $questionResponsesData,
+                'deleted_by' => auth()->id(),
+                'deleted_at' => now(),
+            ]);
+
+            // Now delete the actual records
             $evaluation_record->questionResponses()->delete();
             $evaluation_record->delete();
         });

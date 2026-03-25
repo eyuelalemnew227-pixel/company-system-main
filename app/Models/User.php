@@ -10,7 +10,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable {
+class User extends Authenticatable
+{
 	/** @use HasFactory<\Database\Factories\UserFactory> */
 	use HasFactory, Notifiable, HasRoles;
 
@@ -69,7 +70,8 @@ class User extends Authenticatable {
 	 *
 	 * @return array<string, string>
 	 */
-	protected function casts(): array {
+	protected function casts(): array
+	{
 		return [
 			'email_verified_at' => 'datetime',
 			'password' => 'hashed',
@@ -77,4 +79,30 @@ class User extends Authenticatable {
 			'sms_notifications_enabled' => 'boolean',
 		];
 	}
+
+    public function isManagerOfDepartment(int $departmentId): bool
+    {
+        if (!$this->employee_id) {
+            return false;
+        }
+
+        return \Illuminate\Support\Facades\DB::table('managers')
+            ->join('employees', 'managers.employee_id', '=', 'employees.id')
+            ->where('employees.department_id', $departmentId)
+            ->where('managers.employee_id', $this->employee_id)
+            ->exists();
+    }
+
+    public function managedDepartmentIds(): array
+    {
+        if (!$this->employee_id) {
+            return [];
+        }
+
+        return \Illuminate\Support\Facades\DB::table('managers')
+            ->join('employees', 'managers.employee_id', '=', 'employees.id')
+            ->where('managers.employee_id', $this->employee_id)
+            ->pluck('employees.department_id')
+            ->toArray();
+    }
 }

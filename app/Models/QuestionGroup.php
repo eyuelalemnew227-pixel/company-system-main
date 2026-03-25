@@ -17,6 +17,7 @@ class QuestionGroup extends Model
     public function questions(): BelongsToMany
     {
         return $this->belongsToMany(Question::class, 'question_group_question')
+            ->withPivot('weight')
             ->withTimestamps();
     }
 }

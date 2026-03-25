@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('pre_orders', function (Blueprint $table) {
-            $table->boolean('late_payment')->default(false)->after('status');
+            if (!Schema::hasColumn('pre_orders', 'late_payment')) {
+                $table->boolean('late_payment')->default(false)->after('status');
+            }
         });
     }
 

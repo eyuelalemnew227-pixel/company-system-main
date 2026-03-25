@@ -23,6 +23,8 @@ export default function CreateDepartment() {
     const { data, setData, post, errors, processing } = useForm({
         name: '',
         description: '',
+        is_active: true,
+        is_active_on_ticketing: true,
     });
 
     function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -69,6 +71,26 @@ export default function CreateDepartment() {
                                     placeholder="Enter description (optional)"
                                 />
                                 <InputError message={errors.description} />
+                            </div>
+                            <div className="mb-4 flex items-center gap-2">
+                                <Label htmlFor="is_active">Active</Label>
+                                <input
+                                    id="is_active"
+                                    type="checkbox"
+                                    checked={data.is_active}
+                                    onChange={(e) => setData('is_active', e.target.checked)}
+                                />
+                                <InputError message={errors.is_active} />
+                            </div>
+                            <div className="mb-4 flex items-center gap-2">
+                                <Label htmlFor="is_active_on_ticketing">Active for Ticketing</Label>
+                                <input
+                                    id="is_active_on_ticketing"
+                                    type="checkbox"
+                                    checked={data.is_active_on_ticketing}
+                                    onChange={(e) => setData('is_active_on_ticketing', e.target.checked)}
+                                />
+                                <InputError message={(errors as any).is_active_on_ticketing} />
                             </div>
                             <div className="flex justify-end">
                                 <Button size="lg" type="submit" disabled={processing}>

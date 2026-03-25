@@ -11,6 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('pre_order_items')) {
+            return;
+        }
+
         Schema::create('pre_order_items', function (Blueprint $table) {
             $table->id();
             $table->foreignId('pre_order_id')->constrained('pre_orders')->onDelete('cascade');

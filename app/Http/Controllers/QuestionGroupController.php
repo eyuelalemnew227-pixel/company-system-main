@@ -40,6 +40,7 @@ class QuestionGroupController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'question_ids' => ['array'],
             'question_ids.*' => ['integer', 'exists:questions,id'],
+            'question_weights' => ['nullable', 'array'],
         ]);
 
         $group = QuestionGroup::create([
@@ -47,7 +48,11 @@ class QuestionGroupController extends Controller
         ]);
 
         if (!empty($validated['question_ids'])) {
-            $group->questions()->sync($validated['question_ids']);
+            $syncData = [];
+            foreach ($validated['question_ids'] as $id) {
+                $syncData[$id] = ['weight' => $validated['question_weights'][$id] ?? 1.0];
+            }
+            $group->questions()->sync($syncData);
         }
 
         return to_route('question-groups.index')->with('message', 'Question Group created successfully!');
@@ -62,6 +67,7 @@ class QuestionGroupController extends Controller
                 ->where('status', 'active')
                 ->orderBy('question_text')
                 ->get(),
+            'current_weights' => $question_group->questions->pluck('pivot.weight', 'id'),
         ]);
     }
 
@@ -71,13 +77,20 @@ class QuestionGroupController extends Controller
             'name' => ['required', 'string', 'max:255'],
             'question_ids' => ['array'],
             'question_ids.*' => ['integer', 'exists:questions,id'],
+            'question_weights' => ['nullable', 'array'],
         ]);
 
         $question_group->update([
             'name' => $validated['name'],
         ]);
 
-        $question_group->questions()->sync($validated['question_ids'] ?? []);
+        $syncData = [];
+        if (!empty($validated['question_ids'])) {
+            foreach ($validated['question_ids'] as $id) {
+                $syncData[$id] = ['weight' => $validated['question_weights'][$id] ?? 1.0];
+            }
+        }
+        $question_group->questions()->sync($syncData);
 
         return to_route('question-groups.index')->with('message', 'Question Group updated successfully!');
     }

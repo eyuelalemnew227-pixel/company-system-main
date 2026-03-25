@@ -13,8 +13,12 @@ return new class extends Migration
     {
         app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
-        \Spatie\Permission\Models\Permission::create(['name' => 'update pre-order product regular price']);
-        \Spatie\Permission\Models\Permission::create(['name' => 'update pre-order product walkin price']);
+        foreach ([
+            'update pre-order product regular price',
+            'update pre-order product walkin price',
+        ] as $perm) {
+            \Spatie\Permission\Models\Permission::firstOrCreate(['name' => $perm, 'guard_name' => 'web']);
+        }
     }
 
     /**

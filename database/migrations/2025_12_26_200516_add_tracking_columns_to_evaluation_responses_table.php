@@ -12,8 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('evaluation_responses', function (Blueprint $table) {
-            $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('set null');
-            $table->foreignId('updated_by')->nullable()->constrained('users')->onDelete('set null');
+            if (!Schema::hasColumn('evaluation_responses', 'created_by')) {
+                $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('set null');
+            }
+            if (!Schema::hasColumn('evaluation_responses', 'updated_by')) {
+                $table->foreignId('updated_by')->nullable()->constrained('users')->onDelete('set null');
+            }
         });
     }
 

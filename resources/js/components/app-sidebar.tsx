@@ -12,8 +12,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/react';
+import { type ExternalLinkSection, type NavItem, type PageProps } from '@/types';
+import { Link, usePage } from '@inertiajs/react';
 import {
   Award,
   Building2,
@@ -46,10 +46,48 @@ import {
   Warehouse,
   ShoppingCart,
   MessageSquare,
+  Ticket,
+  Phone,
+  ExternalLink,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
-const sections: NavSection[] = [
+const iconMap = {
+  LayoutDashboard,
+  ShoppingCart,
+  BarChart3,
+  Warehouse,
+  TrendingUp,
+  Globe2,
+  Settings,
+  LockKeyhole,
+  Shield,
+  UserCog,
+  Building2,
+  ClipboardList,
+  Users,
+  Phone,
+  ShieldCheck,
+  FileText,
+  FolderKey,
+  MessageSquare,
+  Calendar,
+  CalendarDays,
+  CalendarCheck,
+  Award,
+  ListChecks,
+  FileQuestion,
+  UserCircle,
+  Target,
+  History,
+  XCircle,
+  Ticket,
+  Package,
+  Sparkles,
+  ExternalLink,
+} as const;
+
+const baseSections: NavSection[] = [
   {
     label: 'Dashboard',
     icon: LayoutDashboard,
@@ -72,11 +110,13 @@ const sections: NavSection[] = [
       { title: 'Branches', href: '/branches', icon: Globe2, permission: 'view branches' },
       { title: 'Positions', href: '/positions', icon: ClipboardList, permission: 'view positions' },
       { title: 'Employees', href: '/employees', icon: Users, permission: 'view employees' },
+      { title: 'Employee Directory', href: '/directory', icon: Phone, permission: 'view employee directory' },
       { title: 'Managers', href: '/managers', icon: ShieldCheck, permission: 'view managers' },
       { title: 'Other Evaluables', href: '/other-evaluables', icon: FileText, permission: 'view other evaluables' },
       { title: 'Child Categories', href: '/child-categories', icon: FolderKey, permission: 'view child categories' },
       { title: 'Products', href: '/products', icon: ClipboardList, permission: 'view products' },
       { title: 'SMS Management', href: '/sms-balance', icon: MessageSquare, permission: 'view sms balance' },
+      { title: 'External Links', href: '/external-links', icon: ExternalLink, permission: 'manage external links' },
     ],
   },
   {
@@ -95,6 +135,7 @@ const sections: NavSection[] = [
     icon: TrendingUp,
     items: [
       { title: 'Evaluation Types', href: '/evaluation-types', icon: Sparkles, permission: 'view evaluation types' },
+      { title: 'Evaluation Categories', href: '/evaluation-categories', icon: ListChecks, permission: 'view evaluation categories' },
       { title: 'Question Groups', href: '/question-groups', icon: FolderKey, permission: 'view question groups' },
       { title: 'Questions', href: '/questions', icon: FileQuestion, permission: 'view questions' },
       { title: 'Evaluator Groups', href: '/evaluator-groups', icon: UserCircle, permission: 'view evaluator groups' },
@@ -117,6 +158,14 @@ const sections: NavSection[] = [
     ],
   },
   {
+    label: 'Ticketing',
+    icon: Ticket,
+    items: [
+      { title: 'Tickets', href: '/tickets', icon: Ticket, permission: 'ticket.view.own|ticket.view.department|ticket.view.all' },
+      { title: 'Ticket Settings', href: '/ticket-settings', icon: Settings, permission: 'ticket.manage.taxonomy|ticket.view.all' },
+    ],
+  },
+  {
     label: 'Pre-Orders',
     icon: ShoppingCart,
     items: [
@@ -132,6 +181,13 @@ const sections: NavSection[] = [
 const footerNavItems: NavItem[] = [];
 
 export function AppSidebar() {
+  const { props } = usePage<PageProps>();
+  const externalGroups = buildExternalGroups(props.externalLinks as ExternalLinkSection[] | undefined);
+  const sections =
+    externalGroups.length > 0
+      ? [...baseSections, { label: 'Links', icon: ExternalLink, items: [], groups: externalGroups }]
+      : baseSections;
+
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
@@ -156,4 +212,27 @@ export function AppSidebar() {
       </SidebarFooter>
     </Sidebar>
   );
+}
+
+function resolveIcon(name?: string | null) {
+  if (!name) return undefined;
+  return iconMap[name as keyof typeof iconMap] ?? ExternalLink;
+}
+
+function buildExternalGroups(sections: ExternalLinkSection[] | undefined) {
+  if (!sections?.length) return [];
+
+  return sections.map((section) => ({
+    label: section.label,
+    icon: resolveIcon(section.icon) ?? ExternalLink,
+    items: (section.items ?? section.links ?? []).map((item) => ({
+      title: item.title,
+      href: item.href,
+      permission: item.permission,
+      icon: resolveIcon(item.icon ?? item.iconName) ?? resolveIcon(section.icon) ?? ExternalLink,
+      target: item.target ?? '_blank',
+      rel: item.rel ?? 'noreferrer noopener',
+      external: item.external ?? item.is_external ?? true,
+    })),
+  }));
 }

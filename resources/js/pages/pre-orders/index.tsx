@@ -185,7 +185,7 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
         const discountType = isWalkin ? 'ቅርንጫፍ ደንበኛ' : 'ሸገር ገበታ';
 
         let message = `ውድ ደምበኛችን ${preOrder.client_name}\n\n`;
-        message += "እንኳን ለብርሃነ ልደቱ በሰላም አደረስዎ!\n\n";
+        message += "እንኳን ለዒድ አልፊጥር በሰላም አደረስዎ!\n\n";
         message += "ከካልዲስ ኮፊ የበዓል ቶርታ ስላዘዙ በጣም እናመሰግናለን። ክፍያዎት ደርስዎናል። የትዕዛዝዎ ዝርዝር መረጃ ከስር ያለውን ይመስላል፡\n\n";
         message += `የተጠቀሙት የቅናሽ አይነት፡ ${discountType}\n\n`;
         message += `ያዘዙት ቶርታ፡ ${products}\n\n`;
@@ -198,7 +198,7 @@ export default function Index({ preOrders, branches, collectionDays, orderTypes,
         }
         message += `ቶርታውን የሚወስዱበት ቀን፡ ${preOrder.collection_day?.name || 'N/A'}\n\n`;
         message += "ካልዲስን ስለመረጡ እናመሰግናለን።\n\n";
-        message += "መልካም ገና";
+        message += "መልካም በዓል";
 
         return message;
     };

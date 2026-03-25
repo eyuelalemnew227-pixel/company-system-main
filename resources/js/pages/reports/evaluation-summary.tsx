@@ -17,7 +17,8 @@ type PageProps = {
     department_id: number
     department: string
     employee_name: string
-    [key: string]: string | number | null
+    has_sufficient_data: boolean
+    [key: string]: string | number | boolean | null
   }>
   evaluationNames: string[]
   branches: { id: number; name: string }[]
@@ -41,8 +42,8 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
 
   const buildQuery = () => {
     const params = new URLSearchParams()
-    if (branchId) params.set('branch_id', branchId)
-    if (departmentId) params.set('department_id', departmentId)
+    if (branchId && branchId !== 'all') params.set('branch_id', branchId)
+    if (departmentId && departmentId !== 'all') params.set('department_id', departmentId)
     if (periodId) params.set('period_id', periodId)
     const s = params.toString()
     return s ? `?${s}` : ''
@@ -59,15 +60,9 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
   const visibleEvalNames = React.useMemo(() => evaluationNames.filter(n => visible[n]), [evaluationNames, visible])
 
   const calcOverall = React.useCallback((r: Record<string, any>) => {
-    const values = visibleEvalNames
-      .map((name) => r[name])
-      .filter((v) => v !== null && v !== undefined)
-      .map((v) => Number(v))
-      .filter((n) => !Number.isNaN(n))
-    if (values.length === 0) return '-'
-    const sum = values.reduce((acc, n) => acc + n, 0)
-    return (sum / values.length).toFixed(2)
-  }, [visibleEvalNames])
+    if (!r.has_sufficient_data) return ''
+    return <span className="font-bold text-blue-600">{r.overall_avg}%</span>
+  }, [])
 
   const openDetails = async (evalName: string, row: any) => {
     if (row[evalName] === null || row[evalName] === '-') return
@@ -90,7 +85,7 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
         }
       })
       const data = await res.json()
-      
+
       if (!res.ok) {
         throw new Error(data.error || `Server returned ${res.status}`)
       }
@@ -126,7 +121,7 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
             <div className="flex gap-4 items-end flex-wrap">
               <div className="w-56">
                 <label className="text-sm font-medium mb-2 block">Branch</label>
-                <Select value={branchId || 'all'} onValueChange={(v) => setBranchId(v === 'all' ? '' : v)}>
+                <Select value={branchId || 'all'} onValueChange={setBranchId}>
                   <SelectTrigger>
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
@@ -140,7 +135,7 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
               </div>
               <div className="w-56">
                 <label className="text-sm font-medium mb-2 block">Department</label>
-                <Select value={departmentId || 'all'} onValueChange={(v) => setDepartmentId(v === 'all' ? '' : v)}>
+                <Select value={departmentId || 'all'} onValueChange={setDepartmentId}>
                   <SelectTrigger>
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
@@ -154,7 +149,7 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
               </div>
               <div className="w-56">
                 <label className="text-sm font-medium mb-2 block">Period</label>
-                <Select value={periodId || 'all'} onValueChange={(v) => setPeriodId(v === 'all' ? '' : v)}>
+                <Select value={periodId || 'all'} onValueChange={setPeriodId}>
                   <SelectTrigger>
                     <SelectValue placeholder="All" />
                   </SelectTrigger>
@@ -206,14 +201,14 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
         <Card>
           <CardContent className="p-0">
             <Table>
-              <TableHeader className="bg-slate-500 dark:bg-slate-700">
+              <TableHeader className="bg-slate-500 dark:bg-slate-700 sticky top-0 z-10">
                 <TableRow>
                   <TableHead className="font-bold text-white">Department</TableHead>
                   <TableHead className="font-bold text-white">Employee Name</TableHead>
                   {visibleEvalNames.map((name) => (
                     <TableHead key={name} className="font-bold text-white text-center">{name}</TableHead>
                   ))}
-                  <TableHead className="font-bold text-white text-center">Overall Avg</TableHead>
+                  <TableHead className="font-bold text-white text-center">Final Result (100%)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -239,7 +234,7 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
                       {visibleEvalNames.map((name) => (
                         <TableCell key={name} className="text-center">
                           {r[name] !== null && r[name] !== undefined ? (
-                            <button 
+                            <button
                               onClick={() => openDetails(name, r)}
                               className="text-blue-600 hover:underline font-medium focus:outline-none"
                             >
@@ -288,8 +283,8 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
                           Evaluator: {resp.evaluator}
                         </span>
                         <Badge variant="secondary">
-                          Avg Score: {resp.questions.length > 0 
-                            ? (resp.questions.reduce((acc: number, q: any) => acc + q.score, 0) / resp.questions.length).toFixed(2) 
+                          Avg Score: {resp.questions.length > 0
+                            ? (resp.questions.reduce((acc: number, q: any) => acc + q.score, 0) / resp.questions.length).toFixed(2)
                             : '0.00'}
                         </Badge>
                       </div>

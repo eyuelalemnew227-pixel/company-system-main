@@ -28,7 +28,7 @@ export default function MyResultsIndex({ items, periods, request, kpi }: { items
 
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
-    router.get('/my-results', { search, period_id: periodId !== 'all' ? periodId : undefined }, { preserveState: true, replace: true });
+    router.get('/my-results', { search, period_id: periodId }, { preserveState: true, replace: true });
   }
 
   return (
@@ -99,7 +99,7 @@ export default function MyResultsIndex({ items, periods, request, kpi }: { items
           <hr />
           <CardContent>
             <Table>
-              <TableHeader className="bg-slate-500 dark:bg-slate-700">
+              <TableHeader className="bg-slate-500 dark:bg-slate-700 sticky top-0 z-10">
                 <TableRow>
                   <TableHead className="font-bold text-white">ID</TableHead>
                   <TableHead className="font-bold text-white">Evaluation</TableHead>
@@ -116,11 +116,10 @@ export default function MyResultsIndex({ items, periods, request, kpi }: { items
                     <TableCell>{(items.from ?? 0) + index}</TableCell>
                     <TableCell className="font-medium">{it.evaluation?.name || `Evaluation #${it.evaluation?.id}`}</TableCell>
                     <TableCell>
-                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                        it.evaluation_type === 'Personal' 
-                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' 
-                          : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                      }`}>
+                      <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${it.evaluation_type === 'Personal'
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                        : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                        }`}>
                         {it.evaluation_type}
                       </span>
                     </TableCell>

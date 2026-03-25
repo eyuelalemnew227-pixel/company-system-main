@@ -1,4 +1,5 @@
 import { Breadcrumbs } from '@/components/breadcrumbs';
+import NotificationBell from '@/components/NotificationBell';
 import { SyncStatusIndicator } from '@/components/sync-status-indicator';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { type BreadcrumbItem as BreadcrumbItemType } from '@/types';
@@ -10,7 +11,8 @@ export function AppSidebarHeader({ breadcrumbs = [] }: { breadcrumbs?: Breadcrum
                 <SidebarTrigger className="-ml-1" />
                 <Breadcrumbs breadcrumbs={breadcrumbs} />
             </div>
-            <div className="flex items-center">
+            <div className="flex items-center gap-3">
+                <NotificationBell />
                 <SyncStatusIndicator />
             </div>
         </header>

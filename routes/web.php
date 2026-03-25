@@ -19,6 +19,7 @@ use App\Http\Controllers\{
     PermissionController,
     RoleController,
     UserController,
+    EmployeeDirectoryController,
     BranchController,
     PositionController,
     EmployeeController,
@@ -27,7 +28,10 @@ use App\Http\Controllers\{
     SyncController,
     SmsBalanceController,
     PreOrderDashboardController,
-    HolidayController
+    HolidayController,
+    EvaluationCategoryController,
+    ExternalLinkController,
+    ExternalLinkSectionController,
 };
 
 Route::get('/', fn() => Inertia::render('welcome'))->name('home');
@@ -76,6 +80,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         'holidays' => HolidayController::class,
     ]);
 
+    // Employee Directory (read-only)
+    Route::get('directory', [EmployeeDirectoryController::class, 'index'])
+        ->name('employee-directory.index')
+        ->middleware('permission:view employee directory');
+
     // Managers
     Route::resource('managers', ManagerController::class)->except(['show']);
 
@@ -109,6 +118,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Evaluation Periods
     Route::resource('evaluation-periods', EvaluationPeriodController::class)->except(['show']);
+
+    // Evaluation Categories
+    Route::resource('evaluation-categories', EvaluationCategoryController::class)->except(['show']);
 
     // Child Categories
     Route::middleware('permission:view child categories')->group(function () {
@@ -190,6 +202,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ]);
     });
 
+    // External Links Management
+    Route::middleware('permission:manage external links')->group(function () {
+        Route::get('external-links', [ExternalLinkController::class, 'index'])->name('external-links.index');
+        Route::post('external-links', [ExternalLinkController::class, 'store'])->name('external-links.store');
+        Route::put('external-links/{external_link}', [ExternalLinkController::class, 'update'])->name('external-links.update');
+        Route::delete('external-links/{external_link}', [ExternalLinkController::class, 'destroy'])->name('external-links.destroy');
+
+        Route::post('external-link-sections', [ExternalLinkSectionController::class, 'store'])->name('external-link-sections.store');
+        Route::put('external-link-sections/{external_link_section}', [ExternalLinkSectionController::class, 'update'])->name('external-link-sections.update');
+        Route::delete('external-link-sections/{external_link_section}', [ExternalLinkSectionController::class, 'destroy'])->name('external-link-sections.destroy');
+    });
+
+    // Deleted Evaluations (Audit Trail)
+    Route::middleware('permission:view deleted evaluations')->group(function () {
+        Route::get('deleted-evaluations', [\App\Http\Controllers\DeletedEvaluationsController::class, 'index'])
+            ->name('deleted-evaluations.index');
+        Route::post('deleted-evaluations/{deleted_evaluation}/restore', [\App\Http\Controllers\DeletedEvaluationsController::class, 'restore'])
+            ->name('deleted-evaluations.restore')
+            ->middleware('permission:restore deleted evaluations');
+    });
+
     // Branch Manager Evaluation summary report (permission-gated)
     Route::middleware('permission:view branch manager evaluation summary')->group(function () {
         Route::get('reports/branch-manager-evaluation-summary', [\App\Http\Controllers\BranchManagerEvaluationSummaryController::class, 'summary'])->name('reports.branch-manager-evaluation-summary');
@@ -231,6 +264,63 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:manage sms settings')->group(function () {
         Route::post('sms-balance/activate', [SmsBalanceController::class, 'activate'])->name('sms-balance.activate');
         Route::post('sms-balance/deactivate', [SmsBalanceController::class, 'deactivate'])->name('sms-balance.deactivate');
+    });
+
+    // Tickets
+    Route::get('tickets', [\App\Http\Controllers\TicketController::class, 'index'])
+        ->name('tickets.index')
+        ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
+    Route::get('tickets/create', [\App\Http\Controllers\TicketController::class, 'create'])
+        ->name('tickets.create')
+        ->middleware('permission:ticket.create');
+    Route::post('tickets', [\App\Http\Controllers\TicketController::class, 'store'])
+        ->name('tickets.store')
+        ->middleware('permission:ticket.create');
+    Route::get('tickets/{ticket}', [\App\Http\Controllers\TicketController::class, 'show'])
+        ->name('tickets.show')
+        ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
+    Route::post('tickets/{ticket}/status', [\App\Http\Controllers\TicketController::class, 'updateStatus'])
+        ->name('tickets.status')
+        ->middleware('permission:ticket.status.update|ticket.approve|ticket.reject|ticket.done|ticket.pending|ticket.escalate|ticket.close');
+    Route::post('tickets/{ticket}/assign', [\App\Http\Controllers\TicketController::class, 'assign'])
+        ->name('tickets.assign')
+        ->middleware('permission:ticket.assign');
+    Route::post('tickets/{ticket}/approve-completion', [\App\Http\Controllers\TicketController::class, 'approveCompletion'])
+        ->name('tickets.approve-completion')
+        ->middleware('permission:ticket.view.own|ticket.view.department|ticket.view.all');
+    Route::post('tickets/{ticket}/reject-completion', [\App\Http\Controllers\TicketController::class, 'rejectCompletion'])
+        ->name('tickets.reject-completion')
+        ->middleware('permission:ticket.view.own|ticket.view.department|ticket.view.all');
+    Route::post('tickets/{ticket}/rate', [\App\Http\Controllers\TicketController::class, 'rate'])
+        ->name('tickets.rate')
+        ->middleware('permission:ticket.rate');
+    Route::post('tickets/{ticket}/asset', [\App\Http\Controllers\TicketController::class, 'updateAsset'])
+        ->name('tickets.update-asset')
+        ->middleware('permission:ticket.status.update|ticket.assign|ticket.view.all');
+    Route::post('tickets/{ticket}/deadline', [\App\Http\Controllers\TicketController::class, 'updateDeadline'])
+        ->name('tickets.update-deadline')
+        ->middleware('permission:ticket.assign|ticket.view.all');
+    Route::post('tickets/{ticket}/priority', [\App\Http\Controllers\TicketController::class, 'updatePriority'])
+        ->name('tickets.update-priority')
+        ->middleware('permission:ticket.assign|ticket.view.all');
+    Route::delete('tickets/{ticket}', [\App\Http\Controllers\TicketController::class, 'destroy'])
+        ->name('tickets.destroy')
+        ->middleware('permission:ticket.delete');
+
+    // Ticket notifications (for bell UI)
+    Route::get('ticket-notifications', [\App\Http\Controllers\TicketNotificationController::class, 'index'])
+        ->name('ticket-notifications.index');
+    Route::post('ticket-notifications/mark-read/{notification?}', [\App\Http\Controllers\TicketNotificationController::class, 'markRead'])
+        ->name('ticket-notifications.mark-read');
+    Route::delete('ticket-notifications', [\App\Http\Controllers\TicketNotificationController::class, 'clear'])
+        ->name('ticket-notifications.clear');
+
+    // Ticket taxonomy management
+    Route::middleware('permission:ticket.manage.taxonomy')->group(function () {
+        Route::get('ticket-settings', [\App\Http\Controllers\TicketSettingsController::class, 'index'])->name('ticket-settings.index');
+        Route::resource('ticket-main-categories', \App\Http\Controllers\TicketMainCategoryController::class)->except(['show']);
+        Route::resource('ticket-sub-categories', \App\Http\Controllers\TicketSubCategoryController::class)->except(['show']);
+        Route::resource('ticket-assets', \App\Http\Controllers\TicketAssetController::class)->except(['show']);
     });
 });
 

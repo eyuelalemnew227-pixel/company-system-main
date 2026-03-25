@@ -12,9 +12,9 @@ import React, { useMemo, useState } from 'react';
 import { Search, CheckSquare, XSquare } from 'lucide-react';
 import type { QuestionGroup } from '@/types/question-groups';
 
-type QuestionOption = { 
-    id: number; 
-    question_text: string; 
+type QuestionOption = {
+    id: number;
+    question_text: string;
     evaluation_type_id: number;
     status: string;
     evaluation_type?: { id: number; name: string };
@@ -25,20 +25,21 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Edit Group', href: null },
 ];
 
-export default function EditQuestionGroup({ group, questions }: { group: QuestionGroup; questions: QuestionOption[] }) {
+export default function EditQuestionGroup({ group, questions, current_weights }: { group: QuestionGroup; questions: QuestionOption[]; current_weights: Record<number, number> }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState<string>('all');
 
     const { data, setData, put, errors, processing } = useForm({
         name: group.name,
         question_ids: (group.questions || []).map((q) => q.id) as number[],
+        question_weights: current_weights || {} as Record<number, number>,
     });
 
     // Get unique evaluation types
     const evaluationTypes = useMemo(() => {
         const types = questions
             .map(q => q.evaluation_type)
-            .filter((type, index, self) => 
+            .filter((type, index, self) =>
                 type && self.findIndex(t => t?.id === type?.id) === index
             );
         return types as { id: number; name: string }[];
@@ -88,10 +89,10 @@ export default function EditQuestionGroup({ group, questions }: { group: Questio
                         <form onSubmit={submit} className="space-y-6">
                             <div className="space-y-2">
                                 <Label htmlFor="name">Group Name</Label>
-                                <Input 
-                                    id="name" 
-                                    value={data.name} 
-                                    onChange={(e) => setData('name', e.target.value)} 
+                                <Input
+                                    id="name"
+                                    value={data.name}
+                                    onChange={(e) => setData('name', e.target.value)}
                                 />
                                 <InputError message={errors.name} />
                             </div>
@@ -100,18 +101,18 @@ export default function EditQuestionGroup({ group, questions }: { group: Questio
                                 <div className="flex items-center justify-between">
                                     <Label>Select Questions ({data.question_ids.length} selected)</Label>
                                     <div className="flex gap-2">
-                                        <Button 
-                                            type="button" 
-                                            variant="outline" 
+                                        <Button
+                                            type="button"
+                                            variant="outline"
                                             size="sm"
                                             onClick={selectAll}
                                         >
                                             <CheckSquare className="mr-1 h-4 w-4" />
                                             Select All
                                         </Button>
-                                        <Button 
-                                            type="button" 
-                                            variant="outline" 
+                                        <Button
+                                            type="button"
+                                            variant="outline"
                                             size="sm"
                                             onClick={deselectAll}
                                         >
@@ -156,13 +157,13 @@ export default function EditQuestionGroup({ group, questions }: { group: Questio
                                             {filteredQuestions.map((q) => {
                                                 const checked = data.question_ids.includes(q.id);
                                                 return (
-                                                    <label 
-                                                        key={q.id} 
-                                                        className="flex items-start gap-3 rounded-lg border p-3 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
+                                                    <div
+                                                        key={q.id}
+                                                        className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800"
                                                     >
-                                                        <Checkbox 
-                                                            checked={checked} 
-                                                            onCheckedChange={(c) => toggleQuestion(q.id, c)} 
+                                                        <Checkbox
+                                                            checked={checked}
+                                                            onCheckedChange={(c) => toggleQuestion(q.id, c)}
                                                         />
                                                         <div className="flex-1">
                                                             <p className="text-sm leading-tight">{q.question_text}</p>
@@ -172,7 +173,27 @@ export default function EditQuestionGroup({ group, questions }: { group: Questio
                                                                 </span>
                                                             )}
                                                         </div>
-                                                    </label>
+                                                        {checked && (
+                                                            <div className="w-24">
+                                                                <Label htmlFor={`weight-${q.id}`} className="sr-only">Weight</Label>
+                                                                <Input
+                                                                    id={`weight-${q.id}`}
+                                                                    type="number"
+                                                                    step="0.1"
+                                                                    placeholder="Weight"
+                                                                    value={data.question_weights[q.id] || 1.0}
+                                                                    onChange={(e) => {
+                                                                        const val = parseFloat(e.target.value);
+                                                                        setData('question_weights', {
+                                                                            ...data.question_weights,
+                                                                            [q.id]: isNaN(val) ? 1.0 : val
+                                                                        });
+                                                                    }}
+                                                                    className="h-8"
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 );
                                             })}
                                         </div>

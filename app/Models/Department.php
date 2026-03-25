@@ -19,6 +19,8 @@ class Department extends Model
     protected $fillable = [
         'name',
         'description',
+        'is_active',
+        'is_active_on_ticketing',
     ];
     public function branches()
     {

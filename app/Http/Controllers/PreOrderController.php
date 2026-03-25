@@ -936,7 +936,7 @@ class PreOrderController extends Controller
         $discountType = (str_contains(strtolower($orderTypeName), 'walkin')) ? 'ቅርንጫፍ ደንበኛ' : 'ሸገር ገበታ';
 
         $message = "ውድ ደምበኛችን {$preOrder->client_name}\n\n";
-        $message .= "እንኳን ለብርሃነ ልደቱ በሰላም አደረስዎ!\n\n";
+        $message .= "እንኳን ለዒድ አልፊጥር በሰላም አደረስዎ!\n\n";
         $message .= "ከካልዲስ ኮፊ የበዓል ቶርታ ስላዘዙ በጣም እናመሰግናለን። ክፍያዎት ደርስዎናል። የትዕዛዝዎ ዝርዝር መረጃ ከስር ያለውን ይመስላል፡\n\n";
         $message .= "የተጠቀሙት የቅናሽ አይነት፡ {$discountType}\n\n";
         $message .= "ያዘዙት ቶርታ፡ {$products}\n\n";
@@ -949,7 +949,7 @@ class PreOrderController extends Controller
         }
         $message .= "ቶርታውን የሚወስዱበት ቀን፡ {$preOrder->collectionDay->name}\n\n";
         $message .= "ካልዲስን ስለመረጡ እናመሰግናለን።\n\n";
-        $message .= "መልካም ገና";
+        $message .= "መልካም ዒድ";
 
         return $message;
     }
