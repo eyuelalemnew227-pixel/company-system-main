@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
@@ -18,6 +19,7 @@ type Product = {
 	child_category_id: number | null;
 	child_category?: { id: number; child_name: string };
 	status: 'Active' | 'Inactive';
+	is_purchasable: boolean;
 };
 
 type ChildCategory = {
@@ -56,7 +58,7 @@ export default function ProductsIndex({ products, childCategories = [], filters 
 		if (search) params.search = search;
 		if (categoryFilter !== 'all') params.child_category_id = categoryFilter;
 		if (statusFilter !== 'all') params.status = statusFilter;
-		
+
 		router.get('/products', params, {
 			preserveState: true,
 			preserveScroll: true,
@@ -69,6 +71,14 @@ export default function ProductsIndex({ products, childCategories = [], filters 
 			preserveScroll: true,
 			onSuccess: () => toast.success('Deleted successfully'),
 			onError: () => toast.error('Delete failed'),
+		});
+	}
+
+	function togglePurchasable(id: number) {
+		router.patch(route('products.toggle-purchasable', id), {}, {
+			preserveScroll: true,
+			onSuccess: () => toast.success('Status updated'),
+			onError: () => toast.error('Update failed'),
 		});
 	}
 
@@ -127,6 +137,7 @@ export default function ProductsIndex({ products, childCategories = [], filters 
 									<TableHead className="font-bold text-white">Unit Cost</TableHead>
 									<TableHead className="font-bold text-white">Child Category</TableHead>
 									<TableHead className="font-bold text-white">Status</TableHead>
+									<TableHead className="font-bold text-white text-center">Purchasable</TableHead>
 									<TableHead className="font-bold text-white">Actions</TableHead>
 								</TableRow>
 							</TableHeader>
@@ -139,13 +150,21 @@ export default function ProductsIndex({ products, childCategories = [], filters 
 										<TableCell>{item.unit_cost ? `${Number(item.unit_cost).toFixed(2)}` : '-'}</TableCell>
 										<TableCell>{item.child_category?.child_name ?? 'N/A'}</TableCell>
 										<TableCell>
-											<span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
-												item.status === 'Active' 
-													? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-													: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-											}`}>
+											<span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${item.status === 'Active'
+												? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+												: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+												}`}>
 												{item.status}
 											</span>
+										</TableCell>
+										<TableCell className="text-center">
+											<div className="flex justify-center items-center">
+												<Switch
+													checked={item.is_purchasable}
+													onCheckedChange={() => togglePurchasable(item.id)}
+													disabled={!can('update products')}
+												/>
+											</div>
 										</TableCell>
 										<TableCell>
 											{can('update products') && (

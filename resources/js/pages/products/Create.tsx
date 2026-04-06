@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -24,6 +25,7 @@ export default function CreateProduct({ childCategories = [] }: PageProps) {
 	const [maxCountThreshold, setMaxCountThreshold] = useState('');
 	const [measurement, setMeasurement] = useState('');
 	const [status, setStatus] = useState<string>('Active');
+	const [isPurchasable, setIsPurchasable] = useState(false);
 
 	function submit(e: React.FormEvent) {
 		e.preventDefault();
@@ -36,6 +38,7 @@ export default function CreateProduct({ childCategories = [] }: PageProps) {
 			max_count_threshold: maxCountThreshold ? Number(maxCountThreshold) : null,
 			measurement: measurement ? Number(measurement) : null,
 			status: status,
+			is_purchasable: isPurchasable,
 		});
 	}
 
@@ -97,6 +100,11 @@ export default function CreateProduct({ childCategories = [] }: PageProps) {
 										<SelectItem value="Inactive">Inactive</SelectItem>
 									</SelectContent>
 								</Select>
+							</div>
+							<div className="flex items-center space-x-2 py-2">
+								<Switch id="is_purchasable" checked={isPurchasable} onCheckedChange={setIsPurchasable} />
+								<Label htmlFor="is_purchasable">Is Purchasable Product</Label>
+								<p className="text-xs text-muted-foreground ml-2">(If enabled, this product will appear in the ticketing system)</p>
 							</div>
 							<div className="flex items-center gap-2">
 								<Button type="submit" disabled={!can('create products') || !childCategoryId}>Save</Button>

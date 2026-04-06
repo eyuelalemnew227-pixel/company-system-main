@@ -40,6 +40,7 @@ class Ticket extends Model
         'in_progress_at',
         'done_at',
         'closed_at',
+        'parent_ticket_id',
     ];
 
     protected $casts = [
@@ -107,5 +108,38 @@ class Ticket extends Model
     public function ratings(): HasMany
     {
         return $this->hasMany(TicketRating::class);
+    }
+
+    public function productRequests(): HasMany
+    {
+        return $this->hasMany(TicketProductRequest::class);
+    }
+
+    public function getAbilities(User $user): array
+    {
+        $currentAssignment = $this->assignments()->where('is_current', true)->first();
+        $isAssignee = $currentAssignment && $currentAssignment->assigned_to === $user->id;
+
+        $managerUserIds = app(\App\Services\TicketActionService::class)->departmentManagerUserIds($this->department_id);
+        $hasManagerPower = in_array($user->id, $managerUserIds) || $user->hasRole('Ticket Super Admin');
+
+        return [
+            'canAssign' => ($hasManagerPower || $user->can('ticket.assign'))
+                && !in_array($this->status, [TicketStatus::PendingApproval, TicketStatus::Rejected, TicketStatus::Closed]),
+            'canUpdateStatus' => $isAssignee
+                && !in_array($this->status, [TicketStatus::PendingApproval, TicketStatus::Rejected, TicketStatus::Closed, TicketStatus::Done]),
+            'canApproveReject' => ($hasManagerPower && ($this->status === TicketStatus::PendingApproval || $this->status === TicketStatus::Done))
+                || ($this->status === TicketStatus::Done && $this->user_id === $user->id),
+            'canRate' => $this->status === TicketStatus::Closed
+                && $this->user_id === $user->id
+                && $this->ratings()->where('user_id', $user->id)->doesntExist(),
+            'hasRated' => $this->user_id === $user->id
+                && $this->ratings()->where('user_id', $user->id)->exists(),
+            'isRequestor' => $this->user_id === $user->id,
+            'canDelete' => $user->can('ticket.delete'),
+            'canUpdateAsset' => $user->can('updateAsset', $this),
+            'canUpdateDeadline' => $user->can('updateDeadline', $this),
+            'canUpdatePriority' => $user->can('updatePriority', $this),
+        ];
     }
 }

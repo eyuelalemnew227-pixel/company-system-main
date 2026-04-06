@@ -70,6 +70,7 @@ class ProductController extends Controller
             'max_count_threshold' => ['nullable', 'numeric', 'min:0'],
             'measurement' => ['nullable', 'numeric', 'min:0.01'],
             'status' => ['nullable', 'in:Active,Inactive'],
+            'is_purchasable' => ['nullable', 'boolean'],
         ]);
 
         if ($validated['min_count_threshold'] !== null && $validated['max_count_threshold'] !== null) {
@@ -111,6 +112,7 @@ class ProductController extends Controller
             'max_count_threshold' => ['nullable', 'numeric', 'min:0'],
             'measurement' => ['nullable', 'numeric', 'min:0.01'],
             'status' => ['nullable', 'in:Active,Inactive'],
+            'is_purchasable' => ['nullable', 'boolean'],
         ]);
 
         if ($validated['min_count_threshold'] !== null && $validated['max_count_threshold'] !== null) {
@@ -134,6 +136,18 @@ class ProductController extends Controller
 
         return redirect()->route('products.index')
             ->with('success', 'Product deleted successfully.');
+    }
+
+    /**
+     * Toggle the purchasable status of the specified product.
+     */
+    public function togglePurchasable(Product $product): RedirectResponse
+    {
+        $product->update([
+            'is_purchasable' => !$product->is_purchasable,
+        ]);
+
+        return back()->with('success', 'Purchasable status updated.');
     }
 }
 

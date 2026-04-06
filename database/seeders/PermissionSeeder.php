@@ -234,5 +234,21 @@ class PermissionSeeder extends Seeder
         // Deleted Evaluations (Audit Trail)
         Permission::firstOrCreate(['name' => 'view deleted evaluations']);
         Permission::firstOrCreate(['name' => 'restore deleted evaluations']);
+
+        Permission::firstOrCreate(['name' => 'view external links']);
+        Permission::firstOrCreate(['name' => 'manage external links']);
+        Permission::firstOrCreate(['name' => 'view employee directory']);
+
+        // Spare Part Categories
+        Permission::firstOrCreate(['name' => 'view spare part categories']);
+        Permission::firstOrCreate(['name' => 'create spare part categories']);
+        Permission::firstOrCreate(['name' => 'update spare part categories']);
+        Permission::firstOrCreate(['name' => 'delete spare part categories']);
+
+        // Spare Parts
+        Permission::firstOrCreate(['name' => 'view spare parts']);
+        Permission::firstOrCreate(['name' => 'create spare parts']);
+        Permission::firstOrCreate(['name' => 'update spare parts']);
+        Permission::firstOrCreate(['name' => 'delete spare parts']);
     }
 }

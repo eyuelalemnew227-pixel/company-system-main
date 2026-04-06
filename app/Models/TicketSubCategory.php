@@ -13,9 +13,17 @@ class TicketSubCategory extends Model
 
     protected $fillable = [
         'ticket_main_category_id',
+        'child_category_id',
+        'spare_part_category_id',
         'name',
         'is_active',
     ];
+
+    public function childCategory(): BelongsTo
+    {
+        return $this->belongsTo(ChildCategory::class);
+    }
+
 
     public function mainCategory(): BelongsTo
     {

@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
@@ -13,6 +14,7 @@ import { useMemo, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Plus, Trash2 } from 'lucide-react';
 
 type Option = {
   id: number;
@@ -22,6 +24,28 @@ type Option = {
   department_id?: number;
   ticket_main_category_id?: number;
   ticket_sub_category_id?: number;
+  child_category_id?: number;
+};
+
+type Product = {
+  id: number;
+  product_name: string;
+  product_code: string;
+  child_category_id: number;
+};
+
+type SparePartItem = {
+  id: number;
+  name: string;
+  article_code?: string | null;
+  description?: string | null;
+  spare_part_category_id: number;
+};
+
+type SparePartCat = {
+  id: number;
+  name: string;
+  spare_part_category_id: number;
 };
 
 type PageProps = {
@@ -30,7 +54,15 @@ type PageProps = {
   subCategories: Option[];
   assets: Option[];
   severities: string[];
+  products: Product[];
+  purchaseRequestCatId: number;
+  purchaseDeptId: number;
   flash: { message?: string };
+  // Spare part request props
+  isSparePartRequest?: boolean;
+  parentTicketId?: number | null;
+  sparePartCategories?: SparePartCat[];
+  spareParts?: SparePartItem[];
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -38,17 +70,22 @@ const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Create', href: '/tickets/create' },
 ];
 
-export default function TicketCreate({ departments, mainCategories, subCategories, assets, severities, flash }: PageProps) {
+export default function TicketCreate({ departments, mainCategories, subCategories, assets, severities, products, purchaseRequestCatId, purchaseDeptId, flash, isSparePartRequest, parentTicketId, sparePartCategories, spareParts }: PageProps) {
   const { data, setData, post, processing, errors, transform } = useForm({
-    department_id: '',
-    ticket_main_category_id: '',
+    department_id: isSparePartRequest ? String(purchaseDeptId) : '',
+    ticket_main_category_id: isSparePartRequest ? String(purchaseRequestCatId) : '',
     ticket_sub_category_id: '',
     ticket_asset_id: 'none',
     description: '',
     severity: severities[0] ?? '',
     preferred_deadline: '',
+    products: [] as { product_id: string; quantity: string; uom: string; product_name?: string; product_code?: string }[],
+    parent_ticket_id: parentTicketId ? String(parentTicketId) : '',
+    is_spare_part_request: isSparePartRequest ?? false,
   });
   const [assetOpen, setAssetOpen] = useState(false);
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [productSearch, setProductSearch] = useState('');
 
   useEffect(() => {
     transform((data) => ({
@@ -80,6 +117,85 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
       ),
     [assets, data.ticket_sub_category_id, data.department_id]
   );
+
+  const selectedSub = useMemo(
+    () => subCategories.find((s) => String(s.id) === String(data.ticket_sub_category_id)),
+    [subCategories, data.ticket_sub_category_id]
+  );
+
+  // In spare part mode, use the pre-synchronized sub-categories from backend
+  const effectiveFilteredSub = useMemo(() => {
+    if (isSparePartRequest && sparePartCategories?.length) {
+      return sparePartCategories;
+    }
+    return filteredSub;
+  }, [isSparePartRequest, sparePartCategories, filteredSub]);
+
+  const selectedEffectiveSub = useMemo(
+    () => effectiveFilteredSub.find((s) => String(s.id) === String(data.ticket_sub_category_id)),
+    [effectiveFilteredSub, data.ticket_sub_category_id]
+  );
+
+  // In spare part mode, filter spare parts by their category instead of products
+  const filteredProducts = useMemo(
+    () => {
+      if (isSparePartRequest && spareParts?.length) {
+        const subCatId = data.ticket_sub_category_id;
+        const subCat = sparePartCategories?.find(s => String(s.id) === String(subCatId));
+        const sparePartCatId = subCat?.spare_part_category_id;
+
+        const base = sparePartCatId
+          ? spareParts.filter(sp => String(sp.spare_part_category_id) === String(sparePartCatId))
+          : [];
+        // Map spare parts to product-like shape for the modal
+        const mapped = base.map(sp => ({
+          id: sp.id,
+          product_name: sp.name,
+          product_code: sp.article_code || '',
+          child_category_id: sp.spare_part_category_id,
+        }));
+        if (!productSearch) return mapped;
+        const s = productSearch.toLowerCase();
+        return mapped.filter(p => p.product_name.toLowerCase().includes(s) || p.product_code.toLowerCase().includes(s));
+      }
+      const base = selectedSub?.child_category_id
+        ? products.filter((p) => String(p.child_category_id) === String(selectedSub.child_category_id))
+        : [];
+      if (!productSearch) return base;
+      const s = productSearch.toLowerCase();
+      return base.filter(p => p.product_name.toLowerCase().includes(s) || p.product_code.toLowerCase().includes(s));
+    },
+    [isSparePartRequest, spareParts, products, selectedSub, productSearch, data.ticket_sub_category_id]
+  );
+
+  const removeProduct = (index: number) => {
+    const newProducts = [...data.products];
+    newProducts.splice(index, 1);
+    setData('products', newProducts);
+  };
+
+  const updateProductQuantity = (productId: string, quantity: string, productName: string, productCode: string) => {
+    const newProducts = [...data.products];
+    const index = newProducts.findIndex(p => String(p.product_id) === String(productId));
+
+    if (quantity && parseFloat(quantity) > 0) {
+      if (index > -1) {
+        newProducts[index] = { ...newProducts[index], quantity };
+      } else {
+        newProducts.push({
+          product_id: String(productId),
+          quantity,
+          uom: '',
+          product_name: productName,
+          product_code: productCode
+        });
+      }
+    } else if (index > -1) {
+      newProducts.splice(index, 1);
+    }
+
+    setData('products', newProducts);
+  };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,7 +252,7 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
                       <SelectValue placeholder="Select sub category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {filteredSub.map((c) => (
+                      {effectiveFilteredSub.map((c) => (
                         <SelectItem key={c.id} value={String(c.id)}>
                           {c.name}
                         </SelectItem>
@@ -215,12 +331,18 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
                 )}
               </div>
 
-              <Field label="Description" error={errors.description}>
-                <Textarea rows={4} value={data.description} onChange={(e) => setData('description', e.target.value)} required />
-              </Field>
+              {String(data.ticket_main_category_id) !== String(purchaseRequestCatId) && (
+                <Field label="Description" error={errors.description}>
+                  <Textarea
+                    rows={4}
+                    value={data.description}
+                    onChange={(e) => setData('description', e.target.value)}
+                  />
+                </Field>
+              )}
 
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Severity" error={errors.severity}>
+                <Field label={`Severity ${String(data.ticket_main_category_id) === String(purchaseRequestCatId) ? '(optional)' : ''}`} error={errors.severity}>
                   <Select value={data.severity} onValueChange={(v) => setData('severity', v)}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select severity" />
@@ -240,6 +362,134 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
                 </Field>
               </div>
 
+              {String(data.ticket_main_category_id) === String(purchaseRequestCatId) && (selectedEffectiveSub || selectedSub) && (
+                <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold">
+                      {isSparePartRequest ? 'Requested Spare Parts' : 'Requested Products'} ({(selectedEffectiveSub || selectedSub)?.name})
+                    </h3>
+                    <Dialog open={productModalOpen} onOpenChange={setProductModalOpen}>
+                      <DialogTrigger asChild>
+                        <Button type="button" variant="outline" size="sm">
+                          <Plus className="mr-2 h-4 w-4" /> {isSparePartRequest ? 'Select Spare Parts' : 'Select Products'}
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-5xl max-h-[90vh] flex flex-col p-0">
+                        <DialogHeader className="p-6 pb-2">
+                          <DialogTitle>{isSparePartRequest ? 'Select Spare Parts' : 'Select Products'} - {(selectedEffectiveSub || selectedSub)?.name}</DialogTitle>
+                          <div className="pt-4">
+                            <Input
+                              placeholder="Search products..."
+                              value={productSearch}
+                              onChange={(e) => setProductSearch(e.target.value)}
+                            />
+                          </div>
+                        </DialogHeader>
+                        <div className="flex-1 overflow-y-auto p-6 pt-2">
+                          {filteredProducts.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {filteredProducts.map((p) => {
+                                const selected = data.products.find(sp => String(sp.product_id) === String(p.id));
+                                return (
+                                  <div key={p.id} className={cn(
+                                    "flex items-center justify-between p-3 rounded-lg border bg-background transition-colors",
+                                    selected ? "border-primary ring-1 ring-primary/20" : "hover:border-primary/50"
+                                  )}>
+                                    <div className="flex-1 min-w-0 pr-4">
+                                      <div className="font-medium truncate">{p.product_name}</div>
+                                      <div className="text-[10px] text-muted-foreground truncate">{p.product_code}</div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        className="h-8 w-20 text-right font-mono"
+                                        value={selected?.quantity || ''}
+                                        placeholder="0"
+                                        onChange={(e) => updateProductQuantity(String(p.id), e.target.value, p.product_name, p.product_code)}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="py-12 text-center text-muted-foreground italic">
+                              No products found.
+                            </div>
+                          )}
+                        </div>
+                        <DialogFooter className="p-6 pt-2 bg-muted/30">
+                          <div className="flex items-center justify-between w-full">
+                            <div className="text-sm font-medium">
+                              {data.products.length} {isSparePartRequest ? 'spare parts' : 'products'} selected
+                            </div>
+                            <Button type="button" onClick={() => setProductModalOpen(false)}>
+                              Done
+                            </Button>
+                          </div>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+
+                  {data.products.length > 0 ? (
+                    <div className="border rounded-md overflow-hidden bg-background">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50 border-b">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-semibold">Product</th>
+                            <th className="px-3 py-2 text-center font-semibold w-24">Quantity</th>
+                            <th className="px-3 py-2 text-right font-semibold w-12"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {data.products.map((p, idx) => (
+                            <tr key={idx} className="hover:bg-muted/10 transition-colors">
+                              <td className="px-3 py-2">
+                                <div className="font-medium">{p.product_name}</div>
+                                <div className="text-[10px] text-muted-foreground">{p.product_code}</div>
+                              </td>
+                              <td className="px-3 py-2 text-center">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  className="h-8 text-right font-mono w-24 ml-auto"
+                                  value={p.quantity}
+                                  onChange={(e) => updateProductQuantity(p.product_id, e.target.value, p.product_name || '', p.product_code || '')}
+                                  required
+                                />
+                              </td>
+                              <td className="px-3 py-2 text-right">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
+                                  onClick={() => removeProduct(idx)}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="border border-dashed rounded-md p-8 text-center bg-background/50">
+                      <p className="text-xs text-muted-foreground italic">
+                        No products selected yet. Click "Select Products" to begin.
+                      </p>
+                    </div>
+                  )}
+                  {errors.products && <p className="text-sm text-red-600">{errors.products}</p>}
+                  {(errors as any)['products.*.quantity'] && <p className="text-sm text-red-600">Please provide a valid quantity for all products.</p>}
+                </div>
+              )}
+
               <CardFooter className="px-0">
                 <Button type="submit" disabled={processing}>
                   Submit Ticket
@@ -253,9 +503,9 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
   );
 }
 
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+function Field({ label, error, className, children }: { label: string; error?: string; className?: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-1">
+    <div className={cn('space-y-1', className)}>
       <Label className="text-sm font-medium">{label}</Label>
       {children}
       {error && <p className="text-sm text-red-600">{error}</p>}

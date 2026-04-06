@@ -34,6 +34,9 @@ import {
   Trash2,
   Check,
   ChevronsUpDown,
+  ShoppingBag,
+  Download,
+  Wrench,
 } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -64,6 +67,7 @@ type Ticket = {
   description: string;
   status: string;
   severity: string;
+  ticket_main_category_id: number;
   priority: string;
   department_id: number;
   department?: { name: string };
@@ -88,6 +92,21 @@ type Ticket = {
   preferred_deadline?: string | null;
   deadline?: string | null;
   ratings: { stars: number; comment?: string | null }[];
+  product_requests?: {
+    id: number;
+    product?: {
+      product_name: string;
+      product_code?: string | null;
+      child_category?: { child_name: string } | null;
+    } | null;
+    spare_part?: {
+      name: string;
+      article_code?: string | null;
+      category?: { name: string } | null;
+    } | null;
+    quantity: string;
+    uom?: string | null;
+  }[];
 };
 
 type AssetOption = {
@@ -104,7 +123,7 @@ type PageProps = {
   staffOptions: { id: number; name: string; email: string }[];
   priorityOptions: string[];
   assetOptions: AssetOption[];
-  abilities: { canAssign: boolean; canUpdateStatus: boolean; canRate: boolean; hasRated: boolean; isRequestor: boolean; canApproveReject: boolean; canDelete: boolean; canUpdateAsset: boolean; canUpdateDeadline: boolean; canUpdatePriority: boolean };
+  abilities: { canAssign: boolean; canUpdateStatus: boolean; canRate: boolean; hasRated: boolean; isRequestor: boolean; canApproveReject: boolean; canDelete: boolean; canUpdateAsset: boolean; canUpdateDeadline: boolean; canUpdatePriority: boolean; hasManagerPower: boolean };
   flash: { message: string | null; just_created?: boolean | null };
 };
 
@@ -141,6 +160,19 @@ export default function TicketShow() {
   const [statusChangedTo, setStatusChangedTo] = React.useState<string | null>(null);
   const [isRatingModalOpen, setIsRatingModalOpen] = React.useState(false);
   const [assetOpen, setAssetOpen] = React.useState(false);
+  const [isProductsModalOpen, setIsProductsModalOpen] = React.useState(false);
+
+  const groupedProducts = React.useMemo(() => {
+    if (!ticket.product_requests) return {};
+    return ticket.product_requests.reduce((acc, req) => {
+      const catName = req.spare_part
+        ? (req.spare_part.category?.name || 'Uncategorized Spare Parts')
+        : (req.product?.child_category?.child_name || 'Uncategorized Products');
+      if (!acc[catName]) acc[catName] = [];
+      acc[catName].push(req);
+      return acc;
+    }, {} as Record<string, typeof ticket.product_requests>);
+  }, [ticket.product_requests]);
 
   React.useEffect(() => {
     if (flash.just_created) {
@@ -225,7 +257,7 @@ export default function TicketShow() {
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title={`Ticket #${ticket.id} - ${ticket.title}`} />
+      <Head title={`Ticket #${ticket.id} - ${ticket.main_category?.name ?? ticket.mainCategory?.name ?? ticket.title}`} />
 
       <div className="mx-auto max-w-7xl p-4 md:p-6 lg:p-8">
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -247,9 +279,19 @@ export default function TicketShow() {
                 </>
               )}
             </div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">{ticket.title}</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              {ticket.main_category?.name ?? ticket.mainCategory?.name ?? ticket.title}
+            </h1>
           </div>
           <div className="flex items-center gap-2">
+            {abilities.hasManagerPower && ticket.product_requests && ticket.product_requests.length > 0 && (
+              <Button asChild variant="outline" size="sm" className="bg-primary/5 border-primary/20 text-primary hover:bg-primary/10">
+                <a href={route('tickets.download-products', ticket.id)}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export PDF
+                </a>
+              </Button>
+            )}
             <Button asChild variant="outline" size="sm" className="hidden sm:flex">
               <Link href={route('tickets.index')}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
@@ -289,11 +331,13 @@ export default function TicketShow() {
                   <span className="text-sm font-medium">Category:</span>
                   <span className="text-sm">{ticket.main_category?.name ?? ticket.mainCategory?.name ?? '—'}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Tag className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm font-medium">Sub Category:</span>
-                  <span className="text-sm">{ticket.sub_category?.name ?? ticket.subCategory?.name ?? '—'}</span>
-                </div>
+                {(ticket.main_category?.name ?? ticket.mainCategory?.name) !== 'Purchase Request' && (
+                  <div className="flex items-center gap-2">
+                    <Tag className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Sub Category:</span>
+                    <span className="text-sm">{ticket.sub_category?.name ?? ticket.subCategory?.name ?? '—'}</span>
+                  </div>
+                )}
 
                 <div className="flex flex-col gap-3 border-t pt-3">
                   {ticket.preferred_deadline && (
@@ -574,6 +618,28 @@ export default function TicketShow() {
                   </Card>
                 )}
 
+                {ticket.status === 'hold' && (ticket.mainCategory?.name ?? ticket.main_category?.name ?? '').toLowerCase().includes('repair') && abilities.canUpdateStatus && (
+                  <Card className="border-orange-200 shadow-sm overflow-hidden bg-orange-50/30">
+                    <CardHeader className="p-4 pb-2">
+                      <CardTitle className="text-sm font-bold flex items-center gap-2 text-orange-700">
+                        <Wrench className="h-4 w-4" />
+                        Spare Part Required?
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 pt-2 space-y-3">
+                      <p className="text-xs text-muted-foreground italic mb-2">
+                        If you need spare parts to complete this repair, you can create a purchase request.
+                      </p>
+                      <Link href={`/tickets/create?spare_part_request=1&parent_ticket_id=${ticket.id}`}>
+                        <Button className="w-full bg-orange-600 hover:bg-orange-700 h-9 text-xs">
+                          <Wrench className="mr-2 h-3.5 w-3.5" />
+                          Request Spare Part Purchase
+                        </Button>
+                      </Link>
+                    </CardContent>
+                  </Card>
+                )}
+
                 {!abilities.canAssign && ticket.status === 'pending_approval' && (
                   <Card className="border-blue-100 bg-blue-50/50 shadow-none border-dashed">
                     <CardContent className="p-4 flex gap-3 items-start">
@@ -708,19 +774,139 @@ export default function TicketShow() {
 
           {/* Secondary Details & History */}
           <div className="space-y-6">
-            <Card className="overflow-hidden border-none shadow-md">
-              <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-lg">Description</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <p className="whitespace-pre-wrap text-base leading-relaxed text-foreground/90">
-                  {ticket.description}
-                </p>
-              </CardContent>
-            </Card>
+            {ticket.description && (
+              <Card className="overflow-hidden border-none shadow-md">
+                <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-lg">Description</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <p className="whitespace-pre-wrap text-base leading-relaxed text-foreground/90">
+                    {ticket.description}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {ticket.product_requests && ticket.product_requests.length > 0 && (
+              <>
+                <Card className="border-none shadow-md overflow-hidden bg-primary/5 border border-primary/10">
+                  <CardHeader className="pb-3 border-b border-primary/10 bg-primary/10">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <ShoppingBag className="h-5 w-5 text-primary" />
+                        <CardTitle className="text-base font-bold">
+                          {ticket.product_requests.some(r => r.spare_part) ? 'Requested Spare Parts' : 'Requested Products'}
+                        </CardTitle>
+                      </div>
+                      <span className="text-xs font-bold bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
+                        {ticket.product_requests.length} Items
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-4 flex flex-col sm:flex-row gap-3">
+                    <Button
+                      variant="default"
+                      className="flex-1 h-11 font-bold shadow-sm"
+                      onClick={() => setIsProductsModalOpen(true)}
+                    >
+                      <ShoppingBag className="mr-2 h-4 w-4" />
+                      View Detailed List
+                    </Button>
+
+                    <Button asChild variant="outline" className="flex-1 h-11 border-primary/20 bg-background hover:bg-muted text-primary font-bold shadow-sm">
+                      <a href={route('tickets.download-products', ticket.id)}>
+                        <Download className="mr-2 h-4 w-4" />
+                        Download PDF
+                      </a>
+                    </Button>
+                  </CardContent>
+                </Card>
+
+                <Dialog open={isProductsModalOpen} onOpenChange={setIsProductsModalOpen}>
+                  <DialogContent className="sm:max-w-5xl max-h-[85vh] overflow-hidden flex flex-col p-0">
+                    <DialogHeader className="p-6 border-b bg-muted/30">
+                      <DialogTitle className="flex items-center gap-2">
+                        <ShoppingBag className="h-5 w-5 text-primary" />
+                        {ticket.product_requests?.some(r => r.spare_part) ? 'Requested Spare Parts' : 'Requested Products'}
+                      </DialogTitle>
+                      <DialogDescription>
+                        Items requested for Ticket #{ticket.id}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto">
+                      <table className="w-full text-sm border-collapse">
+                        <thead className="bg-muted/50 border-b sticky top-0 z-10">
+                          <tr>
+                            <th className="px-6 py-3 text-left font-semibold border-r w-1/4">Category</th>
+                            <th className="px-6 py-3 text-left font-semibold">Product</th>
+                            <th className="px-6 py-3 text-right font-semibold">Quantity</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y text-[13px]">
+                          {Object.entries(groupedProducts).map(([category, products]) => (
+                            <React.Fragment key={category}>
+                              {products.map((req, idx) => (
+                                <tr key={req.id} className="hover:bg-muted/5 transition-colors group">
+                                  {idx === 0 && (
+                                    <td
+                                      rowSpan={products.length}
+                                      className="px-6 py-4 align-top border-r bg-muted/20"
+                                    >
+                                      <div className="flex flex-col gap-1 mt-1">
+                                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-foreground leading-tight">
+                                          {category}
+                                        </span>
+                                      </div>
+                                    </td>
+                                  )}
+                                  <td className="px-6 py-4">
+                                    <div className="flex flex-col gap-0.5">
+                                      <span className="font-bold text-foreground">
+                                        {req.spare_part ? req.spare_part.name : (req.product?.product_name || 'Unknown Item')}
+                                      </span>
+                                      {(req.spare_part?.article_code || req.product?.product_code) && (
+                                        <span className="text-[11px] font-mono text-muted-foreground">
+                                          Code: {req.spare_part?.article_code || req.product?.product_code}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 text-right">
+                                    <div className="flex flex-col items-end">
+                                      <span className="text-sm font-black text-primary">
+                                        {req.quantity}
+                                      </span>
+                                      {req.uom && (
+                                        <span className="text-[10px] font-medium text-muted-foreground uppercase">
+                                          {req.uom}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </React.Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {abilities.hasManagerPower && (
+                      <DialogFooter className="p-4 border-t bg-muted/30">
+                        <Button asChild variant="default" className="w-full sm:w-auto">
+                          <a href={route('tickets.download-products', ticket.id)}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Download PDF Version
+                          </a>
+                        </Button>
+                      </DialogFooter>
+                    )}
+                  </DialogContent>
+                </Dialog>
+              </>
+            )}
 
             <Card className="border-none shadow-md">
               <CardHeader className="border-b">
@@ -962,7 +1148,7 @@ export default function TicketShow() {
       </Dialog>
 
 
-    </AppLayout>
+    </AppLayout >
   );
 }
 

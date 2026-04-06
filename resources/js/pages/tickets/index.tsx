@@ -124,7 +124,7 @@ export default function TicketIndex() {
                     value={params.search}
                     onChange={(e) => setParams({ ...params, search: e.target.value })}
                     onKeyDown={handleKeyDown}
-                    placeholder="ID, Title, Description..."
+                    placeholder="ID, Category, Description..."
                     className="pl-9 bg-white border-slate-200"
                   />
                 </div>
@@ -239,9 +239,9 @@ export default function TicketIndex() {
                 <TableHeader className="bg-slate-100 border-b border-slate-200">
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="font-bold text-slate-700 w-20">ID</TableHead>
-                    <TableHead className="font-bold text-slate-700">Title</TableHead>
-                    <TableHead className="font-bold text-slate-700">Department</TableHead>
                     <TableHead className="font-bold text-slate-700">Category</TableHead>
+                    <TableHead className="font-bold text-slate-700">Department</TableHead>
+                    <TableHead className="font-bold text-slate-700">Sub Category</TableHead>
                     <TableHead className="font-bold text-slate-700">Status</TableHead>
 
                     <TableHead className="font-bold text-slate-700">Priority</TableHead>
@@ -261,16 +261,13 @@ export default function TicketIndex() {
                         <TableCell className="font-mono text-xs text-slate-500">#{t.id}</TableCell>
                         <TableCell className="font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-md">
                           <Link className="text-blue-600 hover:text-blue-800 transition-colors" href={route('tickets.show', t.id)}>
-                            {t.title}
+                            {t.main_category?.name ?? t.mainCategory?.name ?? t.title}
                           </Link>
                         </TableCell>
                         <TableCell className="text-sm text-slate-600">{t.department?.name ?? '—'}</TableCell>
                         <TableCell>
                           <div className="text-sm text-slate-600 line-clamp-1">
-                            {t.main_category?.name ?? t.mainCategory?.name ?? '—'}
-                          </div>
-                          <div className="text-[10px] text-slate-400 line-clamp-1">
-                            {t.sub_category?.name ?? t.subCategory?.name ?? ''}
+                            {t.sub_category?.name ?? t.subCategory?.name ?? '—'}
                           </div>
                         </TableCell>
                         <TableCell>

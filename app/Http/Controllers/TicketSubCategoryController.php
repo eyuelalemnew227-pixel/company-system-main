@@ -45,6 +45,12 @@ class TicketSubCategoryController extends Controller
         return redirect()->route('ticket-settings.index')->with('message', 'Sub category updated.');
     }
 
+    public function toggleStatus(TicketSubCategory $ticketSubCategory)
+    {
+        $ticketSubCategory->update(['is_active' => !$ticketSubCategory->is_active]);
+        return back()->with('message', 'Status updated.');
+    }
+
     public function destroy(TicketSubCategory $ticketSubCategory)
     {
         $ticketSubCategory->delete();

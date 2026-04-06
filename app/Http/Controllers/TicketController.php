@@ -17,11 +17,15 @@ use App\Models\TicketSubCategory;
 use App\Models\User;
 use App\Services\TicketActionService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class TicketController extends Controller
 {
+    private const PURCHASE_DEPT_ID = 18068;
+    private const PURCHASE_REQUEST_CAT_ID = 22;
+
     public function __construct(
         private readonly TicketActionService $actionService,
         private readonly \App\Services\TicketStatusService $statusService
@@ -87,18 +91,74 @@ class TicketController extends Controller
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $this->authorize('create', Ticket::class);
 
+        // Synchronize ChildCategories for Purchase Request category if it exists
+        if (TicketMainCategory::where('id', self::PURCHASE_REQUEST_CAT_ID)->exists()) {
+            $childCategories = \App\Models\ChildCategory::all();
+            foreach ($childCategories as $cc) {
+                $sub = TicketSubCategory::firstOrNew([
+                    'ticket_main_category_id' => self::PURCHASE_REQUEST_CAT_ID,
+                    'name' => $cc->child_name,
+                ]);
+
+                if (!$sub->exists) {
+                    $sub->is_active = true;
+                }
+
+                $sub->child_category_id = $cc->id;
+                $sub->save();
+            }
+        }
+
+        $isSparePartRequest = $request->boolean('spare_part_request');
+
+        // Synchronize Spare Part Categories as TicketSubCategories for Spare Part Mode
+        $sparePartSubCategories = [];
+        if ($isSparePartRequest) {
+            $spareCats = \App\Models\SparePartCategory::all();
+            foreach ($spareCats as $sc) {
+                $sub = TicketSubCategory::updateOrCreate([
+                    'ticket_main_category_id' => self::PURCHASE_REQUEST_CAT_ID,
+                    'spare_part_category_id' => $sc->id,
+                ], [
+                    'name' => $sc->name,
+                    'is_active' => true,
+                ]);
+                $sparePartSubCategories[] = [
+                    'id' => $sub->id,
+                    'name' => $sub->name,
+                    'spare_part_category_id' => $sc->id,
+                ];
+            }
+        }
+
+        $spareParts = [];
+        if ($isSparePartRequest) {
+            $spareParts = \App\Models\SparePart::with('category:id,name')->orderBy('name')->get(['id', 'name', 'article_code', 'description', 'spare_part_category_id']);
+        }
+
         return Inertia::render('tickets/create', [
             'departments' => Department::where('is_active_on_ticketing', true)->orderBy('name')->get(),
-            'mainCategories' => TicketMainCategory::with('subCategories')->orderBy('name')->get(),
-            'subCategories' => TicketSubCategory::orderBy('name')->get(),
-            'assets' => TicketAsset::orderBy('name')->get(),
+            'mainCategories' => TicketMainCategory::where('is_active', true)
+                ->with(['subCategories' => fn($q) => $q->where('is_active', true)])
+                ->orderBy('name')->get(),
+            'subCategories' => TicketSubCategory::where('is_active', true)->orderBy('name')->get(),
+            'assets' => TicketAsset::where('is_active', true)->orderBy('name')->get(),
             'severities' => array_column(TicketSeverity::cases(), 'value'),
+            'products' => \App\Models\Product::where('status', 'Active')->where('is_purchasable', true)->orderBy('product_name')->get(['id', 'product_name', 'product_code', 'child_category_id']),
+            'purchaseRequestCatId' => self::PURCHASE_REQUEST_CAT_ID,
+            'purchaseDeptId' => self::PURCHASE_DEPT_ID,
+            // Spare part request props
+            'isSparePartRequest' => $isSparePartRequest,
+            'parentTicketId' => $request->integer('parent_ticket_id') ?: null,
+            'sparePartCategories' => $sparePartSubCategories,
+            'spareParts' => $spareParts,
         ]);
     }
+
 
     public function store(TicketStoreRequest $request)
     {
@@ -116,30 +176,58 @@ class TicketController extends Controller
         );
 
         $title = $request->input('title');
+        $sub = TicketSubCategory::find($validated['ticket_sub_category_id']);
         if (!$title) {
-            $sub = TicketSubCategory::find($validated['ticket_sub_category_id']);
-            $asset = $validated['ticket_asset_id'] ? TicketAsset::find($validated['ticket_asset_id']) : null;
+            $asset = ($validated['ticket_asset_id'] ?? null) ? TicketAsset::find($validated['ticket_asset_id']) : null;
             $title = $asset?->name ?: ($sub?->name ?: 'Ticket');
         }
 
-        $ticket = Ticket::create([
-            ...$validated,
-            'user_id' => $user->id,
-            'title' => $title,
-            'status' => TicketStatus::PendingApproval,
-            'requestor_full_name' => $employee ? ($employee->first_name . ' ' . $employee->last_name) : $user->name,
-            'requestor_branch_id' => $employee?->branch_id,
-            'requestor_department_id' => $employee?->department_id,
-            'requestor_phone' => $employee?->phone,
-        ]);
+        // Ensure description is never null (DB column is NOT NULL)
+        if (empty($validated['description'])) {
+            $validated['description'] = '';
+        }
 
-        $this->actionService->logStatusHistory($ticket, $user, null, TicketStatus::PendingApproval->value, null);
-        $this->actionService->logActivity($ticket, $user, 'created', null, TicketStatus::PendingApproval->value, null);
-        $this->actionService->notifyCreated($ticket);
+        // Special handling for Purchase Request categories
+        if ($validated['ticket_main_category_id'] == self::PURCHASE_REQUEST_CAT_ID) {
+            if (empty($validated['severity'])) {
+                $validated['severity'] = \App\Enums\TicketSeverity::NoImpact->value;
+            }
+        }
 
-        return redirect()->route('tickets.show', $ticket)
-            ->with('message', 'Ticket submitted and pending approval.')
-            ->with('just_created', true);
+        return DB::transaction(function () use ($validated, $user, $employee, $title, $request) {
+            $ticket = Ticket::create([
+                ...collect($validated)->except(['products', 'is_spare_part_request'])->toArray(),
+                'user_id' => $user->id,
+                'title' => $title,
+                'status' => TicketStatus::PendingApproval,
+                'requestor_full_name' => $employee ? ($employee->first_name . ' ' . $employee->last_name) : $user->name,
+                'requestor_branch_id' => $employee?->branch_id,
+                'requestor_department_id' => $employee?->department_id,
+                'requestor_phone' => $employee?->phone,
+            ]);
+
+            // Save product requests if present
+            if (!empty($validated['products'])) {
+                $isSparePart = $validated['is_spare_part_request'] ?? false;
+                foreach ($validated['products'] as $product) {
+                    if (($product['quantity'] ?? 0) > 0) {
+                        $ticket->productRequests()->create([
+                            $isSparePart ? 'spare_part_id' : 'product_id' => $product['product_id'],
+                            'quantity' => $product['quantity'],
+                            'uom' => $product['uom'] ?? null,
+                        ]);
+                    }
+                }
+            }
+
+            $this->actionService->logStatusHistory($ticket, $user, null, TicketStatus::PendingApproval->value, null);
+            $this->actionService->logActivity($ticket, $user, 'created', null, TicketStatus::PendingApproval->value, null);
+            $this->actionService->notifyCreated($ticket);
+
+            return redirect()->route('tickets.show', $ticket)
+                ->with('message', 'Ticket submitted and pending approval.')
+                ->with('just_created', true);
+        });
     }
 
     public function show(Request $request, Ticket $ticket)
@@ -155,6 +243,8 @@ class TicketController extends Controller
             'statusHistory.user',
             'activityLogs.user',
             'ratings',
+            'productRequests.product.childCategory',
+            'productRequests.sparePart.category',
         ]);
         $currentAssignment = $ticket->assignments()->where('is_current', true)->with('assignee')->first();
         $staffOptions = User::whereHas('employee', fn($q) => $q->where('department_id', $ticket->department_id))
@@ -195,31 +285,25 @@ class TicketController extends Controller
 
         return Inertia::render('tickets/show', [
             'ticket' => $ticket,
-            'statuses' => array_values($availableStatuses),
-            'severities' => array_column(TicketSeverity::cases(), 'value'),
-            'priorityOptions' => array_column(TicketPriority::cases(), 'value'),
             'currentAssignment' => $currentAssignment,
-            'staffOptions' => User::whereHas('employee', fn($q) => $q->where('department_id', $ticket->department_id))->get(),
+            'staffOptions' => $staffOptions,
+            'statuses' => array_values($availableStatuses),
+            'priorityOptions' => array_column(TicketPriority::cases(), 'value'),
             'assetOptions' => $assetOptions,
-            'abilities' => [
-                'canAssign' => ($hasManagerPower || $user->can('ticket.assign'))
-                    && !in_array($ticket->status, [TicketStatus::PendingApproval, TicketStatus::Rejected, TicketStatus::Closed]),
-                'canUpdateStatus' => $isAssignee
-                    && !in_array($ticket->status, [TicketStatus::PendingApproval, TicketStatus::Rejected, TicketStatus::Closed, TicketStatus::Done]),
-                'canApproveReject' => ($hasManagerPower && ($ticket->status === TicketStatus::PendingApproval || $ticket->status === TicketStatus::Done))
-                    || ($ticket->status === TicketStatus::Done && $ticket->user_id === $user->id),
-                'canRate' => $ticket->status === TicketStatus::Closed
-                    && $ticket->user_id === $user->id
-                    && $ticket->ratings()->where('user_id', $user->id)->doesntExist(),
-                'hasRated' => $ticket->user_id === $user->id
-                    && $ticket->ratings()->where('user_id', $user->id)->exists(),
-                'isRequestor' => $ticket->user_id === $user->id,
-                'canDelete' => $user->can('ticket.delete'),
-                'canUpdateAsset' => $user->can('updateAsset', $ticket),
-                'canUpdateDeadline' => $user->can('updateDeadline', $ticket),
-                'canUpdatePriority' => $user->can('updatePriority', $ticket),
-            ],
+            'abilities' => $ticket->getAbilities($user),
+            'hasManagerPower' => $hasManagerPower,
         ]);
+    }
+
+    public function downloadProductsPdf(Ticket $ticket)
+    {
+        $ticket->load(['productRequests.product.childCategory', 'productRequests.sparePart.category', 'department', 'subCategory', 'mainCategory', 'requestorBranch']);
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.requested-products', compact('ticket'));
+
+        $filename = 'requested-products-ticket-' . $ticket->id . '.pdf';
+
+        return $pdf->download($filename);
     }
 
     public function destroy(Ticket $ticket)

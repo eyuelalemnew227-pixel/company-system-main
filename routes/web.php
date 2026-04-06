@@ -32,6 +32,8 @@ use App\Http\Controllers\{
     EvaluationCategoryController,
     ExternalLinkController,
     ExternalLinkSectionController,
+    SparePartCategoryController,
+    SparePartController,
 };
 
 Route::get('/', fn() => Inertia::render('welcome'))->name('home');
@@ -129,6 +131,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Products
     Route::middleware('permission:view products')->group(function () {
+        Route::patch('products/{product}/toggle-purchasable', [\App\Http\Controllers\ProductController::class, 'togglePurchasable'])->name('products.toggle-purchasable');
         Route::resource('products', \App\Http\Controllers\ProductController::class)->except(['show']);
     });
 
@@ -279,6 +282,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('tickets/{ticket}', [\App\Http\Controllers\TicketController::class, 'show'])
         ->name('tickets.show')
         ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
+    Route::get('tickets/{ticket}/download-products', [\App\Http\Controllers\TicketController::class, 'downloadProductsPdf'])
+        ->name('tickets.download-products')
+        ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
     Route::post('tickets/{ticket}/status', [\App\Http\Controllers\TicketController::class, 'updateStatus'])
         ->name('tickets.status')
         ->middleware('permission:ticket.status.update|ticket.approve|ticket.reject|ticket.done|ticket.pending|ticket.escalate|ticket.close');
@@ -317,11 +323,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Ticket taxonomy management
     Route::middleware('permission:ticket.manage.taxonomy')->group(function () {
-        Route::get('ticket-settings', [\App\Http\Controllers\TicketSettingsController::class, 'index'])->name('ticket-settings.index');
+        Route::get('ticket-settings', function () {
+            return redirect()->route('ticket-settings.main-categories');
+        })->name('ticket-settings.index');
+
+        Route::get('ticket-settings/main-categories', [\App\Http\Controllers\TicketSettingsController::class, 'mainCategories'])->name('ticket-settings.main-categories');
+        Route::get('ticket-settings/sub-categories', [\App\Http\Controllers\TicketSettingsController::class, 'subCategories'])->name('ticket-settings.sub-categories');
+        Route::get('ticket-settings/assets', [\App\Http\Controllers\TicketSettingsController::class, 'assets'])->name('ticket-settings.assets');
+
+        Route::patch('ticket-sub-categories/{ticketSubCategory}/toggle-status', [\App\Http\Controllers\TicketSubCategoryController::class, 'toggleStatus'])->name('ticket-sub-categories.toggle-status');
+
         Route::resource('ticket-main-categories', \App\Http\Controllers\TicketMainCategoryController::class)->except(['show']);
         Route::resource('ticket-sub-categories', \App\Http\Controllers\TicketSubCategoryController::class)->except(['show']);
         Route::resource('ticket-assets', \App\Http\Controllers\TicketAssetController::class)->except(['show']);
     });
+
+    // Spare Part Management
+    Route::resource('spare-part-categories', SparePartCategoryController::class)->except(['show']);
+    Route::resource('spare-parts', SparePartController::class)->except(['show']);
 });
 
 require __DIR__ . '/settings.php';

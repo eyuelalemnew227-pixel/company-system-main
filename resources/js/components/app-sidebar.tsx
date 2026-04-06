@@ -177,6 +177,14 @@ const baseSections: NavSection[] = [
       { title: 'Collection Days', href: '/settings/collection-days', icon: CalendarDays, permission: 'view collection days' },
     ],
   },
+  {
+    label: 'Spare Parts',
+    icon: Warehouse,
+    items: [
+      { title: 'Categories', href: '/spare-part-categories', icon: FolderKey, permission: 'view spare part categories' },
+      { title: 'Spare Parts', href: '/spare-parts', icon: Package, permission: 'view spare parts' },
+    ],
+  },
 ];
 const footerNavItems: NavItem[] = [];
 

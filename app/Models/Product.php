@@ -27,6 +27,7 @@ class Product extends Model
         'variance_percentage',
         'measurement',
         'status',
+        'is_purchasable',
     ];
 
     protected $casts = [
@@ -35,6 +36,7 @@ class Product extends Model
         'max_count_threshold' => 'decimal:2',
         'variance_percentage' => 'decimal:2',
         'measurement' => 'decimal:2',
+        'is_purchasable' => 'boolean',
     ];
 
     /**
