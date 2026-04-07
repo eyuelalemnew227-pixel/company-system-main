@@ -618,7 +618,7 @@ export default function TicketShow() {
                   </Card>
                 )}
 
-                {ticket.status === 'hold' && (ticket.mainCategory?.name ?? ticket.main_category?.name ?? '').toLowerCase().includes('repair') && abilities.canUpdateStatus && (
+                {ticket.status === 'hold' && (ticket.mainCategory?.name ?? ticket.main_category?.name ?? '').toLowerCase().includes('repair') && (abilities.canUpdateStatus || abilities.hasManagerPower) && (
                   <Card className="border-orange-200 shadow-sm overflow-hidden bg-orange-50/30">
                     <CardHeader className="p-4 pb-2">
                       <CardTitle className="text-sm font-bold flex items-center gap-2 text-orange-700">
@@ -662,32 +662,34 @@ export default function TicketShow() {
                         Assign Representative
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4 pt-2 space-y-3">
-                      <select
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                        value={assignData.assigned_to}
-                        onChange={(e) => setAssignData('assigned_to', e.target.value)}
-                        required
-                      >
-                        <option value="">Select staff member</option>
-                        {staffOptions.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          postAssign(route('tickets.assign', ticket.id));
-                        }}
-                        size="sm"
-                        disabled={assigning}
-                        variant="secondary"
-                        className="w-full"
-                      >
-                        Set Assignee
-                      </Button>
+                    <CardContent className="p-4 pt-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <select
+                          className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                          value={assignData.assigned_to}
+                          onChange={(e) => setAssignData('assigned_to', e.target.value)}
+                          required
+                        >
+                          <option value="">Select staff member</option>
+                          {staffOptions.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            postAssign(route('tickets.assign', ticket.id));
+                          }}
+                          size="sm"
+                          disabled={assigning}
+                          className="bg-blue-600 hover:bg-blue-700 text-white font-bold whitespace-nowrap"
+                        >
+                          <UserPlus className="mr-2 h-3.5 w-3.5" />
+                          Set Assignee
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 )}
@@ -729,30 +731,32 @@ export default function TicketShow() {
                         Manage Priority
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4 pt-2 space-y-3">
-                      <div className="space-y-1">
-                        <Label htmlFor="priority" className="text-[10px] text-muted-foreground uppercase font-bold px-1">Set Priority Level</Label>
-                        <Select value={priorityData.priority} onValueChange={(v) => setPriorityData('priority', v)}>
-                          <SelectTrigger id="priority" className="h-9 text-sm bg-background/50">
-                            <SelectValue placeholder="Select priority" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {priorityOptions.map((opt) => (
-                              <SelectItem key={opt} value={opt}>
-                                {opt.charAt(0).toUpperCase() + opt.slice(1)}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                    <CardContent className="p-4 pt-2">
+                      <div className="flex flex-col sm:flex-row gap-2 items-end">
+                        <div className="flex-1 w-full space-y-1">
+                          <Label htmlFor="priority" className="text-[10px] text-muted-foreground uppercase font-bold px-1">Priority Level</Label>
+                          <Select value={priorityData.priority} onValueChange={(v) => setPriorityData('priority', v)}>
+                            <SelectTrigger id="priority" className="h-9 text-sm bg-background/50">
+                              <SelectValue placeholder="Select priority" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {priorityOptions.map((opt) => (
+                                <SelectItem key={opt} value={opt}>
+                                  {opt.charAt(0).toUpperCase() + opt.slice(1)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          size="sm"
+                          className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white font-bold h-9"
+                          onClick={submitPriority}
+                          disabled={updatingPriority}
+                        >
+                          Update
+                        </Button>
                       </div>
-                      <Button
-                        size="sm"
-                        className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-                        onClick={submitPriority}
-                        disabled={updatingPriority}
-                      >
-                        Update Priority
-                      </Button>
                     </CardContent>
                   </Card>
                 )}

@@ -12,9 +12,11 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { useMemo, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Layers, Package, ShoppingCart, Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Plus, Trash2 } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 
 type Option = {
   id: number;
@@ -79,12 +81,12 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
     description: '',
     severity: severities[0] ?? '',
     preferred_deadline: '',
-    products: [] as { product_id: string; quantity: string; uom: string; product_name?: string; product_code?: string }[],
+    products: [] as { product_id: string; quantity: string; uom: string; product_name?: string; product_code?: string; sub_category_id: string; sub_category_name: string }[],
     parent_ticket_id: parentTicketId ? String(parentTicketId) : '',
     is_spare_part_request: isSparePartRequest ?? false,
   });
   const [assetOpen, setAssetOpen] = useState(false);
-  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [productSearch, setProductSearch] = useState('');
 
   useEffect(() => {
@@ -136,6 +138,21 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
     [effectiveFilteredSub, data.ticket_sub_category_id]
   );
 
+  const groupedAddedProducts = useMemo(() => {
+    return data.products.reduce((acc, p) => {
+      if (!acc[p.sub_category_id]) acc[p.sub_category_id] = { name: p.sub_category_name, items: [] };
+      acc[p.sub_category_id].items.push(p);
+      return acc;
+    }, {} as Record<string, { name: string; items: typeof data.products }>);
+  }, [data.products]);
+
+  const toggleCategory = (catId: string) => {
+    const newSet = new Set(expandedCats);
+    if (newSet.has(catId)) newSet.delete(catId);
+    else newSet.add(catId);
+    setExpandedCats(newSet);
+  };
+
   // In spare part mode, filter spare parts by their category instead of products
   const filteredProducts = useMemo(
     () => {
@@ -168,15 +185,16 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
     [isSparePartRequest, spareParts, products, selectedSub, productSearch, data.ticket_sub_category_id]
   );
 
-  const removeProduct = (index: number) => {
-    const newProducts = [...data.products];
-    newProducts.splice(index, 1);
+  const removeProduct = (productId: string) => {
+    const newProducts = data.products.filter(p => String(p.product_id) !== String(productId));
     setData('products', newProducts);
   };
 
   const updateProductQuantity = (productId: string, quantity: string, productName: string, productCode: string) => {
     const newProducts = [...data.products];
     const index = newProducts.findIndex(p => String(p.product_id) === String(productId));
+    const subId = String(data.ticket_sub_category_id);
+    const subName = selectedEffectiveSub?.name || selectedSub?.name || 'Unknown Category';
 
     if (quantity && parseFloat(quantity) > 0) {
       if (index > -1) {
@@ -187,7 +205,9 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
           quantity,
           uom: '',
           product_name: productName,
-          product_code: productCode
+          product_code: productCode,
+          sub_category_id: subId,
+          sub_category_name: subName
         });
       }
     } else if (index > -1) {
@@ -196,6 +216,7 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
 
     setData('products', newProducts);
   };
+
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -362,131 +383,187 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
                 </Field>
               </div>
 
-              {String(data.ticket_main_category_id) === String(purchaseRequestCatId) && (selectedEffectiveSub || selectedSub) && (
-                <div className="space-y-4 rounded-lg border p-4 bg-muted/20">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold">
-                      {isSparePartRequest ? 'Requested Spare Parts' : 'Requested Products'} ({(selectedEffectiveSub || selectedSub)?.name})
-                    </h3>
-                    <Dialog open={productModalOpen} onOpenChange={setProductModalOpen}>
-                      <DialogTrigger asChild>
-                        <Button type="button" variant="outline" size="sm">
-                          <Plus className="mr-2 h-4 w-4" /> {isSparePartRequest ? 'Select Spare Parts' : 'Select Products'}
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-5xl max-h-[90vh] flex flex-col p-0">
-                        <DialogHeader className="p-6 pb-2">
-                          <DialogTitle>{isSparePartRequest ? 'Select Spare Parts' : 'Select Products'} - {(selectedEffectiveSub || selectedSub)?.name}</DialogTitle>
-                          <div className="pt-4">
-                            <Input
-                              placeholder="Search products..."
-                              value={productSearch}
-                              onChange={(e) => setProductSearch(e.target.value)}
-                            />
-                          </div>
-                        </DialogHeader>
-                        <div className="flex-1 overflow-y-auto p-6 pt-2">
-                          {filteredProducts.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {filteredProducts.map((p) => {
-                                const selected = data.products.find(sp => String(sp.product_id) === String(p.id));
-                                return (
-                                  <div key={p.id} className={cn(
-                                    "flex items-center justify-between p-3 rounded-lg border bg-background transition-colors",
-                                    selected ? "border-primary ring-1 ring-primary/20" : "hover:border-primary/50"
-                                  )}>
-                                    <div className="flex-1 min-w-0 pr-4">
-                                      <div className="font-medium truncate">{p.product_name}</div>
-                                      <div className="text-[10px] text-muted-foreground truncate">{p.product_code}</div>
+              {String(data.ticket_main_category_id) === String(purchaseRequestCatId) && (
+                <div className="space-y-6">
+                  {/* Added Items (Collapsed by Category) */}
+                  {Object.keys(groupedAddedProducts).length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-primary font-bold px-1">
+                        <ShoppingCart className="h-4 w-4" />
+                        <h3>Added Items</h3>
+                      </div>
+                      <div className="grid gap-3">
+                        {Object.entries(groupedAddedProducts).map(([catId, { name, items }]) => (
+                          <Card key={catId} className="border-primary/20 shadow-sm overflow-hidden">
+                            <Collapsible
+                              open={expandedCats.has(catId)}
+                              onOpenChange={() => toggleCategory(catId)}
+                            >
+                              <CollapsibleTrigger asChild>
+                                <div className="flex items-center justify-between p-3 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors">
+                                  <div className="flex items-center gap-3">
+                                    <div className="p-1.5 rounded-md bg-primary/10 text-primary">
+                                      <Layers className="h-3.5 w-3.5" />
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                      <Input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        className="h-8 w-20 text-right font-mono"
-                                        value={selected?.quantity || ''}
-                                        placeholder="0"
-                                        onChange={(e) => updateProductQuantity(String(p.id), e.target.value, p.product_name, p.product_code)}
-                                      />
+                                    <div>
+                                      <span className="text-sm font-bold">{name}</span>
+                                      <Badge variant="secondary" className="ml-2 bg-background text-[10px] h-5 px-1.5">
+                                        {items.length} {items.length === 1 ? 'item' : 'items'}
+                                      </Badge>
                                     </div>
                                   </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="py-12 text-center text-muted-foreground italic">
-                              No products found.
-                            </div>
-                          )}
-                        </div>
-                        <DialogFooter className="p-6 pt-2 bg-muted/30">
-                          <div className="flex items-center justify-between w-full">
-                            <div className="text-sm font-medium">
-                              {data.products.length} {isSparePartRequest ? 'spare parts' : 'products'} selected
-                            </div>
-                            <Button type="button" onClick={() => setProductModalOpen(false)}>
-                              Done
-                            </Button>
-                          </div>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                  </div>
-
-                  {data.products.length > 0 ? (
-                    <div className="border rounded-md overflow-hidden bg-background">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/50 border-b">
-                          <tr>
-                            <th className="px-3 py-2 text-left font-semibold">Product</th>
-                            <th className="px-3 py-2 text-center font-semibold w-24">Quantity</th>
-                            <th className="px-3 py-2 text-right font-semibold w-12"></th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {data.products.map((p, idx) => (
-                            <tr key={idx} className="hover:bg-muted/10 transition-colors">
-                              <td className="px-3 py-2">
-                                <div className="font-medium">{p.product_name}</div>
-                                <div className="text-[10px] text-muted-foreground">{p.product_code}</div>
-                              </td>
-                              <td className="px-3 py-2 text-center">
-                                <Input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  className="h-8 text-right font-mono w-24 ml-auto"
-                                  value={p.quantity}
-                                  onChange={(e) => updateProductQuantity(p.product_id, e.target.value, p.product_name || '', p.product_code || '')}
-                                  required
-                                />
-                              </td>
-                              <td className="px-3 py-2 text-right">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive hover:bg-destructive/10"
-                                  onClick={() => removeProduct(idx)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="border border-dashed rounded-md p-8 text-center bg-background/50">
-                      <p className="text-xs text-muted-foreground italic">
-                        No products selected yet. Click "Select Products" to begin.
-                      </p>
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const newProducts = data.products.filter(p => String(p.sub_category_id) !== String(catId));
+                                        setData('products', newProducts);
+                                      }}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                    {expandedCats.has(catId) ? (
+                                      <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                                    ) : (
+                                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                    )}
+                                  </div>
+                                </div>
+                              </CollapsibleTrigger>
+                              <CollapsibleContent>
+                                <div className="p-0 border-t bg-background">
+                                  <Table>
+                                    <TableHeader className="bg-muted/30">
+                                      <TableRow className="hover:bg-transparent h-8">
+                                        <TableHead className="h-8 text-[10px] font-bold uppercase tracking-wider pl-4">Product</TableHead>
+                                        <TableHead className="h-8 text-[10px] font-bold uppercase tracking-wider text-right pr-4">Quantity</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {items.map((item, idx) => (
+                                        <TableRow key={idx} className="h-10 hover:bg-muted/5">
+                                          <TableCell className="py-2 pl-4">
+                                            <div className="font-medium text-xs">{item.product_name}</div>
+                                            <div className="text-[9px] text-muted-foreground font-mono">{item.product_code}</div>
+                                          </TableCell>
+                                          <TableCell className="py-2 text-right font-mono text-xs pr-4 font-bold text-primary flex items-center justify-end gap-2">
+                                            {item.quantity}
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="icon"
+                                              className="h-6 w-6 text-destructive hover:bg-destructive/10"
+                                              onClick={() => removeProduct(item.product_id)}
+                                            >
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                              </CollapsibleContent>
+                            </Collapsible>
+                          </Card>
+                        ))}
+                      </div>
                     </div>
                   )}
-                  {errors.products && <p className="text-sm text-red-600">{errors.products}</p>}
-                  {(errors as any)['products.*.quantity'] && <p className="text-sm text-red-600">Please provide a valid quantity for all products.</p>}
+
+                  {/* Current Selection Area */}
+                  {(selectedEffectiveSub || selectedSub) && (
+                    <div className="space-y-4 rounded-xl border p-5 bg-card shadow-sm border-primary/10">
+                      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-lg bg-primary text-primary-foreground">
+                            <Plus className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-bold leading-none">
+                              {isSparePartRequest ? 'Select Spare Parts' : 'Select Products'}
+                            </h3>
+                            <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+                              <Package className="h-3 w-3" />
+                              {(selectedEffectiveSub || selectedSub)?.name}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            placeholder="Search in this category..."
+                            className="h-9 text-xs w-full sm:w-64"
+                            value={productSearch}
+                            onChange={(e) => setProductSearch(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="rounded-lg border overflow-hidden">
+                        <Table>
+                          <TableHeader className="bg-muted/50">
+                            <TableRow className="hover:bg-transparent">
+                              <TableHead className="text-[10px] font-bold uppercase tracking-widest pl-4">Product Name & Code</TableHead>
+                              <TableHead className="text-[10px] font-bold uppercase tracking-widest text-center w-[120px]">Quantity</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {filteredProducts.length > 0 ? (
+                              filteredProducts.map((p) => {
+                                const selected = data.products.find(sp => String(sp.product_id) === String(p.id));
+                                return (
+                                  <TableRow key={p.id} className={cn(
+                                    "transition-colors group",
+                                    selected ? "bg-primary/5 hover:bg-primary/10" : "hover:bg-muted/5"
+                                  )}>
+                                    <TableCell className="py-3 pl-4">
+                                      <div className="flex flex-col gap-0.5">
+                                        <span className="font-bold text-xs group-hover:text-primary transition-colors">
+                                          {p.product_name}
+                                        </span>
+                                        <span className="text-[10px] text-muted-foreground font-mono">
+                                          {p.product_code}
+                                        </span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="py-2 text-center group-hover:bg-background/50 transition-colors">
+                                      <div className="flex justify-center">
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          className={cn(
+                                            "h-8 w-24 text-right font-mono text-xs transition-all",
+                                            selected ? "border-primary ring-1 ring-primary/20 bg-background" : "border-muted-foreground/20"
+                                          )}
+                                          value={selected?.quantity || ''}
+                                          placeholder="0.00"
+                                          onChange={(e) => updateProductQuantity(String(p.id), e.target.value, p.product_name, p.product_code)}
+                                        />
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })
+                            ) : (
+                              <TableRow>
+                                <TableCell colSpan={2} className="h-32 text-center text-muted-foreground italic">
+                                  No items found matching your search.
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {errors.products && <p className="text-xs font-bold text-destructive">{errors.products}</p>}
+                      {(errors as any)['products.*.quantity'] && <p className="text-xs font-bold text-destructive">Please ensure all quantities are valid numbers.</p>}
+                    </div>
+                  )}
                 </div>
               )}
 
