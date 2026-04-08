@@ -37,7 +37,7 @@ class PreOrderCancelledGeezSMSNotification extends Notification
         }
 
         $message = $this->generateSMSMessage();
-        
+
         return $this->smsService->sendMessage(
             $this->preOrder->phone_number,
             $message
@@ -58,6 +58,9 @@ class PreOrderCancelledGeezSMSNotification extends Notification
         }
 
         $replacements = [
+            '{client_name}' => $this->preOrder->client_name,
+            '{first_name}' => $this->preOrder->client_name,
+            '{last_name}' => '',
             '{order_method}' => $orderMethod,
         ];
 

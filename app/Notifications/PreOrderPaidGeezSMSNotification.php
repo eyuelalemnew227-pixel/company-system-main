@@ -69,6 +69,8 @@ class PreOrderPaidGeezSMSNotification extends Notification
 
         $replacements = [
             '{client_name}' => $this->preOrder->client_name,
+            '{first_name}' => $this->preOrder->client_name,
+            '{last_name}' => '',
             '{order_method}' => $orderMethod,
             '{order_number}' => $this->preOrder->order_number,
             '{products}' => $products,
