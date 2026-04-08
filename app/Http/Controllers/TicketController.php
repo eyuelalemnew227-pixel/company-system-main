@@ -25,6 +25,7 @@ class TicketController extends Controller
 {
     private const PURCHASE_DEPT_ID = 18068;
     private const PURCHASE_REQUEST_CAT_ID = 22;
+    private const SPARE_PART_PURCHASE_REQUEST_CAT_ID = 23;
 
     public function __construct(
         private readonly TicketActionService $actionService,
@@ -95,6 +96,9 @@ class TicketController extends Controller
     {
         $this->authorize('create', Ticket::class);
 
+        $isSparePartRequest = $request->boolean('spare_part_request');
+        $purchaseRequestCatId = $isSparePartRequest ? self::SPARE_PART_PURCHASE_REQUEST_CAT_ID : self::PURCHASE_REQUEST_CAT_ID;
+
         // Synchronize ChildCategories for Purchase Request category if it exists
         if (TicketMainCategory::where('id', self::PURCHASE_REQUEST_CAT_ID)->exists()) {
             $childCategories = \App\Models\ChildCategory::all();
@@ -113,15 +117,13 @@ class TicketController extends Controller
             }
         }
 
-        $isSparePartRequest = $request->boolean('spare_part_request');
-
         // Synchronize Spare Part Categories as TicketSubCategories for Spare Part Mode
         $sparePartSubCategories = [];
         if ($isSparePartRequest) {
             $spareCats = \App\Models\SparePartCategory::all();
             foreach ($spareCats as $sc) {
                 $sub = TicketSubCategory::updateOrCreate([
-                    'ticket_main_category_id' => self::PURCHASE_REQUEST_CAT_ID,
+                    'ticket_main_category_id' => self::SPARE_PART_PURCHASE_REQUEST_CAT_ID,
                     'spare_part_category_id' => $sc->id,
                 ], [
                     'name' => $sc->name,
@@ -149,7 +151,7 @@ class TicketController extends Controller
             'assets' => TicketAsset::where('is_active', true)->orderBy('name')->get(),
             'severities' => array_column(TicketSeverity::cases(), 'value'),
             'products' => \App\Models\Product::where('status', 'Active')->where('is_purchasable', true)->orderBy('product_name')->get(['id', 'product_name', 'product_code', 'child_category_id']),
-            'purchaseRequestCatId' => self::PURCHASE_REQUEST_CAT_ID,
+            'purchaseRequestCatId' => $purchaseRequestCatId,
             'purchaseDeptId' => self::PURCHASE_DEPT_ID,
             // Spare part request props
             'isSparePartRequest' => $isSparePartRequest,
@@ -188,7 +190,7 @@ class TicketController extends Controller
         }
 
         // Special handling for Purchase Request categories
-        if ($validated['ticket_main_category_id'] == self::PURCHASE_REQUEST_CAT_ID) {
+        if ($validated['ticket_main_category_id'] == self::PURCHASE_REQUEST_CAT_ID || $validated['ticket_main_category_id'] == self::SPARE_PART_PURCHASE_REQUEST_CAT_ID) {
             if (empty($validated['severity'])) {
                 $validated['severity'] = \App\Enums\TicketSeverity::NoImpact->value;
             }

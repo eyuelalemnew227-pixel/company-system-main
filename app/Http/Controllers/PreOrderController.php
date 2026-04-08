@@ -122,11 +122,11 @@ class PreOrderController extends Controller
         $collectionDays = CollectionDay::where('status', 'Active')->orderBy('display_order')->get(['id', 'name']);
         $holidays = Holiday::query()->orderBy('date')->get(['id', 'name']);
         $orderTypes = OrderType::where('status', 'Active')->get(['id', 'name']);
-        
+
         $operators = [];
         $user = auth()->user();
         $isHeadOffice = $user->employee && $user->employee->branch && $user->employee->branch->name === 'Head Office';
-        
+
         if ($user->can('view all pre-orders') && $isHeadOffice) {
             $operators = \App\Models\User::whereHas('preOrders')
                 ->orderBy('name', 'asc')
@@ -229,7 +229,8 @@ class PreOrderController extends Controller
         }
 
         $validated = $request->validate([
-            'client_name' => ['required', 'string', 'max:255'],
+            'first_name' => ['required', 'string', 'max:255'],
+            'last_name' => ['nullable', 'string', 'max:255'],
             'phone_number' => ['required', 'string', 'max:9', new EthiopianPhoneNumber],
             'order_type_id' => ['required', 'integer', 'exists:order_types,id'],
             'collection_day_id' => ['required', 'integer', 'exists:collection_days,id'],
@@ -412,7 +413,7 @@ class PreOrderController extends Controller
                 $canEdit = true;
             }
         }
-        
+
         // Check if order is collected and user has permission to edit collected orders
         if ($preOrder->status === 'Collected' && !$user->can('edit collected pre-orders')) {
             abort(403, 'You do not have permission to edit orders that have already been collected.');
@@ -476,7 +477,7 @@ class PreOrderController extends Controller
                 $canEdit = true;
             }
         }
-        
+
         // Check if order is collected and user has permission to edit collected orders
         if ($preOrder->status === 'Collected' && !$user->can('edit collected pre-orders')) {
             abort(403, 'You do not have permission to edit orders that have already been collected.');
@@ -487,7 +488,8 @@ class PreOrderController extends Controller
         }
 
         $validated = $request->validate([
-            'client_name' => ['required', 'string', 'max:255'],
+            'first_name' => ['required', 'string', 'max:255'],
+            'last_name' => ['nullable', 'string', 'max:255'],
             'phone_number' => ['required', 'string', 'max:9', new EthiopianPhoneNumber],
             'order_type_id' => ['required', 'integer', 'exists:order_types,id'],
             'collection_day_id' => ['required', 'integer', 'exists:collection_days,id'],
@@ -839,7 +841,7 @@ class PreOrderController extends Controller
                     try {
                         $smsNotification = new PreOrderCancelledGeezSMSNotification($order);
                         $smsSent = $smsNotification->sendCustomerSMS();
-                        
+
                         if ($smsSent) {
                             $cancelMsg .= " SMS sent.";
                         } else {
@@ -944,24 +946,24 @@ class PreOrderController extends Controller
             // Send SMS notification to customer using GeezSMS
             if (SmsSettings::isActive()) {
                 try {
-                $smsNotification = new PreOrderPaidGeezSMSNotification($preOrder);
-                $smsSent = $smsNotification->sendCustomerSMS();
+                    $smsNotification = new PreOrderPaidGeezSMSNotification($preOrder);
+                    $smsSent = $smsNotification->sendCustomerSMS();
 
-                if ($smsSent) {
-                    $smsStatus = 'SMS notification sent to customer successfully via GeezSMS.';
-                    Log::info('SMS sent to customer via GeezSMS', [
-                        'pre_order_id' => $preOrder->id,
-                        'order_number' => $preOrder->order_number,
-                        'phone' => $preOrder->phone_number
-                    ]);
-                } else {
-                    $smsStatus = 'SMS notification failed via GeezSMS. Please check GeezSMS configuration.';
-                    Log::warning('SMS sending failed via GeezSMS', [
-                        'pre_order_id' => $preOrder->id,
-                        'order_number' => $preOrder->order_number,
-                        'phone' => $preOrder->phone_number
-                    ]);
-                }
+                    if ($smsSent) {
+                        $smsStatus = 'SMS notification sent to customer successfully via GeezSMS.';
+                        Log::info('SMS sent to customer via GeezSMS', [
+                            'pre_order_id' => $preOrder->id,
+                            'order_number' => $preOrder->order_number,
+                            'phone' => $preOrder->phone_number
+                        ]);
+                    } else {
+                        $smsStatus = 'SMS notification failed via GeezSMS. Please check GeezSMS configuration.';
+                        Log::warning('SMS sending failed via GeezSMS', [
+                            'pre_order_id' => $preOrder->id,
+                            'order_number' => $preOrder->order_number,
+                            'phone' => $preOrder->phone_number
+                        ]);
+                    }
                 } catch (\Exception $e) {
                     Log::error('SMS notification error', ['error' => $e->getMessage()]);
                 }
@@ -996,8 +998,8 @@ class PreOrderController extends Controller
 
     private function generateTelegramMessage(PreOrder $preOrder): string
     {
-        $products = $preOrder->items->map(function($item) {
-             return ($item->product->product_name ?? 'Unknown') . " (" . $item->quantity . ")";
+        $products = $preOrder->items->map(function ($item) {
+            return ($item->product->product_name ?? 'Unknown') . " (" . $item->quantity . ")";
         })->implode(', ');
 
         $orderTypeName = $preOrder->orderType?->name ?? 'Unknown';
@@ -1023,8 +1025,8 @@ class PreOrderController extends Controller
             return $message;
         }
 
-        $branchLocation = !empty($preOrder->collectionBranch?->location) 
-            ? "አድራሻ  ፡ {$preOrder->collectionBranch->location}\n\n" 
+        $branchLocation = !empty($preOrder->collectionBranch?->location)
+            ? "አድራሻ  ፡ {$preOrder->collectionBranch->location}\n\n"
             : "\n";
 
         $replacements = [
@@ -1220,10 +1222,10 @@ class PreOrderController extends Controller
             for ($i = 0; $i < 2; $i++) {
                 $letters .= chr(rand(65, 90));
             }
-            
+
             // Generate 4 random digits
             $numbers = str_pad(rand(0, 9999), 4, '0', STR_PAD_LEFT);
-            
+
             $orderNumber = $letters . $numbers;
         } while (PreOrder::where('order_number', $orderNumber)->exists());
 
