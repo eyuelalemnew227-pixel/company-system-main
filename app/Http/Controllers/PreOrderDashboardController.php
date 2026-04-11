@@ -36,7 +36,7 @@ class PreOrderDashboardController extends Controller
             'branch_id' => $request->query('branch_id'),
             'product_id' => $request->query('product_id'),
             'collection_day_id' => $request->query('collection_day_id'),
-            'holiday_id' => $request->query('holiday_id', $latestHoliday ? (string)$latestHoliday->id : 'all'),
+            'holiday_id' => $request->query('holiday_id', $latestHoliday ? (string) $latestHoliday->id : 'all'),
             'order_type_id' => $request->query('order_type_id'),
         ];
 
@@ -117,7 +117,7 @@ class PreOrderDashboardController extends Controller
 
         // KPI Summary (All status, then converted)
         $summary = $this->getSummaryStats($query->clone());
-        
+
         // Summary table data (All statuses as requested)
         $summaryData = $this->getSummaryTableData($query->clone());
 
@@ -143,7 +143,7 @@ class PreOrderDashboardController extends Controller
             'breakEvenAnalysis' => $this->getBreakEvenData($filters),
         ];
     }
-/**
+    /**
      * Apply filters to the query
      */
     private function applyFilters($query, array $filters): void
@@ -195,6 +195,7 @@ class PreOrderDashboardController extends Controller
             ->selectRaw("
                 COUNT(DISTINCT phone_number) as total_leads,
                 SUM(pre_order_items.quantity) as total_products,
+                SUM(CASE WHEN pre_orders.status IN ('Paid', 'Collected') THEN pre_order_items.quantity ELSE 0 END) as paid_products,
                 COUNT(DISTINCT pre_orders.id) as total_order_count,
                 SUM(CASE WHEN pre_orders.status IN ('Paid', 'Collected') THEN pre_order_items.quantity * pre_order_items.unit_price ELSE 0 END) as total_revenue,
                 COUNT(DISTINCT CASE WHEN pre_orders.status IN ('Paid', 'Collected') THEN phone_number END) as paid_leads,
@@ -212,6 +213,7 @@ class PreOrderDashboardController extends Controller
         return [
             'total_leads' => $totalLeads,
             'total_orders' => $totalProducts, // This is sum of products
+            'paid_products' => (int) $stats->paid_products,
             'total_revenue' => (float) $stats->total_revenue,
             'conversion_rate' => $totalLeads > 0 ? round(($paidLeads / $totalLeads) * 100, 2) : 0,
             'cancellation_rate' => $totalLeads > 0 ? round(($unpaidOnlyLeads / $totalLeads) * 100, 2) : 0,
@@ -553,7 +555,7 @@ class PreOrderDashboardController extends Controller
 
         $dataMap = $hourly->pluck('count', 'hour')->toArray();
         $result = [];
-        
+
         for ($i = 0; $i < 24; $i++) {
             $hourLabel = $i < 12 ? ($i == 0 ? '12 AM' : $i . ' AM') : ($i == 12 ? '12 PM' : ($i - 12) . ' PM');
             $result[] = [
@@ -620,10 +622,10 @@ class PreOrderDashboardController extends Controller
         // 1. Build base query with filters (ignore date-specific filters only)
         $trendFilters = $filters;
         unset($trendFilters['date']);
-        
+
         $baseQuery = PreOrder::query();
         $this->applyFilters($baseQuery, $trendFilters);
-        
+
         // 2. Identify the latest 7 dates with activity
         $activeDates = (clone $baseQuery)
             ->selectRaw('DATE(created_at) as order_date')
@@ -672,7 +674,7 @@ class PreOrderDashboardController extends Controller
         foreach ($activeDates as $dateString) {
             $dateObj = Carbon::parse($dateString);
             $formattedDate = $dateObj->format('M d');
-            
+
             $row = ['date' => $formattedDate];
             foreach ($topProducts as $product) {
                 $item = $data->where('order_date', $dateString)->where('product_name', $product)->first();
@@ -771,15 +773,15 @@ class PreOrderDashboardController extends Controller
 
         // 2. Get Product (Variable) Costs - costs LINKED to specific products
         $variableCostsData = DB::table('pre_order_costs as poc')
-            ->join('pre_order_items as poi', function($join) use ($holidayId) {
+            ->join('pre_order_items as poi', function ($join) use ($holidayId) {
                 $join->on('poc.pre_order_product_id', '=', 'poi.pre_order_product_id')
-                     ->whereExists(function($query) use ($holidayId) {
-                         $query->select(DB::raw(1))
-                               ->from('pre_orders as po')
-                               ->whereRaw('po.id = poi.pre_order_id')
-                               ->where('po.holiday_id', $holidayId)
-                               ->whereIn('po.status', ['Paid', 'Collected']);
-                     });
+                    ->whereExists(function ($query) use ($holidayId) {
+                        $query->select(DB::raw(1))
+                            ->from('pre_orders as po')
+                            ->whereRaw('po.id = poi.pre_order_id')
+                            ->where('po.holiday_id', $holidayId)
+                            ->whereIn('po.status', ['Paid', 'Collected']);
+                    });
             })
             ->where('poc.holiday_id', $holidayId)
             ->whereNotNull('poc.pre_order_product_id')
@@ -800,27 +802,27 @@ class PreOrderDashboardController extends Controller
 
         $totalRevenue = (float) $preOrderData->total_revenue;
         $totalOrders = (int) $preOrderData->total_orders;
-        
+
         // 4. Calculate Margins
         $avgRevenuePerOrder = $totalOrders > 0 ? ($totalRevenue / $totalOrders) : 0;
         $avgVariableCostPerOrder = $totalOrders > 0 ? ($totalVariableCosts / $totalOrders) : 0;
         $contributionMargin = $avgRevenuePerOrder - $avgVariableCostPerOrder;
-        
+
         // 5. Calculate Break-Even
         // Condition: BEP = Fixed Costs / contribution margin
         // If margin <= 0, break-even is unreachable (losing money per order)
         $isUnreachable = $contributionMargin <= 0;
-        $breakEvenOrders = (!$isUnreachable && $contributionMargin > 0) 
-            ? ceil($totalNonProductFixedCosts / $contributionMargin) 
+        $breakEvenOrders = (!$isUnreachable && $contributionMargin > 0)
+            ? ceil($totalNonProductFixedCosts / $contributionMargin)
             : null;
-            
+
         $currentProfit = $totalRevenue - ($totalNonProductFixedCosts + $totalVariableCosts);
         $ordersToBreakEven = ($breakEvenOrders !== null) ? max(0, $breakEvenOrders - $totalOrders) : null;
         $isProfitable = $currentProfit > 0;
 
         // 6. Generate Chart Data (slope-based costs simulation)
         $chartData = [];
-        $displayMax = max($totalOrders, (int)($breakEvenOrders ?? 0)) + 20;
+        $displayMax = max($totalOrders, (int) ($breakEvenOrders ?? 0)) + 20;
         $step = max(1, floor($displayMax / 15));
 
         for ($i = 0; $i <= $displayMax; $i += $step) {
@@ -862,15 +864,15 @@ class PreOrderDashboardController extends Controller
         foreach ($dailyData as $day) {
             // Calculate daily variable (product) costs for this day's orders
             $dailyVariableCosts = DB::table('pre_order_costs as poc')
-                ->join('pre_order_items as poi', function($join) use ($day) {
+                ->join('pre_order_items as poi', function ($join) use ($day) {
                     $join->on('poc.pre_order_product_id', '=', 'poi.pre_order_product_id')
-                         ->whereExists(function($query) use ($day) {
-                             $query->select(DB::raw(1))
-                                   ->from('pre_orders as po')
-                                   ->whereRaw('po.id = poi.pre_order_id')
-                                   ->whereDate('po.created_at', $day->date)
-                                   ->whereIn('po.status', ['Paid', 'Collected']);
-                         });
+                        ->whereExists(function ($query) use ($day) {
+                            $query->select(DB::raw(1))
+                                ->from('pre_orders as po')
+                                ->whereRaw('po.id = poi.pre_order_id')
+                                ->whereDate('po.created_at', $day->date)
+                                ->whereIn('po.status', ['Paid', 'Collected']);
+                        });
                 })
                 ->where('poc.holiday_id', $holidayId)
                 ->whereNotNull('poc.pre_order_product_id')
@@ -879,7 +881,7 @@ class PreOrderDashboardController extends Controller
             $dayRevenue = (float) $day->daily_revenue;
             $dayOrders = (int) $day->daily_orders;
             $dayContribution = $dayRevenue - $dailyVariableCosts;
-            
+
             // Get quantity for the day
             $dayQuantity = DB::table('pre_order_items as poi')
                 ->join('pre_orders as po', 'poi.pre_order_id', '=', 'po.id')

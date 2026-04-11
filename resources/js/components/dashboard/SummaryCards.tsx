@@ -6,6 +6,7 @@ import { DollarSign, ShoppingCart, Users, Building, TrendingUp, Clock, BarChart3
 interface SummaryStats {
     total_leads: number;
     total_orders: number;
+    paid_products: number;
     total_revenue: number;
     conversion_rate: number;
     cancellation_rate: number;
@@ -32,7 +33,7 @@ export default function SummaryCards({ stats }: SummaryCardsProps) {
         {
             title: 'Total Products Ordered',
             value: stats.total_orders.toLocaleString(),
-            description: 'Gross volume (All status)',
+            description: `${stats.paid_products.toLocaleString()} Paid / Collected`,
             icon: ShoppingCart,
 
             color: 'text-indigo-600',
