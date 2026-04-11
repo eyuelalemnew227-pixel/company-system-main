@@ -56,6 +56,13 @@ class MyBranchOrdersController extends Controller
             ->where('collection_branch_id', $userBranch)
             ->whereIn('status', ['Paid', 'Collected']);
 
+        // Filter by active holidays only
+        $query->where(function ($q) {
+            $q->whereHas('holiday', function ($hq) {
+                $hq->where('status', 'Active');
+            })->orWhereNull('holiday_id');
+        });
+
         // Filter by search
         if ($search = $request->query('search')) {
             $normalizedPhone = $this->normalizeSearchPhone($search);
@@ -67,13 +74,13 @@ class MyBranchOrdersController extends Controller
         }
 
         // Filter by collection day
-        if ($collectionDayId = $request->query('collection_day_id')) {
-            $query->where('collection_day_id', $collectionDayId);
+        if ($collectionDayIds = $request->query('collection_day_id')) {
+            $query->whereIn('collection_day_id', (array) $collectionDayIds);
         }
 
         // Filter by order type
-        if ($orderTypeId = $request->query('order_type_id')) {
-            $query->where('order_type_id', $orderTypeId);
+        if ($orderTypeIds = $request->query('order_type_id')) {
+            $query->whereIn('order_type_id', (array) $orderTypeIds);
         }
 
         // Filter by collection status
@@ -173,8 +180,8 @@ class MyBranchOrdersController extends Controller
             'orderTypeStats' => $orderTypeStats,
             'filters' => [
                 'search' => $search,
-                'collection_day_id' => $request->query('collection_day_id'),
-                'order_type_id' => $request->query('order_type_id'),
+                'collection_day_id' => (array) ($request->query('collection_day_id') ?? []),
+                'order_type_id' => (array) ($request->query('order_type_id') ?? []),
                 'collection_status' => $collectionStatus,
                 'sort' => $sortField,
                 'direction' => $sortDirection,
@@ -279,6 +286,13 @@ class MyBranchOrdersController extends Controller
             ->where('collection_branch_id', $userBranch)
             ->whereIn('status', ['Paid', 'Collected']);
 
+        // Filter by active holidays only
+        $query->where(function ($q) {
+            $q->whereHas('holiday', function ($hq) {
+                $hq->where('status', 'Active');
+            })->orWhereNull('holiday_id');
+        });
+
         // Apply same filters as index
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -288,12 +302,12 @@ class MyBranchOrdersController extends Controller
             });
         }
 
-        if ($collectionDayId = $request->query('collection_day_id')) {
-            $query->where('collection_day_id', $collectionDayId);
+        if ($collectionDayIds = $request->query('collection_day_id')) {
+            $query->whereIn('collection_day_id', (array) $collectionDayIds);
         }
 
-        if ($orderTypeId = $request->query('order_type_id')) {
-            $query->where('order_type_id', $orderTypeId);
+        if ($orderTypeIds = $request->query('order_type_id')) {
+            $query->whereIn('order_type_id', (array) $orderTypeIds);
         }
 
         if ($collectionStatus = $request->query('collection_status')) {

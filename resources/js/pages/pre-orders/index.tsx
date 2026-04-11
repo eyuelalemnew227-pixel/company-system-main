@@ -514,6 +514,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                             onChange={setStatus}
                             placeholder="All Statuses"
                             className="w-[200px]"
+                            showSelectedLabels={false}
                         />
                     </div>
 
@@ -525,6 +526,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                             onChange={setBranchId}
                             placeholder="All Branches"
                             className="w-[200px]"
+                            showSelectedLabels={false}
                         />
                     </div>
 
@@ -536,6 +538,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                             onChange={setCollectionDayId}
                             placeholder="All Days"
                             className="w-[180px]"
+                            showSelectedLabels={false}
                         />
                     </div>
 
@@ -547,6 +550,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                             onChange={setHolidayId}
                             placeholder="All Holidays"
                             className="w-[180px]"
+                            showSelectedLabels={false}
                         />
                     </div>
 
@@ -559,6 +563,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                 onChange={setCreatedBy}
                                 placeholder="All Operators"
                                 className="w-[180px]"
+                                showSelectedLabels={false}
                             />
                         </div>
                     )}
@@ -571,6 +576,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                             onChange={setSource}
                             placeholder="All Sources"
                             className="w-[180px]"
+                            showSelectedLabels={false}
                         />
                     </div>
 

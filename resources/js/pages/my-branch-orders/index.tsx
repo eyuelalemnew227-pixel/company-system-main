@@ -10,6 +10,7 @@ import { ActionSuccessModal } from '@/components/pre-order/action-success-modal'
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MultiSelect, type MultiSelectOption } from '@/components/ui/multi-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
 	DropdownMenu,
@@ -37,8 +38,8 @@ type Props = {
 	orderTypeStats: Array<{ name: string; total: number; collected: number; pending: number }>;
 	filters: {
 		search?: string;
-		collection_day_id?: string;
-		order_type_id?: string;
+		collection_day_id?: string[];
+		order_type_id?: string[];
 		collection_status?: string;
 		sort?: string;
 		direction?: 'asc' | 'desc';
@@ -55,8 +56,8 @@ const statusColors = {
 
 export default function Index({ orders, collectionDays, orderTypes, kpis, productStats, orderTypeStats, filters = {}, userBranch }: Props) {
 	const [search, setSearch] = useState(filters?.search || '');
-	const [collectionDayId, setCollectionDayId] = useState(filters?.collection_day_id || 'all');
-	const [orderTypeId, setOrderTypeId] = useState(filters?.order_type_id || 'all');
+	const [collectionDayId, setCollectionDayId] = useState<string[]>(filters?.collection_day_id || []);
+	const [orderTypeId, setOrderTypeId] = useState<string[]>(filters?.order_type_id || []);
 	const [collectionStatus, setCollectionStatus] = useState(filters?.collection_status || 'all');
 
 	const [successModal, setSuccessModal] = useState({
@@ -88,8 +89,8 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 	const handleFilter = () => {
 		const params: any = {};
 		if (search) params.search = search;
-		if (collectionDayId !== 'all') params.collection_day_id = collectionDayId;
-		if (orderTypeId !== 'all') params.order_type_id = orderTypeId;
+		if (collectionDayId.length > 0) params.collection_day_id = collectionDayId;
+		if (orderTypeId.length > 0) params.order_type_id = orderTypeId;
 		if (collectionStatus !== 'all') params.collection_status = collectionStatus;
 
 		// Keep current sort/direction if available in filters
@@ -161,6 +162,16 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 			},
 		);
 	};
+
+	const dayOptions: MultiSelectOption[] = collectionDays.map((day) => ({
+		value: day.id.toString(),
+		label: day.name,
+	}));
+
+	const typeOptions: MultiSelectOption[] = orderTypes.map((type) => ({
+		value: type.id.toString(),
+		label: type.name,
+	}));
 
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
@@ -279,33 +290,29 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 							className="max-w-md"
 						/>
 
-						<Select value={collectionDayId} onValueChange={setCollectionDayId}>
-							<SelectTrigger className="w-[180px]">
-								<SelectValue placeholder="Collection Day" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All Days</SelectItem>
-								{collectionDays.map((day) => (
-									<SelectItem key={day.id} value={day.id.toString()}>
-										{day.name}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+						<div className="flex flex-col gap-1.5">
+							<span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Collection Day</span>
+							<MultiSelect
+								options={dayOptions}
+								selected={collectionDayId}
+								onChange={setCollectionDayId}
+								placeholder="All Days"
+								className="w-[180px]"
+								showSelectedLabels={false}
+							/>
+						</div>
 
-						<Select value={orderTypeId} onValueChange={setOrderTypeId}>
-							<SelectTrigger className="w-[180px]">
-								<SelectValue placeholder="Order Type" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All Types</SelectItem>
-								{orderTypes.map((type) => (
-									<SelectItem key={type.id} value={type.id.toString()}>
-										{type.name}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+						<div className="flex flex-col gap-1.5">
+							<span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground ml-1">Order Type</span>
+							<MultiSelect
+								options={typeOptions}
+								selected={orderTypeId}
+								onChange={setOrderTypeId}
+								placeholder="All Types"
+								className="w-[180px]"
+								showSelectedLabels={false}
+							/>
+						</div>
 
 						<Select value={collectionStatus} onValueChange={setCollectionStatus}>
 							<SelectTrigger className="w-[180px]">
@@ -331,8 +338,10 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 								<DropdownMenuItem onClick={() => {
 									const params = new URLSearchParams();
 									if (search) params.append('search', search);
-									if (collectionDayId !== 'all') params.append('collection_day_id', collectionDayId);
-									if (orderTypeId !== 'all') params.append('order_type_id', orderTypeId);
+
+									collectionDayId.forEach(v => params.append('collection_day_id[]', v));
+									orderTypeId.forEach(v => params.append('order_type_id[]', v));
+
 									if (collectionStatus !== 'all') params.append('collection_status', collectionStatus);
 									if (filters?.sort) params.append('sort', filters.sort);
 									if (filters?.direction) params.append('direction', filters.direction);

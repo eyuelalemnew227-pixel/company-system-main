@@ -21,6 +21,7 @@ interface MultiSelectProps {
   onChange: (selected: string[]) => void;
   placeholder?: string;
   className?: string;
+  showSelectedLabels?: boolean;
 }
 
 export function MultiSelect({
@@ -29,6 +30,7 @@ export function MultiSelect({
   onChange,
   placeholder = 'Select items...',
   className,
+  showSelectedLabels = true,
 }: MultiSelectProps) {
   const [open, setOpen] = React.useState(false);
 
@@ -37,6 +39,14 @@ export function MultiSelect({
       ? selected.filter((item) => item !== value)
       : [...selected, value];
     onChange(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selected.length === options.length) {
+      onChange([]);
+    } else {
+      onChange(options.map((opt) => opt.value));
+    }
   };
 
   const handleRemove = (value: string, e: React.MouseEvent) => {
@@ -55,6 +65,8 @@ export function MultiSelect({
     .map((value) => options.find((opt) => opt.value === value)?.label)
     .filter(Boolean);
 
+  const isAllSelected = selected.length === options.length && options.length > 0;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -62,11 +74,15 @@ export function MultiSelect({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className={cn('w-full justify-between', className)}
+          className={cn('w-full justify-between min-h-10 h-auto py-2', className)}
         >
           <div className="flex flex-wrap gap-1 flex-1 overflow-hidden">
             {selected.length === 0 ? (
               <span className="text-muted-foreground">{placeholder}</span>
+            ) : !showSelectedLabels ? (
+              <span className="text-sm font-medium">
+                {selected.length === options.length ? 'All Selected' : `${selected.length} Selected`}
+              </span>
             ) : (
               <>
                 {selectedLabels.slice(0, 2).map((label, index) => (
@@ -105,6 +121,18 @@ export function MultiSelect({
             </div>
           ) : (
             <div className="space-y-1">
+              <div
+                className="flex items-center space-x-2 p-2 rounded-sm hover:bg-accent cursor-pointer border-b mb-1 pb-2"
+                onClick={handleSelectAll}
+              >
+                <Checkbox
+                  checked={isAllSelected}
+                  onCheckedChange={handleSelectAll}
+                />
+                <label className="flex-1 cursor-pointer text-sm font-medium">
+                  Select All
+                </label>
+              </div>
               {options.map((option) => (
                 <div
                   key={option.value}

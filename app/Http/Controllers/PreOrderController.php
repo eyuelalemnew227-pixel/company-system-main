@@ -43,6 +43,13 @@ class PreOrderController extends Controller
             $query->where('created_by', auth()->id());
         }
 
+        // Filter by active holidays only
+        $query->where(function ($q) {
+            $q->whereHas('holiday', function ($hq) {
+                $hq->where('status', 'Active');
+            })->orWhereNull('holiday_id');
+        });
+
         if ($search = $request->query('search')) {
             $normalizedPhone = $this->normalizeSearchPhone($search);
             $query->where(function ($q) use ($search, $normalizedPhone) {
@@ -141,7 +148,7 @@ class PreOrderController extends Controller
 
         $branches = Branch::orderBy('name', 'asc')->get(['id', 'name']);
         $collectionDays = CollectionDay::where('status', 'Active')->orderBy('display_order')->get(['id', 'name']);
-        $holidays = Holiday::query()->orderBy('date')->get(['id', 'name']);
+        $holidays = Holiday::where('status', 'Active')->orderBy('date')->get(['id', 'name']);
         $orderTypes = OrderType::where('status', 'Active')->get(['id', 'name']);
 
         $operators = [];
@@ -269,20 +276,6 @@ class PreOrderController extends Controller
         // Prepend +251 to phone number (remove any non-digits first)
         $cleanedPhone = preg_replace('/[^0-9]/', '', $validated['phone_number']);
         $validated['phone_number'] = '+251' . $cleanedPhone;
-
-        // Check for duplicate order (same client, phone, and collection day within last 24 hours)
-        $existingOrder = PreOrder::where('client_name', $validated['client_name'])
-            ->where('phone_number', $validated['phone_number'])
-            ->where('collection_day_id', $validated['collection_day_id'])
-            ->where('created_at', '>=', now()->subDay())
-            ->whereIn('status', ['Pending', 'Paid'])
-            ->first();
-
-        if ($existingOrder) {
-            return back()->withErrors([
-                'duplicate' => "A similar order already exists for this client ({$existingOrder->order_number}). Please check before creating a duplicate."
-            ])->withInput();
-        }
 
         DB::beginTransaction();
         try {
@@ -1081,6 +1074,13 @@ class PreOrderController extends Controller
                 'items:id,pre_order_id,pre_order_product_id,quantity',
                 'items.product:id,product_name',
             ]);
+
+        // Filter by active holidays only
+        $query->where(function ($q) {
+            $q->whereHas('holiday', function ($hq) {
+                $hq->where('status', 'Active');
+            })->orWhereNull('holiday_id');
+        });
 
         // Apply filters
         if ($search = $request->query('search')) {
