@@ -186,6 +186,19 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
             <ArrowDown className="ml-2 size-4" />;
     };
 
+    const hasActiveFilters = !!(search || status.length || branchId.length || collectionDayId.length || holidayId.length || createdBy.length || source.length || latePayment !== 'all');
+
+    const resetFilters = () => {
+        setSearch('');
+        setStatus([]);
+        setBranchId([]);
+        setCollectionDayId([]);
+        setHolidayId([]);
+        setCreatedBy([]);
+        setLatePayment('all');
+        setSource([]);
+    };
+
     const handleFilter = () => {
         const params: any = {};
         if (search) params.search = search;
@@ -596,6 +609,17 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                         </div>
                     )}
 
+
+                    {/* Reset Filters */}
+                    {hasActiveFilters && (
+                        <button
+                            onClick={resetFilters}
+                            className="flex items-center gap-1.5 h-9 px-3 rounded-md text-sm font-medium border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 hover:border-red-300 transition-colors self-end"
+                        >
+                            <span className="text-base leading-none">&times;</span>
+                            Reset Filters
+                        </button>
+                    )}
 
                     {/* Export Dropdown - Show only if user has permission to view all pre-orders */}
                     {canViewAllOrders && (
