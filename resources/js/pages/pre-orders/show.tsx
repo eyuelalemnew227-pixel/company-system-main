@@ -201,9 +201,21 @@ export default function Show({ preOrder, userPermissions }: Props) {
 						<h3 className="text-lg font-semibold">Customer Information</h3>
 						<div className="space-y-3">
 							<div>
-								<p className="text-sm text-muted-foreground">Client Name</p>
-								<p className="font-medium">{preOrder.client_name}</p>
+								<p className="text-sm text-muted-foreground">First Name</p>
+								<p className="font-medium">{preOrder.first_name}</p>
 							</div>
+							{preOrder.father_name && (
+								<div>
+									<p className="text-sm text-muted-foreground">Father Name</p>
+									<p className="font-medium">{preOrder.father_name}</p>
+								</div>
+							)}
+							{preOrder.surname && (
+								<div>
+									<p className="text-sm text-muted-foreground">Surname</p>
+									<p className="font-medium">{preOrder.surname}</p>
+								</div>
+							)}
 							<div>
 								<p className="text-sm text-muted-foreground">Phone Number</p>
 								<p className="font-medium">{preOrder.phone_number}</p>

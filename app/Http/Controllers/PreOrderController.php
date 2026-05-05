@@ -57,7 +57,9 @@ class PreOrderController extends Controller
             $normalizedPhone = $this->normalizeSearchPhone($search);
             $query->where(function ($q) use ($search, $normalizedPhone) {
                 $q->where('order_number', 'like', "%{$search}%")
-                    ->orWhere('client_name', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('father_name', 'like', "%{$search}%")
+                    ->orWhere('surname', 'like', "%{$search}%")
                     ->orWhere('phone_number', 'like', "%{$normalizedPhone}%")
                     ->orWhere('voucher_code', 'like', "%{$search}%")
                     ->orWhere('transaction_reference', 'like', "%{$search}%")
@@ -274,7 +276,9 @@ class PreOrderController extends Controller
         $validMethods = $paymentSettings->keys()->toArray();
 
         $validated = $request->validate([
-            'client_name' => ['required', 'string', 'max:255'],
+            'first_name' => ['required', 'string', 'max:255'],
+            'father_name' => ['nullable', 'string', 'max:255'],
+            'surname' => ['nullable', 'string', 'max:255'],
             'phone_number' => ['required', 'string', 'max:9', new EthiopianPhoneNumber],
             'order_type_id' => ['required', 'integer', 'exists:order_types,id'],
             'collection_day_id' => ['required', 'integer', 'exists:collection_days,id'],
@@ -347,7 +351,9 @@ class PreOrderController extends Controller
             // Create pre-order
             $preOrder = PreOrder::create([
                 'order_number' => $orderNumber,
-                'client_name' => $validated['client_name'],
+                'first_name' => $validated['first_name'],
+                'father_name' => $validated['father_name'] ?? null,
+                'surname' => $validated['surname'] ?? null,
                 'phone_number' => $validated['phone_number'],
                 'order_type_id' => $validated['order_type_id'],
                 'collection_day_id' => $validated['collection_day_id'],
@@ -544,7 +550,9 @@ class PreOrderController extends Controller
         $isPaid = in_array($request->input('status'), ['Paid', 'Collected']);
 
         $validated = $request->validate([
-            'client_name' => ['required', 'string', 'max:255'],
+            'first_name' => ['required', 'string', 'max:255'],
+            'father_name' => ['nullable', 'string', 'max:255'],
+            'surname' => ['nullable', 'string', 'max:255'],
             'phone_number' => ['required', 'string', 'max:9', new EthiopianPhoneNumber],
             'order_type_id' => ['required', 'integer', 'exists:order_types,id'],
             'collection_day_id' => ['required', 'integer', 'exists:collection_days,id'],
@@ -658,7 +666,9 @@ class PreOrderController extends Controller
 
             // Prepare update data
             $updateData = [
-                'client_name' => $validated['client_name'],
+                'first_name' => $validated['first_name'],
+                'father_name' => $validated['father_name'] ?? null,
+                'surname' => $validated['surname'] ?? null,
                 'phone_number' => $validated['phone_number'],
                 'order_type_id' => $validated['order_type_id'],
                 'collection_day_id' => $validated['collection_day_id'],
@@ -1153,7 +1163,9 @@ class PreOrderController extends Controller
             $normalizedPhone = $this->normalizeSearchPhone($search);
             $query->where(function ($q) use ($search, $normalizedPhone) {
                 $q->where('order_number', 'like', "%{$search}%")
-                    ->orWhere('client_name', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('father_name', 'like', "%{$search}%")
+                    ->orWhere('surname', 'like', "%{$search}%")
                     ->orWhere('phone_number', 'like', "%{$normalizedPhone}%");
             });
         }

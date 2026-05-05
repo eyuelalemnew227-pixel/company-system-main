@@ -45,7 +45,10 @@ export interface PreOrderItem {
 export interface PreOrder {
     id: number;
     order_number: string;
-    client_name: string;
+    client_name: string; // virtual accessor: first_name + father_name + surname
+    first_name: string;
+    father_name: string | null;
+    surname: string | null;
     phone_number: string;
     order_type_id: number;
     collection_day_id: number;

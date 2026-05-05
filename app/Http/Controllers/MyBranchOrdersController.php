@@ -68,7 +68,9 @@ class MyBranchOrdersController extends Controller
             $normalizedPhone = $this->normalizeSearchPhone($search);
             $query->where(function ($q) use ($search, $normalizedPhone) {
                 $q->where('order_number', 'like', "%{$search}%")
-                    ->orWhere('client_name', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('father_name', 'like', "%{$search}%")
+                    ->orWhere('surname', 'like', "%{$search}%")
                     ->orWhere('phone_number', 'like', "%{$normalizedPhone}%");
             });
         }
@@ -96,7 +98,7 @@ class MyBranchOrdersController extends Controller
         $sortField = $request->query('sort', 'created_at');
         $sortDirection = $request->query('direction', 'desc');
 
-        $allowedSorts = ['id', 'order_number', 'client_name', 'status', 'total_amount', 'created_at', 'collected_at'];
+        $allowedSorts = ['id', 'order_number', 'first_name', 'status', 'total_amount', 'created_at', 'collected_at'];
         if (!in_array($sortField, $allowedSorts)) {
             $sortField = 'created_at';
         }
@@ -297,7 +299,9 @@ class MyBranchOrdersController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('order_number', 'like', "%{$search}%")
-                    ->orWhere('client_name', 'like', "%{$search}%")
+                    ->orWhere('first_name', 'like', "%{$search}%")
+                    ->orWhere('father_name', 'like', "%{$search}%")
+                    ->orWhere('surname', 'like', "%{$search}%")
                     ->orWhere('phone_number', 'like', "%{$search}%");
             });
         }
@@ -322,7 +326,7 @@ class MyBranchOrdersController extends Controller
         $sortField = $request->query('sort', 'created_at');
         $sortDirection = $request->query('direction', 'desc');
 
-        $allowedSorts = ['id', 'order_number', 'client_name', 'status', 'total_amount', 'created_at', 'collected_at'];
+        $allowedSorts = ['id', 'order_number', 'first_name', 'status', 'total_amount', 'created_at', 'collected_at'];
         if (!in_array($sortField, $allowedSorts)) {
             $sortField = 'created_at';
         }

@@ -308,8 +308,8 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
 
             const replacements: Record<string, string> = {
                 '{client_name}': preOrder.client_name,
-                '{first_name}': preOrder.client_name,
-                '{last_name}': '',
+                '{first_name}': preOrder.first_name,
+                '{last_name}': preOrder.surname || '',
                 '{order_method}': orderMethod,
                 '{order_number}': preOrder.order_number,
                 '{products}': products,

@@ -43,7 +43,10 @@ type OrderItem = {
 
 export default function Create({ branches, collectionDays, orderTypes, products, userPermissions, paymentSettings }: Props) {
 	const { data, setData, post, processing, errors } = useForm<{
-		client_name: string;
+		client_name?: string; // kept for backward compat if needed
+		first_name: string;
+		father_name: string;
+		surname: string;
 		phone_number: string;
 		order_type_id: string;
 		collection_day_id: string;
@@ -55,7 +58,9 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 		late_payment: boolean;
 		payment_method: string;
 	}>({
-		client_name: '',
+		first_name: '',
+		father_name: '',
+		surname: '',
 		phone_number: '',
 		order_type_id: '',
 		collection_day_id: '',
@@ -200,19 +205,44 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 					<div className="space-y-4 rounded-lg border p-6">
 						<h3 className="text-lg font-semibold">Customer Information</h3>
 
-						<div className="grid gap-4 md:grid-cols-2">
+						<div className="grid gap-4 md:grid-cols-3">
 							<div className="grid gap-2">
-								<Label htmlFor="client_name">Client Name *</Label>
+								<Label htmlFor="first_name">First Name *</Label>
 								<Input
-									id="client_name"
-									value={data.client_name}
-									onChange={(e) => setData('client_name', e.target.value)}
+									id="first_name"
+									value={data.first_name}
+									onChange={(e) => setData('first_name', e.target.value)}
 									required
-									placeholder="Enter client name"
+									placeholder="First name"
 								/>
-								<InputError message={errors.client_name} />
+								<InputError message={errors.first_name} />
 							</div>
 
+							<div className="grid gap-2">
+								<Label htmlFor="father_name">Father Name</Label>
+								<Input
+									id="father_name"
+									value={data.father_name}
+									onChange={(e) => setData('father_name', e.target.value)}
+									placeholder="Father's name"
+								/>
+								<InputError message={errors.father_name} />
+							</div>
+
+							<div className="grid gap-2">
+								<Label htmlFor="surname">Surname</Label>
+								<Input
+									id="surname"
+									value={data.surname}
+									onChange={(e) => setData('surname', e.target.value)}
+									placeholder="Surname"
+								/>
+								<InputError message={errors.surname} />
+							</div>
+
+						</div>
+
+						<div className="grid gap-4 md:grid-cols-2">
 							<div className="grid gap-2">
 								<Label htmlFor="phone_number">Phone Number *</Label>
 								<div className="flex">
@@ -441,7 +471,7 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 					title={successModal.title}
 					description={successModal.description}
 				/>
-			</div>
-		</AppLayout>
+			</div >
+		</AppLayout >
 	);
 }

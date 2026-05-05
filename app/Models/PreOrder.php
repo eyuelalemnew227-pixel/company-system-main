@@ -13,7 +13,9 @@ class PreOrder extends Model
 
     protected $fillable = [
         'order_number',
-        'client_name',
+        'first_name',
+        'father_name',
+        'surname',
         'phone_number',
         'order_type_id',
         'collection_day_id',
@@ -34,12 +36,26 @@ class PreOrder extends Model
         'payment_slip',
     ];
 
+    protected $appends = ['client_name'];
+
     protected $casts = [
         'total_amount' => 'decimal:2',
         'holiday_id' => 'integer',
         'late_payment' => 'boolean',
-
     ];
+
+    /**
+     * Virtual accessor for backward-compatibility.
+     * Returns the full concatenated name from the three name parts.
+     */
+    public function getClientNameAttribute(): string
+    {
+        return trim(implode(' ', array_filter([
+            $this->first_name,
+            $this->father_name,
+            $this->surname,
+        ])));
+    }
 
     /**
      * @return BelongsTo<OrderType, PreOrder>
