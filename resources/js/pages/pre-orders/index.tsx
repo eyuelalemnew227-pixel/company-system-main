@@ -809,10 +809,12 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                     onClick={() => handleSort('first_name')}
                                 >
                                     <div className="flex items-center">
-                                        Client Name
+                                        First Name
                                         <SortIcon field="first_name" />
                                     </div>
                                 </TableHead>
+                                <TableHead>Father Name</TableHead>
+                                <TableHead>Surname</TableHead>
                                 <TableHead
                                     className="cursor-pointer hover:bg-muted/50"
                                     onClick={() => handleSort('phone_number')}
@@ -874,7 +876,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                             {preOrders.data.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={
-                                        (canViewAllOrders ? 14 : 13) + (canViewAuditTrail ? 3 : 0)
+                                        (canViewAllOrders ? 16 : 15) + (canViewAuditTrail ? 3 : 0)
                                     } className="text-center text-muted-foreground">
                                         No pre-orders found. Click "New Pre-Order" to create one.
                                     </TableCell>
@@ -895,7 +897,9 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                             </TableCell>
                                         )}
                                         <TableCell className="font-medium">{order.order_number}</TableCell>
-                                        <TableCell>{`${order.first_name || ''} ${order.father_name || ''} ${order.surname || ''}`.trim()}</TableCell>
+                                        <TableCell>{order.first_name}</TableCell>
+                                        <TableCell>{order.father_name || '-'}</TableCell>
+                                        <TableCell>{order.surname || '-'}</TableCell>
                                         <TableCell>{order.phone_number}</TableCell>
                                         <TableCell>{order.order_type?.name}</TableCell>
                                         <TableCell>{order.payment_method || '-'}</TableCell>

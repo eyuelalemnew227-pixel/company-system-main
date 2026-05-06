@@ -384,10 +384,12 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 									</TableHead>
 									<TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('first_name')}>
 										<div className="flex items-center">
-											Client Name
+											First Name
 											<SortIcon field="first_name" />
 										</div>
 									</TableHead>
+									<TableHead>Father Name</TableHead>
+									<TableHead>Surname</TableHead>
 									<TableHead>Phone</TableHead>
 									<TableHead>Order Type</TableHead>
 									<TableHead>Collection Day</TableHead>
@@ -405,7 +407,7 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 							<TableBody>
 								{orders.data.length === 0 ? (
 									<TableRow>
-										<TableCell colSpan={9} className="text-center text-muted-foreground">
+										<TableCell colSpan={11} className="text-center text-muted-foreground">
 											No orders found for your branch.
 										</TableCell>
 									</TableRow>
@@ -415,9 +417,9 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 										return (
 											<TableRow key={order.id} className={isCollected ? 'opacity-60' : ''}>
 												<TableCell className={isCollected ? 'line-through' : ''}>{order.order_number}</TableCell>
-												<TableCell className={isCollected ? 'line-through' : ''}>
-													{`${order.first_name || ''} ${order.father_name || ''} ${order.surname || ''}`.trim()}
-												</TableCell>
+												<TableCell className={isCollected ? 'line-through' : ''}>{order.first_name}</TableCell>
+												<TableCell className={isCollected ? 'line-through' : ''}>{order.father_name || '-'}</TableCell>
+												<TableCell className={isCollected ? 'line-through' : ''}>{order.surname || '-'}</TableCell>
 												<TableCell className={isCollected ? 'line-through' : ''}>{order.phone_number}</TableCell>
 
 												<TableCell className={isCollected ? 'line-through' : ''}>
