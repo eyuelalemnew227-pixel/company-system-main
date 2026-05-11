@@ -251,17 +251,15 @@ export default function DashboardPage({ dashboard, filters, options, auth }: Pro
 						</div>
 					</div>
 
-					{/* Filters - Persistent above tabs or inside each? Let's keep them global but grouped */}
-					<Card className="border-none shadow-sm bg-muted/30">
-						<CardContent className="p-4">
-							<DashboardFilters 
-								filters={filters} 
-								options={options} 
-								onExportCsv={handleExportCsv}
+					{/* Filters */}
+					<div className="py-2">
+						<DashboardFilters 
+							filters={filters} 
+							options={options} 
+							onExportCsv={handleExportCsv}
                                 disableAllHolidays={activeTab === 'break-even'}
-							/>
-						</CardContent>
-					</Card>
+						/>
+					</div>
 
 					<TabsContent value="overview" className="space-y-6 animate-in fade-in duration-500">
 						{/* Summary Cards */}
