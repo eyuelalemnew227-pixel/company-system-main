@@ -266,13 +266,13 @@ export default function DashboardPage({ dashboard, filters, options, auth, targe
 					</div>
 
 					<TabsContent value="overview" className="space-y-6 animate-in fade-in duration-500">
+						{/* Summary Cards */}
+						<SummaryCards stats={dashboard.summary} />
+
 						{/* Target KPI Progress Bars */}
 						{targetKpi && targetKpi.length > 0 && (
 							<TargetKpiCard data={targetKpi} holidayName={selectedHolidayName} />
 						)}
-
-						{/* Summary Cards */}
-						<SummaryCards stats={dashboard.summary} />
 
 						{/* Top row of Overview: Funnel and Ordering Time */}
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
