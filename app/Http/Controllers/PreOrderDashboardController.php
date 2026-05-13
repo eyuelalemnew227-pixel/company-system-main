@@ -1104,7 +1104,7 @@ class PreOrderDashboardController extends Controller
             ->get();
 
         $products = $raw->pluck('product_name')->unique()->sort()->values();
-        $channels = ['tr' => 'TR Order', 'telegram' => 'Telegram Bot', 'walkin' => 'Walk-in', 'other' => 'Other'];
+        $channels = ['tr' => 'Operator Orders', 'telegram' => 'Telegram Bot', 'walkin' => 'Walk-in'];
 
         $rows = $products->map(function ($product) use ($raw, $channels) {
             $row = ['name' => $product, 'total_qty' => 0, 'total_amount' => 0];

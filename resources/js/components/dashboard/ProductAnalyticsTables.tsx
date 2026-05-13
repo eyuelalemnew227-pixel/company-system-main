@@ -126,7 +126,6 @@ function ProductByChannelTable({ data }: { data: ProductByChannelData }) {
         tr: 'text-blue-700',
         telegram: 'text-violet-700',
         walkin: 'text-orange-700',
-        other: 'text-gray-500',
     };
 
     return (
