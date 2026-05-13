@@ -146,6 +146,8 @@ class PreOrderDashboardController extends Controller
             'branchMatrix' => $this->getProductBranchMatrixData($salesQuery->clone()),
             'operatorPerformance' => $this->getOperatorPerformanceData($query->clone()),
             'breakEvenAnalysis' => $this->getBreakEvenData($filters),
+            'productByOrderType' => $this->getProductByOrderTypeData($salesQuery->clone()),
+            'productByChannel' => $this->getProductByChannelData($salesQuery->clone()),
         ];
     }
     /**
@@ -1029,6 +1031,97 @@ class PreOrderDashboardController extends Controller
         usort($result, fn($a, $b) => ($b['order_type_id'] !== null) <=> ($a['order_type_id'] !== null));
 
         return $result;
+    }
+
+    /**
+     * Product vs Order Type matrix — qty and amount per product per order type (Paid/Collected only)
+     */
+    private function getProductByOrderTypeData($query): array
+    {
+        $orderTypes = OrderType::orderBy('name')->get(['id', 'name']);
+
+        $data = DB::table('pre_order_items as poi')
+            ->join('pre_orders as po', 'poi.pre_order_id', '=', 'po.id')
+            ->join('pre_order_products as pop', 'poi.pre_order_product_id', '=', 'pop.id')
+            ->whereIn('po.id', $query->select('pre_orders.id'))
+            ->selectRaw("
+                pop.product_name,
+                po.order_type_id,
+                SUM(poi.quantity) as total_qty,
+                SUM(poi.subtotal) as total_amount
+            ")
+            ->groupBy('pop.product_name', 'po.order_type_id')
+            ->get();
+
+        $products = $data->pluck('product_name')->unique()->sort()->values();
+
+        $rows = $products->map(function ($product) use ($data, $orderTypes) {
+            $row = ['name' => $product, 'total_qty' => 0, 'total_amount' => 0];
+            foreach ($orderTypes as $ot) {
+                $item = $data->where('product_name', $product)->where('order_type_id', $ot->id)->first();
+                $row['qty_' . $ot->id] = $item ? (int) $item->total_qty : 0;
+                $row['amount_' . $ot->id] = $item ? (float) $item->total_amount : 0;
+                $row['total_qty'] += $row['qty_' . $ot->id];
+                $row['total_amount'] += $row['amount_' . $ot->id];
+            }
+            return $row;
+        })->values()->toArray();
+
+        return [
+            'orderTypes' => $orderTypes->map(fn($ot) => ['id' => $ot->id, 'name' => $ot->name])->values()->toArray(),
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * Product vs Channel matrix — qty and amount per product per sales channel (TR / Telegram / Walk-in)
+     * Channel detection:
+     *  TR         = transaction_reference NOT NULL AND payment_slip IS NULL AND voucher_code IS NULL
+     *  Telegram   = payment_slip IS NOT NULL
+     *  Walk-in    = voucher_code IS NOT NULL AND voucher_code != ''
+     */
+    private function getProductByChannelData($query): array
+    {
+        // Get all paid/collected order IDs from the base query
+        $baseIds = $query->select('pre_orders.id')->pluck('id');
+
+        $raw = DB::table('pre_order_items as poi')
+            ->join('pre_orders as po', 'poi.pre_order_id', '=', 'po.id')
+            ->join('pre_order_products as pop', 'poi.pre_order_product_id', '=', 'pop.id')
+            ->whereIn('po.id', $baseIds)
+            ->selectRaw("
+                pop.product_name,
+                CASE
+                    WHEN po.payment_slip IS NOT NULL THEN 'telegram'
+                    WHEN po.voucher_code IS NOT NULL AND po.voucher_code != '' THEN 'walkin'
+                    WHEN po.transaction_reference IS NOT NULL THEN 'tr'
+                    ELSE 'other'
+                END as channel,
+                SUM(poi.quantity) as total_qty,
+                SUM(poi.subtotal) as total_amount
+            ")
+            ->groupBy('pop.product_name', 'channel')
+            ->get();
+
+        $products = $raw->pluck('product_name')->unique()->sort()->values();
+        $channels = ['tr' => 'TR Order', 'telegram' => 'Telegram Bot', 'walkin' => 'Walk-in', 'other' => 'Other'];
+
+        $rows = $products->map(function ($product) use ($raw, $channels) {
+            $row = ['name' => $product, 'total_qty' => 0, 'total_amount' => 0];
+            foreach (array_keys($channels) as $ch) {
+                $item = $raw->where('product_name', $product)->where('channel', $ch)->first();
+                $row['qty_' . $ch] = $item ? (int) $item->total_qty : 0;
+                $row['amount_' . $ch] = $item ? (float) $item->total_amount : 0;
+                $row['total_qty'] += $row['qty_' . $ch];
+                $row['total_amount'] += $row['amount_' . $ch];
+            }
+            return $row;
+        })->values()->toArray();
+
+        return [
+            'channels' => $channels,
+            'rows' => $rows,
+        ];
     }
 }
 

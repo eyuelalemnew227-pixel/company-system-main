@@ -15,6 +15,8 @@ import DashboardFilters from '@/components/dashboard/DashboardFilters';
 import MatrixTable from '@/components/dashboard/MatrixTable';
 import OperatorPerformance from '@/components/dashboard/OperatorPerformance';
 import TargetKpiCard, { type TargetKpiEntry } from '@/components/dashboard/TargetKpiCard';
+
+import ProductAnalyticsTables, { type ProductByOrderTypeData, type ProductByChannelData } from '@/components/dashboard/ProductAnalyticsTables';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -144,6 +146,8 @@ type Props = {
 	};
 	targetKpi: TargetKpiEntry[];
 	selectedHolidayName?: string;
+	productByOrderType: ProductByOrderTypeData;
+	productByChannel: ProductByChannelData;
 };
 
 
@@ -152,7 +156,7 @@ type Props = {
 import { router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 
-export default function DashboardPage({ dashboard, filters, options, auth, targetKpi, selectedHolidayName }: Props) {
+export default function DashboardPage({ dashboard, filters, options, auth, targetKpi, selectedHolidayName, productByOrderType, productByChannel }: Props) {
 	const [activeTab, setActiveTab] = useState('overview');
 
 	useEffect(() => {
@@ -305,6 +309,10 @@ export default function DashboardPage({ dashboard, filters, options, auth, targe
 							funnelData={dashboard.funnel}
 							orderingTimeData={dashboard.orderingTime}
 							productTrend={dashboard.productTrend}
+						/>
+						<ProductAnalyticsTables
+							productByOrderType={productByOrderType}
+							productByChannel={productByChannel}
 						/>
 					</TabsContent>
 
