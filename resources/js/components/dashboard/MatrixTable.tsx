@@ -71,6 +71,29 @@ export default function MatrixTable({ title, description, data, firstColumnLabel
                                     </TableRow>
                                 );
                             })}
+
+                            {/* Column totals footer row */}
+                            {(() => {
+                                const colTotals = data.columns.map(col =>
+                                    data.rows.reduce((sum, row) => sum + (row[col] || 0), 0)
+                                );
+                                const grandTotal = colTotals.reduce((s, v) => s + v, 0);
+                                return (
+                                    <TableRow className="bg-muted/40 border-t-2 border-primary/20">
+                                        <TableCell className="font-bold sticky left-0 bg-muted/40 border-r text-sm uppercase tracking-wide">
+                                            Total
+                                        </TableCell>
+                                        {colTotals.map((total, i) => (
+                                            <TableCell key={i} className="text-center font-bold text-primary">
+                                                {total > 0 ? total.toLocaleString() : '-'}
+                                            </TableCell>
+                                        ))}
+                                        <TableCell className="text-center font-bold text-primary bg-primary/10">
+                                            {grandTotal.toLocaleString()}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })()}
                         </TableBody>
                     </Table>
                 </div>
