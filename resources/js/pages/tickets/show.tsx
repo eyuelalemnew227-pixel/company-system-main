@@ -339,6 +339,23 @@ export default function TicketShow() {
                   </div>
                 )}
 
+                <div className="flex flex-col gap-2 border-t pt-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground flex items-center gap-1">
+                      <User className="h-4 w-4" />
+                      Requesting Branch
+                    </span>
+                    <span className="text-sm font-medium">{ticket.requestor_branch?.name ?? ticket.requestorBranch?.name ?? '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Users className="h-4 w-4" />
+                      Requesting Dept
+                    </span>
+                    <span className="text-sm font-medium">{ticket.requestor_department?.name ?? ticket.requestorDepartment?.name ?? '—'}</span>
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-3 border-t pt-3">
                   {ticket.preferred_deadline && (
                     <div className="flex items-center justify-between">
