@@ -157,6 +157,9 @@ class TicketController extends Controller
             'parentTicketId' => $request->integer('parent_ticket_id') ?: null,
             'sparePartCategories' => $sparePartSubCategories,
             'spareParts' => $spareParts,
+            // Beneficiary selection
+            'branches' => \App\Models\Branch::orderBy('name')->get(['id', 'name']),
+            'allDepartments' => Department::orderBy('name')->get(['id', 'name']),
         ]);
     }
 
@@ -237,6 +240,8 @@ class TicketController extends Controller
             'department',
             'requestorBranch',
             'requestorDepartment',
+            'beneficiaryBranch',
+            'beneficiaryDepartment',
             'mainCategory',
             'subCategory',
             'asset',

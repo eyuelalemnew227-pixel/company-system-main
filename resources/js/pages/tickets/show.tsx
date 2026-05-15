@@ -88,6 +88,12 @@ type Ticket = {
   requestor_branch_id?: number | null;
   requestor_branch?: { name: string };
   requestor_department?: { name: string };
+  requestorBranch?: { name: string };
+  requestorDepartment?: { name: string };
+  beneficiary_branch?: { name: string } | null;
+  beneficiaryBranch?: { name: string } | null;
+  beneficiary_department?: { name: string } | null;
+  beneficiaryDepartment?: { name: string } | null;
   activity_logs: Activity[];
   status_history: StatusHistory[];
   preferred_deadline?: string | null;
@@ -344,17 +350,19 @@ export default function TicketShow() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground flex items-center gap-1">
                       <User className="h-4 w-4" />
-                      Requesting Branch
+                      Requested For Branch
                     </span>
-                    <span className="text-sm font-medium">{ticket.requestor_branch?.name ?? ticket.requestorBranch?.name ?? '—'}</span>
+                    <span className="text-sm font-semibold text-primary">{ticket.beneficiary_branch?.name ?? ticket.beneficiaryBranch?.name ?? '—'}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Users className="h-4 w-4" />
-                      Requesting Dept
-                    </span>
-                    <span className="text-sm font-medium">{ticket.requestor_department?.name ?? ticket.requestorDepartment?.name ?? '—'}</span>
-                  </div>
+                  {(ticket.beneficiary_department?.name ?? ticket.beneficiaryDepartment?.name) && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Users className="h-4 w-4" />
+                        Requested For Dept
+                      </span>
+                      <span className="text-sm font-semibold">{ticket.beneficiary_department?.name ?? ticket.beneficiaryDepartment?.name}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-col gap-3 border-t pt-3">

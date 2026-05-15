@@ -31,6 +31,8 @@ class Ticket extends Model
         'requestor_branch_id',
         'requestor_department_id',
         'requestor_phone',
+        'beneficiary_branch_id',
+        'beneficiary_department_id',
         'deadline',
         'status',
         'hold_reason',
@@ -58,6 +60,16 @@ class Ticket extends Model
     public function requestor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function beneficiaryBranch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'beneficiary_branch_id');
+    }
+
+    public function beneficiaryDepartment(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'beneficiary_department_id');
     }
 
     public function department(): BelongsTo

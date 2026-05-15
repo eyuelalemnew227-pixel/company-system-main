@@ -50,6 +50,11 @@ class TicketStoreRequest extends FormRequest
             'products.*.uom' => ['nullable', 'string', 'max:50'],
             'parent_ticket_id' => ['nullable', 'integer', 'exists:tickets,id'],
             'is_spare_part_request' => ['nullable', 'boolean'],
+            'beneficiary_branch_id' => [
+                request('is_spare_part_request') ? 'required' : 'nullable',
+                'exists:branches,id'
+            ],
+            'beneficiary_department_id' => ['nullable', 'exists:departments,id'],
         ];
     }
 }
