@@ -45,9 +45,11 @@ export default function Create({ fiscalYears, fiscalMonths }: Props) {
 
     const handleFiscalYearChange = (value: string) => {
         setSelectedFiscalYear(value);
-        setData('fiscal_year_id', value);
-        // Reset fiscal month when fiscal year changes
-        setData('fiscal_month_id', '');
+        setData((prev) => ({
+            ...prev,
+            fiscal_year_id: value,
+            fiscal_month_id: '',
+        }));
     };
 
     // Filter fiscal months based on selected fiscal year
@@ -109,8 +111,8 @@ export default function Create({ fiscalYears, fiscalMonths }: Props) {
 
                             <div className="space-y-2">
                                 <Label htmlFor="fiscal_month_id">Fiscal Month</Label>
-                                <Select 
-                                    value={data.fiscal_month_id} 
+                                <Select
+                                    value={data.fiscal_month_id}
                                     onValueChange={(value) => setData('fiscal_month_id', value)}
                                     disabled={!selectedFiscalYear}
                                 >
@@ -130,7 +132,7 @@ export default function Create({ fiscalYears, fiscalMonths }: Props) {
 
                             <div className="space-y-2">
                                 <Label htmlFor="status">Status</Label>
-                                <Select value={data.status} onValueChange={(value) => setData('status', value)}>
+                                <Select value={data.status} onValueChange={(value) => setData('status', value as 'active' | 'inactive')}>
                                     <SelectTrigger className={errors.status ? 'border-red-500' : ''}>
                                         <SelectValue placeholder="Select status" />
                                     </SelectTrigger>
