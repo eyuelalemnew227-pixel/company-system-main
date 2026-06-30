@@ -122,6 +122,82 @@ class ExpenseBudgetController extends Controller
         ]);
     }
 
+    public function submissionTracker(): Response
+    {
+        abort_unless(auth()->user()->can('view expense budgets'), 403);
+
+        $branches = Branch::query()
+            ->orderBy('name')
+            ->get(['id', 'name', 'branch_code']);
+
+        $departments = Department::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $years = ExpenseBudget::query()
+            ->distinct()
+            ->orderByDesc('year')
+            ->pluck('year')
+            ->values();
+
+        $frequentExpenseItems = ExpenseItem::query()
+            ->where('frequent_expense', true)
+            ->orderBy('expense_type')
+            ->get(['expense_parent_acc_code', 'expense_type'])
+            ->map(fn (ExpenseItem $item) => [
+                'id' => $item->expense_parent_acc_code,
+                'name' => $item->expense_type,
+            ])
+            ->values();
+
+        $submissionLookup = $this->buildSubmissionLookup(
+            request('month'),
+            request('year'),
+        );
+
+        $trackerBranches = $branches->when(
+            request('branch_id'),
+            fn ($collection, $branchId) => $collection->where('id', (int) $branchId),
+        );
+
+        $trackerDepartments = $departments->when(
+            request('department_id'),
+            fn ($collection, $departmentId) => $collection->where('id', (int) $departmentId),
+        );
+
+        $rows = [];
+
+        foreach ($trackerBranches as $branch) {
+            if ($this->isHeadOfficeBranch($branch)) {
+                foreach ($trackerDepartments as $department) {
+                    $rows[] = $this->buildSubmissionTrackerRow(
+                        $branch,
+                        $department,
+                        $frequentExpenseItems,
+                        $submissionLookup,
+                    );
+                }
+            } elseif (! request('department_id')) {
+                $rows[] = $this->buildSubmissionTrackerRow(
+                    $branch,
+                    null,
+                    $frequentExpenseItems,
+                    $submissionLookup,
+                );
+            }
+        }
+
+        return Inertia::render('Budget/ExpenseBudget/SubmissionTracker', [
+            'rows' => $rows,
+            'frequentExpenseItems' => $frequentExpenseItems,
+            'branches' => $branches,
+            'departments' => $departments,
+            'years' => $years,
+            'request' => request()->only(['branch_id', 'department_id', 'month', 'year']),
+        ]);
+    }
+
     public function create(): Response
     {
         abort_unless(auth()->user()->can('manage expense budgets'), 403);
@@ -491,6 +567,67 @@ class ExpenseBudgetController extends Controller
         return response()->json([
             'expense_item_ids' => $expenseItemIds,
         ]);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, array{id: int, name: string}>  $frequentExpenseItems
+     * @return array{branch: string, department: string, submissions: array<string, bool>}
+     */
+    private function buildSubmissionTrackerRow(
+        Branch $branch,
+        ?Department $department,
+        $frequentExpenseItems,
+        array $submissionLookup,
+    ): array {
+        $departmentKey = $department?->id ?? 0;
+        $submissions = [];
+
+        foreach ($frequentExpenseItems as $expenseItem) {
+            $lookupKey = "{$branch->id}|{$departmentKey}|{$expenseItem['id']}";
+            $submissions[(string) $expenseItem['id']] = isset($submissionLookup[$lookupKey]);
+        }
+
+        return [
+            'branch' => $branch->name,
+            'department' => $department?->name ?? '-',
+            'submissions' => $submissions,
+        ];
+    }
+
+    /**
+     * @return array<string, bool>
+     */
+    private function buildSubmissionLookup(?string $month, ?string $year): array
+    {
+        $items = ExpenseBudgetItem::query()
+            ->whereNotNull('planned_budget')
+            ->whereHas('expenseBudget', function ($query) use ($month, $year) {
+                if ($month && $month !== 'all') {
+                    $query->where('month', $month);
+                }
+
+                if ($year && $year !== 'all') {
+                    $query->where('year', $year);
+                }
+            })
+            ->with(['expenseBudget:id,branch_id,department_id'])
+            ->get(['id', 'expense_budget_id', 'expense_item_id']);
+
+        $lookup = [];
+
+        foreach ($items as $item) {
+            $budget = $item->expenseBudget;
+
+            if (! $budget) {
+                continue;
+            }
+
+            $departmentKey = $budget->department_id ?? 0;
+            $lookupKey = "{$budget->branch_id}|{$departmentKey}|{$item->expense_item_id}";
+            $lookup[$lookupKey] = true;
+        }
+
+        return $lookup;
     }
 
     private function findExpenseBudgetForScope(

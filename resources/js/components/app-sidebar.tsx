@@ -91,6 +91,7 @@ const iconMap = {
   Wallet,
   Plus,
   List,
+  ClipboardCheck,
 } as const;
 
 const baseSections: NavSection[] = [
@@ -207,6 +208,7 @@ const baseSections: NavSection[] = [
         items: [
           { title: 'Add Expense Budget', href: '/budget/expense-budget/create', icon: Plus, permission: 'manage expense budgets' },
           { title: 'View Expense Budget', href: '/budget/expense-budget', icon: List, permission: 'view expense budgets' },
+          { title: 'Expense Submission Tracker', href: '/budget/expense-budget/submission-tracker', icon: ClipboardCheck, permission: 'view expense budgets' },
         ],
       },
     ],
