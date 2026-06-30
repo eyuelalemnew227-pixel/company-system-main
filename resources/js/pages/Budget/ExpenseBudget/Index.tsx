@@ -2,6 +2,14 @@ import TablePagination from '@/components/table-pagination';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Filter, X } from 'lucide-react';
+import { Filter, Trash2, X } from 'lucide-react';
 import { debounce } from 'lodash';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -146,6 +154,7 @@ export default function ExpenseBudgetIndex({ items, branches, departments, years
     const [selectedDepartment, setSelectedDepartment] = useState<string>(request?.department_id ?? 'all');
     const [selectedMonth, setSelectedMonth] = useState<string>(request?.month ?? 'all');
     const [selectedYear, setSelectedYear] = useState<string>(request?.year ?? 'all');
+    const [deleteItemId, setDeleteItemId] = useState<number | null>(null);
 
     const selectedBranchOption = useMemo(
         () => (selectedBranch === 'all' ? null : branches.find((branch) => branch.id.toString() === selectedBranch) ?? null),
@@ -228,10 +237,14 @@ export default function ExpenseBudgetIndex({ items, branches, departments, years
         router.get('/budget/expense-budget', {}, { preserveState: true, replace: true });
     }
 
-    function deleteItem(id: number) {
-        if (confirm('Are you sure you want to delete this expense budget item?')) {
-            router.delete(`/budget/expense-budget/items/${id}`);
+    function confirmDeleteItem() {
+        if (deleteItemId === null) {
+            return;
         }
+
+        router.delete(`/budget/expense-budget/items/${deleteItemId}`, {
+            onSuccess: () => setDeleteItemId(null),
+        });
     }
 
     const hasActiveFilters =
@@ -298,7 +311,7 @@ export default function ExpenseBudgetIndex({ items, branches, departments, years
                                         <SelectItem value="all">All Months</SelectItem>
                                         {ETHIOPIAN_FISCAL_MONTHS.map((month) => (
                                             <SelectItem key={month.value} value={month.value.toString()}>
-                                                {getEthiopianMonthEnglishName(month.value)}
+                                                {month.am}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -345,7 +358,7 @@ export default function ExpenseBudgetIndex({ items, branches, departments, years
                             <TableBody>
                                 {items.data.map((item) => (
                                     <TableRow key={item.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
-                                        <TableCell>{getEthiopianMonthEnglishName(item.month)}</TableCell>
+                                        <TableCell>{ETHIOPIAN_FISCAL_MONTHS.find((month) => month.value === item.month)?.am ?? item.month}</TableCell>
                                         <TableCell>{item.year}</TableCell>
                                         <TableCell>{item.branch ?? 'N/A'}</TableCell>
                                         <TableCell>{item.department ?? '-'}</TableCell>
@@ -372,7 +385,7 @@ export default function ExpenseBudgetIndex({ items, branches, departments, years
                                                         className="m-2"
                                                         variant="destructive"
                                                         size="sm"
-                                                        onClick={() => deleteItem(item.id)}
+                                                        onClick={() => setDeleteItemId(item.id)}
                                                     >
                                                         Delete
                                                     </Button>
@@ -391,6 +404,29 @@ export default function ExpenseBudgetIndex({ items, branches, departments, years
                     )}
                 </Card>
             </div>
+
+            <Dialog open={deleteItemId !== null} onOpenChange={(open) => !open && setDeleteItemId(null)}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-destructive">
+                            <Trash2 className="size-5" />
+                            Delete Expense Budget Item
+                        </DialogTitle>
+                        <DialogDescription className="pt-1">
+                            Are you sure you want to delete this expense budget row? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 mt-2">
+                        <Button variant="ghost" onClick={() => setDeleteItemId(null)}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={confirmDeleteItem}>
+                            <Trash2 className="size-4 mr-1.5" />
+                            Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }
