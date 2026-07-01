@@ -6,6 +6,7 @@ use App\Support\ExpenseBudgetAccess;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\ExpenseBudget;
+use App\Models\ExpenseBudgetActivityLog;
 use App\Models\ExpenseBudgetItem;
 use App\Models\ExpenseItem;
 use App\Models\FiscalMonth;
@@ -648,6 +649,55 @@ class ExpenseBudgetController extends Controller
 
         return response()->json([
             'expense_item_ids' => $expenseItemIds,
+        ]);
+    }
+
+    public function itemActivityLogs(ExpenseBudgetItem $expenseBudgetItem): JsonResponse
+    {
+        abort_unless(ExpenseBudgetAccess::canView(), 403);
+
+        $expenseBudgetItem->load([
+            'expenseItem',
+            'expenseBudget.fiscalYear',
+            'expenseBudget.fiscalMonth',
+            'expenseBudget.branch',
+            'expenseBudget.department',
+        ]);
+
+        $budget = $expenseBudgetItem->expenseBudget;
+
+        $logs = ExpenseBudgetActivityLog::query()
+            ->where('expense_budget_item_id', $expenseBudgetItem->id)
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (ExpenseBudgetActivityLog $log) => [
+                'id' => $log->id,
+                'action' => $log->action,
+                'summary' => $log->summary,
+                'old_values' => $log->old_values,
+                'new_values' => $log->new_values,
+                'meta' => $log->meta,
+                'created_at' => $log->created_at?->toIso8601String(),
+                'user' => $log->user ? [
+                    'id' => $log->user->id,
+                    'name' => $log->user->name,
+                ] : null,
+            ])
+            ->values();
+
+        return response()->json([
+            'item' => [
+                'id' => $expenseBudgetItem->id,
+                'expense_item' => $expenseBudgetItem->expenseItem?->expense_type,
+                'planned_budget' => $expenseBudgetItem->planned_budget,
+                'status' => $expenseBudgetItem->status,
+                'fiscal_year' => $budget?->fiscalYear?->name,
+                'fiscal_month' => $budget?->fiscalMonth?->name,
+                'branch' => $budget?->branch?->name,
+                'department' => $budget?->department?->name,
+            ],
+            'logs' => $logs,
         ]);
     }
 

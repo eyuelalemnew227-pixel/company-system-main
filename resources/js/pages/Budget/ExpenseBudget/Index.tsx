@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Filter, Trash2, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Filter, History, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { debounce } from 'lodash';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -86,6 +86,31 @@ type EditFormState = {
     expense_item_id: number;
     planned_budget: string;
     status: 'draft' | 'submitted' | 'approved';
+};
+
+type ActivityLogEntry = {
+    id: number;
+    action: string;
+    summary: string;
+    old_values: Record<string, unknown> | null;
+    new_values: Record<string, unknown> | null;
+    meta: Record<string, unknown> | null;
+    created_at: string;
+    user: { id: number; name: string } | null;
+};
+
+type ActivityLogResponse = {
+    item: {
+        id: number;
+        expense_item: string | null;
+        planned_budget: string | number | null;
+        status: string;
+        fiscal_year: string | null;
+        fiscal_month: string | null;
+        branch: string | null;
+        department: string | null;
+    };
+    logs: ActivityLogEntry[];
 };
 
 interface ExpenseBudgetList extends Pagination {
@@ -159,6 +184,33 @@ function getStatusClassName(status: string): string {
     }
 }
 
+function formatActivityAction(action: string): string {
+    return action
+        .split('_')
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
+
+function getActivityIcon(action: string) {
+    if (action.includes('created')) {
+        return Plus;
+    }
+
+    if (action.includes('deleted')) {
+        return Trash2;
+    }
+
+    if (action.includes('updated')) {
+        return Pencil;
+    }
+
+    return History;
+}
+
+function formatActivityTimestamp(value: string): string {
+    return new Date(value).toLocaleString();
+}
+
 function buildFilterParams(
     search: string,
     selectedBranch: string,
@@ -217,6 +269,9 @@ export default function ExpenseBudgetIndex({
     const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(request?.fiscal_month_id ?? 'all');
     const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(request?.fiscal_year_id ?? 'all');
     const [deleteItemId, setDeleteItemId] = useState<number | null>(null);
+    const [historyItem, setHistoryItem] = useState<ExpenseBudgetRow | null>(null);
+    const [historyData, setHistoryData] = useState<ActivityLogResponse | null>(null);
+    const [historyLoading, setHistoryLoading] = useState(false);
     const [editingItem, setEditingItem] = useState<ExpenseBudgetRow | null>(null);
     const [editForm, setEditForm] = useState<EditFormState | null>(null);
     const [editProcessing, setEditProcessing] = useState(false);
@@ -345,6 +400,34 @@ export default function ExpenseBudgetIndex({
         router.delete(`/budget/expense-budget/items/${deleteItemId}`, {
             onSuccess: () => setDeleteItemId(null),
         });
+    }
+
+    async function openHistoryDialog(item: ExpenseBudgetRow) {
+        setHistoryItem(item);
+        setHistoryData(null);
+        setHistoryLoading(true);
+
+        try {
+            const response = await fetch(`/budget/expense-budget/items/${item.id}/activity-logs`);
+
+            if (!response.ok) {
+                throw new Error('Failed to load activity history.');
+            }
+
+            const data = (await response.json()) as ActivityLogResponse;
+            setHistoryData(data);
+        } catch {
+            toast.error('Failed to load activity history.');
+            setHistoryItem(null);
+        } finally {
+            setHistoryLoading(false);
+        }
+    }
+
+    function closeHistoryDialog() {
+        setHistoryItem(null);
+        setHistoryData(null);
+        setHistoryLoading(false);
     }
 
     function openEditDialog(item: ExpenseBudgetRow) {
@@ -562,25 +645,34 @@ export default function ExpenseBudgetIndex({
                                         </TableCell>
                                         <TableCell>{item.submitted_by ?? 'N/A'}</TableCell>
                                         <TableCell>
-                                            {can('manage expense budgets') && (
-                                                <>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => openEditDialog(item)}
-                                                    >
-                                                        Edit
-                                                    </Button>
-                                                    <Button
-                                                        className="m-2"
-                                                        variant="destructive"
-                                                        size="sm"
-                                                        onClick={() => setDeleteItemId(item.id)}
-                                                    >
-                                                        Delete
-                                                    </Button>
-                                                </>
-                                            )}
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => openHistoryDialog(item)}
+                                                >
+                                                    <History className="mr-1 size-4" />
+                                                    History
+                                                </Button>
+                                                {can('manage expense budgets') && (
+                                                    <>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => openEditDialog(item)}
+                                                        >
+                                                            Edit
+                                                        </Button>
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            onClick={() => setDeleteItemId(item.id)}
+                                                        >
+                                                            Delete
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -924,6 +1016,71 @@ export default function ExpenseBudgetIndex({
                             </DialogFooter>
                         </form>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={historyItem !== null} onOpenChange={(open) => !open && closeHistoryDialog()}>
+                <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <History className="size-5 text-muted-foreground" />
+                            Activity History
+                        </DialogTitle>
+                        <DialogDescription>
+                            {historyData?.item
+                                ? `${historyData.item.expense_item ?? 'Expense item'} · ${historyData.item.fiscal_month ?? 'N/A'} / ${historyData.item.fiscal_year ?? 'N/A'} · ${historyData.item.branch ?? 'N/A'}${historyData.item.department ? ` (${historyData.item.department})` : ''}`
+                                : historyItem
+                                  ? `${historyItem.expense_item ?? 'Expense item'} · ${historyItem.fiscal_month ?? 'N/A'} / ${historyItem.fiscal_year ?? 'N/A'}`
+                                  : 'Expense budget item activity'}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                        {historyLoading ? (
+                            <div className="py-10 text-center text-sm text-muted-foreground">Loading activity history...</div>
+                        ) : historyData && historyData.logs.length > 0 ? (
+                            <div className="relative space-y-4 before:absolute before:inset-y-0 before:left-[17px] before:w-0.5 before:bg-muted">
+                                {historyData.logs.map((log) => {
+                                    const ActionIcon = getActivityIcon(log.action);
+
+                                    return (
+                                        <div key={log.id} className="relative pl-10">
+                                            <div className="absolute top-1 left-0 flex size-9 items-center justify-center rounded-full border bg-background shadow-sm">
+                                                <ActionIcon className="size-4 text-muted-foreground" />
+                                            </div>
+                                            <div className="flex flex-col rounded-lg border bg-card p-3 shadow-sm">
+                                                <div className="mb-1 flex items-center justify-between gap-2">
+                                                    <span className="text-sm font-semibold">
+                                                        {formatActivityAction(log.action)}
+                                                    </span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {formatActivityTimestamp(log.created_at)}
+                                                    </span>
+                                                </div>
+                                                <p className="text-sm text-foreground">{log.summary}</p>
+                                                <p className="mt-2 text-xs text-muted-foreground">
+                                                    By{' '}
+                                                    <span className="font-medium text-foreground">
+                                                        {log.user?.name ?? 'System'}
+                                                    </span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="py-10 text-center text-sm italic text-muted-foreground">
+                                No activity recorded for this item yet.
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button type="button" variant="outline" onClick={closeHistoryDialog}>
+                            Close
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </AppLayout>

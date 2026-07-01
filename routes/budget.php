@@ -7,6 +7,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:view expense budgets')->group(function () {
         Route::get('budget/expense-budget', [ExpenseBudgetController::class, 'index'])->name('expense-budget.index');
         Route::get('budget/expense-budget/submission-tracker', [ExpenseBudgetController::class, 'submissionTracker'])->name('expense-budget.submission-tracker');
+        Route::get('budget/expense-budget/items/{expenseBudgetItem}/activity-logs', [ExpenseBudgetController::class, 'itemActivityLogs'])->name('expense-budget.items.activity-logs');
     });
 
     Route::middleware(['permission:manage expense budgets', 'expense_budget.manage_window'])->group(function () {
