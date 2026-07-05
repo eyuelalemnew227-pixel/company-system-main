@@ -130,7 +130,6 @@ class ExpenseBudgetActivityLogger
             'expense_item' => $item->expenseItem?->expense_type,
             'planned_budget' => $item->planned_budget !== null ? (string) $item->planned_budget : null,
             'prev_month_budget' => $item->prev_month_budget !== null ? (string) $item->prev_month_budget : null,
-            'status' => $item->status,
         ]);
     }
 
@@ -238,14 +237,6 @@ class ExpenseBudgetActivityLogger
             );
         }
 
-        if (($oldValues['status'] ?? null) !== ($newValues['status'] ?? null)) {
-            $parts[] = sprintf(
-                'status from %s to %s',
-                $this->formatStatus($oldValues['status'] ?? null),
-                $this->formatStatus($newValues['status'] ?? null),
-            );
-        }
-
         $scopeFields = [
             'fiscal_year' => 'fiscal year',
             'fiscal_month' => 'fiscal month',
@@ -280,8 +271,4 @@ class ExpenseBudgetActivityLogger
         return number_format((float) $value, 2);
     }
 
-    private function formatStatus(?string $status): string
-    {
-        return $status ? ucfirst($status) : 'N/A';
-    }
 }

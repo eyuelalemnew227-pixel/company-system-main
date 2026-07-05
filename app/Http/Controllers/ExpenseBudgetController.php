@@ -108,8 +108,6 @@ class ExpenseBudgetController extends Controller
                 'expense_item_id' => $item->expense_item_id,
                 'expense_item' => $item->expenseItem?->expense_type,
                 'planned_budget' => $item->planned_budget,
-                'actual_budget' => 0,
-                'status' => $item->status,
                 'submitted_by' => $item->expenseBudget->creator?->name,
                 'can_view_history' => ExpenseBudgetAccess::canViewItemHistory(auth()->user(), $item),
             ]);
@@ -371,7 +369,6 @@ class ExpenseBudgetController extends Controller
                     'expense_item_id' => $item['expense_item_id'],
                     'prev_month_budget' => $item['prev_month_budget'] ?? null,
                     'planned_budget' => $item['planned_budget'],
-                    'status' => 'draft',
                 ]);
 
                 $this->activityLogger->logItemCreated($createdItem);
@@ -439,7 +436,6 @@ class ExpenseBudgetController extends Controller
             'department_id' => ['nullable', 'exists:departments,id'],
             'expense_item_id' => ['required', 'exists:expenses,expense_parent_acc_code'],
             'planned_budget' => ['required', 'numeric', 'min:0'],
-            'status' => ['required', 'in:draft,submitted,approved'],
         ]);
 
         $branch = Branch::findOrFail($validated['branch_id']);
@@ -529,7 +525,6 @@ class ExpenseBudgetController extends Controller
                 'expense_budget_id' => $targetBudget->id,
                 'expense_item_id' => $validated['expense_item_id'],
                 'planned_budget' => $newPlannedBudget,
-                'status' => $validated['status'],
             ]);
 
             if ($oldBudget && $oldBudget->id !== $targetBudget->id) {
@@ -697,7 +692,6 @@ class ExpenseBudgetController extends Controller
                 'id' => $expenseBudgetItem->id,
                 'expense_item' => $expenseBudgetItem->expenseItem?->expense_type,
                 'planned_budget' => $expenseBudgetItem->planned_budget,
-                'status' => $expenseBudgetItem->status,
                 'fiscal_year' => $budget?->fiscalYear?->name,
                 'fiscal_month' => $budget?->fiscalMonth?->name,
                 'branch' => $budget?->branch?->name,

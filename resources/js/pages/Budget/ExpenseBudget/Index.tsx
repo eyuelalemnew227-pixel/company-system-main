@@ -1,5 +1,4 @@
 import TablePagination from '@/components/table-pagination';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -72,8 +71,6 @@ type ExpenseBudgetRow = {
     expense_item_id: number;
     expense_item: string | null;
     planned_budget: string | number;
-    actual_budget: number;
-    status: string;
     submitted_by: string | null;
     can_view_history: boolean;
 };
@@ -85,7 +82,6 @@ type EditFormState = {
     department_id: string;
     expense_item_id: number;
     planned_budget: string;
-    status: 'draft' | 'submitted' | 'approved';
 };
 
 type ActivityLogEntry = {
@@ -104,7 +100,6 @@ type ActivityLogResponse = {
         id: number;
         expense_item: string | null;
         planned_budget: string | number | null;
-        status: string;
         fiscal_year: string | null;
         fiscal_month: string | null;
         branch: string | null;
@@ -158,30 +153,6 @@ function formatBudgetInput(value: string): string {
 function parseFormattedNumber(value: string): number {
     const cleaned = value.replace(/,/g, '').trim();
     return Number.parseFloat(cleaned);
-}
-
-function getStatusLabel(status: string): string {
-    switch (status) {
-        case 'approved':
-            return 'Approved';
-        case 'submitted':
-            return 'Pending';
-        case 'draft':
-        default:
-            return 'Pending';
-    }
-}
-
-function getStatusClassName(status: string): string {
-    switch (status) {
-        case 'approved':
-            return 'border-green-200 bg-green-100 text-green-800 hover:bg-green-100';
-        case 'submitted':
-            return 'border-amber-200 bg-amber-100 text-amber-800 hover:bg-amber-100';
-        case 'draft':
-        default:
-            return 'border-amber-200 bg-amber-100 text-amber-800 hover:bg-amber-100';
-    }
 }
 
 function formatActivityAction(action: string): string {
@@ -278,10 +249,20 @@ export default function ExpenseBudgetIndex({
     const [openEditBranch, setOpenEditBranch] = useState(false);
     const [openEditDepartment, setOpenEditDepartment] = useState(false);
     const [openEditExpenseItem, setOpenEditExpenseItem] = useState(false);
+    const [openBranchFilter, setOpenBranchFilter] = useState(false);
+    const [openDepartmentFilter, setOpenDepartmentFilter] = useState(false);
 
     const selectedBranchOption = useMemo(
         () => (selectedBranch === 'all' ? null : branches.find((branch) => branch.id.toString() === selectedBranch) ?? null),
         [selectedBranch, branches],
+    );
+
+    const selectedDepartmentOption = useMemo(
+        () =>
+            selectedDepartment === 'all'
+                ? null
+                : departments.find((department) => department.id.toString() === selectedDepartment) ?? null,
+        [selectedDepartment, departments],
     );
 
     const canFilterByDepartment = isHeadOfficeBranch(selectedBranchOption);
@@ -360,15 +341,17 @@ export default function ExpenseBudgetIndex({
         router.get('/budget/expense-budget', params, { preserveState: true, replace: true });
     }
 
-    function handleBranchChange(value: string) {
-        setSelectedBranch(value);
+    function handleBranchFilterSelect(branchId: string) {
+        setOpenBranchFilter(false);
+        setSelectedBranch(branchId);
         setSelectedDepartment('all');
-        applyFilters({ branch: value, department: 'all' });
+        applyFilters({ branch: branchId, department: 'all' });
     }
 
-    function handleDepartmentChange(value: string) {
-        setSelectedDepartment(value);
-        applyFilters({ department: value });
+    function handleDepartmentFilterSelect(departmentId: string) {
+        setOpenDepartmentFilter(false);
+        setSelectedDepartment(departmentId);
+        applyFilters({ department: departmentId });
     }
 
     function handleFiscalMonthChange(value: string) {
@@ -443,7 +426,6 @@ export default function ExpenseBudgetIndex({
             department_id: item.department_id ? String(item.department_id) : '',
             expense_item_id: item.expense_item_id,
             planned_budget: formatCurrency(item.planned_budget),
-            status: item.status as EditFormState['status'],
         });
         setOpenEditBranch(false);
         setOpenEditDepartment(false);
@@ -514,7 +496,6 @@ export default function ExpenseBudgetIndex({
                 department_id: canEditDepartment ? editForm.department_id : null,
                 expense_item_id: editForm.expense_item_id,
                 planned_budget: parsedBudget,
-                status: editForm.status,
             },
             {
                 preserveScroll: true,
@@ -550,36 +531,113 @@ export default function ExpenseBudgetIndex({
                                 className="max-w-xs"
                             />
                             <div className="flex flex-wrap gap-2">
-                                <Select value={selectedBranch} onValueChange={handleBranchChange}>
-                                    <SelectTrigger className="w-[180px]">
-                                        <SelectValue placeholder="All Branches" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Branches</SelectItem>
-                                        {branches.map((branch) => (
-                                            <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                {branch.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Select
-                                    value={selectedDepartment}
-                                    onValueChange={handleDepartmentChange}
-                                    disabled={!canFilterByDepartment}
-                                >
-                                    <SelectTrigger className="w-[180px]">
-                                        <SelectValue placeholder="Filter by Department" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Departments</SelectItem>
-                                        {departments.map((department) => (
-                                            <SelectItem key={department.id} value={department.id.toString()}>
-                                                {department.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Popover open={openBranchFilter} onOpenChange={setOpenBranchFilter}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            className="w-[180px] justify-between font-normal"
+                                        >
+                                            {selectedBranchOption?.name ?? 'All Branches'}
+                                            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Search branches..." />
+                                            <CommandList className="max-h-60">
+                                                <CommandEmpty>No branches found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    <CommandItem
+                                                        value="All Branches"
+                                                        onSelect={() => handleBranchFilterSelect('all')}
+                                                    >
+                                                        <Check
+                                                            className={cn(
+                                                                'mr-2 size-4',
+                                                                selectedBranch === 'all' ? 'opacity-100' : 'opacity-0',
+                                                            )}
+                                                        />
+                                                        All Branches
+                                                    </CommandItem>
+                                                    {branches.map((branch) => (
+                                                        <CommandItem
+                                                            key={branch.id}
+                                                            value={branch.name}
+                                                            onSelect={() => handleBranchFilterSelect(branch.id.toString())}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    'mr-2 size-4',
+                                                                    selectedBranch === branch.id.toString()
+                                                                        ? 'opacity-100'
+                                                                        : 'opacity-0',
+                                                                )}
+                                                            />
+                                                            {branch.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                                <Popover open={openDepartmentFilter} onOpenChange={setOpenDepartmentFilter}>
+                                    <div className={cn(!canFilterByDepartment && 'cursor-not-allowed')}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                className="w-[180px] justify-between font-normal"
+                                                disabled={!canFilterByDepartment}
+                                            >
+                                                {selectedDepartmentOption?.name ?? 'All Departments'}
+                                                <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                    </div>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Search departments..." />
+                                            <CommandList className="max-h-60">
+                                                <CommandEmpty>No departments found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    <CommandItem
+                                                        value="All Departments"
+                                                        onSelect={() => handleDepartmentFilterSelect('all')}
+                                                    >
+                                                        <Check
+                                                            className={cn(
+                                                                'mr-2 size-4',
+                                                                selectedDepartment === 'all' ? 'opacity-100' : 'opacity-0',
+                                                            )}
+                                                        />
+                                                        All Departments
+                                                    </CommandItem>
+                                                    {departments.map((department) => (
+                                                        <CommandItem
+                                                            key={department.id}
+                                                            value={department.name}
+                                                            onSelect={() =>
+                                                                handleDepartmentFilterSelect(department.id.toString())
+                                                            }
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    'mr-2 size-4',
+                                                                    selectedDepartment === department.id.toString()
+                                                                        ? 'opacity-100'
+                                                                        : 'opacity-0',
+                                                                )}
+                                                            />
+                                                            {department.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                                 <Select value={selectedFiscalYear} onValueChange={handleFiscalYearChange}>
                                     <SelectTrigger className="w-[180px]">
                                         <SelectValue placeholder="All Fiscal Years" />
@@ -626,8 +684,6 @@ export default function ExpenseBudgetIndex({
                                     <TableHead className="font-bold text-white">Department</TableHead>
                                     <TableHead className="font-bold text-white">Expense Item</TableHead>
                                     <TableHead className="font-bold text-white">Planned Budget</TableHead>
-                                    <TableHead className="font-bold text-white">Actual Budget</TableHead>
-                                    <TableHead className="font-bold text-white">Status</TableHead>
                                     <TableHead className="font-bold text-white">Submitted By</TableHead>
                                     <TableHead className="font-bold text-white">Actions</TableHead>
                                 </TableRow>
@@ -641,12 +697,6 @@ export default function ExpenseBudgetIndex({
                                         <TableCell>{item.department ?? '-'}</TableCell>
                                         <TableCell>{item.expense_item ?? 'N/A'}</TableCell>
                                         <TableCell>{formatCurrency(item.planned_budget)}</TableCell>
-                                        <TableCell>{formatCurrency(item.actual_budget)}</TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline" className={cn(getStatusClassName(item.status))}>
-                                                {getStatusLabel(item.status)}
-                                            </Badge>
-                                        </TableCell>
                                         <TableCell>{item.submitted_by ?? 'N/A'}</TableCell>
                                         <TableCell>
                                             <div className="flex flex-wrap gap-2">
@@ -983,30 +1033,6 @@ export default function ExpenseBudgetIndex({
                                         placeholder="Enter planned budget"
                                         inputMode="decimal"
                                     />
-                                </div>
-
-                                <div className="space-y-2 sm:col-span-1">
-                                    <Label htmlFor="edit-status">
-                                        Status <span className="text-red-500">*</span>
-                                    </Label>
-                                    <Select
-                                        value={editForm.status}
-                                        onValueChange={(value) =>
-                                            setEditForm({
-                                                ...editForm,
-                                                status: value as EditFormState['status'],
-                                            })
-                                        }
-                                    >
-                                        <SelectTrigger id="edit-status" className="w-full">
-                                            <SelectValue placeholder="Select status" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="draft">Draft</SelectItem>
-                                            <SelectItem value="submitted">Submitted</SelectItem>
-                                            <SelectItem value="approved">Approved</SelectItem>
-                                        </SelectContent>
-                                    </Select>
                                 </div>
                             </div>
 

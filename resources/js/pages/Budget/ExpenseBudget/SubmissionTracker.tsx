@@ -1,12 +1,14 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
-import { Check, Filter, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Filter, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -118,6 +120,8 @@ export default function ExpenseSubmissionTracker({
     const [selectedDepartment, setSelectedDepartment] = useState<string>(request?.department_id ?? 'all');
     const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(request?.fiscal_month_id ?? 'all');
     const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(request?.fiscal_year_id ?? 'all');
+    const [openBranchFilter, setOpenBranchFilter] = useState(false);
+    const [openDepartmentFilter, setOpenDepartmentFilter] = useState(false);
 
     const filteredFiscalMonths = useMemo(() => {
         if (selectedFiscalYear === 'all') {
@@ -129,6 +133,11 @@ export default function ExpenseSubmissionTracker({
 
     const selectedBranchOption =
         selectedBranch === 'all' ? null : branches.find((branch) => branch.id.toString() === selectedBranch) ?? null;
+
+    const selectedDepartmentOption =
+        selectedDepartment === 'all'
+            ? null
+            : departments.find((department) => department.id.toString() === selectedDepartment) ?? null;
 
     const canFilterByDepartment = isHeadOfficeBranch(selectedBranchOption);
 
@@ -150,15 +159,17 @@ export default function ExpenseSubmissionTracker({
         router.get('/budget/expense-budget/submission-tracker', params, { preserveState: true, replace: true });
     }
 
-    function handleBranchChange(value: string) {
-        setSelectedBranch(value);
+    function handleBranchFilterSelect(branchId: string) {
+        setOpenBranchFilter(false);
+        setSelectedBranch(branchId);
         setSelectedDepartment('all');
-        applyFilters({ branch: value, department: 'all' });
+        applyFilters({ branch: branchId, department: 'all' });
     }
 
-    function handleDepartmentChange(value: string) {
-        setSelectedDepartment(value);
-        applyFilters({ department: value });
+    function handleDepartmentFilterSelect(departmentId: string) {
+        setOpenDepartmentFilter(false);
+        setSelectedDepartment(departmentId);
+        applyFilters({ department: departmentId });
     }
 
     function handleFiscalMonthChange(value: string) {
@@ -199,36 +210,113 @@ export default function ExpenseSubmissionTracker({
                         </CardTitle>
                         <div className="flex flex-wrap items-end gap-3 pt-2">
                             <div className="flex flex-wrap gap-2">
-                                <Select value={selectedBranch} onValueChange={handleBranchChange}>
-                                    <SelectTrigger className="w-[180px]">
-                                        <SelectValue placeholder="All Branches" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Branches</SelectItem>
-                                        {branches.map((branch) => (
-                                            <SelectItem key={branch.id} value={branch.id.toString()}>
-                                                {branch.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Select
-                                    value={selectedDepartment}
-                                    onValueChange={handleDepartmentChange}
-                                    disabled={!canFilterByDepartment}
-                                >
-                                    <SelectTrigger className="w-[180px]">
-                                        <SelectValue placeholder="Filter by Department" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Departments</SelectItem>
-                                        {departments.map((department) => (
-                                            <SelectItem key={department.id} value={department.id.toString()}>
-                                                {department.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <Popover open={openBranchFilter} onOpenChange={setOpenBranchFilter}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            className="w-[180px] justify-between font-normal"
+                                        >
+                                            {selectedBranchOption?.name ?? 'All Branches'}
+                                            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Search branches..." />
+                                            <CommandList className="max-h-60">
+                                                <CommandEmpty>No branches found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    <CommandItem
+                                                        value="All Branches"
+                                                        onSelect={() => handleBranchFilterSelect('all')}
+                                                    >
+                                                        <Check
+                                                            className={cn(
+                                                                'mr-2 size-4',
+                                                                selectedBranch === 'all' ? 'opacity-100' : 'opacity-0',
+                                                            )}
+                                                        />
+                                                        All Branches
+                                                    </CommandItem>
+                                                    {branches.map((branch) => (
+                                                        <CommandItem
+                                                            key={branch.id}
+                                                            value={branch.name}
+                                                            onSelect={() => handleBranchFilterSelect(branch.id.toString())}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    'mr-2 size-4',
+                                                                    selectedBranch === branch.id.toString()
+                                                                        ? 'opacity-100'
+                                                                        : 'opacity-0',
+                                                                )}
+                                                            />
+                                                            {branch.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                                <Popover open={openDepartmentFilter} onOpenChange={setOpenDepartmentFilter}>
+                                    <div className={cn(!canFilterByDepartment && 'cursor-not-allowed')}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                className="w-[180px] justify-between font-normal"
+                                                disabled={!canFilterByDepartment}
+                                            >
+                                                {selectedDepartmentOption?.name ?? 'All Departments'}
+                                                <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                    </div>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Search departments..." />
+                                            <CommandList className="max-h-60">
+                                                <CommandEmpty>No departments found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    <CommandItem
+                                                        value="All Departments"
+                                                        onSelect={() => handleDepartmentFilterSelect('all')}
+                                                    >
+                                                        <Check
+                                                            className={cn(
+                                                                'mr-2 size-4',
+                                                                selectedDepartment === 'all' ? 'opacity-100' : 'opacity-0',
+                                                            )}
+                                                        />
+                                                        All Departments
+                                                    </CommandItem>
+                                                    {departments.map((department) => (
+                                                        <CommandItem
+                                                            key={department.id}
+                                                            value={department.name}
+                                                            onSelect={() =>
+                                                                handleDepartmentFilterSelect(department.id.toString())
+                                                            }
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    'mr-2 size-4',
+                                                                    selectedDepartment === department.id.toString()
+                                                                        ? 'opacity-100'
+                                                                        : 'opacity-0',
+                                                                )}
+                                                            />
+                                                            {department.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                                 <Select value={selectedFiscalYear} onValueChange={handleFiscalYearChange}>
                                     <SelectTrigger className="w-[180px]">
                                         <SelectValue placeholder="All Fiscal Years" />

@@ -267,6 +267,7 @@ export default function CreateExpenseBudget({
     const [budgetedExpenseItemIds, setBudgetedExpenseItemIds] = useState<Set<number>>(new Set());
     const prevScopeRef = useRef('');
     const activeScopeRef = useRef('');
+    const prevFetchKeyRef = useRef('');
 
     const allExpenseItems = useMemo(
         () => [...frequentExpenseItems, ...otherExpenseItems],
@@ -493,6 +494,7 @@ export default function CreateExpenseBudget({
                 isHeadOffice,
             )
         ) {
+            prevFetchKeyRef.current = '';
             return;
         }
 
@@ -502,17 +504,40 @@ export default function CreateExpenseBudget({
             data.fiscal_year_id,
             data.fiscal_month_id,
         );
+        const fetchKey = `${scopeKey}::${itemIdsSignature}`;
 
-        setPrevBudgets({});
-        setLoadingPrevBudget({});
+        if (prevFetchKeyRef.current === fetchKey) {
+            return;
+        }
 
-        data.items.forEach((item) => {
-            if (typeof item.expense_item_id !== 'number') {
-                return;
-            }
+        const previousFetchKey = prevFetchKeyRef.current;
+        prevFetchKeyRef.current = fetchKey;
 
+        const [previousScopeKey = ''] = previousFetchKey.split('::');
+        const scopeChanged = previousScopeKey !== scopeKey;
+
+        if (scopeChanged) {
+            setPrevBudgets({});
+            setLoadingPrevBudget({});
+        }
+
+        const previousItemIdsPart = previousFetchKey.includes('::')
+            ? previousFetchKey.split('::')[1] ?? ''
+            : '';
+        const previousItemIds = new Set(
+            previousItemIdsPart ? previousItemIdsPart.split('|').map((id) => Number(id)) : [],
+        );
+        const currentItemIds = itemIdsSignature
+            ? itemIdsSignature.split('|').map((id) => Number(id))
+            : [];
+
+        const idsToFetch = scopeChanged
+            ? currentItemIds
+            : currentItemIds.filter((id) => !previousItemIds.has(id));
+
+        idsToFetch.forEach((expenseItemId) => {
             fetchPrevBudget(
-                item.expense_item_id,
+                expenseItemId,
                 data.branch_id,
                 data.department_id,
                 data.fiscal_year_id,
@@ -527,7 +552,6 @@ export default function CreateExpenseBudget({
         data.department_id,
         data.fiscal_year_id,
         data.fiscal_month_id,
-        data.items,
         isHeadOffice,
         fetchPrevBudget,
     ]);
