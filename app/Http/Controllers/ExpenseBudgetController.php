@@ -29,7 +29,7 @@ class ExpenseBudgetController extends Controller
 
     public function index(): Response
     {
-        abort_unless(auth()->user()->can('view expense budgets'), 403);
+        abort_unless(ExpenseBudgetAccess::canView(), 403);
 
         $query = ExpenseBudgetItem::query()
             ->with([
@@ -134,7 +134,7 @@ class ExpenseBudgetController extends Controller
 
     public function submissionTracker(): Response
     {
-        abort_unless(auth()->user()->can('view expense budgets'), 403);
+        abort_unless(ExpenseBudgetAccess::canView(), 403);
 
         $branches = Branch::query()
             ->orderBy('name')

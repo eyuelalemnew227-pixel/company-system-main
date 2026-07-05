@@ -7,18 +7,30 @@ type AuthProps = {
 	};
 };
 
+const MANAGE_PERMISSIONS = [
+	'manage expense budget anytime',
+	'manage expense budget within time window',
+];
+
 export function usePermission() {
 	const { props } = usePage<AuthProps>();
 	const permissions = props.auth?.permissions || [];
 	const canManageExpenseBudget = props.auth?.canManageExpenseBudget ?? false;
 
 	const can = (permission: string): boolean => {
-		if (permission === 'manage expense budgets') {
+		const requestedPermissions = permission
+			.split('|')
+			.map((value) => value.trim())
+			.filter(Boolean);
+
+		if (requestedPermissions.some((value) => MANAGE_PERMISSIONS.includes(value))) {
 			return canManageExpenseBudget;
 		}
 
-		return permissions.includes(permission);
+		return requestedPermissions.some((value) => permissions.includes(value));
 	};
 
-	return { can, canManageExpenseBudget };
+	const hasExpenseBudgetManagePermission = MANAGE_PERMISSIONS.some((value) => permissions.includes(value));
+
+	return { can, canManageExpenseBudget, hasExpenseBudgetManagePermission };
 }

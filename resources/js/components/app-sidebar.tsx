@@ -206,7 +206,7 @@ const baseSections: NavSection[] = [
         label: 'Expense Budget',
         icon: FileText,
         items: [
-          { title: 'Add Expense Budget', href: '/budget/expense-budget/create', icon: Plus, permission: 'manage expense budgets' },
+          { title: 'Add Expense Budget', href: '/budget/expense-budget/create', icon: Plus, permission: 'manage expense budget anytime|manage expense budget within time window' },
           { title: 'View Expense Budget', href: '/budget/expense-budget', icon: List, permission: 'view expense budgets' },
           { title: 'Expense Submission Tracker', href: '/budget/expense-budget/submission-tracker', icon: ClipboardCheck, permission: 'view expense budgets' },
         ],

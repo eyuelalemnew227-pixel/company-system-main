@@ -10,26 +10,57 @@ use Carbon\CarbonInterface;
 
 class ExpenseBudgetAccess
 {
+    public static function manageAnytimePermission(): string
+    {
+        return (string) config('expense_budget.permissions.manage_anytime', 'manage expense budget anytime');
+    }
+
+    public static function manageWindowedPermission(): string
+    {
+        return (string) config('expense_budget.permissions.manage_windowed', 'manage expense budget within time window');
+    }
+
+    public static function viewPermission(): string
+    {
+        return (string) config('expense_budget.permissions.view', 'view expense budgets');
+    }
+
     public static function canView(?User $user = null): bool
     {
         $user ??= auth()->user();
 
-        return $user?->can('view expense budgets') ?? false;
+        return $user?->can(self::viewPermission()) ?? false;
+    }
+
+    public static function hasManagePermission(?User $user = null): bool
+    {
+        $user ??= auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        return $user->can(self::manageAnytimePermission())
+            || $user->can(self::manageWindowedPermission());
     }
 
     public static function canManage(?User $user = null): bool
     {
         $user ??= auth()->user();
 
-        if (! $user?->can('manage expense budgets')) {
+        if (! $user) {
             return false;
         }
 
-        if (self::hasUnrestrictedManageAccess($user)) {
+        if ($user->can(self::manageAnytimePermission())) {
             return true;
         }
 
-        return self::isWithinManageWindow();
+        if ($user->can(self::manageWindowedPermission())) {
+            return self::isWithinManageWindow();
+        }
+
+        return false;
     }
 
     public static function canViewItemHistory(?User $user, ExpenseBudgetItem $item): bool
@@ -85,18 +116,13 @@ class ExpenseBudgetAccess
         return false;
     }
 
-    public static function hasUnrestrictedManageAccess(User $user): bool
-    {
-        return $user->hasAnyRole(config('expense_budget.unrestricted_manage_roles', []));
-    }
-
     public static function hasUnrestrictedViewAccess(?User $user): bool
     {
         if (! $user) {
             return false;
         }
 
-        return $user->hasAnyRole(config('expense_budget.unrestricted_view_roles', []));
+        return $user->can(self::manageAnytimePermission());
     }
 
     public static function isWithinManageWindow(?CarbonInterface $date = null): bool
@@ -111,10 +137,16 @@ class ExpenseBudgetAccess
 
     public static function manageDeniedMessage(): string
     {
-        $startDay = (int) config('expense_budget.manage_window.start_day', 5);
-        $endDay = (int) config('expense_budget.manage_window.end_day', 12);
+        $user = auth()->user();
 
-        return "Expense budgets can only be managed from the {$startDay}th to the {$endDay}th of each month.";
+        if ($user?->can(self::manageWindowedPermission()) && ! $user->can(self::manageAnytimePermission())) {
+            $startDay = (int) config('expense_budget.manage_window.start_day', 5);
+            $endDay = (int) config('expense_budget.manage_window.end_day', 12);
+
+            return "Expense budgets can only be managed from the {$startDay}th to the {$endDay}th of each month.";
+        }
+
+        return 'You do not have permission to manage expense budgets.';
     }
 
     public static function viewHistoryDeniedMessage(): string

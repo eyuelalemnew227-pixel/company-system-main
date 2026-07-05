@@ -6,17 +6,9 @@ return [
         'end_day' => 12,
     ],
 
-    'unrestricted_manage_roles' => [
-        'finance manager',
-        'finance director',
-        'Admin',
-        'Super Admin',
-    ],
-
-    'unrestricted_view_roles' => [
-        'finance manager',
-        'finance director',
-        'Admin',
-        'Super Admin',
+    'permissions' => [
+        'manage_anytime' => 'manage expense budget anytime',
+        'manage_windowed' => 'manage expense budget within time window',
+        'view' => 'view expense budgets',
     ],
 ];

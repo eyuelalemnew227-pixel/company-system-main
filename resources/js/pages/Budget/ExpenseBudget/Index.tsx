@@ -232,7 +232,7 @@ export default function ExpenseBudgetIndex({
     request,
 }: IndexProps) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
-    const { can } = usePermission();
+    const { canManageExpenseBudget } = usePermission();
 
     const [search, setSearch] = useState<string>(request?.search ?? '');
     const [selectedBranch, setSelectedBranch] = useState<string>(request?.branch_id ?? 'all');
@@ -710,7 +710,7 @@ export default function ExpenseBudgetIndex({
                                                         History
                                                     </Button>
                                                 )}
-                                                {can('manage expense budgets') && (
+                                                {canManageExpenseBudget && (
                                                     <>
                                                         <Button
                                                             variant="outline"
