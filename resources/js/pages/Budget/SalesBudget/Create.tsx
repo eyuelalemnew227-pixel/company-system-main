@@ -97,12 +97,10 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 
 	const selectedMonthNumber = selectedFiscalMonth?.efy_month_number ?? null;
 	const selectedMonthLabel = selectedMonthNumber
-		? monthNames?.[selectedMonthNumber] ?? MONTH_NAMES[selectedMonthNumber] ?? selectedFiscalMonth?.name ?? ''
+		? (monthNames?.[selectedMonthNumber] ?? MONTH_NAMES[selectedMonthNumber] ?? selectedFiscalMonth?.name ?? '')
 		: '';
 	const previousMonthNumber = selectedMonthNumber ? (selectedMonthNumber === 1 ? 12 : selectedMonthNumber - 1) : null;
-	const previousMonthLabel = previousMonthNumber
-		? monthNames?.[previousMonthNumber] ?? MONTH_NAMES[previousMonthNumber] ?? ''
-		: '';
+	const previousMonthLabel = previousMonthNumber ? (monthNames?.[previousMonthNumber] ?? MONTH_NAMES[previousMonthNumber] ?? '') : '';
 
 	function buildInitialRows() {
 		return branches.map((branch) => ({
@@ -194,7 +192,12 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 
 	// Update sales amount for a row
 	function handleAmountChange(branchId: number, value: string) {
-		setRows((prev) => prev.map((r) => (r.branch_id === branchId ? { ...r, sales_amount: value } : r)));
+		const numericValue = value.replace(/,/g, '');
+
+		// Block invalid input (multiple decimal points, non-numeric characters)
+		if (!/^\d*\.?\d*$/.test(numericValue)) return;
+
+		setRows((prev) => prev.map((r) => (r.branch_id === branchId ? { ...r, sales_amount: numericValue } : r)));
 	}
 
 	// Calculate total
@@ -233,6 +236,22 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 				onFinish: () => setProcessing(false),
 			},
 		);
+	}
+
+	function formatWithCommas(value: string): string {
+		if (!value) return '';
+
+		// Strip anything that isn't a digit or a decimal point
+		const cleaned = value.replace(/[^0-9.]/g, '');
+
+		// Split into integer and decimal parts (allow only one decimal point)
+		const [integerPart, ...decimalParts] = cleaned.split('.');
+		const decimalPart = decimalParts.length > 0 ? decimalParts[0] : undefined;
+
+		// Add commas to the integer part
+		const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+		return decimalPart !== undefined ? `${formattedInteger}.${decimalPart}` : formattedInteger;
 	}
 
 	return (
@@ -300,12 +319,8 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 								<tr className="border-b border-gray-200 bg-gray-50">
 									<th className="w-8 px-4 py-3 text-left font-medium text-gray-600">#</th>
 									<th className="w-1/3 px-4 py-3 text-left font-medium text-gray-600">Branch Name</th>
-									<th className="w-1/3 px-4 py-3 text-left font-medium text-gray-600">
-										Prev Month ({previousMonthLabel || '—'})
-									</th>
-									<th className="px-4 py-3 text-left font-medium text-gray-600">
-										Current Month ({selectedMonthLabel || '—'})
-									</th>
+									<th className="w-1/3 px-4 py-3 text-left font-medium text-gray-600">Prev Month ({previousMonthLabel || '—'})</th>
+									<th className="px-4 py-3 text-left font-medium text-gray-600">Current Month ({selectedMonthLabel || '—'})</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -332,8 +347,8 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 													row.loading
 														? 'Loading...'
 														: row.prev_expense_budget.toLocaleString('en-US', {
-															minimumFractionDigits: 2,
-														})
+																minimumFractionDigits: 2,
+															})
 												}
 												readOnly
 												className="w-full cursor-not-allowed rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-400"
@@ -343,19 +358,22 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 										{/* Sales Amount - editable */}
 										<td className="px-4 py-3">
 											{row.loading ? (
-												<div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-400">Loading...</div>
+												<div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-400">
+													Loading...
+												</div>
 											) : row.existing_budget_id ? (
 												<div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-													{row.sales_amount ? Number(row.sales_amount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}
+													{row.sales_amount
+														? Number(row.sales_amount).toLocaleString('en-US', { minimumFractionDigits: 2 })
+														: '0.00'}
 												</div>
 											) : (
 												<input
-													type="number"
+													type="text"
+													inputMode="decimal"
 													placeholder="0.00"
-													value={row.sales_amount}
+													value={formatWithCommas(row.sales_amount)}
 													onChange={(e) => handleAmountChange(row.branch_id, e.target.value)}
-													min="0"
-													step="0.01"
 													className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
 												/>
 											)}
