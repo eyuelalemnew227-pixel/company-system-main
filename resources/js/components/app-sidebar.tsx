@@ -211,6 +211,15 @@ const baseSections: NavSection[] = [
           { title: 'Expense Submission Tracker', href: '/budget/expense-budget/submission-tracker', icon: ClipboardCheck, permission: 'view expense budgets' },
         ],
       },
+        {
+          label: 'Sales Budget',
+          icon: TrendingUp,
+          items: [
+            { title: 'Add New Budget', href: '/budget/sales-budget/create', icon: ClipboardList, permission: 'manage sales budget' },
+            { title: 'View Budgets', href: '/budget/sales-budget', icon: BarChart3, permission: 'manage sales budget' },
+            { title: 'Action Logs', href: '/budget/sales-budget/logs', icon: History, permission: 'manage sales budget' },
+          ],
+        },
     ],
   },
 ];
