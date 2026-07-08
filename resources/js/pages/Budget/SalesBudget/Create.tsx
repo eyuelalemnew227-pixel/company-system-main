@@ -28,6 +28,21 @@ interface FiscalMonth {
 	efy_month_number: number;
 }
 
+const MONTH_NAMES: Record<number, string> = {
+	1: 'ሐምሌ',
+	2: 'ነሐሴ',
+	3: 'መስከረም',
+	4: 'ጥቅምት',
+	5: 'ህዳር',
+	6: 'ታህሳስ',
+	7: 'ጥር',
+	8: 'የካቲት',
+	9: 'መጋቢት',
+	10: 'ሚያዝያ',
+	11: 'ግንቦት',
+	12: 'ሰኔ',
+};
+
 interface BudgetRow {
 	branch_id: number;
 	branch_name: string;
@@ -43,10 +58,10 @@ interface Props {
 	branches: Branch[];
 	fiscalYears: FiscalYear[];
 	fiscalMonths: FiscalMonth[];
-	monthNames: Record<number, string>;
+	monthNames?: Record<number, string>;
 }
 
-export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths }: Props) {
+export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths, monthNames }: Props) {
 	const { flash } = usePage<{ flash: { message?: string; error?: string } }>().props;
 
 	// Find current fiscal year based on today's date
@@ -66,7 +81,6 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths 
 	const [selectedFiscalMonthId, setSelectedFiscalMonthId] = useState('');
 	const [ethiopianYear, setEthiopianYear] = useState(currentYear ? currentYear.name.replace('EFY ', '') : '');
 	const [ethiopianMonth, setEthiopianMonth] = useState('');
-	const [previousMonthLabel, setPreviousMonthLabel] = useState('');
 	const [editingBudgetCount, setEditingBudgetCount] = useState(0);
 	const [rows, setRows] = useState<BudgetRow[]>([]);
 	const [processing, setProcessing] = useState(false);
@@ -75,6 +89,20 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths 
 		() => (selectedFiscalYearId ? fiscalMonths.filter((month) => month.fiscal_year_id.toString() === selectedFiscalYearId) : fiscalMonths),
 		[fiscalMonths, selectedFiscalYearId],
 	);
+
+	const selectedFiscalMonth = useMemo(
+		() => fiscalMonths.find((month) => month.id.toString() === selectedFiscalMonthId),
+		[fiscalMonths, selectedFiscalMonthId],
+	);
+
+	const selectedMonthNumber = selectedFiscalMonth?.efy_month_number ?? null;
+	const selectedMonthLabel = selectedMonthNumber
+		? monthNames?.[selectedMonthNumber] ?? MONTH_NAMES[selectedMonthNumber] ?? selectedFiscalMonth?.name ?? ''
+		: '';
+	const previousMonthNumber = selectedMonthNumber ? (selectedMonthNumber === 1 ? 12 : selectedMonthNumber - 1) : null;
+	const previousMonthLabel = previousMonthNumber
+		? monthNames?.[previousMonthNumber] ?? MONTH_NAMES[previousMonthNumber] ?? ''
+		: '';
 
 	function buildInitialRows() {
 		return branches.map((branch) => ({
@@ -108,7 +136,6 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths 
 		}
 		setSelectedFiscalMonthId('');
 		setEthiopianMonth('');
-		setPreviousMonthLabel('');
 		setEditingBudgetCount(0);
 		setRows(buildInitialRows());
 	}
@@ -135,47 +162,15 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths 
 		// Set all rows to loading
 		setRows((prev) => prev.map((r) => ({ ...r, loading: true })));
 
-		const updated = await Promise.all(
-			branches.map(async (branch) => {
-				try {
-					const [prevRes, checkRes] = await Promise.all([
-						fetch(`/budget/sales-budget/prev-expense?fiscal_month_id=${fiscalMonthId}&year=${year}&branch_id=${branch.id}`),
-						fetch(`/budget/sales-budget/check?branch_id=${branch.id}&fiscal_year_id=${selectedFiscalYearId}&fiscal_month_id=${fiscalMonthId}`),
-					]);
-
-					const prevData = await prevRes.json();
-					const checkData = await checkRes.json();
-					const existingBudget = checkData.budget ?? null;
-					return {
-						branch_id: branch.id,
-						branch_name: branch.name,
-						prev_expense_budget: parseFloat(prevData.prev_expense_budget) || 0,
-						prev_month_name: prevData.prev_month_name ? `${prevData.prev_month_name}` : '',
-						prev_year: prevData.prev_year,
-						sales_amount: existingBudget ? String(existingBudget.sales_amount ?? '') : '',
-						existing_budget_id: existingBudget ? existingBudget.id : null,
-						loading: false,
-					};
-				} catch {
-					return {
-						branch_id: branch.id,
-						branch_name: branch.name,
-						prev_expense_budget: 0,
-						prev_month_name: '',
-						prev_year: null,
-						sales_amount: '',
-						existing_budget_id: null,
-						loading: false,
-					};
-				}
-			}),
-		);
-		setRows(updated);
-		setEditingBudgetCount(updated.filter((row) => row.existing_budget_id !== null).length);
-		if (updated[0]?.prev_month_name && updated[0]?.prev_year) {
-			setPreviousMonthLabel(`${updated[0].prev_month_name} ${updated[0].prev_year}`.trim());
-		} else {
-			setPreviousMonthLabel('');
+		try {
+			const response = await fetch(`/budget/sales-budget/period-data?fiscal_year_id=${selectedFiscalYearId}&fiscal_month_id=${fiscalMonthId}`);
+			const data = await response.json();
+			const updated = Array.isArray(data.rows) ? data.rows : [];
+			setRows(updated);
+			setEditingBudgetCount(updated.filter((row: BudgetRow) => row.existing_budget_id !== null).length);
+		} catch {
+			setRows(buildInitialRows());
+			setEditingBudgetCount(0);
 		}
 	}
 
@@ -256,12 +251,6 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths 
 
 				{/* Form Card */}
 				<div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-					{editingBudgetCount > 0 && (
-						<div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-							A budget already exists for this branch/month period.
-						</div>
-					)}
-
 					{/* Top Fields — 2 columns only */}
 					<div className="mb-6 grid grid-cols-2 gap-4">
 						{/* Fiscal Year Dropdown */}
@@ -301,7 +290,6 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths 
 									</option>
 								))}
 							</select>
-							{previousMonthLabel && <p className="mt-1 text-xs text-blue-500">Previous month: {previousMonthLabel}</p>}
 						</div>
 					</div>
 
@@ -312,8 +300,12 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths 
 								<tr className="border-b border-gray-200 bg-gray-50">
 									<th className="w-8 px-4 py-3 text-left font-medium text-gray-600">#</th>
 									<th className="w-1/3 px-4 py-3 text-left font-medium text-gray-600">Branch Name</th>
-									<th className="w-1/3 px-4 py-3 text-left font-medium text-gray-600">Prev Month Expense Budget</th>
-									<th className="px-4 py-3 text-left font-medium text-gray-600">Sales Budget (ETB)</th>
+									<th className="w-1/3 px-4 py-3 text-left font-medium text-gray-600">
+										Prev Month ({previousMonthLabel || '—'})
+									</th>
+									<th className="px-4 py-3 text-left font-medium text-gray-600">
+										Current Month ({selectedMonthLabel || '—'})
+									</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -340,31 +332,33 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths 
 													row.loading
 														? 'Loading...'
 														: row.prev_expense_budget.toLocaleString('en-US', {
-																minimumFractionDigits: 2,
-															})
+															minimumFractionDigits: 2,
+														})
 												}
 												readOnly
 												className="w-full cursor-not-allowed rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-400"
 											/>
-											{row.prev_month_name && !row.loading && (
-												<p className="mt-1 text-xs text-gray-400">From {row.prev_month_name}</p>
-											)}
-											{row.existing_budget_id && !row.loading && (
-												<p className="mt-1 text-xs text-amber-600">A budget already exists</p>
-											)}
 										</td>
 
 										{/* Sales Amount - editable */}
 										<td className="px-4 py-3">
-											<input
-												type="number"
-												placeholder="0.00"
-												value={row.sales_amount}
-												onChange={(e) => handleAmountChange(row.branch_id, e.target.value)}
-												min="0"
-												step="0.01"
-												className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-											/>
+											{row.loading ? (
+												<div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-400">Loading...</div>
+											) : row.existing_budget_id ? (
+												<div className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+													{row.sales_amount ? Number(row.sales_amount).toLocaleString('en-US', { minimumFractionDigits: 2 }) : '0.00'}
+												</div>
+											) : (
+												<input
+													type="number"
+													placeholder="0.00"
+													value={row.sales_amount}
+													onChange={(e) => handleAmountChange(row.branch_id, e.target.value)}
+													min="0"
+													step="0.01"
+													className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+												/>
+											)}
 										</td>
 									</tr>
 								))}

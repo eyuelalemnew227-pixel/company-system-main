@@ -8,6 +8,7 @@ use App\Models\FiscalYear;
 use App\Models\SalesBudget;
 use App\Models\SalesBudgetLog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -23,6 +24,23 @@ private function canModify(): bool
     return true;
 }
 
+    private function activeBranches()
+    {
+        return Cache::remember('sales_budget_active_branches', 600, fn () => Branch::query()
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name']));
+    }
+
+    private function previousFiscalMonth(FiscalMonth $fiscalMonth): ?FiscalMonth
+    {
+        return FiscalMonth::query()
+            ->with('fiscalYear')
+            ->where('gregorian_start_date', '<', $fiscalMonth->gregorian_start_date)
+            ->orderByDesc('gregorian_start_date')
+            ->first();
+    }
+
     // GET /budget/sales-budget → show list
    public function index(Request $request)
 {
@@ -33,7 +51,14 @@ private function canModify(): bool
     $ethiopianMonth = $request->input('ethiopian_month');
     $showUnbudgeted = filter_var($request->input('show_unbudgeted', false), FILTER_VALIDATE_BOOLEAN);
 
-    $allBranches = Branch::orderBy('name')->get();
+    $allBranches = Branch::query()
+        ->where(function ($query) {
+            $query->where('status', 'active')
+                ->orWhere('name', 'like', '%Head Office%')
+                ->orWhereRaw('UPPER(branch_code) = ?', ['HO']);
+        })
+        ->orderBy('name')
+        ->get(['id', 'name', 'branch_code']);
     $fiscalYears = FiscalYear::orderByDesc('id')->get();
     $fiscalMonths = FiscalMonth::query()
         ->select('id', 'fiscal_year_id', 'name', 'efy_month_number')
@@ -158,7 +183,7 @@ private function canModify(): bool
 {
     
 
-    $branches    = Branch::orderBy('name')->get();
+    $branches    = $this->activeBranches();
 $fiscalYears = \App\Models\FiscalYear::orderBy('id')->get([
     'id',
     'name',
@@ -179,6 +204,70 @@ $fiscalYears = \App\Models\FiscalYear::orderBy('id')->get([
         'monthNames'  => $monthNames,
     ]);
 }
+
+    // GET /budget/sales-budget/period-data → load previous/current month data for all active branches
+    public function getPeriodData(Request $request)
+    {
+        $request->validate([
+            'fiscal_year_id' => ['required', 'exists:fiscal_years,id'],
+            'fiscal_month_id' => ['required', 'exists:fiscal_months,id'],
+        ]);
+
+        $fiscalMonth = FiscalMonth::query()
+            ->select('id', 'fiscal_year_id', 'name', 'efy_month_number', 'gregorian_start_date')
+            ->whereKey($request->integer('fiscal_month_id'))
+            ->firstOrFail();
+
+        $previousFiscalMonth = $this->previousFiscalMonth($fiscalMonth);
+
+        $previousYearLabel = null;
+        if ($previousFiscalMonth?->fiscalYear?->name) {
+            preg_match('/(\d+)/', $previousFiscalMonth->fiscalYear->name, $previousYearMatches);
+            $previousYearLabel = $previousYearMatches[1] ?? $previousFiscalMonth->fiscalYear->name;
+        }
+
+        $branches = $this->activeBranches();
+        $branchIds = $branches->pluck('id');
+
+        $currentBudgets = SalesBudget::query()
+            ->select(['id', 'branch_id', 'sales_amount'])
+            ->where('fiscal_year_id', $request->integer('fiscal_year_id'))
+            ->where('fiscal_month_id', $request->integer('fiscal_month_id'))
+            ->whereIn('branch_id', $branchIds)
+            ->get()
+            ->keyBy('branch_id');
+
+        $previousBudgets = $previousFiscalMonth
+            ? SalesBudget::query()
+                ->select(['branch_id', 'sales_amount'])
+                ->where('fiscal_month_id', $previousFiscalMonth->id)
+                ->whereIn('branch_id', $branchIds)
+                ->get()
+                ->keyBy('branch_id')
+            : collect();
+
+        $rows = $branches->map(function ($branch) use ($currentBudgets, $previousBudgets, $previousFiscalMonth, $previousYearLabel) {
+            $currentBudget = $currentBudgets->get($branch->id);
+            $previousBudget = $previousBudgets->get($branch->id);
+
+            return [
+                'branch_id' => $branch->id,
+                'branch_name' => $branch->name,
+                'prev_expense_budget' => (float) ($previousBudget->sales_amount ?? 0),
+                'prev_month_name' => $previousFiscalMonth?->name ?? '',
+                'prev_year' => $previousYearLabel,
+                'sales_amount' => $currentBudget?->sales_amount !== null ? (string) $currentBudget->sales_amount : '',
+                'existing_budget_id' => $currentBudget?->id,
+                'loading' => false,
+            ];
+        })->values();
+
+        return response()->json([
+            'rows' => $rows,
+            'previous_month_label' => $previousFiscalMonth?->name,
+            'previous_year_label' => $previousYearLabel,
+        ]);
+    }
 
     // GET /budget/sales-budget/prev-expense → get previous month expense
     public function getPrevExpense(Request $request)

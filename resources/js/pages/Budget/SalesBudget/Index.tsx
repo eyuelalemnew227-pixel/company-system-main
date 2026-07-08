@@ -1,7 +1,12 @@
 import TablePagination from '@/components/table-pagination';
+import { Button } from '@/components/ui/button';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -88,6 +93,7 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 	}>({ open: false, id: null, branchName: '', month: '', year: 0 });
 
 	const [selectedBranch, setSelectedBranch] = useState(request?.branch_id ?? '');
+	const [openBranch, setOpenBranch] = useState(false);
 	const [selectedFiscalYear, setSelectedFiscalYear] = useState(request?.fiscal_year_id ?? '');
 	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState(request?.fiscal_month_id ?? '');
 	const [showUnbudgeted, setShowUnbudgeted] = useState(
@@ -140,6 +146,13 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 		setSelectedFiscalYear(value);
 		setSelectedFiscalMonth('');
 	}
+
+	function handleBranchSelect(value: string) {
+		setSelectedBranch(value);
+		setOpenBranch(false);
+	}
+
+	const selectedBranchOption = branches.find((branch) => String(branch.id) === selectedBranch);
 
 	const filteredFiscalMonths = selectedFiscalYear ? fiscalMonths.filter((month) => month.fiscal_year_id.toString() === selectedFiscalYear) : [];
 
@@ -207,18 +220,38 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 				{/* Filter */}
 				<form onSubmit={handleFilterSubmit} className="mb-6 flex flex-col gap-3">
 					<div className="flex flex-wrap items-center gap-3">
-						<select
-							value={selectedBranch}
-							onChange={(e) => setSelectedBranch(e.target.value)}
-							className="h-10 w-52 appearance-none rounded-lg border border-gray-200 px-3 py-2 text-sm leading-none focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
-						>
-							<option value="">All Branches</option>
-							{branches.map((branch) => (
-								<option key={branch.id} value={branch.id}>
-									{branch.name}
-								</option>
-							))}
-						</select>
+						<Popover open={openBranch} onOpenChange={setOpenBranch}>
+							<PopoverTrigger asChild>
+								<Button variant="outline" role="combobox" className="h-10 w-52 justify-between font-normal">
+									{selectedBranchOption ? selectedBranchOption.name : 'All Branches'}
+									<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+								</Button>
+							</PopoverTrigger>
+							<PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+								<Command>
+									<CommandInput placeholder="Search branches..." />
+									<CommandList className="max-h-60">
+										<CommandEmpty>No branches found.</CommandEmpty>
+										<CommandGroup>
+											<CommandItem value="All Branches" onSelect={() => handleBranchSelect('')}>
+												<Check className={cn('mr-2 size-4', selectedBranch === '' ? 'opacity-100' : 'opacity-0')} />
+												All Branches
+											</CommandItem>
+											{branches.map((branch) => (
+												<CommandItem
+													key={branch.id}
+													value={branch.name}
+													onSelect={() => handleBranchSelect(String(branch.id))}
+												>
+													<Check className={cn('mr-2 size-4', selectedBranch === String(branch.id) ? 'opacity-100' : 'opacity-0')} />
+													{branch.name}
+												</CommandItem>
+											))}
+										</CommandGroup>
+									</CommandList>
+								</Command>
+							</PopoverContent>
+						</Popover>
 
 						<select
 							value={selectedFiscalYear}
