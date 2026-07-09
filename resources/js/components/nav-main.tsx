@@ -194,7 +194,7 @@ function NavGroup({ sectionLabel, group }: { sectionLabel: string; group: NavGro
 					</SidebarMenuSubButton>
 				</CollapsibleTrigger>
 				<CollapsibleContent>
-					<SidebarMenuSub className="mx-0 border-0 px-0">
+					<SidebarMenuSub>
 						{group.items.map((item) => {
 							const href = item.href ?? '';
 							const isExternalLink = item.external ?? /^https?:\/\//.test(href);
