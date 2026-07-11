@@ -39,7 +39,8 @@ class WeeklyBudgetController extends Controller
             ->when(request('branch_id'), fn ($q, $v) => $q->where('branch_id', $v))
             ->when(request('department_id'), fn ($q, $v) => $q->where('department_id', $v))
             ->when(request('fiscal_year_id'), fn ($q, $v) => $q->where('fiscal_year_id', $v))
-            ->when(request('fiscal_month_id'), fn ($q, $v) => $q->where('fiscal_month_id', $v));
+            ->when(request('fiscal_month_id'), fn ($q, $v) => $q->where('fiscal_month_id', $v))
+            ->when(request('week_start_date'), fn ($q, $v) => $q->where('week_start_date', $v));
 
         $items = $query
             ->latest()
@@ -76,6 +77,12 @@ class WeeklyBudgetController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        $today = now()->toDateString();
+        $currentFiscalYear = FiscalYear::query()
+            ->where('gregorian_start_date', '<=', $today)
+            ->where('gregorian_end_date', '>=', $today)
+            ->first();
+
         return Inertia::render('Budget/WeeklyBudget/Index', [
             'items'       => $items,
             'branches'    => $branches,
@@ -86,6 +93,8 @@ class WeeklyBudgetController extends Controller
             'statusFinances' => array_column(WeeklyBudgetStatusFinance::cases(), 'value'),
             'statusDepartments' => array_column(WeeklyBudgetStatusDepartment::cases(), 'value'),
             'statusCeos'    => array_column(WeeklyBudgetStatusCeo::cases(), 'value'),
+            'today'         => $today,
+            'currentFiscalYearId' => $currentFiscalYear?->id,
             'request'     => request()->only([
                 'request_type',
                 'status_finance',
@@ -95,6 +104,7 @@ class WeeklyBudgetController extends Controller
                 'department_id',
                 'fiscal_year_id',
                 'fiscal_month_id',
+                'week_start_date',
             ]),
         ]);
     }
@@ -258,11 +268,12 @@ class WeeklyBudgetController extends Controller
     {
         return FiscalYear::query()
             ->orderByDesc('gregorian_start_date')
-            ->get(['id', 'name', 'gregorian_start_date'])
+            ->get(['id', 'name', 'gregorian_start_date', 'gregorian_end_date'])
             ->map(fn (FiscalYear $year) => [
                 'id'                   => $year->id,
                 'name'                 => $year->name,
                 'gregorian_start_date' => $year->gregorian_start_date?->toDateString(),
+                'gregorian_end_date'   => $year->gregorian_end_date?->toDateString(),
             ])
             ->values();
     }
@@ -275,11 +286,13 @@ class WeeklyBudgetController extends Controller
         return FiscalMonth::query()
             ->orderBy('fiscal_year_id')
             ->orderBy('efy_month_number')
-            ->get(['id', 'name', 'fiscal_year_id'])
+            ->get(['id', 'name', 'fiscal_year_id', 'gregorian_start_date', 'gregorian_end_date'])
             ->map(fn (FiscalMonth $month) => [
-                'id'             => $month->id,
-                'name'           => $month->name,
-                'fiscal_year_id' => $month->fiscal_year_id,
+                'id'                   => $month->id,
+                'name'                 => $month->name,
+                'fiscal_year_id'       => $month->fiscal_year_id,
+                'gregorian_start_date' => $month->gregorian_start_date?->toDateString(),
+                'gregorian_end_date'   => $month->gregorian_end_date?->toDateString(),
             ])
             ->values();
     }

@@ -9,13 +9,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Filter, Plus, Save, Trash2, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Filter, MessageSquare, Plus, Save, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -35,12 +36,23 @@ type DepartmentOption = {
 type FiscalYearOption = {
 	id: number;
 	name: string;
+	gregorian_start_date: string | null;
+	gregorian_end_date: string | null;
 };
 
 type FiscalMonthOption = {
 	id: number;
 	name: string;
 	fiscal_year_id: number;
+	gregorian_start_date?: string | null;
+	gregorian_end_date?: string | null;
+};
+
+type WeekOption = {
+	weekNumber: number;
+	startDate: string;
+	endDate: string;
+	label: string;
 };
 
 type WeeklyBudgetRow = {
@@ -92,7 +104,10 @@ type IndexProps = {
 	requestTypes: string[];
 	statusFinances: string[];
 	statusDepartments: string[];
+	statueCeos: string[];
 	statusCeos: string[];
+	today: string;
+	currentFiscalYearId?: number | null;
 	request?: {
 		request_type?: string;
 		status_finance?: string;
@@ -102,6 +117,7 @@ type IndexProps = {
 		department_id?: string;
 		fiscal_year_id?: string;
 		fiscal_month_id?: string;
+		week_start_date?: string;
 	};
 };
 
@@ -126,12 +142,22 @@ function isHeadOfficeBranch(branch: BranchOption | null | undefined): boolean {
 	return branch.name.includes('Head Office');
 }
 
-function formatWeekLabel(weekNumber: number, startDate: string | null, endDate: string | null): string {
+/**
+ * Department→Branch dependency: Branch is enabled only for Operation or HR departments.
+ */
+function isBranchEnabledForDepartment(dept: DepartmentOption | null | undefined): boolean {
+	if (!dept) return false;
+	const name = dept.name.toLowerCase();
+	return name.includes('operation') || name.includes('hr') || name.includes('human resource');
+}
+
+function formatWeekLabelFull(weekNumber: number, startDate: string | null, endDate: string | null): string {
 	if (startDate && endDate) {
-		const start = new Date(startDate);
-		const end = new Date(endDate);
-		const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-		return `Week ${weekNumber} (${fmt(start)} – ${fmt(end)})`;
+		const start = new Date(startDate + 'T00:00:00');
+		const end = new Date(endDate + 'T00:00:00');
+		const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+		const fmtFull = (d: Date) => `${months[d.getMonth()]} ${d.getDate()}`;
+		return `Week ${weekNumber} (${fmtFull(start)} – ${fmtFull(end)})`;
 	}
 	return `Week ${weekNumber}`;
 }
@@ -201,7 +227,117 @@ function getMondayOfWeek(d: Date): Date {
 }
 
 function toDateString(d: Date): string {
-	return d.toISOString().split('T')[0];
+	const yyyy = d.getFullYear();
+	const mm = String(d.getMonth() + 1).padStart(2, '0');
+	const dd = String(d.getDate()).padStart(2, '0');
+	return `${yyyy}-${mm}-${dd}`;
+}
+
+function toMonthDayLabel(d: Date): string {
+	const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+	return `${months[d.getMonth()]} ${d.getDate()}`;
+}
+
+function getFiscalWeekNumber(monday: Date, fiscalYearStartDate: Date): number {
+	const anchor = getMondayOfWeek(fiscalYearStartDate);
+	const diffMs = monday.getTime() - anchor.getTime();
+	const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+	return Math.floor(diffDays / 7) + 1;
+}
+
+/**
+ * Build all weeks within the current fiscal year from week 1 up to 2 weeks ahead of today.
+ */
+function buildCurrentFiscalYearWeeks(fiscalYear: FiscalYearOption, todayStr: string): WeekOption[] {
+	if (!fiscalYear.gregorian_start_date || !fiscalYear.gregorian_end_date) return [];
+
+	const fyStart = new Date(fiscalYear.gregorian_start_date + 'T00:00:00');
+	const fyEnd = new Date(fiscalYear.gregorian_end_date + 'T00:00:00');
+	const today = new Date(todayStr + 'T00:00:00');
+
+	// Limit: two weeks ahead of today
+	const twoWeeksAheadMonday = getMondayOfWeek(today);
+	twoWeeksAheadMonday.setDate(twoWeeksAheadMonday.getDate() + 14);
+	const cutoff = twoWeeksAheadMonday; // up to and including this week's Monday
+
+	const weeks: WeekOption[] = [];
+	let cursor = getMondayOfWeek(fyStart);
+
+	while (cursor <= cutoff && cursor <= fyEnd) {
+		const sunday = new Date(cursor);
+		sunday.setDate(cursor.getDate() + 6);
+		const weekNumber = getFiscalWeekNumber(cursor, fyStart);
+		weeks.push({
+			weekNumber,
+			startDate: toDateString(cursor),
+			endDate: toDateString(sunday),
+			label: `Week ${weekNumber} (${toMonthDayLabel(cursor)} – ${toMonthDayLabel(sunday)})`,
+		});
+		cursor = new Date(cursor);
+		cursor.setDate(cursor.getDate() + 7);
+	}
+
+	return weeks;
+}
+
+/**
+ * Build weeks for a specific fiscal year (all weeks within that year).
+ */
+function buildFiscalYearAllWeeks(fiscalYear: FiscalYearOption): WeekOption[] {
+	if (!fiscalYear.gregorian_start_date || !fiscalYear.gregorian_end_date) return [];
+
+	const fyStart = new Date(fiscalYear.gregorian_start_date + 'T00:00:00');
+	const fyEnd = new Date(fiscalYear.gregorian_end_date + 'T00:00:00');
+
+	const weeks: WeekOption[] = [];
+	let cursor = getMondayOfWeek(fyStart);
+
+	while (cursor <= fyEnd) {
+		const sunday = new Date(cursor);
+		sunday.setDate(cursor.getDate() + 6);
+		const weekNumber = getFiscalWeekNumber(cursor, fyStart);
+		weeks.push({
+			weekNumber,
+			startDate: toDateString(cursor),
+			endDate: toDateString(sunday),
+			label: `Week ${weekNumber} (${toMonthDayLabel(cursor)} – ${toMonthDayLabel(sunday)})`,
+		});
+		cursor = new Date(cursor);
+		cursor.setDate(cursor.getDate() + 7);
+	}
+
+	return weeks;
+}
+
+/**
+ * Build weeks filtered to those overlapping a specific fiscal month.
+ */
+function buildFiscalMonthWeeks(fiscalYear: FiscalYearOption, fiscalMonth: FiscalMonthOption): WeekOption[] {
+	if (!fiscalYear.gregorian_start_date || !fiscalMonth.gregorian_start_date || !fiscalMonth.gregorian_end_date) return [];
+
+	const fyStart = new Date(fiscalYear.gregorian_start_date + 'T00:00:00');
+	const monthStart = new Date(fiscalMonth.gregorian_start_date + 'T00:00:00');
+	const monthEnd = new Date(fiscalMonth.gregorian_end_date + 'T00:00:00');
+
+	const weeks: WeekOption[] = [];
+	// Start from the Monday of the week containing month start
+	let cursor = getMondayOfWeek(monthStart);
+
+	while (cursor <= monthEnd) {
+		const sunday = new Date(cursor);
+		sunday.setDate(cursor.getDate() + 6);
+		const weekNumber = getFiscalWeekNumber(cursor, fyStart);
+		weeks.push({
+			weekNumber,
+			startDate: toDateString(cursor),
+			endDate: toDateString(sunday),
+			label: `Week ${weekNumber} (${toMonthDayLabel(cursor)} – ${toMonthDayLabel(sunday)})`,
+		});
+		cursor = new Date(cursor);
+		cursor.setDate(cursor.getDate() + 7);
+	}
+
+	return weeks;
 }
 
 export default function WeeklyBudgetIndex({
@@ -214,6 +350,8 @@ export default function WeeklyBudgetIndex({
 	statusFinances,
 	statusDepartments,
 	statusCeos,
+	today,
+	currentFiscalYearId,
 	request,
 }: IndexProps) {
 	const { flash } = usePage<{ flash: { message?: string } }>().props;
@@ -228,6 +366,8 @@ export default function WeeklyBudgetIndex({
 	const [selectedDepartment, setSelectedDepartment] = useState<string>(request?.department_id ?? 'all');
 	const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(request?.fiscal_year_id ?? 'all');
 	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(request?.fiscal_month_id ?? 'all');
+	const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(request?.week_start_date ?? 'all');
+
 	const [openBranchFilter, setOpenBranchFilter] = useState(false);
 	const [openDepartmentFilter, setOpenDepartmentFilter] = useState(false);
 
@@ -248,9 +388,7 @@ export default function WeeklyBudgetIndex({
 	const newRequestDeptOption = useMemo(() => departments.find((d) => d.id.toString() === newRequestDept) ?? null, [newRequestDept, departments]);
 
 	const isNewRequestBranchEnabled = useMemo(() => {
-		if (!newRequestDeptOption) return false;
-		const name = newRequestDeptOption.name.toLowerCase();
-		return name.includes('operation') || name.includes('hr') || name.includes('human resource');
+		return isBranchEnabledForDepartment(newRequestDeptOption);
 	}, [newRequestDeptOption]);
 
 	const newRequestBranchOption = useMemo(() => branches.find((b) => b.id.toString() === newRequestBranch) ?? null, [newRequestBranch, branches]);
@@ -377,17 +515,19 @@ export default function WeeklyBudgetIndex({
 		);
 	}
 
-	const selectedBranchOption = useMemo(
-		() => (selectedBranch === 'all' ? null : (branches.find((b) => b.id.toString() === selectedBranch) ?? null)),
-		[selectedBranch, branches],
-	);
-
+	// ─── Filter: Department option ────────────────────────────────────────────
 	const selectedDepartmentOption = useMemo(
 		() => (selectedDepartment === 'all' ? null : (departments.find((d) => d.id.toString() === selectedDepartment) ?? null)),
 		[selectedDepartment, departments],
 	);
 
-	const canFilterByDepartment = isHeadOfficeBranch(selectedBranchOption);
+	// Branch enabled only when department is Operation or HR
+	const canFilterByBranch = useMemo(() => isBranchEnabledForDepartment(selectedDepartmentOption), [selectedDepartmentOption]);
+
+	const selectedBranchOption = useMemo(
+		() => (selectedBranch === 'all' ? null : (branches.find((b) => b.id.toString() === selectedBranch) ?? null)),
+		[selectedBranch, branches],
+	);
 
 	const filteredFiscalMonths = useMemo(() => {
 		if (selectedFiscalYear === 'all') {
@@ -395,6 +535,35 @@ export default function WeeklyBudgetIndex({
 		}
 		return fiscalMonths.filter((m) => String(m.fiscal_year_id) === selectedFiscalYear);
 	}, [fiscalMonths, selectedFiscalYear]);
+
+	// ─── Week filter options ──────────────────────────────────────────────────
+	const weekFilterOptions = useMemo((): WeekOption[] => {
+		const hasYear = selectedFiscalYear !== 'all';
+		const hasMonth = selectedFiscalMonth !== 'all';
+
+		if (hasMonth) {
+			// Both year and month selected — show weeks for that month
+			const fy = fiscalYears.find((y) => String(y.id) === selectedFiscalYear);
+			const fm = fiscalMonths.find((m) => String(m.id) === selectedFiscalMonth);
+			if (fy && fm) return buildFiscalMonthWeeks(fy, fm);
+			return [];
+		}
+
+		if (hasYear) {
+			// Year selected only — show all weeks for that year
+			const fy = fiscalYears.find((y) => String(y.id) === selectedFiscalYear);
+			if (fy) return buildFiscalYearAllWeeks(fy);
+			return [];
+		}
+
+		// Default: no year/month selected — show current fiscal year weeks up to 2 weeks ahead
+		if (currentFiscalYearId) {
+			const fy = fiscalYears.find((y) => y.id === currentFiscalYearId);
+			if (fy) return buildCurrentFiscalYearWeeks(fy, today);
+		}
+
+		return [];
+	}, [selectedFiscalYear, selectedFiscalMonth, fiscalYears, fiscalMonths, currentFiscalYearId, today]);
 
 	useEffect(() => {
 		if (flash?.message) {
@@ -408,10 +577,11 @@ export default function WeeklyBudgetIndex({
 		if (selectedStatusFinance !== 'all') params.status_finance = selectedStatusFinance;
 		if (selectedStatusDepartment !== 'all') params.status_department = selectedStatusDepartment;
 		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
-		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
 		if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
+		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
 		if (selectedFiscalYear !== 'all') params.fiscal_year_id = selectedFiscalYear;
 		if (selectedFiscalMonth !== 'all') params.fiscal_month_id = selectedFiscalMonth;
+		if (selectedWeekStartDate !== 'all') params.week_start_date = selectedWeekStartDate;
 		return params;
 	}
 
@@ -424,28 +594,38 @@ export default function WeeklyBudgetIndex({
 		router.get('/budget/weekly-budget', params, { preserveState: true, replace: true });
 	}
 
-	function handleBranchFilterSelect(branchId: string) {
-		setOpenBranchFilter(false);
-		setSelectedBranch(branchId);
-		setSelectedDepartment('all');
-		applyFilters({ branch_id: branchId, department_id: 'all' });
-	}
-
 	function handleDepartmentFilterSelect(departmentId: string) {
 		setOpenDepartmentFilter(false);
 		setSelectedDepartment(departmentId);
-		applyFilters({ department_id: departmentId });
+		// Reset branch when department changes
+		setSelectedBranch('all');
+		setSelectedWeekStartDate('all');
+		applyFilters({ department_id: departmentId, branch_id: 'all', week_start_date: 'all' });
+	}
+
+	function handleBranchFilterSelect(branchId: string) {
+		setOpenBranchFilter(false);
+		setSelectedBranch(branchId);
+		setSelectedWeekStartDate('all');
+		applyFilters({ branch_id: branchId, week_start_date: 'all' });
 	}
 
 	function handleFiscalYearChange(value: string) {
 		setSelectedFiscalYear(value);
 		setSelectedFiscalMonth('all');
-		applyFilters({ fiscal_year_id: value, fiscal_month_id: 'all' });
+		setSelectedWeekStartDate('all');
+		applyFilters({ fiscal_year_id: value, fiscal_month_id: 'all', week_start_date: 'all' });
 	}
 
 	function handleFiscalMonthChange(value: string) {
 		setSelectedFiscalMonth(value);
-		applyFilters({ fiscal_month_id: value });
+		setSelectedWeekStartDate('all');
+		applyFilters({ fiscal_month_id: value, week_start_date: 'all' });
+	}
+
+	function handleWeekFilterChange(value: string) {
+		setSelectedWeekStartDate(value);
+		applyFilters({ week_start_date: value });
 	}
 
 	function handleRequestTypeChange(value: string) {
@@ -471,22 +651,32 @@ export default function WeeklyBudgetIndex({
 	function clearFilters() {
 		setSelectedRequestType('all');
 		setSelectedStatusFinance('all');
+		setSelectedStatusDepartment('all');
 		setSelectedStatusCeo('all');
-		setSelectedBranch('all');
 		setSelectedDepartment('all');
+		setSelectedBranch('all');
 		setSelectedFiscalYear('all');
 		setSelectedFiscalMonth('all');
+		setSelectedWeekStartDate('all');
 		router.get('/budget/weekly-budget', {}, { preserveState: true, replace: true });
 	}
 
 	const hasActiveFilters =
 		selectedRequestType !== 'all' ||
 		selectedStatusFinance !== 'all' ||
+		selectedStatusDepartment !== 'all' ||
 		selectedStatusCeo !== 'all' ||
-		selectedBranch !== 'all' ||
 		selectedDepartment !== 'all' ||
+		selectedBranch !== 'all' ||
 		selectedFiscalYear !== 'all' ||
-		selectedFiscalMonth !== 'all';
+		selectedFiscalMonth !== 'all' ||
+		selectedWeekStartDate !== 'all';
+
+	// Selected week option label for the filter trigger
+	const selectedWeekOption = useMemo(
+		() => (selectedWeekStartDate === 'all' ? null : weekFilterOptions.find((w) => w.startDate === selectedWeekStartDate) ?? null),
+		[selectedWeekStartDate, weekFilterOptions],
+	);
 
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
@@ -564,13 +754,60 @@ export default function WeeklyBudgetIndex({
 								</SelectContent>
 							</Select>
 
-							<Popover open={openBranchFilter} onOpenChange={setOpenBranchFilter}>
+							{/* Department — comes first before Branch */}
+							<Popover open={openDepartmentFilter} onOpenChange={setOpenDepartmentFilter}>
 								<PopoverTrigger asChild>
 									<Button variant="outline" role="combobox" className="w-[180px] justify-between font-normal">
-										{selectedBranchOption?.name ?? 'All Branches'}
+										{selectedDepartmentOption?.name ?? 'All Departments'}
 										<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
 									</Button>
 								</PopoverTrigger>
+								<PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+									<Command>
+										<CommandInput placeholder="Search departments..." />
+										<CommandList className="max-h-60">
+											<CommandEmpty>No departments found.</CommandEmpty>
+											<CommandGroup>
+												<CommandItem value="All Departments" onSelect={() => handleDepartmentFilterSelect('all')}>
+													<Check className={cn('mr-2 size-4', selectedDepartment === 'all' ? 'opacity-100' : 'opacity-0')} />
+													All Departments
+												</CommandItem>
+												{departments.map((department) => (
+													<CommandItem
+														key={department.id}
+														value={department.name}
+														onSelect={() => handleDepartmentFilterSelect(department.id.toString())}
+													>
+														<Check
+															className={cn(
+																'mr-2 size-4',
+																selectedDepartment === department.id.toString() ? 'opacity-100' : 'opacity-0',
+															)}
+														/>
+														{department.name}
+													</CommandItem>
+												))}
+											</CommandGroup>
+										</CommandList>
+									</Command>
+								</PopoverContent>
+							</Popover>
+
+							{/* Branch — only enabled when Department is Operation or HR */}
+							<Popover open={openBranchFilter} onOpenChange={setOpenBranchFilter}>
+								<div className={cn(!canFilterByBranch && 'cursor-not-allowed')}>
+									<PopoverTrigger asChild>
+										<Button
+											variant="outline"
+											role="combobox"
+											className="w-[180px] justify-between font-normal"
+											disabled={!canFilterByBranch}
+										>
+											{selectedBranchOption?.name ?? 'All Branches'}
+											<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+										</Button>
+									</PopoverTrigger>
+								</div>
 								<PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
 									<Command>
 										<CommandInput placeholder="Search branches..." />
@@ -602,53 +839,6 @@ export default function WeeklyBudgetIndex({
 								</PopoverContent>
 							</Popover>
 
-							<Popover open={openDepartmentFilter} onOpenChange={setOpenDepartmentFilter}>
-								<div className={cn(!canFilterByDepartment && 'cursor-not-allowed')}>
-									<PopoverTrigger asChild>
-										<Button
-											variant="outline"
-											role="combobox"
-											className="w-[180px] justify-between font-normal"
-											disabled={!canFilterByDepartment}
-										>
-											{selectedDepartmentOption?.name ?? 'All Departments'}
-											<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-										</Button>
-									</PopoverTrigger>
-								</div>
-								<PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-									<Command>
-										<CommandInput placeholder="Search departments..." />
-										<CommandList className="max-h-60">
-											<CommandEmpty>No departments found.</CommandEmpty>
-											<CommandGroup>
-												<CommandItem value="All Departments" onSelect={() => handleDepartmentFilterSelect('all')}>
-													<Check
-														className={cn('mr-2 size-4', selectedDepartment === 'all' ? 'opacity-100' : 'opacity-0')}
-													/>
-													All Departments
-												</CommandItem>
-												{departments.map((department) => (
-													<CommandItem
-														key={department.id}
-														value={department.name}
-														onSelect={() => handleDepartmentFilterSelect(department.id.toString())}
-													>
-														<Check
-															className={cn(
-																'mr-2 size-4',
-																selectedDepartment === department.id.toString() ? 'opacity-100' : 'opacity-0',
-															)}
-														/>
-														{department.name}
-													</CommandItem>
-												))}
-											</CommandGroup>
-										</CommandList>
-									</Command>
-								</PopoverContent>
-							</Popover>
-
 							<Select value={selectedFiscalYear} onValueChange={handleFiscalYearChange}>
 								<SelectTrigger className="w-[180px]">
 									<SelectValue placeholder="All Fiscal Years" />
@@ -672,6 +862,21 @@ export default function WeeklyBudgetIndex({
 									{filteredFiscalMonths.map((month) => (
 										<SelectItem key={month.id} value={month.id.toString()}>
 											{month.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+
+							{/* Week filter — at the end */}
+							<Select value={selectedWeekStartDate} onValueChange={handleWeekFilterChange}>
+								<SelectTrigger className="w-[260px]">
+									<SelectValue placeholder="All Weeks" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All Weeks</SelectItem>
+									{weekFilterOptions.map((week) => (
+										<SelectItem key={week.startDate} value={week.startDate}>
+											{week.label}
 										</SelectItem>
 									))}
 								</SelectContent>
@@ -715,7 +920,7 @@ export default function WeeklyBudgetIndex({
 										<TableCell>{item.fiscal_year ?? 'N/A'}</TableCell>
 										<TableCell>{item.fiscal_month ?? 'N/A'}</TableCell>
 										<TableCell className="whitespace-nowrap">
-											{formatWeekLabel(item.week_number, item.week_start_date, item.week_end_date)}
+											{formatWeekLabelFull(item.week_number, item.week_start_date, item.week_end_date)}
 										</TableCell>
 										<TableCell>{requestTypeBadge(item.request_type)}</TableCell>
 										<TableCell>{statusBadge(item.status_department, 'department')}</TableCell>
@@ -726,7 +931,28 @@ export default function WeeklyBudgetIndex({
 											<div className="max-w-xs truncate text-sm text-slate-600">{item.description || '-'}</div>
 										</TableCell>
 										<TableCell>
-											<div className="max-w-xs truncate text-sm text-slate-600">{item.note || '-'}</div>
+											<Tooltip delayDuration={100}>
+												<TooltipTrigger asChild>
+													<button
+														type="button"
+														className={cn(
+															'flex items-center justify-center rounded p-1 transition-colors',
+															item.note
+																? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-700'
+																: 'cursor-default text-slate-300',
+														)}
+														aria-label="View note"
+													>
+														<MessageSquare className="size-4" />
+													</button>
+												</TooltipTrigger>
+												<TooltipContent
+													side="left"
+													className="max-w-[280px] whitespace-pre-wrap break-words text-sm"
+												>
+													{item.note ? item.note : <span className="italic text-muted-foreground">No note added</span>}
+												</TooltipContent>
+											</Tooltip>
 										</TableCell>
 										<TableCell>
 											{canManageWeeklyBudget && (
@@ -993,7 +1219,7 @@ export default function WeeklyBudgetIndex({
 								/>
 								{editForm.week_number && (
 									<p className="mt-1 text-xs text-slate-500">
-										{formatWeekLabel(Number(editForm.week_number), editForm.week_start_date, editForm.week_end_date)}
+										{formatWeekLabelFull(Number(editForm.week_number), editForm.week_start_date, editForm.week_end_date)}
 									</p>
 								)}
 							</div>
