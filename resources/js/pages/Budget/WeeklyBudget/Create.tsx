@@ -193,22 +193,35 @@ function getWeekOptions(requestType: string, todayStr: string, fiscalYearStartDa
 	const weekAfterNextMonday = new Date(currentMonday);
 	weekAfterNextMonday.setDate(currentMonday.getDate() + 14);
 
-	if (requestType === 'urgent') {
-		// Both options are always enabled (deadline = Sunday, i.e. never disabled within the week)
-		return [
-			buildWeekOption(nextMonday, false, fiscalYearStartDate),
-			buildWeekOption(weekAfterNextMonday, false, fiscalYearStartDate),
-		];
-	}
+    if (requestType === 'urgent') {
+        // Monday–Friday: current week + next week; Weekend: only next week
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+            return [
+                buildWeekOption(currentMonday, false, fiscalYearStartDate),
+                buildWeekOption(nextMonday, false, fiscalYearStartDate),
+            ];
+        } else {
+            // Saturday (6) or Sunday (0)
+            return [
+                buildWeekOption(nextMonday, false, fiscalYearStartDate),
+            ];
+        }
+    }
 
-	if (requestType === 'normal') {
-		// Deadline is Friday (day 5). On Sat (6) or Sun (0) the immediate next week is disabled.
-		const isWeekendCutoff = dayOfWeek === 0 || dayOfWeek === 6;
-		return [
-			buildWeekOption(nextMonday, isWeekendCutoff, fiscalYearStartDate),
-			buildWeekOption(weekAfterNextMonday, false, fiscalYearStartDate),
-		];
-	}
+    if (requestType === 'normal') {
+        // Monday–Friday: next week + week after next; Weekend: only week after next
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+            return [
+                buildWeekOption(nextMonday, false, fiscalYearStartDate),
+                buildWeekOption(weekAfterNextMonday, false, fiscalYearStartDate),
+            ];
+        } else {
+            // Saturday (6) or Sunday (0)
+            return [
+                buildWeekOption(weekAfterNextMonday, false, fiscalYearStartDate),
+            ];
+        }
+    }
 
 	return [];
 }
