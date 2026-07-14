@@ -30,6 +30,8 @@ class WeeklyBudget extends Model
         'description',
         'note',
         'created_by',
+        'payment_category_id',
+        'payment_type_id',
     ];
 
     protected $casts = [
@@ -65,5 +67,15 @@ class WeeklyBudget extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function paymentCategory(): BelongsTo
+    {
+        return $this->belongsTo(PaymentCategory::class, 'payment_category_id');
+    }
+
+    public function paymentType(): BelongsTo
+    {
+        return $this->belongsTo(PaymentType::class, 'payment_type_id');
     }
 }

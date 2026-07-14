@@ -10,6 +10,7 @@ use App\Models\Branch;
 use App\Models\Department;
 use App\Models\FiscalMonth;
 use App\Models\FiscalYear;
+use App\Models\ExpenseItem;
 use App\Models\WeeklyBudget;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -304,5 +305,211 @@ class WeeklyBudgetController extends Controller
         }
 
         return str_contains($branch->name, 'Head Office');
+    }
+
+    public function financeView(): Response
+    {
+        abort_unless(auth()->user()->can('view finance budgets'), 403);
+
+        $query = WeeklyBudget::query()->with([
+            'branch',
+            'department',
+            'fiscalYear',
+            'fiscalMonth',
+            'creator',
+        ]);
+
+        // Load all expense items upfront for payment type name resolution
+        $expenseItems = ExpenseItem::query()->orderBy('expense_type')->get();
+
+        $query
+            ->when(request('request_type'), fn ($q, $v) => $q->where('request_type', $v))
+            ->when(request('status_finance'), fn ($q, $v) => $q->where('status_finance', $v))
+            ->when(request('status_department'), fn ($q, $v) => $q->where('status_department', $v))
+            ->when(request('status_ceo'), fn ($q, $v) => $q->where('status_ceo', $v))
+            ->when(request('branch_id'), fn ($q, $v) => $q->where('branch_id', $v))
+            ->when(request('department_id'), fn ($q, $v) => $q->where('department_id', $v))
+            ->when(request('fiscal_year_id'), fn ($q, $v) => $q->where('fiscal_year_id', $v))
+            ->when(request('fiscal_month_id'), fn ($q, $v) => $q->where('fiscal_month_id', $v))
+            ->when(request('week_start_date'), fn ($q, $v) => $q->where('week_start_date', $v))
+            ->when(request('payment_category_id'), fn ($q, $v) => $q->where('payment_category_id', $v))
+            ->when(request('payment_type_id'), fn ($q, $v) => $q->where('payment_type_id', $v));
+
+        $items = $query
+            ->latest()
+            ->paginate(15)
+            ->withQueryString()
+            ->through(fn (WeeklyBudget $wb) => [
+                'id'             => $wb->id,
+                'branch_id'      => $wb->branch_id,
+                'department_id'  => $wb->department_id,
+                'fiscal_year_id' => $wb->fiscal_year_id,
+                'fiscal_month_id' => $wb->fiscal_month_id,
+                'branch'         => $wb->branch?->name,
+                'department'     => $wb->department?->name,
+                'fiscal_year'    => $wb->fiscalYear?->name,
+                'fiscal_month'   => $wb->fiscalMonth?->name,
+                'week_number'    => $wb->week_number,
+                'week_start_date' => $wb->week_start_date?->toDateString(),
+                'week_end_date'   => $wb->week_end_date?->toDateString(),
+                'request_type'   => $wb->request_type?->value,
+                'status_finance' => $wb->status_finance?->value,
+                'status_department' => $wb->status_department?->value,
+                'status_ceo'     => $wb->status_ceo?->value,
+                'amount'         => $wb->amount,
+                'description'    => $wb->description,
+                'note'           => $wb->note,
+                'payment_category_id' => $wb->payment_category_id,
+                'payment_type_id' => $wb->payment_type_id,
+                'payment_category' => $wb->payment_category_id === 1 ? 'Expense' : ($wb->payment_category_id === 2 ? 'Cost of Sales' : null),
+                'payment_type' => $expenseItems->firstWhere('expense_parent_acc_code', $wb->payment_type_id)?->expense_type,
+            ]);
+
+
+
+        $branches = Branch::query()
+            ->orderBy('name')
+            ->get(['id', 'name', 'branch_code']);
+
+        $departments = Department::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $paymentCategories = [
+            ['id' => 1, 'name' => 'Expense'],
+            ['id' => 2, 'name' => 'Cost of Sales'],
+        ];
+
+        // Map expenses to payment types: category_id 1 = Expense (is_expense=true), 2 = Cost of Sales (is_expense=false)
+        $paymentTypes = $expenseItems->map(fn ($e) => [
+            'id'                  => $e->expense_parent_acc_code,
+            'name'                => $e->expense_type,
+            'payment_category_id' => $e->is_expense ? 1 : 2,
+        ])->values()->toArray();
+
+        $today = now()->toDateString();
+        $currentFiscalYear = FiscalYear::query()
+            ->where('gregorian_start_date', '<=', $today)
+            ->where('gregorian_end_date', '>=', $today)
+            ->first();
+
+        return Inertia::render('Budget/WeeklyBudget/Finance', [
+            'items'       => $items,
+            'branches'    => $branches,
+            'departments' => $departments,
+            'paymentCategories' => $paymentCategories,
+            'paymentTypes' => $paymentTypes,
+            'fiscalYears' => $this->fiscalYearOptions(),
+            'fiscalMonths' => $this->fiscalMonthOptions(),
+            'requestTypes'  => array_column(WeeklyBudgetRequestType::cases(), 'value'),
+            'statusFinances' => array_column(WeeklyBudgetStatusFinance::cases(), 'value'),
+            'statusDepartments' => array_column(WeeklyBudgetStatusDepartment::cases(), 'value'),
+            'statusCeos'    => array_column(WeeklyBudgetStatusCeo::cases(), 'value'),
+            'today'         => $today,
+            'currentFiscalYearId' => $currentFiscalYear?->id,
+            'request'     => request()->only([
+                'request_type',
+                'status_finance',
+                'status_department',
+                'status_ceo',
+                'branch_id',
+                'department_id',
+                'fiscal_year_id',
+                'fiscal_month_id',
+                'week_start_date',
+                'payment_category_id',
+                'payment_type_id',
+            ]),
+        ]);
+    }
+
+    public function updateFinance(Request $request, WeeklyBudget $weeklyBudget): RedirectResponse
+    {
+        abort_unless(auth()->user()->can('manage finance budgets'), 403);
+
+        $validated = $request->validate([
+            'status_finance' => ['required', Rule::enum(WeeklyBudgetStatusFinance::class)],
+            'payment_category_id' => [
+                Rule::requiredIf(fn () => $request->input('status_finance') === WeeklyBudgetStatusFinance::Paid->value),
+                'nullable', 'integer'
+            ],
+            'payment_type_id' => [
+                Rule::requiredIf(fn () => $request->input('status_finance') === WeeklyBudgetStatusFinance::Paid->value),
+                'nullable', 'integer'
+            ],
+        ]);
+
+        if ($weeklyBudget->status_ceo === WeeklyBudgetStatusCeo::Approved) {
+            if (in_array($validated['status_finance'], [WeeklyBudgetStatusFinance::OnHold->value, WeeklyBudgetStatusFinance::Pending->value])) {
+                return back()->withErrors(['status_finance' => 'Cannot change Finance Status to "On Hold" or "Pending" if CEO Status is Approved.']);
+            }
+        }
+
+        if ($weeklyBudget->status_department !== WeeklyBudgetStatusDepartment::Approved) {
+             return back()->withErrors(['status_finance' => 'Finance Status change only allowed if Department Status is Approved.']);
+        }
+
+        if ($weeklyBudget->status_finance === WeeklyBudgetStatusFinance::Paid && !auth()->user()->can('override_paid_status')) {
+            return back()->withErrors(['status_finance' => 'Cannot revert Paid status.']);
+        }
+
+        $weeklyBudget->update([
+            'status_finance' => $validated['status_finance'],
+            'payment_category_id' => collect($validated)->has('payment_category_id') ? $validated['payment_category_id'] : $weeklyBudget->payment_category_id,
+            'payment_type_id' => collect($validated)->has('payment_type_id') ? $validated['payment_type_id'] : $weeklyBudget->payment_type_id,
+        ]);
+
+        return back()->with('message', 'Finance status updated successfully.');
+    }
+
+    public function bulkUpdateFinance(Request $request): RedirectResponse
+    {
+        abort_unless(auth()->user()->can('manage finance budgets'), 403);
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array'],
+            'ids.*' => ['exists:weekly_budgets,id'],
+            'status_finance' => ['required', Rule::enum(WeeklyBudgetStatusFinance::class)],
+        ]);
+
+        if ($validated['status_finance'] === WeeklyBudgetStatusFinance::Paid->value) {
+             return back()->withErrors(['status_finance' => 'Bulk update to Paid is not allowed because payment category/type is required.']);
+        }
+
+        $budgets = WeeklyBudget::whereIn('id', $validated['ids'])->get();
+
+        foreach ($budgets as $budget) {
+            if ($budget->status_department !== WeeklyBudgetStatusDepartment::Approved) {
+                continue;
+            }
+            if ($budget->status_ceo === WeeklyBudgetStatusCeo::Approved && in_array($validated['status_finance'], [WeeklyBudgetStatusFinance::OnHold->value, WeeklyBudgetStatusFinance::Pending->value])) {
+                continue;
+            }
+            if ($budget->status_finance === WeeklyBudgetStatusFinance::Paid) {
+                continue;
+            }
+
+            $budget->update(['status_finance' => $validated['status_finance']]);
+        }
+
+        return back()->with('message', 'Selected budgets updated successfully.');
+    }
+
+    public function overridePaid(Request $request): RedirectResponse
+    {
+        abort_unless(auth()->user()->can('override_paid_status'), 403);
+
+        $validated = $request->validate([
+            'id' => ['required', 'exists:weekly_budgets,id'],
+            'status_finance' => ['required', Rule::enum(WeeklyBudgetStatusFinance::class)],
+        ]);
+
+        $budget = WeeklyBudget::findOrFail($validated['id']);
+        $budget->update([
+            'status_finance' => $validated['status_finance'],
+        ]);
+
+        return back()->with('message', 'Paid status overridden successfully.');
     }
 }

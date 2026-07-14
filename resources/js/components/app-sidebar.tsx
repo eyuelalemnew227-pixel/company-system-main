@@ -243,6 +243,7 @@ const baseSections: NavSection[] = [
 				items: [
 					// { title: 'New Request', href: '/budget/weekly-budget/create', icon: Plus, permission: 'manage weekly budgets' },
 					{ title: 'Weekly Budgets', href: '/budget/weekly-budget', icon: List, permission: 'view weekly budgets' },
+					{ title: 'Finance View', href: '/budget/weekly-budget/finance', icon: Wallet, permission: 'view finance budgets' },
 				],
 			},
 		],

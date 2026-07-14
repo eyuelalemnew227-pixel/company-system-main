@@ -35,6 +35,7 @@ use App\Http\Controllers\{
     SparePartCategoryController,
     SparePartController,
     PreOrderTargetController,
+    WeeklyBudgetController,
 };
 
 Route::get('/', fn() => Inertia::render('welcome'))->name('home');
@@ -205,6 +206,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 'update' => 'evaluation-records.update',
                 'destroy' => 'evaluation-records.destroy',
             ]);
+        // Finance View for Weekly Budgets
+        Route::middleware('permission:view finance budgets')->group(function () {
+            Route::get('budget/weekly-budget/finance', [WeeklyBudgetController::class, 'financeView'])->name('weekly-budget.finance');
+        });
+
+        Route::middleware('permission:manage finance budgets')->group(function () {
+            Route::patch('budget/weekly-budget/{weeklyBudget}/finance-status', [WeeklyBudgetController::class, 'updateFinance'])->name('weekly-budget.update-finance');
+            Route::patch('budget/weekly-budget/finance/bulk', [WeeklyBudgetController::class, 'bulkUpdateFinance'])->name('weekly-budget.bulk-update-finance');
+            Route::post('budget/weekly-budget/finance/override-paid', [WeeklyBudgetController::class, 'overridePaid'])->name('weekly-budget.override-paid');
+        });
+        // Weekly Budget (existing)
+        Route::middleware('permission:view weekly budgets')->group(function () {
+            Route::get('budget/weekly-budget', [WeeklyBudgetController::class, 'index'])->name('weekly-budget.index');
+        });
+
+        Route::middleware('permission:manage weekly budgets')->group(function () {
+            Route::get('budget/weekly-budget/create', [WeeklyBudgetController::class, 'create'])->name('weekly-budget.create');
+            Route::post('budget/weekly-budget', [WeeklyBudgetController::class, 'store'])->name('weekly-budget.store');
+            Route::put('budget/weekly-budget/{weeklyBudget}', [WeeklyBudgetController::class, 'update'])->name('weekly-budget.update');
+            Route::delete('budget/weekly-budget/{weeklyBudget}', [WeeklyBudgetController::class, 'destroy'])->name('weekly-budget.destroy');
+        });
     });
 
     // External Links Management
