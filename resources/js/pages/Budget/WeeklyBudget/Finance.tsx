@@ -9,13 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
 import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Filter, MessageSquare, Save, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Filter, MessageSquare, Save, X, FileText } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -86,17 +87,6 @@ function isBranchEnabledForDepartment(dept: DepartmentOption | null | undefined)
 	if (!dept) return false;
 	const name = dept.name.toLowerCase();
 	return name.includes('operation') || name.includes('hr') || name.includes('human resource');
-}
-
-function formatWeekLabelFull(weekNumber: number, startDate: string | null, endDate: string | null): string {
-	if (startDate && endDate) {
-		const start = new Date(startDate + 'T00:00:00');
-		const end = new Date(endDate + 'T00:00:00');
-		const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-		const fmtFull = (d: Date) => `${months[d.getMonth()]} ${d.getDate()}`;
-		return `Week ${weekNumber} (${fmtFull(start)} – ${fmtFull(end)})`;
-	}
-	return `Week ${weekNumber}`;
 }
 
 function statusBadge(status: string, variant: 'finance' | 'ceo' | 'department') {
@@ -222,14 +212,15 @@ export default function WeeklyBudgetFinance({
 	const canManageFinance = can('manage finance budgets');
     const canOverridePaid = can('override_paid_status');
 
-    // ── Filter state ────────────────────────────────────────────────────────
 	const [selectedRequestType, setSelectedRequestType] = useState<string>(request?.request_type ?? 'all');
 	const [selectedStatusFinance, setSelectedStatusFinance] = useState<string>(request?.status_finance ?? 'all');
 	const [selectedStatusDepartment, setSelectedStatusDepartment] = useState<string>(request?.status_department ?? 'all');
 	const [selectedStatusCeo, setSelectedStatusCeo] = useState<string>(request?.status_ceo ?? 'all');
 
-	// ── View note dialog ────────────────────────────────────────────────────
 	const [viewNoteItem, setViewNoteItem] = useState<WeeklyBudgetRow | null>(null);
+
+	const [descriptionDialogItem, setDescriptionDialogItem] = useState<WeeklyBudgetRow | null>(null);
+	const [descriptionDialogText, setDescriptionDialogText] = useState<string>('');
 	const [selectedBranch, setSelectedBranch] = useState<string>(request?.branch_id ?? 'all');
 	const [selectedDepartment, setSelectedDepartment] = useState<string>(request?.department_id ?? 'all');
 	const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(request?.fiscal_year_id ?? 'all');
@@ -242,11 +233,9 @@ export default function WeeklyBudgetFinance({
 	const [openDepartmentFilter, setOpenDepartmentFilter] = useState(false);
     const [openPaymentTypeFilter, setOpenPaymentTypeFilter] = useState(false);
 
-    // Bulk selection state
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
     const [bulkStatus, setBulkStatus] = useState<string>('');
 
-    // Inline edit state
     const [editingRowId, setEditingRowId] = useState<number | null>(null);
     const [editForm, setEditForm] = useState<any>({});
 
@@ -331,7 +320,6 @@ export default function WeeklyBudgetFinance({
 
 	const hasActiveFilters = [selectedRequestType, selectedStatusFinance, selectedStatusDepartment, selectedStatusCeo, selectedDepartment, selectedBranch, selectedFiscalYear, selectedFiscalMonth, selectedWeekStartDate, selectedPaymentCategory, selectedPaymentType].some(v => v !== 'all');
 
-    // Select All
     const allSelectableIds = useMemo(() => {
         return items.data.filter(item => item.status_department === 'approved' && item.status_finance !== 'paid').map(item => item.id);
     }, [items.data]);
@@ -365,34 +353,57 @@ export default function WeeklyBudgetFinance({
         });
     }
 
-    // Inline Update
     function startEditRow(item: WeeklyBudgetRow) {
-        if (item.status_finance === 'paid' && !canOverridePaid) return;
-        setEditingRowId(item.id);
-        setEditForm({
-            status_finance: item.status_finance,
-            payment_category_id: item.payment_category_id ? String(item.payment_category_id) : '',
-            payment_type_id: item.payment_type_id ? String(item.payment_type_id) : '',
-        });
-    }
+		setEditingRowId(item.id);
+		setEditForm({
+			status_finance: item.status_finance,
+			payment_category_id: item.payment_category_id ? String(item.payment_category_id) : '',
+			payment_type_id: item.payment_type_id ? String(item.payment_type_id) : '',
+			request_type: item.request_type,
+			amount: String(item.amount),
+		});
+	}
 
-    function saveEditRow(item: WeeklyBudgetRow) {
-        if (item.status_finance === 'paid' && canOverridePaid) {
-            router.post('/budget/weekly-budget/finance/override-paid', {
-                id: item.id,
-                status_finance: editForm.status_finance
-            }, {
-                preserveScroll: true,
-                onSuccess: () => setEditingRowId(null)
-            });
-            return;
-        }
+	function saveEditRow(item: WeeklyBudgetRow) {
+		router.patch(
+			`/budget/weekly-budget/${item.id}/finance-status`,
+			{
+				status_finance: editForm.status_finance,
+				payment_category_id: editForm.payment_category_id || null,
+				payment_type_id: editForm.payment_type_id || null,
+				request_type: editForm.request_type,
+				amount: editForm.amount,
+			},
+			{
+				preserveScroll: true,
+				onSuccess: () => {
+					setEditingRowId(null);
+				},
+			},
+		);
+	}
 
-        router.patch(`/budget/weekly-budget/${item.id}/finance-status`, editForm, {
-            preserveScroll: true,
-            onSuccess: () => setEditingRowId(null)
-        });
-    }
+	function openDescriptionPopup(item: WeeklyBudgetRow) {
+		setDescriptionDialogItem(item);
+		setDescriptionDialogText(item.description ?? '');
+	}
+
+	function saveDescriptionPopup() {
+		if (!descriptionDialogItem) return;
+		router.patch(
+			`/budget/weekly-budget/${descriptionDialogItem.id}/finance-status`,
+			{
+				status_finance: descriptionDialogItem.status_finance,
+				description: descriptionDialogText.trim() || null,
+			},
+			{
+				preserveScroll: true,
+				onSuccess: () => {
+					setDescriptionDialogItem(null);
+				},
+			}
+		);
+	}
 
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
@@ -408,7 +419,6 @@ export default function WeeklyBudgetFinance({
 							<Filter className="size-4 text-muted-foreground" /> Filters
 						</CardTitle>
 						<div className="flex flex-wrap items-end gap-3 pt-2">
-                            {/* Department */}
 							<Popover open={openDepartmentFilter} onOpenChange={setOpenDepartmentFilter}>
 								<PopoverTrigger asChild>
 									<Button variant="outline" role="combobox" className="w-[180px] justify-between font-normal">
@@ -438,7 +448,6 @@ export default function WeeklyBudgetFinance({
 								</PopoverContent>
 							</Popover>
 
-                            {/* Branch */}
 							<Popover open={openBranchFilter} onOpenChange={setOpenBranchFilter}>
 								<div className={cn(!canFilterByBranch && 'cursor-not-allowed')}>
 									<PopoverTrigger asChild>
@@ -525,7 +534,6 @@ export default function WeeklyBudgetFinance({
                                 </SelectContent>
                             </Select>
 
-                            {/* Payment Type — searchable combobox, filtered by selected category */}
                             <Popover open={openPaymentTypeFilter} onOpenChange={setOpenPaymentTypeFilter}>
                                 <PopoverTrigger asChild>
                                     <Button variant="outline" role="combobox" className="w-[220px] justify-between font-normal">
@@ -609,15 +617,16 @@ export default function WeeklyBudgetFinance({
 									<TableHead className="font-bold text-white">Status (CEO)</TableHead>
 									<TableHead className="font-bold text-white">Payment Category</TableHead>
                                     <TableHead className="font-bold text-white">Payment Type</TableHead>
-									<TableHead className="font-bold text-white">Amount</TableHead>
+									<TableHead className="font-bold text-white">Description</TableHead>
 									<TableHead className="font-bold text-white">Note</TableHead>
+									<TableHead className="font-bold text-white">Amount</TableHead>
                                     {canManageFinance && <TableHead className="font-bold text-white">Actions</TableHead>}
 								</TableRow>
 							</TableHeader>
 							<TableBody>
 								{items.data.map((item) => {
                                     const isEditing = editingRowId === item.id;
-                                    const isEditable = canManageFinance && (item.status_finance !== 'paid' || canOverridePaid) && item.status_department === 'approved';
+                                    const isEditable = canManageFinance && item.status_ceo !== 'approved' && (item.status_finance !== 'paid' || canOverridePaid);
 
                                     const itemFilteredPaymentTypes = paymentTypes.filter(pt => String(pt.payment_category_id) === editForm.payment_category_id);
 
@@ -634,8 +643,27 @@ export default function WeeklyBudgetFinance({
                                             )}
                                             <TableCell>{item.department ?? '-'}</TableCell>
                                             <TableCell>{item.branch ?? '-'}</TableCell>
-                                            <TableCell>{requestTypeBadge(item.request_type)}</TableCell>
-
+                                            <TableCell>
+                                                {isEditing ? (
+                                                    <Select
+                                                        value={editForm.request_type}
+                                                        onValueChange={(v) => setEditForm({ ...editForm, request_type: v })}
+                                                    >
+                                                        <SelectTrigger className="w-[110px]">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {requestTypes.map((rt) => (
+                                                                <SelectItem key={rt} value={rt}>
+                                                                    {rt.charAt(0).toUpperCase() + rt.slice(1)}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                ) : (
+                                                    requestTypeBadge(item.request_type)
+                                                )}
+                                            </TableCell>
                                             <TableCell>
                                                 {isEditing ? (
                                                     <Select value={editForm.status_finance} onValueChange={(v) => setEditForm({...editForm, status_finance: v})}>
@@ -708,8 +736,20 @@ export default function WeeklyBudgetFinance({
                                                 )}
                                             </TableCell>
 
-                                            <TableCell className="whitespace-nowrap">
-                                                {formatCurrency(item.amount)}
+                                            <TableCell>
+                                                <button
+                                                    type="button"
+                                                    className={cn(
+                                                        'flex items-center justify-center rounded p-1 transition-colors',
+                                                        item.description
+                                                            ? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-700'
+                                                            : 'cursor-pointer text-slate-300 hover:text-slate-500',
+                                                    )}
+                                                    onClick={() => openDescriptionPopup(item)}
+                                                    aria-label="View description"
+                                                >
+                                                    <FileText className="size-4" />
+                                                </button>
                                             </TableCell>
 
                                             <TableCell>
@@ -726,6 +766,20 @@ export default function WeeklyBudgetFinance({
                                                 >
                                                     <MessageSquare className="size-4" />
                                                 </button>
+                                            </TableCell>
+
+                                            <TableCell className="whitespace-nowrap">
+                                                {isEditing ? (
+                                                    <input
+                                                        type="text"
+                                                        inputMode="decimal"
+                                                        value={editForm.amount}
+                                                        onChange={(e) => setEditForm({ ...editForm, amount: e.target.value.replace(/[^0-9.]/g, '') })}
+                                                        className="w-24 rounded border px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                                    />
+                                                ) : (
+                                                    formatCurrency(item.amount)
+                                                )}
                                             </TableCell>
 
                                             {/* Actions — last column */}
@@ -770,6 +824,53 @@ export default function WeeklyBudgetFinance({
 						<Button variant="outline" onClick={() => setViewNoteItem(null)}>
 							Cancel
 						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* ── Description Dialog ─────────────────────────────────────────── */}
+			<Dialog open={!!descriptionDialogItem} onOpenChange={(open) => !open && setDescriptionDialogItem(null)}>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>
+							{descriptionDialogItem &&
+							canManageFinance &&
+							descriptionDialogItem.status_ceo !== 'approved' &&
+							(descriptionDialogItem.status_finance !== 'paid' || canOverridePaid)
+								? 'Edit Description'
+								: 'View Description'}
+						</DialogTitle>
+					</DialogHeader>
+					<div className="py-4 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+						{descriptionDialogItem &&
+						canManageFinance &&
+						descriptionDialogItem.status_ceo !== 'approved' &&
+						(descriptionDialogItem.status_finance !== 'paid' || canOverridePaid) ? (
+							<Textarea
+								value={descriptionDialogText}
+								onChange={(e) => setDescriptionDialogText(e.target.value)}
+								placeholder="Enter description..."
+								rows={4}
+							/>
+						) : (
+							descriptionDialogItem?.description || <span className="italic text-slate-400">No description provided.</span>
+						)}
+					</div>
+					<DialogFooter>
+						<Button variant="outline" onClick={() => setDescriptionDialogItem(null)}>
+							Cancel
+						</Button>
+						{descriptionDialogItem &&
+							canManageFinance &&
+							descriptionDialogItem.status_ceo !== 'approved' &&
+							(descriptionDialogItem.status_finance !== 'paid' || canOverridePaid) && (
+								<Button
+									onClick={saveDescriptionPopup}
+									disabled={descriptionDialogText === (descriptionDialogItem?.description ?? '')}
+								>
+									Save Changes
+								</Button>
+							)}
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>

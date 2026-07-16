@@ -372,6 +372,11 @@ export default function CreateWeeklyBudget({
 			return;
 		}
 
+		if (!data.description || data.description.trim() === '') {
+			setError('description', 'The description field is required.');
+			return;
+		}
+
 		transform((formData) => ({
 			...formData,
 			amount: parseFormattedNumber(formData.amount),
@@ -639,10 +644,12 @@ export default function CreateWeeklyBudget({
 
 								{/* Description */}
 								<div className="space-y-2 md:col-span-1 xl:col-span-2">
-									<Label htmlFor="description">Description</Label>
+									<Label htmlFor="description">
+										Description <span className="text-red-500">*</span>
+									</Label>
 									<Textarea
 										id="description"
-										placeholder="Optional description for this budget request..."
+										placeholder="Description for this budget request..."
 										value={data.description}
 										onChange={(e) => setData('description', e.target.value)}
 										rows={3}

@@ -175,7 +175,7 @@ class WeeklyBudgetController extends Controller
             'week_end_date'  => ['required', 'date', 'after_or_equal:week_start_date'],
             'request_type'   => ['required', Rule::enum(WeeklyBudgetRequestType::class)],
             'amount'         => ['required', 'numeric', 'min:0'],
-            'description'    => ['nullable', 'string'],
+            'description'    => ['required', 'string'],
             'note'           => ['nullable', 'string'],
         ]);
 
@@ -226,7 +226,7 @@ class WeeklyBudgetController extends Controller
             'week_end_date'  => ['required', 'date', 'after_or_equal:week_start_date'],
             'request_type'   => ['required', Rule::enum(WeeklyBudgetRequestType::class)],
             'amount'         => ['required', 'numeric', 'min:0'],
-            'description'    => ['nullable', 'string'],
+            'description'    => ['required', 'string'],
             'note'           => ['nullable', 'string'],
         ]);
 
@@ -438,7 +438,16 @@ class WeeklyBudgetController extends Controller
                 Rule::requiredIf(fn () => $request->input('status_finance') === WeeklyBudgetStatusFinance::Paid->value),
                 'nullable', 'integer'
             ],
+            'request_type' => ['nullable', Rule::enum(WeeklyBudgetRequestType::class)],
+            'amount'       => ['nullable', 'numeric', 'min:0'],
+            'description'  => ['nullable', 'string'],
         ]);
+
+        if ($validated['status_finance'] === WeeklyBudgetStatusFinance::Paid->value) {
+            if ($weeklyBudget->status_ceo !== WeeklyBudgetStatusCeo::Approved) {
+                return back()->withErrors(['status_finance' => 'Cannot change Finance Status to Paid because CEO Status is not Approved.']);
+            }
+        }
 
         if ($weeklyBudget->status_ceo === WeeklyBudgetStatusCeo::Approved) {
             if (in_array($validated['status_finance'], [WeeklyBudgetStatusFinance::OnHold->value, WeeklyBudgetStatusFinance::Pending->value])) {
@@ -454,11 +463,26 @@ class WeeklyBudgetController extends Controller
             return back()->withErrors(['status_finance' => 'Cannot revert Paid status.']);
         }
 
-        $weeklyBudget->update([
+        $updateData = [
             'status_finance' => $validated['status_finance'],
-            'payment_category_id' => collect($validated)->has('payment_category_id') ? $validated['payment_category_id'] : $weeklyBudget->payment_category_id,
-            'payment_type_id' => collect($validated)->has('payment_type_id') ? $validated['payment_type_id'] : $weeklyBudget->payment_type_id,
-        ]);
+            'payment_category_id' => array_key_exists('payment_category_id', $validated) ? $validated['payment_category_id'] : $weeklyBudget->payment_category_id,
+            'payment_type_id' => array_key_exists('payment_type_id', $validated) ? $validated['payment_type_id'] : $weeklyBudget->payment_type_id,
+        ];
+
+        // Finance can edit request_type, amount, and description before CEO approval
+        if ($weeklyBudget->status_ceo !== WeeklyBudgetStatusCeo::Approved) {
+            if (!empty($validated['request_type'])) {
+                $updateData['request_type'] = $validated['request_type'];
+            }
+            if (isset($validated['amount'])) {
+                $updateData['amount'] = $validated['amount'];
+            }
+            if (array_key_exists('description', $validated)) {
+                $updateData['description'] = $validated['description'];
+            }
+        }
+
+        $weeklyBudget->update($updateData);
 
         return back()->with('message', 'Finance status updated successfully.');
     }
