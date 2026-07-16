@@ -231,6 +231,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::middleware('permission:manage ceo budgets')->group(function () {
             Route::patch('budget/weekly-budget/{weeklyBudget}/ceo-status', [WeeklyBudgetController::class, 'updateCeo'])->name('weekly-budget.update-ceo');
+            Route::patch('budget/weekly-budget/ceo/bulk', [WeeklyBudgetController::class, 'bulkUpdateCeo'])->name('weekly-budget.bulk-update-ceo');
         });
         // Weekly Budget (existing)
         Route::middleware('permission:view weekly budgets')->group(function () {

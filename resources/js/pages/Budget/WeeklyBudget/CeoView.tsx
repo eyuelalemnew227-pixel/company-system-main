@@ -1,6 +1,7 @@
 import TablePagination from '@/components/table-pagination';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,7 +12,7 @@ import { type BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Filter, MessageSquare } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Weekly Budgets CEO', href: '/budget/weekly-budget/ceo' }];
@@ -84,6 +85,10 @@ export default function WeeklyBudgetCeoView({ items, statusCeos, request }: CeoP
 	// ── Filter state ────────────────────────────────────────────────────────
 	const [selectedStatusCeo, setSelectedStatusCeo] = useState<string>(request?.status_ceo ?? 'all');
 
+	// ── Bulk action state ───────────────────────────────────────────────────
+	const [selectedIds, setSelectedIds] = useState<number[]>([]);
+	const [bulkStatus, setBulkStatus] = useState<string>('');
+
 	// ── Edit state ──────────────────────────────────────────────────────────
 	const [editingRowId, setEditingRowId] = useState<number | null>(null);
 	const [editForm, setEditForm] = useState<any>({});
@@ -96,6 +101,13 @@ export default function WeeklyBudgetCeoView({ items, statusCeos, request }: CeoP
 		if (errors?.status_ceo) toast.error(errors.status_ceo);
 	}, [flash?.message, errors]);
 
+	const allSelectableIds = useMemo(() => {
+		return items.data.filter((item) => item.status_finance !== 'paid').map((item) => item.id);
+	}, [items.data]);
+
+	const isAllSelected = allSelectableIds.length > 0 && allSelectableIds.every((id) => selectedIds.includes(id));
+	const isSomeSelected = selectedIds.length > 0 && !isAllSelected;
+
 	function applyFilters(overrides: Record<string, string> = {}) {
 		const params: Record<string, string> = {};
 		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
@@ -107,6 +119,36 @@ export default function WeeklyBudgetCeoView({ items, statusCeos, request }: CeoP
 		});
 
 		router.get('/budget/weekly-budget/ceo', params, { preserveState: true, replace: true });
+	}
+
+	function toggleSelectAll() {
+		if (isAllSelected) setSelectedIds([]);
+		else setSelectedIds(allSelectableIds);
+	}
+
+	function toggleSelectRow(id: number) {
+		if (selectedIds.includes(id)) setSelectedIds(selectedIds.filter((i) => i !== id));
+		else setSelectedIds([...selectedIds, id]);
+	}
+
+	function handleBulkUpdate() {
+		if (!bulkStatus) return toast.error('Select a status to apply.');
+		if (selectedIds.length === 0) return toast.error('Select at least one item.');
+
+		router.patch(
+			'/budget/weekly-budget/ceo/bulk',
+			{
+				ids: selectedIds,
+				status_ceo: bulkStatus,
+			},
+			{
+				preserveScroll: true,
+				onSuccess: () => {
+					setSelectedIds([]);
+					setBulkStatus('');
+				},
+			},
+		);
 	}
 
 	// ── Edit helpers ─────────────────────────────────────────────────────────
@@ -168,12 +210,45 @@ export default function WeeklyBudgetCeoView({ items, statusCeos, request }: CeoP
 								</SelectContent>
 							</Select>
 						</div>
+
+						{canManageCeo && (
+							<div className="mt-6 flex items-center gap-3 rounded-lg border bg-slate-50 p-3 dark:bg-slate-900">
+								<span className="text-sm font-medium">Bulk Action ({selectedIds.length} selected):</span>
+								<Select value={bulkStatus} onValueChange={setBulkStatus}>
+									<SelectTrigger className="w-[180px] bg-white dark:bg-slate-800">
+										<SelectValue placeholder="Select Status" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="pending">Pending</SelectItem>
+										<SelectItem value="approved">Approved</SelectItem>
+										<SelectItem value="rejected">Rejected</SelectItem>
+										<SelectItem value="on-hold">On Hold</SelectItem>
+									</SelectContent>
+								</Select>
+								<Button onClick={handleBulkUpdate} disabled={selectedIds.length === 0 || !bulkStatus}>
+									Apply Bulk Status
+								</Button>
+							</div>
+						)}
 					</CardHeader>
 
 					<CardContent>
 						<Table>
 							<TableHeader className="bg-slate-500 dark:bg-slate-700">
 								<TableRow>
+									{canManageCeo && (
+										<TableHead className="w-12 text-center text-white">
+											<Checkbox
+												checked={isAllSelected}
+												// @ts-ignore
+												indeterminate={isSomeSelected}
+												onCheckedChange={toggleSelectAll}
+												disabled={allSelectableIds.length === 0}
+												aria-label="Select all"
+												className="border-white data-[state=checked]:bg-white data-[state=checked]:text-slate-900"
+											/>
+										</TableHead>
+									)}
 									<TableHead className="font-bold text-white">Department</TableHead>
 									<TableHead className="font-bold text-white">Branch</TableHead>
 									<TableHead className="font-bold text-white">Request Type</TableHead>
@@ -193,6 +268,15 @@ export default function WeeklyBudgetCeoView({ items, statusCeos, request }: CeoP
 
 									return (
 										<TableRow key={item.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
+											{canManageCeo && (
+												<TableCell className="text-center">
+													<Checkbox
+														checked={selectedIds.includes(item.id)}
+														onCheckedChange={() => toggleSelectRow(item.id)}
+														disabled={item.status_finance === 'paid'}
+													/>
+												</TableCell>
+											)}
 											<TableCell>{item.department ?? '-'}</TableCell>
 											<TableCell>{item.branch ?? '-'}</TableCell>
 											<TableCell>{requestTypeBadge(item.request_type)}</TableCell>

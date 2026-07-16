@@ -215,6 +215,20 @@ function isWithinEditWindow(submittedAt: string | null, today: string): boolean 
 	return now <= deadline;
 }
 
+function isDepartmentStatusLocked(item: WeeklyBudgetRow): boolean {
+	return item.status_finance === 'paid' || item.status_ceo === 'approved';
+}
+
+function getDepartmentEditLockReason(item: WeeklyBudgetRow): string {
+	if (item.status_finance === 'paid') {
+		return 'Locked — Finance Status is Paid';
+	}
+	if (item.status_ceo === 'approved') {
+		return 'Locked — CEO Status is Approved';
+	}
+	return 'Locked';
+}
+
 function statusBadge(status: string, _variant: 'finance' | 'ceo' | 'department') {
 	const colorMap: Record<string, string> = {
 		pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
@@ -341,6 +355,7 @@ export default function WeeklyBudgetDepartmentView({
 		if (errors?.status_department) toast.error(errors.status_department);
 		if (errors?.note) toast.error(errors.note);
 		if (errors?.delete) toast.error(errors.delete);
+		if (errors?.edit) toast.error(errors.edit);
 	}, [flash?.message, errors]);
 
 	// ── Filter helpers ───────────────────────────────────────────────────────
@@ -440,6 +455,8 @@ export default function WeeklyBudgetDepartmentView({
 	}
 
 	function saveEditRow(item: WeeklyBudgetRow) {
+		const withinEditWindow = isWithinEditWindow(item.submitted_at, today);
+
 		// Downgrade: approved → pending always requires a note
 		const isDowngrade = item.status_department === 'approved' && editForm.status_department === 'pending';
 
@@ -453,24 +470,25 @@ export default function WeeklyBudgetDepartmentView({
 			return;
 		}
 
-		router.patch(
-			`/budget/weekly-budget/${item.id}/department-status`,
-			{
-				status_department: editForm.status_department,
-				payment_category_id: editForm.payment_category_id || null,
-				payment_type_id: editForm.payment_type_id || null,
-				request_type: editForm.request_type,
-				amount: editForm.amount,
-				note: editForm.inline_note?.trim() || null,
+		const payload: Record<string, string | number | null> = {
+			status_department: editForm.status_department,
+			note: editForm.inline_note?.trim() || null,
+		};
+
+		if (withinEditWindow) {
+			payload.payment_category_id = editForm.payment_category_id || null;
+			payload.payment_type_id = editForm.payment_type_id || null;
+			payload.request_type = editForm.request_type;
+			payload.amount = editForm.amount;
+		}
+
+		router.patch(`/budget/weekly-budget/${item.id}/department-status`, payload, {
+			preserveScroll: true,
+			onSuccess: () => {
+				setEditingRowId(null);
+				setNoteMismatchIds((prev) => prev.filter((id) => id !== item.id));
 			},
-			{
-				preserveScroll: true,
-				onSuccess: () => {
-					setEditingRowId(null);
-					setNoteMismatchIds((prev) => prev.filter((id) => id !== item.id));
-				},
-			},
-		);
+		});
 	}
 
 	// ── Delete helpers ────────────────────────────────────────────────────────
@@ -493,6 +511,9 @@ export default function WeeklyBudgetDepartmentView({
 
 	function saveNotePopup() {
 		if (!noteDialogItem) return;
+		if (isDepartmentStatusLocked(noteDialogItem)) {
+			return toast.error('Editing is locked because Finance Status is Paid or CEO Status is Approved.');
+		}
 		router.patch(
 			`/budget/weekly-budget/${noteDialogItem.id}/department-status`,
 			{
@@ -835,8 +856,8 @@ export default function WeeklyBudgetDepartmentView({
 									<TableHead className="font-bold text-white">Status (Dept)</TableHead>
 									<TableHead className="font-bold text-white">Status (Finance)</TableHead>
 									<TableHead className="font-bold text-white">Status (CEO)</TableHead>
-									{/* <TableHead className="font-bold text-white">Payment Category</TableHead>
-									<TableHead className="font-bold text-white">Payment Type</TableHead> */}
+									<TableHead className="font-bold text-white">Payment Category</TableHead>
+									<TableHead className="font-bold text-white">Payment Type</TableHead>
 									<TableHead className="font-bold text-white">Amount</TableHead>
 									<TableHead className="font-bold text-white">Note</TableHead>
 									{canManageDept && <TableHead className="font-bold text-white">Actions</TableHead>}
@@ -845,15 +866,10 @@ export default function WeeklyBudgetDepartmentView({
 							<TableBody>
 								{items.data.map((item) => {
 									const isEditing = editingRowId === item.id;
-
-									// Status is locked when Finance=Paid OR CEO=Approved
-									const statusLocked = item.status_finance === 'paid' || item.status_ceo === 'approved';
-
-									// Data-field edit/delete is allowed only within the submission week's Friday EOD
+									const statusLocked = isDepartmentStatusLocked(item);
 									const withinEditWindow = isWithinEditWindow(item.submitted_at, today);
-
-									// Can the status select be changed?
-									const canEditStatus = canManageDept && !statusLocked;
+									const canEditRow = canManageDept && !statusLocked;
+									const canEditSubmissionData = isEditing && withinEditWindow;
 
 									// Payment type filtered by the current edit form's selected category
 									const itemFilteredPaymentTypes = paymentTypes.filter(
@@ -861,7 +877,6 @@ export default function WeeklyBudgetDepartmentView({
 									);
 
 									// Note required: downgrade OR status mismatch with finance (excluding pending/approved)
-									const currentDeptStatus = isEditing ? editForm.status_department : item.status_department;
 									const isDowngrade =
 										isEditing && item.status_department === 'approved' && editForm.status_department === 'pending';
 									const isMismatch = isEditing && statusMismatchNoteRequired(editForm.status_department, item.status_finance);
@@ -872,9 +887,9 @@ export default function WeeklyBudgetDepartmentView({
 											<TableCell>{item.department ?? '-'}</TableCell>
 											<TableCell>{item.branch ?? '-'}</TableCell>
 
-											{/* Request Type — editable select within edit window */}
+											{/* Request Type — editable within submission edit window */}
 											<TableCell>
-												{isEditing && withinEditWindow ? (
+												{canEditSubmissionData ? (
 													<Select
 														value={editForm.request_type}
 														onValueChange={(v) => setEditForm({ ...editForm, request_type: v })}
@@ -895,13 +910,12 @@ export default function WeeklyBudgetDepartmentView({
 												)}
 											</TableCell>
 
-											{/* Department Status — editable unless locked */}
+											{/* Department Status — editable unless row is locked */}
 											<TableCell>
 												{isEditing ? (
 													<Select
 														value={editForm.status_department}
 														onValueChange={(v) => setEditForm({ ...editForm, status_department: v })}
-														disabled={statusLocked}
 													>
 														<SelectTrigger className="w-[130px]">
 															<SelectValue />
@@ -922,11 +936,7 @@ export default function WeeklyBudgetDepartmentView({
 																<TooltipTrigger asChild>
 																	<Lock className="size-3 text-slate-400" />
 																</TooltipTrigger>
-																<TooltipContent side="top">
-																	{item.status_finance === 'paid'
-																		? 'Locked — Finance Status is Paid'
-																		: 'Locked — CEO Status is Approved'}
-																</TooltipContent>
+																<TooltipContent side="top">{getDepartmentEditLockReason(item)}</TooltipContent>
 															</Tooltip>
 														)}
 													</div>
@@ -939,69 +949,81 @@ export default function WeeklyBudgetDepartmentView({
 											{/* CEO Status — always read-only */}
 											<TableCell>{statusBadge(item.status_ceo, 'ceo')}</TableCell>
 
-											{/* Payment Category — editable within time window */}
-											{/* <TableCell>
-                                                {isEditing && withinEditWindow ? (
-                                                    <Select
-                                                        value={editForm.payment_category_id}
-                                                        onValueChange={(v) => setEditForm({ ...editForm, payment_category_id: v, payment_type_id: '' })}
-                                                    >
-                                                        <SelectTrigger className="w-[140px]"><SelectValue placeholder="Category" /></SelectTrigger>
-                                                        <SelectContent>
-                                                            {paymentCategories.map((pc) => <SelectItem key={pc.id} value={String(pc.id)}>{pc.name}</SelectItem>)}
-                                                        </SelectContent>
-                                                    </Select>
-                                                ) : (
-                                                    item.payment_category ?? '-'
-                                                )}
-                                            </TableCell> */}
+											{/* Payment Category — editable within submission edit window */}
+											<TableCell>
+												{canEditSubmissionData ? (
+													<Select
+														value={editForm.payment_category_id}
+														onValueChange={(v) => setEditForm({ ...editForm, payment_category_id: v, payment_type_id: '' })}
+													>
+														<SelectTrigger className="w-[140px]">
+															<SelectValue placeholder="Category" />
+														</SelectTrigger>
+														<SelectContent>
+															{paymentCategories.map((pc) => (
+																<SelectItem key={pc.id} value={String(pc.id)}>
+																	{pc.name}
+																</SelectItem>
+															))}
+														</SelectContent>
+													</Select>
+												) : (
+													(item.payment_category ?? '-')
+												)}
+											</TableCell>
 
-											{/* Payment Type — searchable combobox within time window */}
-											{/* <TableCell>
-                                                {isEditing && withinEditWindow ? (
-                                                    <Popover>
-                                                        <PopoverTrigger asChild>
-                                                            <Button
-                                                                variant="outline"
-                                                                role="combobox"
-                                                                disabled={!editForm.payment_category_id}
-                                                                className="w-[200px] justify-between font-normal"
-                                                            >
-                                                                {editForm.payment_type_id
-                                                                    ? (itemFilteredPaymentTypes.find((pt) => String(pt.id) === editForm.payment_type_id)?.name ?? 'Select type')
-                                                                    : 'Select type'}
-                                                                <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-                                                            </Button>
-                                                        </PopoverTrigger>
-                                                        <PopoverContent className="w-[240px] p-0" align="start">
-                                                            <Command>
-                                                                <CommandInput placeholder="Search types..." />
-                                                                <CommandList className="max-h-52">
-                                                                    <CommandEmpty>No types found.</CommandEmpty>
-                                                                    <CommandGroup>
-                                                                        {itemFilteredPaymentTypes.map((pt) => (
-                                                                            <CommandItem
-                                                                                key={pt.id}
-                                                                                value={pt.name}
-                                                                                onSelect={() => setEditForm({ ...editForm, payment_type_id: String(pt.id) })}
-                                                                            >
-                                                                                <Check className={cn('mr-2 size-4', editForm.payment_type_id === String(pt.id) ? 'opacity-100' : 'opacity-0')} />
-                                                                                {pt.name}
-                                                                            </CommandItem>
-                                                                        ))}
-                                                                    </CommandGroup>
-                                                                </CommandList>
-                                                            </Command>
-                                                        </PopoverContent>
-                                                    </Popover>
-                                                ) : (
-                                                    item.payment_type ?? '-'
-                                                )}
-                                            </TableCell> */}
+											{/* Payment Type — searchable combobox within submission edit window */}
+											<TableCell>
+												{canEditSubmissionData ? (
+													<Popover>
+														<PopoverTrigger asChild>
+															<Button
+																variant="outline"
+																role="combobox"
+																disabled={!editForm.payment_category_id}
+																className="w-[200px] justify-between font-normal"
+															>
+																{editForm.payment_type_id
+																	? (itemFilteredPaymentTypes.find((pt) => String(pt.id) === editForm.payment_type_id)?.name ??
+																		'Select type')
+																	: 'Select type'}
+																<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+															</Button>
+														</PopoverTrigger>
+														<PopoverContent className="w-[240px] p-0" align="start">
+															<Command>
+																<CommandInput placeholder="Search types..." />
+																<CommandList className="max-h-52">
+																	<CommandEmpty>No types found.</CommandEmpty>
+																	<CommandGroup>
+																		{itemFilteredPaymentTypes.map((pt) => (
+																			<CommandItem
+																				key={pt.id}
+																				value={pt.name}
+																				onSelect={() => setEditForm({ ...editForm, payment_type_id: String(pt.id) })}
+																			>
+																				<Check
+																					className={cn(
+																						'mr-2 size-4',
+																						editForm.payment_type_id === String(pt.id) ? 'opacity-100' : 'opacity-0',
+																					)}
+																				/>
+																				{pt.name}
+																			</CommandItem>
+																		))}
+																	</CommandGroup>
+																</CommandList>
+															</Command>
+														</PopoverContent>
+													</Popover>
+												) : (
+													(item.payment_type ?? '-')
+												)}
+											</TableCell>
 
-											{/* Amount — editable number input within edit window */}
+											{/* Amount — editable within submission edit window */}
 											<TableCell className="whitespace-nowrap">
-												{isEditing && withinEditWindow ? (
+												{canEditSubmissionData ? (
 													<input
 														type="number"
 														min="0"
@@ -1067,8 +1089,7 @@ export default function WeeklyBudgetDepartmentView({
 														</div>
 													) : (
 														<div className="flex items-center gap-1">
-															{/* Edit button: always show if can manage, but status fields respect lock */}
-															{(canEditStatus || withinEditWindow) && (
+															{canEditRow ? (
 																<Button
 																	variant="ghost"
 																	size="sm"
@@ -1077,9 +1098,21 @@ export default function WeeklyBudgetDepartmentView({
 																>
 																	Edit
 																</Button>
+															) : (
+																canManageDept &&
+																statusLocked && (
+																	<Tooltip>
+																		<TooltipTrigger asChild>
+																			<span className="inline-flex cursor-not-allowed items-center gap-1 px-2 py-1 text-xs text-slate-400">
+																				<Lock className="size-3" />
+																				Locked
+																			</span>
+																		</TooltipTrigger>
+																		<TooltipContent side="top">{getDepartmentEditLockReason(item)}</TooltipContent>
+																	</Tooltip>
+																)
 															)}
-															{/* Delete button: only within edit window */}
-															{withinEditWindow && (
+															{canEditRow && withinEditWindow ? (
 																<Button
 																	variant="ghost"
 																	size="sm"
@@ -1091,6 +1124,20 @@ export default function WeeklyBudgetDepartmentView({
 																>
 																	<Trash2 className="size-3.5" />
 																</Button>
+															) : (
+																canEditRow &&
+																!withinEditWindow && (
+																	<Tooltip>
+																		<TooltipTrigger asChild>
+																			<span className="inline-flex cursor-not-allowed p-1 text-slate-300">
+																				<Trash2 className="size-3.5" />
+																			</span>
+																		</TooltipTrigger>
+																		<TooltipContent side="top">
+																			Delete available until Friday EOD of submission week
+																		</TooltipContent>
+																	</Tooltip>
+																)
 															)}
 														</div>
 													)}
@@ -1141,27 +1188,41 @@ export default function WeeklyBudgetDepartmentView({
 			<Dialog open={!!noteDialogItem} onOpenChange={(open) => !open && setNoteDialogItem(null)}>
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
-						<DialogTitle>{noteDialogItem?.note ? 'Edit Note' : 'Add Note'}</DialogTitle>
+						<DialogTitle>
+							{noteDialogItem && !isDepartmentStatusLocked(noteDialogItem)
+								? noteDialogItem.note
+									? 'Edit Note'
+									: 'Add Note'
+								: 'View Note'}
+						</DialogTitle>
 					</DialogHeader>
 					<div className="py-4">
-						<Textarea
-							value={noteDialogText}
-							onChange={(e) => setNoteDialogText(e.target.value)}
-							placeholder="Enter note details..."
-							rows={5}
-							className="resize-none"
-						/>
+						{noteDialogItem && !isDepartmentStatusLocked(noteDialogItem) ? (
+							<Textarea
+								value={noteDialogText}
+								onChange={(e) => setNoteDialogText(e.target.value)}
+								placeholder="Enter note details..."
+								rows={5}
+								className="resize-none"
+							/>
+						) : (
+							<p className="text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">
+								{noteDialogItem?.note || <span className="text-slate-400 italic">No note added.</span>}
+							</p>
+						)}
 					</div>
 					<DialogFooter className="gap-2">
 						<Button variant="outline" onClick={() => setNoteDialogItem(null)}>
 							Cancel
 						</Button>
-						<Button
-							onClick={saveNotePopup}
-							disabled={noteDialogText === (noteDialogItem?.note ?? '')}
-						>
-							Save Changes
-						</Button>
+						{noteDialogItem && !isDepartmentStatusLocked(noteDialogItem) && (
+							<Button
+								onClick={saveNotePopup}
+								disabled={noteDialogText === (noteDialogItem?.note ?? '')}
+							>
+								Save Changes
+							</Button>
+						)}
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>

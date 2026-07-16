@@ -9,6 +9,7 @@ use App\Enums\WeeklyBudgetStatusFinance;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 class WeeklyBudget extends Model
 {
@@ -77,5 +78,30 @@ class WeeklyBudget extends Model
     public function paymentType(): BelongsTo
     {
         return $this->belongsTo(PaymentType::class, 'payment_type_id');
+    }
+
+    public function isDepartmentStatusLocked(): bool
+    {
+        return $this->status_finance === WeeklyBudgetStatusFinance::Paid
+            || $this->status_ceo === WeeklyBudgetStatusCeo::Approved;
+    }
+
+    public function departmentEditWindowDeadline(): ?Carbon
+    {
+        if (! $this->created_at) {
+            return null;
+        }
+
+        $dayOfWeek = (int) $this->created_at->format('N');
+        $daysToFriday = (5 - $dayOfWeek + 7) % 7;
+
+        return $this->created_at->copy()->addDays($daysToFriday)->endOfDay();
+    }
+
+    public function isWithinDepartmentEditWindow(): bool
+    {
+        $deadline = $this->departmentEditWindowDeadline();
+
+        return $deadline !== null && now()->lte($deadline);
     }
 }

@@ -456,11 +456,19 @@ class WeeklyBudgetController extends Controller
         }
 
         if ($weeklyBudget->status_department !== WeeklyBudgetStatusDepartment::Approved) {
-             return back()->withErrors(['status_finance' => 'Finance Status change only allowed if Department Status is Approved.']);
+            return back()->withErrors(['status_finance' => 'Finance Status change only allowed if Department Status is Approved.']);
         }
 
-        if ($weeklyBudget->status_finance === WeeklyBudgetStatusFinance::Paid && !auth()->user()->can('override_paid_status')) {
-            return back()->withErrors(['status_finance' => 'Cannot revert Paid status.']);
+        $currentFinanceStatus = $weeklyBudget->status_finance->value;
+        $newFinanceStatus = $validated['status_finance'];
+
+        if ($currentFinanceStatus === WeeklyBudgetStatusFinance::Paid->value && $newFinanceStatus !== $currentFinanceStatus) {
+            if (! auth()->user()->can('override_paid_status')) {
+                return back()->withErrors(['status_finance' => 'Cannot revert Paid status.']);
+            }
+            if ($newFinanceStatus !== WeeklyBudgetStatusFinance::Approved->value) {
+                return back()->withErrors(['status_finance' => 'Paid status can only be reverted to Approved.']);
+            }
         }
 
         $updateData = [
@@ -530,6 +538,15 @@ class WeeklyBudgetController extends Controller
         ]);
 
         $budget = WeeklyBudget::findOrFail($validated['id']);
+
+        if ($budget->status_finance !== WeeklyBudgetStatusFinance::Paid) {
+            return back()->withErrors(['status_finance' => 'Override is only allowed for Paid finance status.']);
+        }
+
+        if ($validated['status_finance'] !== WeeklyBudgetStatusFinance::Approved->value) {
+            return back()->withErrors(['status_finance' => 'Paid status can only be reverted to Approved.']);
+        }
+
         $budget->update([
             'status_finance' => $validated['status_finance'],
         ]);
@@ -654,12 +671,23 @@ class WeeklyBudgetController extends Controller
             'amount'            => ['nullable', 'numeric', 'min:0'],
         ]);
 
-        // Lock: Finance paid or CEO approved
-        if (
-            $weeklyBudget->status_finance === WeeklyBudgetStatusFinance::Paid ||
-            $weeklyBudget->status_ceo === WeeklyBudgetStatusCeo::Approved
-        ) {
-            return back()->withErrors(['status_department' => 'Department Status is locked because Finance Status is Paid or CEO Status is Approved.']);
+        if ($weeklyBudget->isDepartmentStatusLocked()) {
+            return back()->withErrors(['status_department' => 'Editing is locked because Finance Status is Paid or CEO Status is Approved.']);
+        }
+
+        $withinEditWindow = $weeklyBudget->isWithinDepartmentEditWindow();
+
+        $amountChanging = array_key_exists('amount', $validated)
+            && (string) $validated['amount'] !== (string) $weeklyBudget->amount;
+        $requestTypeChanging = ! empty($validated['request_type'])
+            && $validated['request_type'] !== $weeklyBudget->request_type?->value;
+        $paymentCategoryChanging = array_key_exists('payment_category_id', $validated)
+            && (int) ($validated['payment_category_id'] ?? 0) !== (int) $weeklyBudget->payment_category_id;
+        $paymentTypeChanging = array_key_exists('payment_type_id', $validated)
+            && (int) ($validated['payment_type_id'] ?? 0) !== (int) $weeklyBudget->payment_type_id;
+
+        if (! $withinEditWindow && ($amountChanging || $requestTypeChanging || $paymentCategoryChanging || $paymentTypeChanging)) {
+            return back()->withErrors(['edit' => 'Submission data can only be edited until Friday EOD of the submission week.']);
         }
 
         // Downgrade note: approved → pending requires a reason
@@ -672,29 +700,22 @@ class WeeklyBudgetController extends Controller
             }
         }
 
-        // Build update payload — always update status and note
         $updateData = [
-            'status_department'   => $validated['status_department'],
-            'note'                => array_key_exists('note', $validated) ? $validated['note'] : $weeklyBudget->note,
-            'payment_category_id' => array_key_exists('payment_category_id', $validated)
-                ? $validated['payment_category_id']
-                : $weeklyBudget->payment_category_id,
-            'payment_type_id'     => array_key_exists('payment_type_id', $validated)
-                ? $validated['payment_type_id']
-                : $weeklyBudget->payment_type_id,
+            'status_department' => $validated['status_department'],
+            'note'              => array_key_exists('note', $validated) ? $validated['note'] : $weeklyBudget->note,
         ];
 
-        // request_type and amount are only updated within the edit window (Friday EOD of submission week)
-        $submittedAt = $weeklyBudget->created_at;
-        $dayOfWeek   = (int) $submittedAt->format('N');
-        $daysToFriday = (5 - $dayOfWeek + 7) % 7;
-        $fridayEod   = $submittedAt->copy()->addDays($daysToFriday)->endOfDay();
-
-        if (now()->lte($fridayEod)) {
-            if (!empty($validated['request_type'])) {
+        if ($withinEditWindow) {
+            if (array_key_exists('payment_category_id', $validated)) {
+                $updateData['payment_category_id'] = $validated['payment_category_id'];
+            }
+            if (array_key_exists('payment_type_id', $validated)) {
+                $updateData['payment_type_id'] = $validated['payment_type_id'];
+            }
+            if (! empty($validated['request_type'])) {
                 $updateData['request_type'] = $validated['request_type'];
             }
-            if (isset($validated['amount'])) {
+            if (array_key_exists('amount', $validated)) {
                 $updateData['amount'] = $validated['amount'];
             }
         }
@@ -708,13 +729,11 @@ class WeeklyBudgetController extends Controller
     {
         abort_unless(auth()->user()->can('manage department budgets'), 403);
 
-        // Server-side edit-window check: only deletable until Friday EOD of submission week
-        $submittedAt = $weeklyBudget->created_at;
-        $dayOfWeek = (int) $submittedAt->format('N'); // 1=Mon … 7=Sun
-        $daysToFriday = (5 - $dayOfWeek + 7) % 7;
-        $fridayEod = $submittedAt->copy()->addDays($daysToFriday)->endOfDay();
+        if ($weeklyBudget->isDepartmentStatusLocked()) {
+            return back()->withErrors(['delete' => 'Deleting is locked because Finance Status is Paid or CEO Status is Approved.']);
+        }
 
-        if (now()->gt($fridayEod)) {
+        if (! $weeklyBudget->isWithinDepartmentEditWindow()) {
             return back()->withErrors(['delete' => 'This entry can no longer be deleted — the edit window (Friday EOD of submission week) has passed.']);
         }
 
@@ -790,6 +809,38 @@ class WeeklyBudgetController extends Controller
         ]);
 
         return back()->with('message', 'CEO status updated successfully.');
+    }
+
+    public function bulkUpdateCeo(Request $request): RedirectResponse
+    {
+        abort_unless(auth()->user()->can('manage ceo budgets'), 403);
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array'],
+            'ids.*' => ['exists:weekly_budgets,id'],
+            'status_ceo' => ['required', Rule::enum(WeeklyBudgetStatusCeo::class)],
+        ]);
+
+        $budgets = WeeklyBudget::whereIn('id', $validated['ids'])->get();
+
+        foreach ($budgets as $budget) {
+            if ($budget->status_finance === WeeklyBudgetStatusFinance::Paid) {
+                continue;
+            }
+
+            if ($validated['status_ceo'] === WeeklyBudgetStatusCeo::Approved->value) {
+                if (
+                    $budget->status_finance !== WeeklyBudgetStatusFinance::Approved ||
+                    $budget->status_department !== WeeklyBudgetStatusDepartment::Approved
+                ) {
+                    continue;
+                }
+            }
+
+            $budget->update(['status_ceo' => $validated['status_ceo']]);
+        }
+
+        return back()->with('message', 'Selected budgets updated successfully.');
     }
 }
 
