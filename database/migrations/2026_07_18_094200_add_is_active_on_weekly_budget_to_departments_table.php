@@ -8,18 +8,18 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (!Schema::hasColumn('departments', 'is_headoffice')) {
+        if (!Schema::hasColumn('departments', 'is_active_on_weekly_budget')) {
             Schema::table('departments', function (Blueprint $table) {
-                $table->boolean('is_headoffice')->default(0)->after('is_active_on_ticketing');
+                $table->boolean('is_active_on_weekly_budget')->default(0)->after('is_active_on_ticketing');
             });
         }
     }
 
     public function down(): void
     {
-        if (Schema::hasColumn('departments', 'is_headoffice')) {
+        if (Schema::hasColumn('departments', 'is_active_on_weekly_budget')) {
             Schema::table('departments', function (Blueprint $table) {
-                $table->dropColumn('is_headoffice');
+                $table->dropColumn('is_active_on_weekly_budget');
             });
         }
     }

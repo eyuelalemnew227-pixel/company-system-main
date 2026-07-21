@@ -10,109 +10,109 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import React from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Departments',
-        href: '/departments',
-    },
-    {
-        title: 'Edit Department',
-        href: null,
-    },
+	{
+		title: 'Departments',
+		href: '/departments',
+	},
+	{
+		title: 'Edit Department',
+		href: null,
+	},
 ];
 
 export default function EditDepartment({ department }: { department: Department }) {
-    const { data, setData, put, errors, processing } = useForm({
-        name: department.name,
-        description: department.description || '',
-        is_active: department.is_active ?? true,
-        is_active_on_ticketing: department.is_active_on_ticketing ?? true,
-        is_headoffice: department.is_headoffice ?? false,
-    });
+	const { data, setData, put, errors, processing } = useForm({
+		name: department.name,
+		description: department.description || '',
+		is_active: department.is_active ?? true,
+		is_active_on_ticketing: department.is_active_on_ticketing ?? true,
+		is_active_on_weekly_budget: department.is_active_on_weekly_budget ?? false,
+	});
 
-    function submit(e: React.FormEvent<HTMLFormElement>) {
-        e.preventDefault();
-        put(`/departments/${department.id}`);
-    }
+	function submit(e: React.FormEvent<HTMLFormElement>) {
+		e.preventDefault();
+		put(`/departments/${department.id}`);
+	}
 
-    return (
-        <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Edit Department" />
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-                <Card>
-                    <CardHeader className="flex items-center justify-between">
-                        <CardTitle>Edit Department</CardTitle>
-                        <CardAction>
-                            <Link href="/departments">
-                                <Button variant="default">Go Back</Button>
-                            </Link>
-                        </CardAction>
-                    </CardHeader>
-                    <hr />
-                    <CardContent>
-                        <form onSubmit={submit}>
-                            <div className="mb-4">
-                                <Label htmlFor="name">Name</Label>
-                                <Input
-                                    id="name"
-                                    type="text"
-                                    value={data.name}
-                                    onChange={(e) => setData('name', e.target.value)}
-                                    aria-invalid={!!errors.name}
-                                    placeholder="Enter department name"
-                                />
-                                <InputError message={errors.name} />
-                            </div>
-                            <div className="mb-4">
-                                <Label htmlFor="description">Description</Label>
-                                <Input
-                                    id="description"
-                                    type="text"
-                                    value={data.description}
-                                    onChange={(e) => setData('description', e.target.value)}
-                                    aria-invalid={!!errors.description}
-                                    placeholder="Enter description (optional)"
-                                />
-                                <InputError message={errors.description} />
-                            </div>
-                            <div className="mb-4 flex items-center gap-2">
-                                <Label htmlFor="is_active">Active</Label>
-                                <input
-                                    id="is_active"
-                                    type="checkbox"
-                                    checked={data.is_active}
-                                    onChange={(e) => setData('is_active', e.target.checked)}
-                                />
-                                <InputError message={errors.is_active} />
-                            </div>
-                            <div className="mb-4 flex items-center gap-2">
-                                <Label htmlFor="is_active_on_ticketing">Active for Ticketing</Label>
-                                <input
-                                    id="is_active_on_ticketing"
-                                    type="checkbox"
-                                    checked={data.is_active_on_ticketing}
-                                    onChange={(e) => setData('is_active_on_ticketing', e.target.checked)}
-                                />
-                                <InputError message={errors.is_active_on_ticketing} />
-                            </div>
-                            <div className="mb-4 flex items-center gap-2">
-                                <Label htmlFor="is_headoffice">Head Office</Label>
-                                <input
-                                    id="is_headoffice"
-                                    type="checkbox"
-                                    checked={data.is_headoffice}
-                                    onChange={(e) => setData('is_headoffice', e.target.checked)}
-                                />
-                                <InputError message={errors.is_headoffice} />
-                            </div>
-                            <div className="flex justify-end">
-                                <Button size="lg" type="submit" disabled={processing}>
-                                    Update
-                                </Button>
-                            </div>
-                        </form>
-                    </CardContent>
-                </Card>
-            </div>
-        </AppLayout>
-    );
+	return (
+		<AppLayout breadcrumbs={breadcrumbs}>
+			<Head title="Edit Department" />
+			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+				<Card>
+					<CardHeader className="flex items-center justify-between">
+						<CardTitle>Edit Department</CardTitle>
+						<CardAction>
+							<Link href="/departments">
+								<Button variant="default">Go Back</Button>
+							</Link>
+						</CardAction>
+					</CardHeader>
+					<hr />
+					<CardContent>
+						<form onSubmit={submit}>
+							<div className="mb-4">
+								<Label htmlFor="name">Name</Label>
+								<Input
+									id="name"
+									type="text"
+									value={data.name}
+									onChange={(e) => setData('name', e.target.value)}
+									aria-invalid={!!errors.name}
+									placeholder="Enter department name"
+								/>
+								<InputError message={errors.name} />
+							</div>
+							<div className="mb-4">
+								<Label htmlFor="description">Description</Label>
+								<Input
+									id="description"
+									type="text"
+									value={data.description}
+									onChange={(e) => setData('description', e.target.value)}
+									aria-invalid={!!errors.description}
+									placeholder="Enter description (optional)"
+								/>
+								<InputError message={errors.description} />
+							</div>
+							<div className="mb-4 flex items-center gap-2">
+								<Label htmlFor="is_active">Active</Label>
+								<input
+									id="is_active"
+									type="checkbox"
+									checked={data.is_active}
+									onChange={(e) => setData('is_active', e.target.checked)}
+								/>
+								<InputError message={errors.is_active} />
+							</div>
+							<div className="mb-4 flex items-center gap-2">
+								<Label htmlFor="is_active_on_ticketing">Active for Ticketing</Label>
+								<input
+									id="is_active_on_ticketing"
+									type="checkbox"
+									checked={data.is_active_on_ticketing}
+									onChange={(e) => setData('is_active_on_ticketing', e.target.checked)}
+								/>
+								<InputError message={errors.is_active_on_ticketing} />
+							</div>
+							<div className="mb-4 flex items-center gap-2">
+								<Label htmlFor="is_active_on_weekly_budget">Active for Weekly Budget</Label>
+								<input
+									id="is_active_on_weekly_budget"
+									type="checkbox"
+									checked={data.is_active_on_weekly_budget}
+									onChange={(e) => setData('is_active_on_weekly_budget', e.target.checked)}
+								/>
+								<InputError message={errors.is_active_on_weekly_budget} />
+							</div>
+							<div className="flex justify-end">
+								<Button size="lg" type="submit" disabled={processing}>
+									Update
+								</Button>
+							</div>
+						</form>
+					</CardContent>
+				</Card>
+			</div>
+		</AppLayout>
+	);
 }
