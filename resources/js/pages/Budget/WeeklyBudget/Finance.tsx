@@ -79,6 +79,7 @@ type IndexProps = {
 	statusCeos: string[];
 	today: string;
 	currentFiscalYearId?: number | null;
+	currentFiscalMonthId?: number | null;
 	request?: any;
 };
 
@@ -103,11 +104,7 @@ function stripCommas(value: string): string {
 
 type FinanceEditMode = 'full' | 'mark-paid' | 'revert-paid';
 
-function getFinanceEditMode(
-	item: WeeklyBudgetRow,
-	canManageFinance: boolean,
-	canOverridePaid: boolean,
-): FinanceEditMode | null {
+function getFinanceEditMode(item: WeeklyBudgetRow, canManageFinance: boolean, canOverridePaid: boolean): FinanceEditMode | null {
 	if (!canManageFinance || item.status_department !== 'approved') {
 		return null;
 	}
@@ -286,6 +283,7 @@ export default function WeeklyBudgetFinance({
 	statusCeos,
 	today,
 	currentFiscalYearId,
+	currentFiscalMonthId,
 	request,
 }: IndexProps) {
 	const { flash, errors } = usePage<any>().props;
@@ -304,8 +302,12 @@ export default function WeeklyBudgetFinance({
 	const [descriptionDialogText, setDescriptionDialogText] = useState<string>('');
 	const [selectedBranch, setSelectedBranch] = useState<string>(request?.branch_id ?? 'all');
 	const [selectedDepartment, setSelectedDepartment] = useState<string>(request?.department_id ?? 'all');
-	const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(request?.fiscal_year_id ?? 'all');
-	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(request?.fiscal_month_id ?? 'all');
+	const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(
+		request?.fiscal_year_id ?? (currentFiscalYearId ? String(currentFiscalYearId) : 'all'),
+	);
+	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(
+		request?.fiscal_month_id ?? (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all'),
+	);
 	const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(request?.week_start_date ?? 'all');
 	const [selectedPaymentCategory, setSelectedPaymentCategory] = useState<string>(request?.payment_category_id ?? 'all');
 	const [selectedPaymentType, setSelectedPaymentType] = useState<string>(request?.payment_type_id ?? 'all');
@@ -374,8 +376,8 @@ export default function WeeklyBudgetFinance({
 		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
 		if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
 		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
-		if (selectedFiscalYear !== 'all') params.fiscal_year_id = selectedFiscalYear;
-		if (selectedFiscalMonth !== 'all') params.fiscal_month_id = selectedFiscalMonth;
+		params.fiscal_year_id = selectedFiscalYear;
+		params.fiscal_month_id = selectedFiscalMonth;
 		if (selectedWeekStartDate !== 'all') params.week_start_date = selectedWeekStartDate;
 		if (selectedPaymentCategory !== 'all') params.payment_category_id = selectedPaymentCategory;
 		if (selectedPaymentType !== 'all') params.payment_type_id = selectedPaymentType;
@@ -385,7 +387,9 @@ export default function WeeklyBudgetFinance({
 	function applyFilters(overrides: Record<string, string> = {}) {
 		const params = { ...buildFilterParams(), ...overrides };
 		Object.keys(params).forEach((key) => {
-			if (params[key] === 'all') delete params[key];
+			if (params[key] === 'all' && key !== 'fiscal_year_id' && key !== 'fiscal_month_id') {
+				delete params[key];
+			}
 		});
 		router.get('/budget/weekly-budget/finance', params, { preserveState: true, replace: true });
 	}
@@ -412,27 +416,33 @@ export default function WeeklyBudgetFinance({
 		setSelectedStatusCeo('all');
 		setSelectedDepartment('all');
 		setSelectedBranch('all');
-		setSelectedFiscalYear('all');
-		setSelectedFiscalMonth('all');
+		setSelectedFiscalYear(currentFiscalYearId ? String(currentFiscalYearId) : 'all');
+		setSelectedFiscalMonth(currentFiscalMonthId ? String(currentFiscalMonthId) : 'all');
 		setSelectedWeekStartDate('all');
 		setSelectedPaymentCategory('all');
 		setSelectedPaymentType('all');
-		router.get('/budget/weekly-budget/finance', {}, { preserveState: true, replace: true });
+		router.get(
+			'/budget/weekly-budget/finance',
+			{
+				fiscal_year_id: currentFiscalYearId ? String(currentFiscalYearId) : 'all',
+				fiscal_month_id: currentFiscalMonthId ? String(currentFiscalMonthId) : 'all',
+			},
+			{ preserveState: true, replace: true },
+		);
 	}
 
-	const hasActiveFilters = [
-		selectedRequestType,
-		selectedStatusFinance,
-		selectedStatusDepartment,
-		selectedStatusCeo,
-		selectedDepartment,
-		selectedBranch,
-		selectedFiscalYear,
-		selectedFiscalMonth,
-		selectedWeekStartDate,
-		selectedPaymentCategory,
-		selectedPaymentType,
-	].some((v) => v !== 'all');
+	const hasActiveFilters =
+		selectedRequestType !== 'all' ||
+		selectedStatusFinance !== 'all' ||
+		selectedStatusDepartment !== 'all' ||
+		selectedStatusCeo !== 'all' ||
+		selectedDepartment !== 'all' ||
+		selectedBranch !== 'all' ||
+		selectedFiscalYear !== (currentFiscalYearId ? String(currentFiscalYearId) : 'all') ||
+		selectedFiscalMonth !== (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all') ||
+		selectedWeekStartDate !== 'all' ||
+		selectedPaymentCategory !== 'all' ||
+		selectedPaymentType !== 'all';
 
 	const allSelectableIds = useMemo(() => {
 		return items.data.filter((item) => item.status_department === 'approved' && item.status_finance !== 'paid').map((item) => item.id);
@@ -902,9 +912,7 @@ export default function WeeklyBudgetFinance({
 									const isEditing = editingRowId === item.id;
 									const editMode = getFinanceEditMode(item, canManageFinance, canOverridePaid);
 									const isEditable = editMode !== null;
-									const allowedFinanceStatuses = editMode
-										? getAllowedFinanceStatuses(item, editMode, statusFinances)
-										: [];
+									const allowedFinanceStatuses = editMode ? getAllowedFinanceStatuses(item, editMode, statusFinances) : [];
 									const canEditPaymentFields = isEditing && editMode !== 'revert-paid';
 									const canEditRequestFields = isEditing && editMode === 'full';
 
@@ -1160,9 +1168,7 @@ export default function WeeklyBudgetFinance({
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
 						<DialogTitle>
-							{descriptionDialogItem && canEditDescription(descriptionDialogItem)
-								? 'Edit Description'
-								: 'View Description'}
+							{descriptionDialogItem && canEditDescription(descriptionDialogItem) ? 'Edit Description' : 'View Description'}
 						</DialogTitle>
 					</DialogHeader>
 					<div className="py-4 text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">
@@ -1182,13 +1188,10 @@ export default function WeeklyBudgetFinance({
 							Cancel
 						</Button>
 						{descriptionDialogItem && canEditDescription(descriptionDialogItem) && (
-								<Button
-									onClick={saveDescriptionPopup}
-									disabled={descriptionDialogText === (descriptionDialogItem?.description ?? '')}
-								>
-									Save Changes
-								</Button>
-							)}
+							<Button onClick={saveDescriptionPopup} disabled={descriptionDialogText === (descriptionDialogItem?.description ?? '')}>
+								Save Changes
+							</Button>
+						)}
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>

@@ -224,6 +224,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('budget/weekly-budget/{weeklyBudget}/department-delete', [WeeklyBudgetController::class, 'departmentDelete'])->name('weekly-budget.department-delete');
         });
 
+        Route::middleware('permission:manage department budgets')->group(function () {
+            Route::patch('budget/weekly-budget/department/bulk', [WeeklyBudgetController::class, 'bulkUpdateDepartment'])->name('weekly-budget.bulk-update-department');
+        });
+
         // CEO View for Weekly Budgets
         Route::middleware('permission:view ceo budgets')->group(function () {
             Route::get('budget/weekly-budget/ceo', [WeeklyBudgetController::class, 'ceoView'])->name('weekly-budget.ceo');

@@ -107,6 +107,7 @@ type IndexProps = {
 	statusCeos: string[];
 	today: string;
 	currentFiscalYearId?: number | null;
+	currentFiscalMonthId?: number | null;
 	request?: {
 		request_type?: string;
 		status_finance?: string;
@@ -351,6 +352,7 @@ export default function WeeklyBudgetIndex({
 	statusCeos,
 	today,
 	currentFiscalYearId,
+	currentFiscalMonthId,
 	request,
 }: IndexProps) {
 	const { flash } = usePage<{ flash: { message?: string } }>().props;
@@ -363,8 +365,12 @@ export default function WeeklyBudgetIndex({
 	const [selectedStatusCeo, setSelectedStatusCeo] = useState<string>(request?.status_ceo ?? 'all');
 	const [selectedBranch, setSelectedBranch] = useState<string>(request?.branch_id ?? 'all');
 	const [selectedDepartment, setSelectedDepartment] = useState<string>(request?.department_id ?? 'all');
-	const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(request?.fiscal_year_id ?? 'all');
-	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(request?.fiscal_month_id ?? 'all');
+	const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(
+		request?.fiscal_year_id ?? (currentFiscalYearId ? String(currentFiscalYearId) : 'all'),
+	);
+	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(
+		request?.fiscal_month_id ?? (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all'),
+	);
 	const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(request?.week_start_date ?? 'all');
 
 	const [openBranchFilter, setOpenBranchFilter] = useState(false);
@@ -581,17 +587,18 @@ export default function WeeklyBudgetIndex({
 		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
 		if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
 		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
-		if (selectedFiscalYear !== 'all') params.fiscal_year_id = selectedFiscalYear;
-		if (selectedFiscalMonth !== 'all') params.fiscal_month_id = selectedFiscalMonth;
+		params.fiscal_year_id = selectedFiscalYear;
+		params.fiscal_month_id = selectedFiscalMonth;
 		if (selectedWeekStartDate !== 'all') params.week_start_date = selectedWeekStartDate;
 		return params;
 	}
 
 	function applyFilters(overrides: Record<string, string> = {}) {
 		const params = { ...buildFilterParams(), ...overrides };
-		// Clean out 'all' values from overrides
 		Object.keys(params).forEach((key) => {
-			if (params[key] === 'all') delete params[key];
+			if (params[key] === 'all' && key !== 'fiscal_year_id' && key !== 'fiscal_month_id') {
+				delete params[key];
+			}
 		});
 		router.get('/budget/weekly-budget', params, { preserveState: true, replace: true });
 	}
@@ -657,10 +664,17 @@ export default function WeeklyBudgetIndex({
 		setSelectedStatusCeo('all');
 		setSelectedDepartment('all');
 		setSelectedBranch('all');
-		setSelectedFiscalYear('all');
-		setSelectedFiscalMonth('all');
+		setSelectedFiscalYear(currentFiscalYearId ? String(currentFiscalYearId) : 'all');
+		setSelectedFiscalMonth(currentFiscalMonthId ? String(currentFiscalMonthId) : 'all');
 		setSelectedWeekStartDate('all');
-		router.get('/budget/weekly-budget', {}, { preserveState: true, replace: true });
+		router.get(
+			'/budget/weekly-budget',
+			{
+				fiscal_year_id: currentFiscalYearId ? String(currentFiscalYearId) : 'all',
+				fiscal_month_id: currentFiscalMonthId ? String(currentFiscalMonthId) : 'all',
+			},
+			{ preserveState: true, replace: true },
+		);
 	}
 
 	const hasActiveFilters =
@@ -670,8 +684,8 @@ export default function WeeklyBudgetIndex({
 		selectedStatusCeo !== 'all' ||
 		selectedDepartment !== 'all' ||
 		selectedBranch !== 'all' ||
-		selectedFiscalYear !== 'all' ||
-		selectedFiscalMonth !== 'all' ||
+		selectedFiscalYear !== (currentFiscalYearId ? String(currentFiscalYearId) : 'all') ||
+		selectedFiscalMonth !== (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all') ||
 		selectedWeekStartDate !== 'all';
 
 	// Selected week option label for the filter trigger

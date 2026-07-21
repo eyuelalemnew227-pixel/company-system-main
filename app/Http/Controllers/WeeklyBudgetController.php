@@ -24,6 +24,15 @@ class WeeklyBudgetController extends Controller
     {
         abort_unless(auth()->user()->can('view weekly budgets'), 403);
 
+        [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
+        $hasFiscalYearFilter = request()->has('fiscal_year_id');
+        $fiscalYearFilter = $hasFiscalYearFilter
+            ? request('fiscal_year_id')
+            : $currentFiscalYear?->id;
+        $fiscalMonthFilter = request()->has('fiscal_month_id')
+            ? request('fiscal_month_id')
+            : ($hasFiscalYearFilter ? null : $currentFiscalMonth?->id);
+
         $query = WeeklyBudget::query()->with([
             'branch',
             'department',
@@ -39,8 +48,8 @@ class WeeklyBudgetController extends Controller
             ->when(request('status_ceo'), fn ($q, $v) => $q->where('status_ceo', $v))
             ->when(request('branch_id'), fn ($q, $v) => $q->where('branch_id', $v))
             ->when(request('department_id'), fn ($q, $v) => $q->where('department_id', $v))
-            ->when(request('fiscal_year_id'), fn ($q, $v) => $q->where('fiscal_year_id', $v))
-            ->when(request('fiscal_month_id'), fn ($q, $v) => $q->where('fiscal_month_id', $v))
+            ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn ($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn ($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when(request('week_start_date'), fn ($q, $v) => $q->where('week_start_date', $v));
 
         $items = $query
@@ -79,11 +88,24 @@ class WeeklyBudgetController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        $today = now()->toDateString();
-        $currentFiscalYear = FiscalYear::query()
-            ->where('gregorian_start_date', '<=', $today)
-            ->where('gregorian_end_date', '>=', $today)
-            ->first();
+        $filters = request()->only([
+            'request_type',
+            'status_finance',
+            'status_department',
+            'status_ceo',
+            'branch_id',
+            'department_id',
+            'fiscal_year_id',
+            'fiscal_month_id',
+            'week_start_date',
+        ]);
+
+        if (! request()->has('fiscal_year_id') && $currentFiscalYear) {
+            $filters['fiscal_year_id'] = (string) $currentFiscalYear->id;
+        }
+        if (! request()->has('fiscal_month_id') && ! $hasFiscalYearFilter && $currentFiscalMonth) {
+            $filters['fiscal_month_id'] = (string) $currentFiscalMonth->id;
+        }
 
         return Inertia::render('Budget/WeeklyBudget/Index', [
             'items'       => $items,
@@ -97,17 +119,8 @@ class WeeklyBudgetController extends Controller
             'statusCeos'    => array_column(WeeklyBudgetStatusCeo::cases(), 'value'),
             'today'         => $today,
             'currentFiscalYearId' => $currentFiscalYear?->id,
-            'request'     => request()->only([
-                'request_type',
-                'status_finance',
-                'status_department',
-                'status_ceo',
-                'branch_id',
-                'department_id',
-                'fiscal_year_id',
-                'fiscal_month_id',
-                'week_start_date',
-            ]),
+            'currentFiscalMonthId' => $currentFiscalMonth?->id,
+            'request'     => $filters,
         ]);
     }
 
@@ -300,6 +313,28 @@ class WeeklyBudgetController extends Controller
             ->values();
     }
 
+    /**
+     * @return array{0: string, 1: ?FiscalYear, 2: ?FiscalMonth}
+     */
+    private function currentFiscalPeriod(): array
+    {
+        $today = now()->toDateString();
+        $currentFiscalYear = FiscalYear::query()
+            ->where('gregorian_start_date', '<=', $today)
+            ->where('gregorian_end_date', '>=', $today)
+            ->first();
+
+        $currentFiscalMonth = $currentFiscalYear
+            ? FiscalMonth::query()
+                ->where('fiscal_year_id', $currentFiscalYear->id)
+                ->where('gregorian_start_date', '<=', $today)
+                ->where('gregorian_end_date', '>=', $today)
+                ->first()
+            : null;
+
+        return [$today, $currentFiscalYear, $currentFiscalMonth];
+    }
+
     private function isHeadOfficeBranch(Branch $branch): bool
     {
         if (strcasecmp($branch->branch_code ?? '', 'HO') === 0) {
@@ -312,6 +347,15 @@ class WeeklyBudgetController extends Controller
     public function financeView(): Response
     {
         abort_unless(auth()->user()->can('view finance budgets'), 403);
+
+        [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
+        $hasFiscalYearFilter = request()->has('fiscal_year_id');
+        $fiscalYearFilter = $hasFiscalYearFilter
+            ? request('fiscal_year_id')
+            : $currentFiscalYear?->id;
+        $fiscalMonthFilter = request()->has('fiscal_month_id')
+            ? request('fiscal_month_id')
+            : ($hasFiscalYearFilter ? null : $currentFiscalMonth?->id);
 
         $query = WeeklyBudget::query()->with([
             'branch',
@@ -331,8 +375,8 @@ class WeeklyBudgetController extends Controller
             ->when(request('status_ceo'), fn ($q, $v) => $q->where('status_ceo', $v))
             ->when(request('branch_id'), fn ($q, $v) => $q->where('branch_id', $v))
             ->when(request('department_id'), fn ($q, $v) => $q->where('department_id', $v))
-            ->when(request('fiscal_year_id'), fn ($q, $v) => $q->where('fiscal_year_id', $v))
-            ->when(request('fiscal_month_id'), fn ($q, $v) => $q->where('fiscal_month_id', $v))
+            ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn ($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn ($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when(request('week_start_date'), fn ($q, $v) => $q->where('week_start_date', $v))
             ->when(request('payment_category_id'), fn ($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn ($q, $v) => $q->where('payment_type_id', $v));
@@ -391,11 +435,26 @@ class WeeklyBudgetController extends Controller
             'payment_category_id' => $e->is_expense ? 1 : 2,
         ])->values()->toArray();
 
-        $today = now()->toDateString();
-        $currentFiscalYear = FiscalYear::query()
-            ->where('gregorian_start_date', '<=', $today)
-            ->where('gregorian_end_date', '>=', $today)
-            ->first();
+        $filters = request()->only([
+            'request_type',
+            'status_finance',
+            'status_department',
+            'status_ceo',
+            'branch_id',
+            'department_id',
+            'fiscal_year_id',
+            'fiscal_month_id',
+            'week_start_date',
+            'payment_category_id',
+            'payment_type_id',
+        ]);
+
+        if (! request()->has('fiscal_year_id') && $currentFiscalYear) {
+            $filters['fiscal_year_id'] = (string) $currentFiscalYear->id;
+        }
+        if (! request()->has('fiscal_month_id') && ! $hasFiscalYearFilter && $currentFiscalMonth) {
+            $filters['fiscal_month_id'] = (string) $currentFiscalMonth->id;
+        }
 
         return Inertia::render('Budget/WeeklyBudget/Finance', [
             'items'       => $items,
@@ -411,19 +470,8 @@ class WeeklyBudgetController extends Controller
             'statusCeos'    => array_column(WeeklyBudgetStatusCeo::cases(), 'value'),
             'today'         => $today,
             'currentFiscalYearId' => $currentFiscalYear?->id,
-            'request'     => request()->only([
-                'request_type',
-                'status_finance',
-                'status_department',
-                'status_ceo',
-                'branch_id',
-                'department_id',
-                'fiscal_year_id',
-                'fiscal_month_id',
-                'week_start_date',
-                'payment_category_id',
-                'payment_type_id',
-            ]),
+            'currentFiscalMonthId' => $currentFiscalMonth?->id,
+            'request'     => $filters,
         ]);
     }
 
@@ -565,6 +613,15 @@ class WeeklyBudgetController extends Controller
     {
         abort_unless(auth()->user()->can('view department budgets'), 403);
 
+        [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
+        $hasFiscalYearFilter = request()->has('fiscal_year_id');
+        $fiscalYearFilter = $hasFiscalYearFilter
+            ? request('fiscal_year_id')
+            : $currentFiscalYear?->id;
+        $fiscalMonthFilter = request()->has('fiscal_month_id')
+            ? request('fiscal_month_id')
+            : ($hasFiscalYearFilter ? null : $currentFiscalMonth?->id);
+
         $expenseItems = ExpenseItem::query()->orderBy('expense_type')->get();
 
         $query = WeeklyBudget::query()->with([
@@ -581,8 +638,8 @@ class WeeklyBudgetController extends Controller
             ->when(request('status_ceo'),       fn ($q, $v) => $q->where('status_ceo', $v))
             ->when(request('branch_id'),        fn ($q, $v) => $q->where('branch_id', $v))
             ->when(request('department_id'),    fn ($q, $v) => $q->where('department_id', $v))
-            ->when(request('fiscal_year_id'),   fn ($q, $v) => $q->where('fiscal_year_id', $v))
-            ->when(request('fiscal_month_id'),  fn ($q, $v) => $q->where('fiscal_month_id', $v))
+            ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn ($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn ($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when(request('week_start_date'),  fn ($q, $v) => $q->where('week_start_date', $v))
             ->when(request('payment_category_id'), fn ($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'),  fn ($q, $v) => $q->where('payment_type_id', $v));
@@ -633,11 +690,18 @@ class WeeklyBudgetController extends Controller
             'payment_category_id' => $e->is_expense ? 1 : 2,
         ])->values()->toArray();
 
-        $today = now()->toDateString();
-        $currentFiscalYear = FiscalYear::query()
-            ->where('gregorian_start_date', '<=', $today)
-            ->where('gregorian_end_date', '>=', $today)
-            ->first();
+        $filters = request()->only([
+            'request_type', 'status_finance', 'status_department', 'status_ceo',
+            'branch_id', 'department_id', 'fiscal_year_id', 'fiscal_month_id',
+            'week_start_date', 'payment_category_id', 'payment_type_id',
+        ]);
+
+        if (! request()->has('fiscal_year_id') && $currentFiscalYear) {
+            $filters['fiscal_year_id'] = (string) $currentFiscalYear->id;
+        }
+        if (! request()->has('fiscal_month_id') && ! $hasFiscalYearFilter && $currentFiscalMonth) {
+            $filters['fiscal_month_id'] = (string) $currentFiscalMonth->id;
+        }
 
         return Inertia::render('Budget/WeeklyBudget/DepartmentView', [
             'items'             => $items,
@@ -653,11 +717,8 @@ class WeeklyBudgetController extends Controller
             'statusCeos'        => array_column(WeeklyBudgetStatusCeo::cases(), 'value'),
             'today'             => $today,
             'currentFiscalYearId' => $currentFiscalYear?->id,
-            'request'           => request()->only([
-                'request_type', 'status_finance', 'status_department', 'status_ceo',
-                'branch_id', 'department_id', 'fiscal_year_id', 'fiscal_month_id',
-                'week_start_date', 'payment_category_id', 'payment_type_id',
-            ]),
+            'currentFiscalMonthId' => $currentFiscalMonth?->id,
+            'request'           => $filters,
         ]);
     }
 
@@ -728,6 +789,45 @@ class WeeklyBudgetController extends Controller
         return back()->with('message', 'Department status updated successfully.');
     }
 
+    public function bulkUpdateDepartment(Request $request): RedirectResponse
+    {
+        abort_unless(auth()->user()->can('manage department budgets'), 403);
+
+        $validated = $request->validate([
+            'ids' => ['required', 'array'],
+            'ids.*' => ['exists:weekly_budgets,id'],
+            'status_department' => ['required', Rule::enum(WeeklyBudgetStatusDepartment::class)],
+        ]);
+
+        $budgets = WeeklyBudget::whereIn('id', $validated['ids'])->get();
+        $updatedCount = 0;
+        $skippedCount = 0;
+
+        foreach ($budgets as $budget) {
+            $requiresDowngradeNote =
+                $budget->status_department === WeeklyBudgetStatusDepartment::Approved
+                && $validated['status_department'] === WeeklyBudgetStatusDepartment::Pending->value;
+
+            if ($budget->isDepartmentStatusLocked() || $requiresDowngradeNote) {
+                $skippedCount++;
+                continue;
+            }
+
+            $budget->update([
+                'status_department' => $validated['status_department'],
+            ]);
+            $updatedCount++;
+        }
+
+        $message = "{$updatedCount} selected budget(s) updated successfully.";
+
+        if ($skippedCount > 0) {
+            $message .= " {$skippedCount} locked or note-required budget(s) were skipped.";
+        }
+
+        return back()->with('message', $message);
+    }
+
     public function departmentDelete(WeeklyBudget $weeklyBudget): RedirectResponse
     {
         abort_unless(auth()->user()->can('manage department budgets'), 403);
@@ -753,16 +853,36 @@ class WeeklyBudgetController extends Controller
     {
         abort_unless(auth()->user()->can('view ceo budgets'), 403);
 
+        [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
+        $hasFiscalYearFilter = request()->has('fiscal_year_id');
+        $fiscalYearFilter = $hasFiscalYearFilter
+            ? request('fiscal_year_id')
+            : $currentFiscalYear?->id;
+        $fiscalMonthFilter = request()->has('fiscal_month_id')
+            ? request('fiscal_month_id')
+            : ($hasFiscalYearFilter ? null : $currentFiscalMonth?->id);
+
         $query = WeeklyBudget::query()->with([
             'branch',
             'department',
+            'fiscalYear',
+            'fiscalMonth',
         ]);
 
         // Permanently filter to where both are approved
         $query->where('status_finance', WeeklyBudgetStatusFinance::Approved->value)
               ->where('status_department', WeeklyBudgetStatusDepartment::Approved->value);
 
-        $query->when(request('status_ceo'), fn ($q, $v) => $q->where('status_ceo', $v));
+        $query
+            ->when(request('request_type'), fn ($q, $v) => $q->where('request_type', $v))
+            ->when(request('status_ceo'), fn ($q, $v) => $q->where('status_ceo', $v))
+            ->when(request('branch_id'), fn ($q, $v) => $q->where('branch_id', $v))
+            ->when(request('department_id'), fn ($q, $v) => $q->where('department_id', $v))
+            ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn ($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn ($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when(request('week_start_date'), fn ($q, $v) => $q->where('week_start_date', $v))
+            ->when(request('payment_category_id'), fn ($q, $v) => $q->where('payment_category_id', $v))
+            ->when(request('payment_type_id'), fn ($q, $v) => $q->where('payment_type_id', $v));
 
         $items = $query
             ->latest()
@@ -770,8 +890,16 @@ class WeeklyBudgetController extends Controller
             ->withQueryString()
             ->through(fn (WeeklyBudget $wb) => [
                 'id'               => $wb->id,
+                'branch_id'        => $wb->branch_id,
+                'fiscal_year_id'   => $wb->fiscal_year_id,
+                'fiscal_month_id'  => $wb->fiscal_month_id,
                 'branch'           => $wb->branch?->name,
                 'department'       => $wb->department?->name,
+                'fiscal_year'      => $wb->fiscalYear?->name,
+                'fiscal_month'     => $wb->fiscalMonth?->name,
+                'week_number'      => $wb->week_number,
+                'week_start_date'  => $wb->week_start_date?->toDateString(),
+                'week_end_date'    => $wb->week_end_date?->toDateString(),
                 'request_type'     => $wb->request_type?->value,
                 'status_finance'   => $wb->status_finance?->value,
                 'status_department'=> $wb->status_department?->value,
@@ -779,12 +907,58 @@ class WeeklyBudgetController extends Controller
                 'amount'           => $wb->amount,
                 'description'      => $wb->description,
                 'note'             => $wb->note,
+                'payment_category_id' => $wb->payment_category_id,
+                'payment_type_id'  => $wb->payment_type_id,
             ]);
+
+        $expenseItems = ExpenseItem::query()->orderBy('expense_type')->get();
+        $paymentCategories = [
+            ['id' => 1, 'name' => 'Expense'],
+            ['id' => 2, 'name' => 'Cost of Sales'],
+        ];
+        $paymentTypes = $expenseItems->map(fn ($expenseItem) => [
+            'id' => $expenseItem->expense_parent_acc_code,
+            'name' => $expenseItem->expense_type,
+            'payment_category_id' => $expenseItem->is_expense ? 1 : 2,
+        ])->values()->toArray();
+
+        $filters = request()->only([
+            'request_type',
+            'status_ceo',
+            'branch_id',
+            'department_id',
+            'fiscal_year_id',
+            'fiscal_month_id',
+            'week_start_date',
+            'payment_category_id',
+            'payment_type_id',
+        ]);
+
+        if (! request()->has('fiscal_year_id') && $currentFiscalYear) {
+            $filters['fiscal_year_id'] = (string) $currentFiscalYear->id;
+        }
+        if (! request()->has('fiscal_month_id') && ! $hasFiscalYearFilter && $currentFiscalMonth) {
+            $filters['fiscal_month_id'] = (string) $currentFiscalMonth->id;
+        }
 
         return Inertia::render('Budget/WeeklyBudget/CeoView', [
             'items'             => $items,
+            'branches'          => Branch::query()->orderBy('name')->get(['id', 'name', 'branch_code']),
+            'departments'       => Department::query()
+                ->where('is_active', true)
+                ->where('is_active_on_weekly_budget', 1)
+                ->orderBy('name')
+                ->get(['id', 'name']),
+            'paymentCategories' => $paymentCategories,
+            'paymentTypes'      => $paymentTypes,
+            'fiscalYears'       => $this->fiscalYearOptions(),
+            'fiscalMonths'      => $this->fiscalMonthOptions(),
+            'requestTypes'      => array_column(WeeklyBudgetRequestType::cases(), 'value'),
             'statusCeos'        => array_column(WeeklyBudgetStatusCeo::cases(), 'value'),
-            'request'           => request()->only(['status_ceo']),
+            'today'             => $today,
+            'currentFiscalYearId' => $currentFiscalYear?->id,
+            'currentFiscalMonthId' => $currentFiscalMonth?->id,
+            'request'           => $filters,
         ]);
     }
 

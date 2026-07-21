@@ -1,6 +1,7 @@
 import TablePagination from '@/components/table-pagination';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -79,6 +80,7 @@ type IndexProps = {
 	statusCeos: string[];
 	today: string;
 	currentFiscalYearId?: number | null;
+	currentFiscalMonthId?: number | null;
 	request?: any;
 };
 
@@ -271,6 +273,7 @@ export default function WeeklyBudgetDepartmentView({
 	statusCeos,
 	today,
 	currentFiscalYearId,
+	currentFiscalMonthId,
 	request,
 }: IndexProps) {
 	const { flash, errors } = usePage<any>().props;
@@ -284,8 +287,12 @@ export default function WeeklyBudgetDepartmentView({
 	const [selectedStatusCeo, setSelectedStatusCeo] = useState<string>(request?.status_ceo ?? 'all');
 	const [selectedBranch, setSelectedBranch] = useState<string>(request?.branch_id ?? 'all');
 	const [selectedDepartment, setSelectedDepartment] = useState<string>(request?.department_id ?? 'all');
-	const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(request?.fiscal_year_id ?? 'all');
-	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(request?.fiscal_month_id ?? 'all');
+	const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(
+		request?.fiscal_year_id ?? (currentFiscalYearId ? String(currentFiscalYearId) : 'all'),
+	);
+	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(
+		request?.fiscal_month_id ?? (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all'),
+	);
 	const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(request?.week_start_date ?? 'all');
 	const [selectedPaymentCategory, setSelectedPaymentCategory] = useState<string>(request?.payment_category_id ?? 'all');
 	const [selectedPaymentType, setSelectedPaymentType] = useState<string>(request?.payment_type_id ?? 'all');
@@ -293,6 +300,10 @@ export default function WeeklyBudgetDepartmentView({
 	const [openBranchFilter, setOpenBranchFilter] = useState(false);
 	const [openDepartmentFilter, setOpenDepartmentFilter] = useState(false);
 	const [openPaymentTypeFilter, setOpenPaymentTypeFilter] = useState(false);
+
+	// ── Bulk action state ───────────────────────────────────────────────────
+	const [selectedIds, setSelectedIds] = useState<number[]>([]);
+	const [bulkStatus, setBulkStatus] = useState<string>('');
 
 	// ── Edit state ──────────────────────────────────────────────────────────
 	const [editingRowId, setEditingRowId] = useState<number | null>(null);
@@ -367,8 +378,8 @@ export default function WeeklyBudgetDepartmentView({
 		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
 		if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
 		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
-		if (selectedFiscalYear !== 'all') params.fiscal_year_id = selectedFiscalYear;
-		if (selectedFiscalMonth !== 'all') params.fiscal_month_id = selectedFiscalMonth;
+		params.fiscal_year_id = selectedFiscalYear;
+		params.fiscal_month_id = selectedFiscalMonth;
 		if (selectedWeekStartDate !== 'all') params.week_start_date = selectedWeekStartDate;
 		if (selectedPaymentCategory !== 'all') params.payment_category_id = selectedPaymentCategory;
 		if (selectedPaymentType !== 'all') params.payment_type_id = selectedPaymentType;
@@ -378,7 +389,9 @@ export default function WeeklyBudgetDepartmentView({
 	function applyFilters(overrides: Record<string, string> = {}) {
 		const params = { ...buildFilterParams(), ...overrides };
 		Object.keys(params).forEach((key) => {
-			if (params[key] === 'all') delete params[key];
+			if (params[key] === 'all' && key !== 'fiscal_year_id' && key !== 'fiscal_month_id') {
+				delete params[key];
+			}
 		});
 		router.get('/budget/weekly-budget/department', params, { preserveState: true, replace: true });
 	}
@@ -405,27 +418,66 @@ export default function WeeklyBudgetDepartmentView({
 		setSelectedStatusCeo('all');
 		setSelectedDepartment('all');
 		setSelectedBranch('all');
-		setSelectedFiscalYear('all');
-		setSelectedFiscalMonth('all');
+		setSelectedFiscalYear(currentFiscalYearId ? String(currentFiscalYearId) : 'all');
+		setSelectedFiscalMonth(currentFiscalMonthId ? String(currentFiscalMonthId) : 'all');
 		setSelectedWeekStartDate('all');
 		setSelectedPaymentCategory('all');
 		setSelectedPaymentType('all');
-		router.get('/budget/weekly-budget/department', {}, { preserveState: true, replace: true });
+		router.get(
+			'/budget/weekly-budget/department',
+			{
+				fiscal_year_id: currentFiscalYearId ? String(currentFiscalYearId) : 'all',
+				fiscal_month_id: currentFiscalMonthId ? String(currentFiscalMonthId) : 'all',
+			},
+			{ preserveState: true, replace: true },
+		);
 	}
 
-	const hasActiveFilters = [
-		selectedRequestType,
-		selectedStatusFinance,
-		selectedStatusDepartment,
-		selectedStatusCeo,
-		selectedDepartment,
-		selectedBranch,
-		selectedFiscalYear,
-		selectedFiscalMonth,
-		selectedWeekStartDate,
-		selectedPaymentCategory,
-		selectedPaymentType,
-	].some((v) => v !== 'all');
+	const hasActiveFilters =
+		selectedRequestType !== 'all' ||
+		selectedStatusFinance !== 'all' ||
+		selectedStatusDepartment !== 'all' ||
+		selectedStatusCeo !== 'all' ||
+		selectedDepartment !== 'all' ||
+		selectedBranch !== 'all' ||
+		selectedFiscalYear !== (currentFiscalYearId ? String(currentFiscalYearId) : 'all') ||
+		selectedFiscalMonth !== (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all') ||
+		selectedWeekStartDate !== 'all' ||
+		selectedPaymentCategory !== 'all' ||
+		selectedPaymentType !== 'all';
+
+	const allSelectableIds = useMemo(() => items.data.filter((item) => !isDepartmentStatusLocked(item)).map((item) => item.id), [items.data]);
+
+	const isAllSelected = allSelectableIds.length > 0 && allSelectableIds.every((id) => selectedIds.includes(id));
+	const isSomeSelected = selectedIds.length > 0 && !isAllSelected;
+
+	function toggleSelectAll() {
+		setSelectedIds(isAllSelected ? [] : allSelectableIds);
+	}
+
+	function toggleSelectRow(id: number) {
+		setSelectedIds((current) => (current.includes(id) ? current.filter((selectedId) => selectedId !== id) : [...current, id]));
+	}
+
+	function handleBulkUpdate() {
+		if (!bulkStatus) return toast.error('Select a status to apply.');
+		if (selectedIds.length === 0) return toast.error('Select at least one item.');
+
+		router.patch(
+			'/budget/weekly-budget/department/bulk',
+			{
+				ids: selectedIds,
+				status_department: bulkStatus,
+			},
+			{
+				preserveScroll: true,
+				onSuccess: () => {
+					setSelectedIds([]);
+					setBulkStatus('');
+				},
+			},
+		);
+	}
 
 	// ── Edit helpers ─────────────────────────────────────────────────────────
 
@@ -525,7 +577,7 @@ export default function WeeklyBudgetDepartmentView({
 				onSuccess: () => {
 					setNoteDialogItem(null);
 				},
-			}
+			},
 		);
 	}
 
@@ -844,12 +896,44 @@ export default function WeeklyBudgetDepartmentView({
 								</Button>
 							)}
 						</div>
+
+						{canManageDept && (
+							<div className="mt-6 flex items-center gap-3 rounded-lg border bg-slate-50 p-3 dark:bg-slate-900">
+								<span className="text-sm font-medium">Bulk Action ({selectedIds.length} selected):</span>
+								<Select value={bulkStatus} onValueChange={setBulkStatus}>
+									<SelectTrigger className="w-[180px] bg-white dark:bg-slate-800">
+										<SelectValue placeholder="Select Status" />
+									</SelectTrigger>
+									<SelectContent>
+										{statusDepartments.map((status) => (
+											<SelectItem key={status} value={status}>
+												{status.charAt(0).toUpperCase() + status.slice(1)}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+								<Button onClick={handleBulkUpdate} disabled={selectedIds.length === 0 || !bulkStatus}>
+									Apply Bulk Status
+								</Button>
+							</div>
+						)}
 					</CardHeader>
 
 					<CardContent>
 						<Table>
 							<TableHeader className="bg-slate-500 dark:bg-slate-700">
 								<TableRow>
+									{canManageDept && (
+										<TableHead className="w-12 text-center text-white">
+											<Checkbox
+												checked={isAllSelected ? true : isSomeSelected ? 'indeterminate' : false}
+												onCheckedChange={toggleSelectAll}
+												disabled={allSelectableIds.length === 0}
+												aria-label="Select all editable budgets"
+												className="border-white data-[state=checked]:bg-white data-[state=checked]:text-slate-900"
+											/>
+										</TableHead>
+									)}
 									<TableHead className="font-bold text-white">Department</TableHead>
 									<TableHead className="font-bold text-white">Branch</TableHead>
 									<TableHead className="font-bold text-white">Request Type</TableHead>
@@ -884,6 +968,16 @@ export default function WeeklyBudgetDepartmentView({
 
 									return (
 										<TableRow key={item.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
+											{canManageDept && (
+												<TableCell className="text-center">
+													<Checkbox
+														checked={selectedIds.includes(item.id)}
+														onCheckedChange={() => toggleSelectRow(item.id)}
+														disabled={statusLocked}
+														aria-label={`Select budget ${item.id}`}
+													/>
+												</TableCell>
+											)}
 											<TableCell>{item.department ?? '-'}</TableCell>
 											<TableCell>{item.branch ?? '-'}</TableCell>
 
@@ -954,7 +1048,9 @@ export default function WeeklyBudgetDepartmentView({
 												{canEditSubmissionData ? (
 													<Select
 														value={editForm.payment_category_id}
-														onValueChange={(v) => setEditForm({ ...editForm, payment_category_id: v, payment_type_id: '' })}
+														onValueChange={(v) =>
+															setEditForm({ ...editForm, payment_category_id: v, payment_type_id: '' })
+														}
 													>
 														<SelectTrigger className="w-[140px]">
 															<SelectValue placeholder="Category" />
@@ -984,8 +1080,9 @@ export default function WeeklyBudgetDepartmentView({
 																className="w-[200px] justify-between font-normal"
 															>
 																{editForm.payment_type_id
-																	? (itemFilteredPaymentTypes.find((pt) => String(pt.id) === editForm.payment_type_id)?.name ??
-																		'Select type')
+																	? (itemFilteredPaymentTypes.find(
+																			(pt) => String(pt.id) === editForm.payment_type_id,
+																		)?.name ?? 'Select type')
 																	: 'Select type'}
 																<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
 															</Button>
@@ -1000,12 +1097,16 @@ export default function WeeklyBudgetDepartmentView({
 																			<CommandItem
 																				key={pt.id}
 																				value={pt.name}
-																				onSelect={() => setEditForm({ ...editForm, payment_type_id: String(pt.id) })}
+																				onSelect={() =>
+																					setEditForm({ ...editForm, payment_type_id: String(pt.id) })
+																				}
 																			>
 																				<Check
 																					className={cn(
 																						'mr-2 size-4',
-																						editForm.payment_type_id === String(pt.id) ? 'opacity-100' : 'opacity-0',
+																						editForm.payment_type_id === String(pt.id)
+																							? 'opacity-100'
+																							: 'opacity-0',
 																					)}
 																				/>
 																				{pt.name}
@@ -1108,7 +1209,9 @@ export default function WeeklyBudgetDepartmentView({
 																				Locked
 																			</span>
 																		</TooltipTrigger>
-																		<TooltipContent side="top">{getDepartmentEditLockReason(item)}</TooltipContent>
+																		<TooltipContent side="top">
+																			{getDepartmentEditLockReason(item)}
+																		</TooltipContent>
 																	</Tooltip>
 																)
 															)}
@@ -1216,10 +1319,7 @@ export default function WeeklyBudgetDepartmentView({
 							Cancel
 						</Button>
 						{noteDialogItem && !isDepartmentStatusLocked(noteDialogItem) && (
-							<Button
-								onClick={saveNotePopup}
-								disabled={noteDialogText === (noteDialogItem?.note ?? '')}
-							>
+							<Button onClick={saveNotePopup} disabled={noteDialogText === (noteDialogItem?.note ?? '')}>
 								Save Changes
 							</Button>
 						)}
