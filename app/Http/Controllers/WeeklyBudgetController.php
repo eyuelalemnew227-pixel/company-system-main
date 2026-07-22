@@ -12,7 +12,10 @@ use App\Models\FiscalMonth;
 use App\Models\FiscalYear;
 use App\Models\ExpenseItem;
 use App\Models\WeeklyBudget;
+use App\Models\WeeklyBudgetActivityLog;
+use App\Services\WeeklyBudgetActivityLogger;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -20,6 +23,10 @@ use Inertia\Response;
 
 class WeeklyBudgetController extends Controller
 {
+    public function __construct(
+        private readonly WeeklyBudgetActivityLogger $activityLogger,
+    ) {}
+
     public function index(): Response
     {
         abort_unless(auth()->user()->can('view weekly budgets'), 403);
@@ -76,6 +83,7 @@ class WeeklyBudgetController extends Controller
                 'amount'         => $wb->amount,
                 'description'    => $wb->description,
                 'note'           => $wb->note,
+                'can_view_history' => auth()->user()->can('view weekly budget activity logs'),
             ]);
 
         $branches = Branch::query()
@@ -208,13 +216,14 @@ class WeeklyBudgetController extends Controller
             $validated['branch_id'] = null;
         }
 
-        WeeklyBudget::create([
+        $weeklyBudget = WeeklyBudget::create([
             ...$validated,
             'status_finance'    => WeeklyBudgetStatusFinance::Pending->value,
             'status_department' => WeeklyBudgetStatusDepartment::Pending->value,
             'status_ceo'        => WeeklyBudgetStatusCeo::Pending->value,
             'created_by'        => auth()->id(),
         ]);
+        $this->activityLogger->logCreated($weeklyBudget);
 
         return redirect()
             ->route('weekly-budget.index')
@@ -259,7 +268,9 @@ class WeeklyBudgetController extends Controller
             $validated['branch_id'] = null;
         }
 
+        $oldValues = $this->activityLogger->attributes($weeklyBudget);
         $weeklyBudget->update($validated);
+        $this->activityLogger->logChanges($weeklyBudget, $oldValues);
 
         return redirect()
             ->route('weekly-budget.index')
@@ -270,11 +281,61 @@ class WeeklyBudgetController extends Controller
     {
         abort_unless(auth()->user()->can('manage weekly budgets'), 403);
 
+        $this->activityLogger->logDeleted($weeklyBudget);
         $weeklyBudget->delete();
 
         return redirect()
             ->route('weekly-budget.index')
             ->with('message', 'Weekly budget deleted successfully.');
+    }
+
+    public function activityLogs(WeeklyBudget $weeklyBudget): JsonResponse
+    {
+        abort_unless(
+            auth()->user()->can('view weekly budgets')
+            && auth()->user()->can('view weekly budget activity logs'),
+            403,
+        );
+
+        $weeklyBudget->load([
+            'branch',
+            'department',
+            'fiscalYear',
+            'fiscalMonth',
+        ]);
+
+        $logs = WeeklyBudgetActivityLog::query()
+            ->where('weekly_budget_id', $weeklyBudget->id)
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(fn (WeeklyBudgetActivityLog $log) => [
+                'id' => $log->id,
+                'action' => $log->action,
+                'summary' => $log->summary,
+                'old_values' => $log->old_values,
+                'new_values' => $log->new_values,
+                'meta' => $log->meta,
+                'created_at' => $log->created_at?->toIso8601String(),
+                'user' => $log->user ? [
+                    'id' => $log->user->id,
+                    'name' => $log->user->name,
+                ] : null,
+            ])
+            ->values();
+
+        return response()->json([
+            'item' => [
+                'id' => $weeklyBudget->id,
+                'department' => $weeklyBudget->department?->name,
+                'branch' => $weeklyBudget->branch?->name,
+                'fiscal_year' => $weeklyBudget->fiscalYear?->name,
+                'fiscal_month' => $weeklyBudget->fiscalMonth?->name,
+                'week_number' => $weeklyBudget->week_number,
+                'amount' => $weeklyBudget->amount,
+            ],
+            'logs' => $logs,
+        ]);
     }
 
     /**
@@ -541,7 +602,17 @@ class WeeklyBudgetController extends Controller
             }
         }
 
+        $oldValues = $this->activityLogger->attributes($weeklyBudget);
         $weeklyBudget->update($updateData);
+        $action = ($oldValues['status_finance'] ?? null) === $validated['status_finance']
+            ? WeeklyBudgetActivityLog::ACTION_REQUEST_UPDATED
+            : WeeklyBudgetActivityLog::ACTION_FINANCE_STATUS_UPDATED;
+        $this->activityLogger->logChanges(
+            $weeklyBudget,
+            $oldValues,
+            $action,
+            'finance review',
+        );
 
         return back()->with('message', 'Finance status updated successfully.');
     }
@@ -573,7 +644,15 @@ class WeeklyBudgetController extends Controller
                 continue;
             }
 
+            $oldValues = $this->activityLogger->attributes($budget);
             $budget->update(['status_finance' => $validated['status_finance']]);
+            $this->activityLogger->logChanges(
+                $budget,
+                $oldValues,
+                WeeklyBudgetActivityLog::ACTION_FINANCE_STATUS_UPDATED,
+                'finance status',
+                meta: ['bulk' => true],
+            );
         }
 
         return back()->with('message', 'Selected budgets updated successfully.');
@@ -598,9 +677,16 @@ class WeeklyBudgetController extends Controller
             return back()->withErrors(['status_finance' => 'Paid status can only be reverted to Approved.']);
         }
 
+        $oldValues = $this->activityLogger->attributes($budget);
         $budget->update([
             'status_finance' => $validated['status_finance'],
         ]);
+        $this->activityLogger->logChanges(
+            $budget,
+            $oldValues,
+            WeeklyBudgetActivityLog::ACTION_PAID_STATUS_OVERRIDDEN,
+            'paid status override',
+        );
 
         return back()->with('message', 'Paid status overridden successfully.');
     }
@@ -784,7 +870,17 @@ class WeeklyBudgetController extends Controller
             }
         }
 
+        $oldValues = $this->activityLogger->attributes($weeklyBudget);
         $weeklyBudget->update($updateData);
+        $action = ($oldValues['status_department'] ?? null) === $validated['status_department']
+            ? WeeklyBudgetActivityLog::ACTION_REQUEST_UPDATED
+            : WeeklyBudgetActivityLog::ACTION_DEPARTMENT_STATUS_UPDATED;
+        $this->activityLogger->logChanges(
+            $weeklyBudget,
+            $oldValues,
+            $action,
+            'department review',
+        );
 
         return back()->with('message', 'Department status updated successfully.');
     }
@@ -813,9 +909,17 @@ class WeeklyBudgetController extends Controller
                 continue;
             }
 
+            $oldValues = $this->activityLogger->attributes($budget);
             $budget->update([
                 'status_department' => $validated['status_department'],
             ]);
+            $this->activityLogger->logChanges(
+                $budget,
+                $oldValues,
+                WeeklyBudgetActivityLog::ACTION_DEPARTMENT_STATUS_UPDATED,
+                'department status',
+                meta: ['bulk' => true],
+            );
             $updatedCount++;
         }
 
@@ -840,6 +944,7 @@ class WeeklyBudgetController extends Controller
             return back()->withErrors(['delete' => 'This entry can no longer be deleted — the edit window (Friday EOD of submission week) has passed.']);
         }
 
+        $this->activityLogger->logDeleted($weeklyBudget);
         $weeklyBudget->delete();
 
         return back()->with('message', 'Weekly budget entry deleted successfully.');
@@ -981,9 +1086,16 @@ class WeeklyBudgetController extends Controller
             }
         }
 
+        $oldValues = $this->activityLogger->attributes($weeklyBudget);
         $weeklyBudget->update([
             'status_ceo' => $validated['status_ceo'],
         ]);
+        $this->activityLogger->logChanges(
+            $weeklyBudget,
+            $oldValues,
+            WeeklyBudgetActivityLog::ACTION_CEO_STATUS_UPDATED,
+            'CEO status',
+        );
 
         return back()->with('message', 'CEO status updated successfully.');
     }
@@ -1014,10 +1126,19 @@ class WeeklyBudgetController extends Controller
                 }
             }
 
+            $oldValues = $this->activityLogger->attributes($budget);
             $budget->update(['status_ceo' => $validated['status_ceo']]);
+            $this->activityLogger->logChanges(
+                $budget,
+                $oldValues,
+                WeeklyBudgetActivityLog::ACTION_CEO_STATUS_UPDATED,
+                'CEO status',
+                meta: ['bulk' => true],
+            );
         }
 
         return back()->with('message', 'Selected budgets updated successfully.');
     }
+
 }
 
