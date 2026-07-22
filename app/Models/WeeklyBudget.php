@@ -9,6 +9,7 @@ use App\Enums\WeeklyBudgetStatusFinance;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 class WeeklyBudget extends Model
@@ -78,6 +79,11 @@ class WeeklyBudget extends Model
     public function paymentType(): BelongsTo
     {
         return $this->belongsTo(PaymentType::class, 'payment_type_id');
+    }
+
+    public function activityLogs(): HasMany
+    {
+        return $this->hasMany(WeeklyBudgetActivityLog::class);
     }
 
     public function isDepartmentStatusLocked(): bool

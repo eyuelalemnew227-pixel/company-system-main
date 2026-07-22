@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Filter, MessageSquare, Plus, Save, Trash2, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Filter, History, MessageSquare, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -74,6 +74,31 @@ type WeeklyBudgetRow = {
 	amount: string | number;
 	description: string | null;
 	note: string | null;
+	can_view_history: boolean;
+};
+
+type ActivityLogEntry = {
+	id: number;
+	action: string;
+	summary: string;
+	old_values: Record<string, unknown> | null;
+	new_values: Record<string, unknown> | null;
+	meta: Record<string, unknown> | null;
+	created_at: string;
+	user: { id: number; name: string } | null;
+};
+
+type ActivityLogResponse = {
+	item: {
+		id: number;
+		department: string | null;
+		branch: string | null;
+		fiscal_year: string | null;
+		fiscal_month: string | null;
+		week_number: number;
+		amount: string | number | null;
+	};
+	logs: ActivityLogEntry[];
 };
 
 type EditFormState = {
@@ -128,6 +153,24 @@ function formatCurrency(value: string | number | null | undefined): string {
 		minimumFractionDigits: 2,
 		maximumFractionDigits: 2,
 	}).format(Number.isNaN(amount) ? 0 : amount);
+}
+
+function formatActivityAction(action: string): string {
+	return action
+		.split('_')
+		.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+		.join(' ');
+}
+
+function getActivityIcon(action: string) {
+	if (action.includes('created')) return Plus;
+	if (action.includes('deleted')) return Trash2;
+	if (action.includes('updated') || action.includes('overridden')) return Pencil;
+	return History;
+}
+
+function formatActivityTimestamp(value: string): string {
+	return new Date(value).toLocaleString();
 }
 
 function isHeadOfficeBranch(branch: BranchOption | null | undefined): boolean {
@@ -377,6 +420,9 @@ export default function WeeklyBudgetIndex({
 	const [openDepartmentFilter, setOpenDepartmentFilter] = useState(false);
 
 	const [deleteItemId, setDeleteItemId] = useState<number | null>(null);
+	const [historyItem, setHistoryItem] = useState<WeeklyBudgetRow | null>(null);
+	const [historyData, setHistoryData] = useState<ActivityLogResponse | null>(null);
+	const [historyLoading, setHistoryLoading] = useState(false);
 	const [editingItem, setEditingItem] = useState<WeeklyBudgetRow | null>(null);
 	const [editForm, setEditForm] = useState<EditFormState | null>(null);
 	const [editProcessing, setEditProcessing] = useState(false);
@@ -439,6 +485,38 @@ export default function WeeklyBudgetIndex({
 		router.delete(`/budget/weekly-budget/${deleteItemId}`, {
 			onSuccess: () => setDeleteItemId(null),
 		});
+	}
+
+	async function openHistoryDialog(item: WeeklyBudgetRow) {
+		setHistoryItem(item);
+		setHistoryData(null);
+		setHistoryLoading(true);
+
+		try {
+			const response = await fetch(`/budget/weekly-budget/${item.id}/activity-logs`);
+
+			if (!response.ok) {
+				if (response.status === 403) {
+					throw new Error('You do not have permission to view weekly budget activity history.');
+				}
+
+				throw new Error('Failed to load activity history.');
+			}
+
+			const data = (await response.json()) as ActivityLogResponse;
+			setHistoryData(data);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to load activity history.');
+			setHistoryItem(null);
+		} finally {
+			setHistoryLoading(false);
+		}
+	}
+
+	function closeHistoryDialog() {
+		setHistoryItem(null);
+		setHistoryData(null);
+		setHistoryLoading(false);
 	}
 
 	function openEditDialog(item: WeeklyBudgetRow) {
@@ -926,6 +1004,7 @@ export default function WeeklyBudgetIndex({
 									<TableHead className="font-bold text-white">Amount</TableHead>
 									<TableHead className="font-bold text-white">Desc</TableHead>
 									<TableHead className="font-bold text-white">Note</TableHead>
+									<TableHead className="font-bold text-white">History</TableHead>
 									{/* <TableHead className="font-bold text-white">Actions</TableHead> */}
 								</TableRow>
 							</TableHeader>
@@ -962,6 +1041,21 @@ export default function WeeklyBudgetIndex({
 											>
 												<MessageSquare className="size-4" />
 											</button>
+										</TableCell>
+										<TableCell>
+											{item.can_view_history && (
+												<Button
+													type="button"
+													variant="outline"
+													size="sm"
+													className="size-8 p-0"
+													onClick={() => openHistoryDialog(item)}
+													aria-label={`View activity history for weekly budget ${item.id}`}
+													title="View activity history"
+												>
+													<History className="size-4" />
+												</Button>
+											)}
 										</TableCell>
 										{/* <TableCell>
 											{canManageWeeklyBudget && (
@@ -1020,6 +1114,64 @@ export default function WeeklyBudgetIndex({
 					<DialogFooter>
 						<Button variant="outline" onClick={() => setViewNoteItem(null)}>
 							Cancel
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog open={historyItem !== null} onOpenChange={(open) => !open && closeHistoryDialog()}>
+				<DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-2xl">
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<History className="size-5 text-muted-foreground" />
+							Activity History
+						</DialogTitle>
+						<DialogDescription>
+							{historyData?.item
+								? `${historyData.item.department ?? 'Department'}${historyData.item.branch ? ` (${historyData.item.branch})` : ''} · ${historyData.item.fiscal_month ?? 'N/A'} / ${historyData.item.fiscal_year ?? 'N/A'} · Week ${historyData.item.week_number}`
+								: historyItem
+									? `${historyItem.department ?? 'Department'} · ${historyItem.fiscal_month ?? 'N/A'} / ${historyItem.fiscal_year ?? 'N/A'} · Week ${historyItem.week_number}`
+									: 'Weekly budget activity'}
+						</DialogDescription>
+					</DialogHeader>
+
+					<div className="min-h-0 flex-1 overflow-y-auto pr-1">
+						{historyLoading ? (
+							<div className="py-10 text-center text-sm text-muted-foreground">Loading activity history...</div>
+						) : historyData && historyData.logs.length > 0 ? (
+							<div className="relative space-y-4 before:absolute before:inset-y-0 before:left-[17px] before:w-0.5 before:bg-muted">
+								{historyData.logs.map((log) => {
+									const ActionIcon = getActivityIcon(log.action);
+
+									return (
+										<div key={log.id} className="relative pl-10">
+											<div className="absolute top-1 left-0 flex size-9 items-center justify-center rounded-full border bg-background shadow-sm">
+												<ActionIcon className="size-4 text-muted-foreground" />
+											</div>
+											<div className="flex flex-col rounded-lg border bg-card p-3 shadow-sm">
+												<div className="mb-1 flex items-center justify-between gap-2">
+													<span className="text-sm font-semibold">{formatActivityAction(log.action)}</span>
+													<span className="text-xs text-muted-foreground">{formatActivityTimestamp(log.created_at)}</span>
+												</div>
+												<p className="text-sm text-foreground">{log.summary}</p>
+												<p className="mt-2 text-xs text-muted-foreground">
+													By <span className="font-medium text-foreground">{log.user?.name ?? 'System'}</span>
+												</p>
+											</div>
+										</div>
+									);
+								})}
+							</div>
+						) : (
+							<div className="py-10 text-center text-sm text-muted-foreground italic">
+								No activity recorded for this weekly budget yet.
+							</div>
+						)}
+					</div>
+
+					<DialogFooter>
+						<Button type="button" variant="outline" onClick={closeHistoryDialog}>
+							Close
 						</Button>
 					</DialogFooter>
 				</DialogContent>
