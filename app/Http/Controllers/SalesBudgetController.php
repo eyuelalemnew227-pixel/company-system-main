@@ -72,7 +72,7 @@ private function canModify(): bool
         : ($selectedFiscalYear ? (int) str_replace('EFY ', '', $selectedFiscalYear->name) : null);
 
     $budgetQuery = SalesBudget::query()
-        ->with(['branch', 'createdBy', 'updatedBy'])
+        ->with(['branch', 'createdBy', 'updatedBy', 'fiscalMonth', 'fiscalYear'])
         ->when($request->filled('branch_id'), function ($query) use ($branchId) {
             $query->where('branch_id', $branchId);
         })
@@ -83,10 +83,14 @@ private function canModify(): bool
             $query->where('fiscal_month_id', $fiscalMonthId);
         })
         ->when($request->filled('ethiopian_year'), function ($query) use ($ethiopianYear) {
-            $query->where('ethiopian_year', (int) $ethiopianYear);
+            $query->whereHas('fiscalYear', function ($q) use ($ethiopianYear) {
+                $q->where('name', 'like', '%'.$ethiopianYear.'%');
+            });
         })
         ->when($request->filled('ethiopian_month'), function ($query) use ($ethiopianMonth) {
-            $query->where('ethiopian_month', (int) $ethiopianMonth);
+            $query->whereHas('fiscalMonth', function ($q) use ($ethiopianMonth) {
+                $q->where('efy_month_number', (int) $ethiopianMonth);
+            });
         })
         ->orderBy('fiscal_year_id')
         ->orderBy('fiscal_month_id')
@@ -109,10 +113,10 @@ private function canModify(): bool
                 return [
                     'id'                  => $existing->id,
                     'branch'              => ['id' => $branch->id, 'name' => $branch->name],
-                    'ethiopian_month'     => $existing->ethiopian_month,
-                    'ethiopian_year'      => $existing->ethiopian_year,
+                    'ethiopian_month'     => $existing->fiscalMonth?->efy_month_number ?? $selectedEthiopianMonth,
+                    'ethiopian_year'      => $existing->fiscalYear ? (int) str_replace('EFY ', '', $existing->fiscalYear->name) : $selectedEthiopianYear,
                     'sales_amount'        => $existing->sales_amount,
-                    'prev_expense_budget' => $existing->prev_expense_budget,
+                    'prev_expense_budget' => null,
                     'created_by'          => $existing->createdBy ? ['name' => $existing->createdBy->name] : null,
                     'updated_by'          => $existing->updatedBy ? ['name' => $existing->updatedBy->name] : null,
                     'has_budget'          => true,
@@ -150,10 +154,10 @@ private function canModify(): bool
             return [
                 'id'                  => $budget->id,
                 'branch'              => ['id' => $budget->branch->id, 'name' => $budget->branch->name],
-                'ethiopian_month'     => $budget->ethiopian_month,
-                'ethiopian_year'      => $budget->ethiopian_year,
+                'ethiopian_month'     => $budget->fiscalMonth?->efy_month_number,
+                'ethiopian_year'      => $budget->fiscalYear ? (int) str_replace('EFY ', '', $budget->fiscalYear->name) : null,
                 'sales_amount'        => $budget->sales_amount,
-                'prev_expense_budget' => $budget->prev_expense_budget,
+                'prev_expense_budget' => null,
                 'created_by'          => $budget->createdBy ? ['name' => $budget->createdBy->name] : null,
                 'updated_by'          => $budget->updatedBy ? ['name' => $budget->updatedBy->name] : null,
                 'has_budget'          => true,
@@ -323,10 +327,7 @@ $fiscalYears = \App\Models\FiscalYear::orderBy('id')->get([
                 'branch_id',
                 'fiscal_year_id',
                 'fiscal_month_id',
-                'ethiopian_month',
-                'ethiopian_year',
                 'sales_amount',
-                'prev_expense_budget',
             ])
             ->where('branch_id', $request->branch_id)
             ->where('fiscal_year_id', $request->fiscal_year_id)
@@ -416,9 +417,6 @@ $fiscalYears = \App\Models\FiscalYear::orderBy('id')->get([
 
                         $existingBudget->update([
                             'sales_amount'        => $salesAmount,
-                            'prev_expense_budget' => $item['prev_expense_budget'] ?? 0,
-                            'ethiopian_month'     => $ethiopianMonth,
-                            'ethiopian_year'      => $ethiopianYear,
                             'updated_by'          => Auth::id(),
                         ]);
 
@@ -431,7 +429,7 @@ $fiscalYears = \App\Models\FiscalYear::orderBy('id')->get([
                             'action'           => 'updated',
                             'old_sales_amount' => $oldAmount,
                             'new_sales_amount' => $salesAmount,
-                            'old_prev_expense' => $existingBudget->prev_expense_budget,
+                            'old_prev_expense' => null,
                             'new_prev_expense' => $item['prev_expense_budget'] ?? 0,
                         ]);
 
@@ -442,10 +440,7 @@ $fiscalYears = \App\Models\FiscalYear::orderBy('id')->get([
                         'branch_id'           => $item['branch_id'],
                         'fiscal_year_id'      => $request->fiscal_year_id,
                         'fiscal_month_id'     => $request->fiscal_month_id,
-                        'ethiopian_month'     => $ethiopianMonth,
-                        'ethiopian_year'      => $ethiopianYear,
                         'sales_amount'        => $salesAmount,
-                        'prev_expense_budget' => $item['prev_expense_budget'] ?? 0,
                         'created_by'          => Auth::id(),
                         'updated_by'          => null,
                     ]);
@@ -524,14 +519,14 @@ $fiscalYears = \App\Models\FiscalYear::orderBy('id')->get([
     SalesBudgetLog::create([
         'sales_budget_id'  => $salesBudget->id,
         'branch_name'      => $salesBudget->branch->name,
-        'ethiopian_month'  => $salesBudget->ethiopian_month,
-        'ethiopian_year'   => $salesBudget->ethiopian_year,
+        'ethiopian_month'  => $salesBudget->fiscalMonth?->efy_month_number,
+        'ethiopian_year'   => $salesBudget->fiscalYear ? (int) str_replace('EFY ', '', $salesBudget->fiscalYear->name) : null,
         'user_id'          => Auth::id(),
         'action'           => 'updated',
         'old_sales_amount' => $oldAmount,
         'new_sales_amount' => $request->sales_amount,
-        'old_prev_expense' => $salesBudget->prev_expense_budget,
-        'new_prev_expense' => $salesBudget->prev_expense_budget,
+        'old_prev_expense' => null,
+        'new_prev_expense' => null,
     ]);
 
     return to_route('sales-budget.index')
@@ -552,13 +547,13 @@ $fiscalYears = \App\Models\FiscalYear::orderBy('id')->get([
     SalesBudgetLog::create([
         'sales_budget_id'  => $salesBudget->id,
         'branch_name'      => $branchName,
-        'ethiopian_month'  => $salesBudget->ethiopian_month,
-        'ethiopian_year'   => $salesBudget->ethiopian_year,
+        'ethiopian_month'  => $salesBudget->fiscalMonth?->efy_month_number,
+        'ethiopian_year'   => $salesBudget->fiscalYear ? (int) str_replace('EFY ', '', $salesBudget->fiscalYear->name) : null,
         'user_id'          => Auth::id(),
         'action'           => 'deleted',
         'old_sales_amount' => $salesBudget->sales_amount,
         'new_sales_amount' => null,
-        'old_prev_expense' => $salesBudget->prev_expense_budget,
+        'old_prev_expense' => null,
         'new_prev_expense' => null,
         'notes'            => 'Deleted budget for ' . $branchName,
     ]);
