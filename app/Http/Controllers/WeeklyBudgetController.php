@@ -1140,5 +1140,116 @@ class WeeklyBudgetController extends Controller
         return back()->with('message', 'Selected budgets updated successfully.');
     }
 
-}
+    public function analytics(Request $request): Response
+    {
+        abort_unless(auth()->user()->can('view weekly budgets'), 403);
 
+        [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
+        $hasFiscalYearFilter = $request->has('fiscal_year_id');
+        $fiscalYearFilter = $hasFiscalYearFilter
+            ? $request->input('fiscal_year_id')
+            : $currentFiscalYear?->id;
+        
+        $fiscalMonthFilter = $request->has('fiscal_month_id')
+            ? $request->input('fiscal_month_id')
+            : ($hasFiscalYearFilter ? null : $currentFiscalMonth?->id);
+
+        $weekStartDateFilter = $request->input('week_start_date');
+        $useCaseFilter = $request->input('use_case');
+
+        $query = WeeklyBudget::query()->with([
+            'fiscalYear',
+            'fiscalMonth',
+        ]);
+
+        if ($fiscalYearFilter && $fiscalYearFilter !== 'all') {
+            $query->where('fiscal_year_id', $fiscalYearFilter);
+        }
+        if ($fiscalMonthFilter && $fiscalMonthFilter !== 'all') {
+            $query->where('fiscal_month_id', $fiscalMonthFilter);
+        }
+        if ($weekStartDateFilter && $weekStartDateFilter !== 'all') {
+            $query->where('week_start_date', $weekStartDateFilter);
+        }
+
+        if ($useCaseFilter) {
+            if ($useCaseFilter === 'ceo_not_paid') {
+                $query->where('status_ceo', WeeklyBudgetStatusCeo::Approved->value)
+                      ->where('status_finance', '!=', WeeklyBudgetStatusFinance::Paid->value);
+            } elseif ($useCaseFilter === 'dept_not_finance') {
+                $query->where('status_department', WeeklyBudgetStatusDepartment::Approved->value)
+                      ->whereIn('status_finance', [WeeklyBudgetStatusFinance::Pending->value, WeeklyBudgetStatusFinance::OnHold->value]);
+            } elseif ($useCaseFilter === 'finance_not_ceo') {
+                $query->where('status_finance', WeeklyBudgetStatusFinance::Approved->value)
+                      ->whereIn('status_ceo', [WeeklyBudgetStatusCeo::Pending->value, WeeklyBudgetStatusCeo::OnHold->value]);
+            }
+        }
+
+        $kpiQuery = WeeklyBudget::query();
+        if ($fiscalYearFilter && $fiscalYearFilter !== 'all') {
+            $kpiQuery->where('fiscal_year_id', $fiscalYearFilter);
+        }
+        if ($fiscalMonthFilter && $fiscalMonthFilter !== 'all') {
+            $kpiQuery->where('fiscal_month_id', $fiscalMonthFilter);
+        }
+        if ($weekStartDateFilter && $weekStartDateFilter !== 'all') {
+            $kpiQuery->where('week_start_date', $weekStartDateFilter);
+        }
+
+        $kpis = [
+            'totalRequested' => (float) (clone $kpiQuery)->sum('amount'),
+            'totalApproved' => (float) (clone $kpiQuery)->where('status_ceo', WeeklyBudgetStatusCeo::Approved->value)->sum('amount'),
+            'pendingFinanceCount' => (clone $kpiQuery)->where('status_department', WeeklyBudgetStatusDepartment::Approved->value)->whereIn('status_finance', [WeeklyBudgetStatusFinance::Pending->value, WeeklyBudgetStatusFinance::OnHold->value])->count(),
+            'pendingFinanceAmount' => (float) (clone $kpiQuery)->where('status_department', WeeklyBudgetStatusDepartment::Approved->value)->whereIn('status_finance', [WeeklyBudgetStatusFinance::Pending->value, WeeklyBudgetStatusFinance::OnHold->value])->sum('amount'),
+            'pendingCeoCount' => (clone $kpiQuery)->where('status_finance', WeeklyBudgetStatusFinance::Approved->value)->whereIn('status_ceo', [WeeklyBudgetStatusCeo::Pending->value, WeeklyBudgetStatusCeo::OnHold->value])->count(),
+            'pendingCeoAmount' => (float) (clone $kpiQuery)->where('status_finance', WeeklyBudgetStatusFinance::Approved->value)->whereIn('status_ceo', [WeeklyBudgetStatusCeo::Pending->value, WeeklyBudgetStatusCeo::OnHold->value])->sum('amount'),
+        ];
+
+        $counts = [
+            'ceo_not_paid' => (clone $kpiQuery)->where('status_ceo', WeeklyBudgetStatusCeo::Approved->value)->where('status_finance', '!=', WeeklyBudgetStatusFinance::Paid->value)->count(),
+            'dept_not_finance' => (clone $kpiQuery)->where('status_department', WeeklyBudgetStatusDepartment::Approved->value)->whereIn('status_finance', [WeeklyBudgetStatusFinance::Pending->value, WeeklyBudgetStatusFinance::OnHold->value])->count(),
+            'finance_not_ceo' => (clone $kpiQuery)->where('status_finance', WeeklyBudgetStatusFinance::Approved->value)->whereIn('status_ceo', [WeeklyBudgetStatusCeo::Pending->value, WeeklyBudgetStatusCeo::OnHold->value])->count(),
+        ];
+
+        $expenseItems = ExpenseItem::query()->orderBy('expense_type')->get();
+
+        $matrixData = $query->latest()
+            ->paginate(15)
+            ->withQueryString()
+            ->through(fn (WeeklyBudget $wb) => [
+                'id'                => $wb->id,
+                'fiscal_year'       => $wb->fiscalYear?->name,
+                'fiscal_month'      => $wb->fiscalMonth?->name,
+                'week_number'       => $wb->week_number,
+                'budget_category'   => $wb->payment_category_id === 1 ? 'Expense' : ($wb->payment_category_id === 2 ? 'Cost of Sales' : null),
+                'budget_type'       => $expenseItems->firstWhere('expense_parent_acc_code', $wb->payment_type_id)?->expense_type,
+                'amount'            => (float) $wb->amount,
+                'status_department' => $wb->status_department?->value,
+                'status_finance'    => $wb->status_finance?->value,
+                'status_ceo'        => $wb->status_ceo?->value,
+            ]);
+
+        $filters = $request->only([
+            'fiscal_year_id',
+            'fiscal_month_id',
+            'week_start_date',
+            'use_case',
+        ]);
+
+        if (! $request->has('fiscal_year_id') && $currentFiscalYear) {
+            $filters['fiscal_year_id'] = (string) $currentFiscalYear->id;
+        }
+        if (! $request->has('fiscal_month_id') && ! $hasFiscalYearFilter && $currentFiscalMonth) {
+            $filters['fiscal_month_id'] = (string) $currentFiscalMonth->id;
+        }
+
+        return Inertia::render('Budget/WeeklyBudget/Analytics', [
+            'counts'       => $counts,
+            'kpis'         => $kpis,
+            'matrixData'   => $matrixData,
+            'fiscalYears'  => $this->fiscalYearOptions(),
+            'fiscalMonths' => $this->fiscalMonthOptions(),
+            'filters'      => $filters,
+        ]);
+    }
+}
