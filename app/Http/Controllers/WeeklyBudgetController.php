@@ -27,6 +27,44 @@ class WeeklyBudgetController extends Controller
         private readonly WeeklyBudgetActivityLogger $activityLogger,
     ) {}
 
+    private function applyDepartmentScope($query): void
+    {
+        $user = auth()->user();
+        
+        $isGlobalRole = $user->hasRole(['Admin', 'Super Admin']) ||
+            $user->canAny([
+                'view finance budgets', 'manage finance budgets',
+                'view ceo budgets', 'manage ceo budgets'
+            ]);
+
+        if (!$isGlobalRole && $user->canAny(['view department budgets', 'manage department budgets'])) {
+            $departmentId = $user->employee?->department_id;
+            if (!$departmentId) {
+                $query->whereRaw('1 = 0'); // Force no results
+            } else {
+                $query->where('department_id', $departmentId);
+            }
+        }
+    }
+
+    private function checkDepartmentScope(WeeklyBudget $weeklyBudget): void
+    {
+        $user = auth()->user();
+        
+        $isGlobalRole = $user->hasRole(['Admin', 'Super Admin']) ||
+            $user->canAny([
+                'view finance budgets', 'manage finance budgets',
+                'view ceo budgets', 'manage ceo budgets'
+            ]);
+
+        if (!$isGlobalRole && $user->canAny(['view department budgets', 'manage department budgets'])) {
+            $departmentId = $user->employee?->department_id;
+            if (!$departmentId || $weeklyBudget->department_id !== $departmentId) {
+                abort(403, 'Unauthorized department access.');
+            }
+        }
+    }
+
     public function index(): Response
     {
         abort_unless(auth()->user()->can('view weekly budgets'), 403);
@@ -58,6 +96,8 @@ class WeeklyBudgetController extends Controller
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn ($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
             ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn ($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when(request('week_start_date'), fn ($q, $v) => $q->where('week_start_date', $v));
+
+        $this->applyDepartmentScope($query);
 
         $items = $query
             ->latest()
@@ -730,6 +770,8 @@ class WeeklyBudgetController extends Controller
             ->when(request('payment_category_id'), fn ($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'),  fn ($q, $v) => $q->where('payment_type_id', $v));
 
+        $this->applyDepartmentScope($query);
+
         $items = $query
             ->latest()
             ->paginate(15)
@@ -811,6 +853,8 @@ class WeeklyBudgetController extends Controller
     public function updateDepartment(Request $request, WeeklyBudget $weeklyBudget): RedirectResponse
     {
         abort_unless(auth()->user()->can('manage department budgets'), 403);
+
+        $this->checkDepartmentScope($weeklyBudget);
 
         $validated = $request->validate([
             'status_department' => ['required', Rule::enum(WeeklyBudgetStatusDepartment::class)],
@@ -909,6 +953,8 @@ class WeeklyBudgetController extends Controller
                 continue;
             }
 
+            $this->checkDepartmentScope($budget);
+
             $oldValues = $this->activityLogger->attributes($budget);
             $budget->update([
                 'status_department' => $validated['status_department'],
@@ -935,6 +981,8 @@ class WeeklyBudgetController extends Controller
     public function departmentDelete(WeeklyBudget $weeklyBudget): RedirectResponse
     {
         abort_unless(auth()->user()->can('manage department budgets'), 403);
+
+        $this->checkDepartmentScope($weeklyBudget);
 
         if ($weeklyBudget->isDepartmentStatusLocked()) {
             return back()->withErrors(['delete' => 'Deleting is locked because Finance Status is Paid or CEO Status is Approved.']);
