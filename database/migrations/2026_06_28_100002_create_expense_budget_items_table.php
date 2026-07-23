@@ -12,7 +12,6 @@ return new class extends Migration
             $table->id();
             $table->foreignId('expense_budget_id')->constrained('expense_budgets')->cascadeOnDelete();
             $table->unsignedInteger('expense_item_id');
-            $table->decimal('prev_month_budget', 12, 2)->nullable();
             $table->decimal('planned_budget', 12, 2);
             $table->timestamps();
 

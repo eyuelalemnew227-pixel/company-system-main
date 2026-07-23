@@ -288,7 +288,6 @@ class ExpenseBudgetController extends Controller
             'items' => ['nullable', 'array'],
             'items.*.expense_item_id' => ['required', 'exists:expenses,expense_parent_acc_code'],
             'items.*.planned_budget' => ['nullable', 'numeric', 'min:0'],
-            'items.*.prev_month_budget' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $branch = Branch::findOrFail($validated['branch_id']);
@@ -382,7 +381,6 @@ class ExpenseBudgetController extends Controller
                 $createdItem = ExpenseBudgetItem::create([
                     'expense_budget_id' => $budget->id,
                     'expense_item_id' => $item['expense_item_id'],
-                    'prev_month_budget' => $item['prev_month_budget'] ?? null,
                     'planned_budget' => $item['planned_budget'],
                 ]);
 

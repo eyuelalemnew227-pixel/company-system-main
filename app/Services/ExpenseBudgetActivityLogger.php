@@ -129,7 +129,6 @@ class ExpenseBudgetActivityLogger
             'expense_item_id' => $item->expense_item_id,
             'expense_item' => $item->expenseItem?->expense_type,
             'planned_budget' => $item->planned_budget !== null ? (string) $item->planned_budget : null,
-            'prev_month_budget' => $item->prev_month_budget !== null ? (string) $item->prev_month_budget : null,
         ]);
     }
 
