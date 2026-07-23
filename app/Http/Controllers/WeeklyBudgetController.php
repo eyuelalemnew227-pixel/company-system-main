@@ -1142,7 +1142,7 @@ class WeeklyBudgetController extends Controller
 
     public function analytics(Request $request): Response
     {
-        abort_unless(auth()->user()->can('view weekly budgets'), 403);
+        abort_unless(auth()->user()->can('view weekly budget summary'), 403);
 
         [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
         $hasFiscalYearFilter = $request->has('fiscal_year_id');
