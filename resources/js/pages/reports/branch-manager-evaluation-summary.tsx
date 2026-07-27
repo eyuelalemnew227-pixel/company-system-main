@@ -1,5 +1,5 @@
 import React from 'react'
-import AppLayout from '@/layouts/app-layout'
+import EvaluationTabsLayout from './components/evaluation-tabs-layout'
 import { Head } from '@inertiajs/react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -90,8 +90,7 @@ export default function BranchManagerEvaluationSummaryPage({ rows, departmentNam
   }
 
   return (
-    <AppLayout breadcrumbs={[{ title: 'Branch Managers Evaluation Summary', href: '/reports/branch-manager-evaluation-summary' }]}>
-      <Head title="Branch Managers Evaluation Summary" />
+    <EvaluationTabsLayout activeTab="branch-manager" title="Branch Managers Evaluation" breadcrumbs={[]}>
       <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
         <Card>
           <CardHeader>
@@ -127,6 +126,20 @@ export default function BranchManagerEvaluationSummaryPage({ rows, departmentNam
                   </SelectContent>
                 </Select>
               </div>
+              <div className="w-56">
+                <label className="text-sm font-medium mb-2 block">Filter Departments</label>
+                <Select value={departmentFilter || 'all'} onValueChange={(v) => setDepartmentFilter(v === 'all' ? '' : v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Departments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {departmentNames.map((name) => (
+                      <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Button variant="outline" onClick={applyFilters}>Apply Filters</Button>
               <Button
                 variant="outline"
@@ -142,27 +155,6 @@ export default function BranchManagerEvaluationSummaryPage({ rows, departmentNam
               >
                 Export CSV
               </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Filter Departments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="w-56">
-              <Select value={departmentFilter || 'all'} onValueChange={(v) => setDepartmentFilter(v === 'all' ? '' : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Departments" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {departmentNames.map((name) => (
-                    <SelectItem key={name} value={name}>{name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           </CardContent>
         </Card>
@@ -303,6 +295,6 @@ export default function BranchManagerEvaluationSummaryPage({ rows, departmentNam
           </DialogContent>
         </Dialog>
       </div>
-    </AppLayout>
+    </EvaluationTabsLayout>
   )
 }

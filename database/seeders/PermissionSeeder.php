@@ -9,6 +9,9 @@ class PermissionSeeder extends Seeder
 {
     public function run(): void
     {
+        // Clear cached permissions to avoid duplicate entry bugs on reseeds
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
         // Dashboard
         Permission::firstOrCreate(['name' => 'view dashboard']);
 
@@ -138,6 +141,12 @@ class PermissionSeeder extends Seeder
 
         // Branch Manager Evaluation Summary
         Permission::firstOrCreate(['name' => 'view branch manager evaluation summary']);
+
+        // Champions Evaluation Summary
+        Permission::firstOrCreate(['name' => 'view champions evaluation summary']);
+
+        // Regional, Production & Maintenance Evaluation Summary
+        Permission::firstOrCreate(['name' => 'view regional production maintenance evaluation summary']);
 
         // Inventory Count Summary
         Permission::firstOrCreate(['name' => 'view inventory count summary']);

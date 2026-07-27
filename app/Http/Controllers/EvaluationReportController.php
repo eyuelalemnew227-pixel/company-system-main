@@ -42,9 +42,30 @@ class EvaluationReportController extends Controller
         );
 
         $evalCategories = EvaluationCategory::where('is_active', true)->get();
-        $employeeEvalNames = $evalCategories->where('name', '!=', 'Department to Department')->pluck('name')->toArray();
+
+        $excludedEvals = [
+            'Branch Managers Evaluation',
+            'Branch manager -> Champions',
+            'Branch managers -> Champions',
+            'Branch manager -> Regional managers',
+            'Branch managers -> Regional managers',
+            'Branch manager -> Maintenance',
+            'Branch managers -> Maintenance',
+            'Branch manager -> maintenance',
+            'Branch manager -> productions',
+            'Branch managers -> productions',
+            'Branch manager -> Productions',
+            'Branch managers -> Productions',
+            'Branch manager -> Production',
+        ];
+
+        $employeeEvalNames = $evalCategories
+            ->where('name', '!=', 'Department to Department')
+            ->whereNotIn('name', $excludedEvals)
+            ->pluck('name')
+            ->toArray();
         $departmentEvalName = 'Department to Department';
-        $evaluationNames = $evalCategories->pluck('name')->toArray();
+        $evaluationNames = $evalCategories->whereNotIn('name', $excludedEvals)->pluck('name')->toArray();
         $categoryWeights = $evalCategories->pluck('weight', 'name')->toArray();
 
         $branchId = $request->query('branch_id');
@@ -160,7 +181,28 @@ class EvaluationReportController extends Controller
     public function export(Request $request)
     {
         $evalCategories = EvaluationCategory::where('is_active', true)->get();
-        $employeeEvalNames = $evalCategories->where('name', '!=', 'Department to Department')->pluck('name')->toArray();
+
+        $excludedEvals = [
+            'Branch Managers Evaluation',
+            'Branch manager -> Champions',
+            'Branch managers -> Champions',
+            'Branch manager -> Regional managers',
+            'Branch managers -> Regional managers',
+            'Branch manager -> Maintenance',
+            'Branch managers -> Maintenance',
+            'Branch manager -> maintenance',
+            'Branch manager -> productions',
+            'Branch managers -> productions',
+            'Branch manager -> Productions',
+            'Branch managers -> Productions',
+            'Branch manager -> Production',
+        ];
+
+        $employeeEvalNames = $evalCategories
+            ->where('name', '!=', 'Department to Department')
+            ->whereNotIn('name', $excludedEvals)
+            ->pluck('name')
+            ->toArray();
         $departmentEvalName = 'Department to Department';
         $categoryWeights = $evalCategories->pluck('weight', 'name')->toArray();
 
@@ -196,9 +238,9 @@ class EvaluationReportController extends Controller
             $categoryWeights
         );
 
-        // Apply same row filter: require at least one employee-based value
-        $rows = array_values(array_filter($rows, function ($row) use ($employeeEvalNames) {
-            foreach ($employeeEvalNames as $name) {
+        // Apply same row filter: require at least one evaluation has a value
+        $rows = array_values(array_filter($rows, function ($row) use ($evaluationNames) {
+            foreach ($evaluationNames as $name) {
                 if (array_key_exists($name, $row) && $row[$name] !== null) {
                     return true;
                 }
@@ -235,24 +277,16 @@ class EvaluationReportController extends Controller
                 foreach ($visibleNames as $name) {
                     $values[] = $r[$name] ?? null;
                 }
-                // compute overall average from visible, non-null
-                $nonNull = array_values(array_filter($values, fn($v) => $v !== null));
-                if (count($nonNull) >= 3) {
-                    $sum = array_reduce($nonNull, function ($carry, $v) {
-                        return $carry + (float) $v;
-                    }, 0.0);
-                    $avg = $sum / count($nonNull);
-                    $overall = round(($avg / 5) * 100, 2) . '%';
-                } else {
-                    $overall = '';
-                }
+
+                $overall = ($r['has_sufficient_data'] ?? false) ? $r['overall_avg'] . '%' : '';
+
                 fputcsv($out, array_merge([
                     (string) ($r['department'] ?? ''),
                     (string) ($r['employee_name'] ?? ''),
                 ], array_map(function ($v) {
                     return $v === null ? '' : $v;
                 }, $values), [
-                    $overall === null ? '' : $overall,
+                    $overall,
                 ]));
             }
             fclose($out);
@@ -374,8 +408,8 @@ class EvaluationReportController extends Controller
             if ($weightTotal > 0) {
                 $avgScore = $weightedSum / $weightTotal;
                 $row['overall_avg'] = round(($avgScore / 5) * 100, 2);
-                // We consider it sufficient if at least 60% of total possible weight is present
-                $row['has_sufficient_data'] = $weightTotal >= 60;
+                // Show data as long as there is any valid weight
+                $row['has_sufficient_data'] = true;
             } else {
                 $row['overall_avg'] = null;
                 $row['has_sufficient_data'] = false;

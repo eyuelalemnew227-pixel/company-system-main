@@ -25,13 +25,16 @@ type Props = {
     evaluatorGroups: EvaluatorGroup[];
     evaluatesGroups: EvaluatesGroup[];
     evaluationCategories: EvaluationCategory[];
+    allEmployees: { id: number, first_name: string, last_name: string }[];
 };
 
-export default function Edit({ evaluation, evaluatorGroups, evaluatesGroups, evaluationCategories }: Props) {
+export default function Edit({ evaluation, evaluatorGroups, evaluatesGroups, evaluationCategories, allEmployees }: Props) {
     const { data, setData, put, processing, errors } = useForm({
         name: evaluation.name,
         evaluator_group_id: evaluation.evaluator_group_id.toString(),
         evaluates_group_id: evaluation.evaluates_group_id.toString(),
+        add_evaluator_ids: [] as number[],
+        add_evaluatee_ids: [] as number[],
     });
 
     const [nameInput, setNameInput] = React.useState(evaluation.name);
@@ -207,6 +210,64 @@ export default function Edit({ evaluation, evaluatorGroups, evaluatesGroups, eva
                                 {errors.evaluates_group_id && (
                                     <p className="text-sm text-red-500">{errors.evaluates_group_id}</p>
                                 )}
+                            </div>
+
+                            <hr className="my-4"/>
+                            <div className="space-y-2 pb-4">
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Add Missing Members Directly</h3>
+                                <p className="text-sm text-gray-500">Select employees here to instantly append them to the groups above without leaving this page.</p>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                                    <div className="space-y-2">
+                                        <Label>+ Add Missing Evaluators</Label>
+                                        <div className="h-48 overflow-y-auto rounded-md border p-4 space-y-2">
+                                            {allEmployees?.map(emp => (
+                                                <div key={`evaluator-${emp.id}`} className="flex items-center space-x-2">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        id={`evaluator-${emp.id}`}
+                                                        checked={data.add_evaluator_ids.includes(emp.id)}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setData('add_evaluator_ids', [...data.add_evaluator_ids, emp.id]);
+                                                            } else {
+                                                                setData('add_evaluator_ids', data.add_evaluator_ids.filter(id => id !== emp.id));
+                                                            }
+                                                        }}
+                                                    />
+                                                    <Label htmlFor={`evaluator-${emp.id}`} className="font-normal cursor-pointer">
+                                                        {emp.first_name} {emp.last_name}
+                                                    </Label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>+ Add Missing Evaluatees</Label>
+                                        <div className="h-48 overflow-y-auto rounded-md border p-4 space-y-2">
+                                            {allEmployees?.map(emp => (
+                                                <div key={`evaluatee-${emp.id}`} className="flex items-center space-x-2">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        id={`evaluatee-${emp.id}`}
+                                                        checked={data.add_evaluatee_ids.includes(emp.id)}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setData('add_evaluatee_ids', [...data.add_evaluatee_ids, emp.id]);
+                                                            } else {
+                                                                setData('add_evaluatee_ids', data.add_evaluatee_ids.filter(id => id !== emp.id));
+                                                            }
+                                                        }}
+                                                    />
+                                                    <Label htmlFor={`evaluatee-${emp.id}`} className="font-normal cursor-pointer">
+                                                        {emp.first_name} {emp.last_name}
+                                                    </Label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
 

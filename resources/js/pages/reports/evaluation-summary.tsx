@@ -1,5 +1,5 @@
 import React from 'react'
-import AppLayout from '@/layouts/app-layout'
+import EvaluationTabsLayout from './components/evaluation-tabs-layout'
 import { Head } from '@inertiajs/react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,8 +9,6 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Loader2 } from 'lucide-react'
-import { BreadcrumbItem } from '@/types'
-
 type PageProps = {
   rows: Array<{
     employee_id: number
@@ -27,7 +25,6 @@ type PageProps = {
   request?: { branch_id?: string; department_id?: string; period_id?: string }
 }
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Evaluation Summary', href: '/reports/evaluation-summary' }];
 
 export default function EvaluationSummaryPage({ rows, evaluationNames, branches, departments, periods, request }: PageProps) {
   const [branchId, setBranchId] = React.useState<string>(request?.branch_id ?? '')
@@ -110,8 +107,7 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
   }
 
   return (
-    <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="Evaluation Summary" />
+    <EvaluationTabsLayout activeTab="summary" title="Head Office Evaluation" breadcrumbs={[]}>
       <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
         <Card>
           <CardHeader>
@@ -310,7 +306,7 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
           </DialogContent>
         </Dialog>
       </div>
-    </AppLayout>
+    </EvaluationTabsLayout>
   )
 }
 

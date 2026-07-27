@@ -138,6 +138,7 @@ class EvaluationController extends Controller
             'evaluatorGroups' => $evaluatorGroups,
             'evaluatesGroups' => $evaluatesGroups,
             'evaluationCategories' => $allCategories,
+            'allEmployees' => \App\Models\Employee::select('id', 'first_name', 'last_name')->get(),
         ]);
     }
 
@@ -147,6 +148,10 @@ class EvaluationController extends Controller
             'name' => 'required|string|max:255',
             'evaluator_group_id' => 'required|exists:evaluator_groups,id',
             'evaluates_group_id' => 'required|exists:evaluates_groups,id',
+            'add_evaluator_ids'  => 'nullable|array',
+            'add_evaluator_ids.*'=> 'exists:employees,id',
+            'add_evaluatee_ids'  => 'nullable|array',
+            'add_evaluatee_ids.*'=> 'exists:employees,id', // Assuming employees for evaluable_type employee
         ]);
 
         // Ensure the evaluation name exists in evaluation_categories
@@ -155,7 +160,26 @@ class EvaluationController extends Controller
             ['weight' => 1, 'is_active' => true]
         );
 
-        $evaluation->update($validated);
+        $evaluation->update([
+            'name' => $validated['name'],
+            'evaluator_group_id' => $validated['evaluator_group_id'],
+            'evaluates_group_id' => $validated['evaluates_group_id']
+        ]);
+
+        // Inline appending missing members
+        if (!empty($validated['add_evaluator_ids'])) {
+            $evaluatorGroup = \App\Models\EvaluatorGroup::find($validated['evaluator_group_id']);
+            if ($evaluatorGroup) {
+                $evaluatorGroup->employees()->syncWithoutDetaching($validated['add_evaluator_ids']);
+            }
+        }
+
+        if (!empty($validated['add_evaluatee_ids'])) {
+            $evaluatesGroup = \App\Models\EvaluatesGroup::find($validated['evaluates_group_id']);
+            if ($evaluatesGroup && strtolower($evaluatesGroup->evaluable_type) === 'employee') {
+                $evaluatesGroup->employees()->syncWithoutDetaching($validated['add_evaluatee_ids']);
+            }
+        }
 
         return Redirect::route('evaluations.index')->with('flash.message', 'Evaluation updated successfully!');
     }

@@ -101,8 +101,7 @@ const baseSections: NavSection[] = [
     items: [
       { title: 'Overview', href: '/dashboard', icon: LayoutDashboard, permission: 'view dashboard' },
       { title: 'Pre-Orders Analysis', href: '/pre-orders/dashboard', icon: ShoppingCart, permission: 'view pre-orders' },
-      { title: 'Evaluation Summary', href: '/reports/evaluation-summary', icon: BarChart3, permission: 'view evaluation summary' },
-      { title: 'Branch Managers Evaluation Summary', href: '/reports/branch-manager-evaluation-summary', icon: BarChart3, permission: 'view branch manager evaluation summary' },
+      { title: 'Employee Evaluations', href: '/reports/employee-evaluations', icon: BarChart3, permission: 'view evaluation summary|view branch manager evaluation summary|view champions evaluation summary|view regional production maintenance evaluation summary' },
       { title: 'Inventory Count Summary', href: '/reports/inventory-count-summary', icon: Warehouse, permission: 'view inventory count summary' },
     ],
   },
@@ -211,15 +210,15 @@ const baseSections: NavSection[] = [
           { title: 'Expense Submission Tracker', href: '/budget/expense-budget/submission-tracker', icon: ClipboardCheck, permission: 'view expense budgets' },
         ],
       },
-        {
-          label: 'Sales Budget',
-          icon: TrendingUp,
-          items: [
-            { title: 'Add New Budget', href: '/budget/sales-budget/create', icon: ClipboardList, permission: 'manage sales budget' },
-            { title: 'View Budgets', href: '/budget/sales-budget', icon: BarChart3, permission: 'manage sales budget' },
-            { title: 'Action Logs', href: '/budget/sales-budget/logs', icon: History, permission: 'manage sales budget' },
-          ],
-        },
+      {
+        label: 'Sales Budget',
+        icon: TrendingUp,
+        items: [
+          { title: 'Add New Budget', href: '/budget/sales-budget/create', icon: ClipboardList, permission: 'manage sales budget' },
+          { title: 'View Budgets', href: '/budget/sales-budget', icon: BarChart3, permission: 'manage sales budget' },
+          { title: 'Action Logs', href: '/budget/sales-budget/logs', icon: History, permission: 'manage sales budget' },
+        ],
+      },
     ],
   },
 ];

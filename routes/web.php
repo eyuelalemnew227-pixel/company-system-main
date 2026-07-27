@@ -228,11 +228,39 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('permission:restore deleted evaluations');
     });
 
+    // Consolidated Tabs Intercept Route
+    Route::get('reports/employee-evaluations', function () {
+        $user = auth()->user();
+        if ($user->can('view evaluation summary'))
+            return redirect()->route('reports.evaluation-summary');
+        if ($user->can('view branch manager evaluation summary'))
+            return redirect()->route('reports.branch-manager-evaluation-summary');
+        if ($user->can('view champions evaluation summary'))
+            return redirect()->route('reports.champions-evaluation-summary');
+        if ($user->can('view regional production maintenance evaluation summary'))
+            return redirect()->route('reports.regional-production-maintenance-summary');
+        abort(403);
+    })->name('reports.employee-evaluations.index');
+
     // Branch Manager Evaluation summary report (permission-gated)
     Route::middleware('permission:view branch manager evaluation summary')->group(function () {
         Route::get('reports/branch-manager-evaluation-summary', [\App\Http\Controllers\BranchManagerEvaluationSummaryController::class, 'summary'])->name('reports.branch-manager-evaluation-summary');
         Route::get('reports/branch-manager-evaluation-summary/details', [\App\Http\Controllers\BranchManagerEvaluationSummaryController::class, 'details'])->name('reports.branch-manager-evaluation-summary.details');
         Route::get('reports/branch-manager-evaluation-summary/export', [\App\Http\Controllers\BranchManagerEvaluationSummaryController::class, 'export'])->name('reports.branch-manager-evaluation-summary.export');
+    });
+
+    // Champions Evaluation summary report
+    Route::middleware('permission:view champions evaluation summary')->group(function () {
+        Route::get('reports/champions-evaluation-summary', [\App\Http\Controllers\ChampionsEvaluationSummaryController::class, 'summary'])->name('reports.champions-evaluation-summary');
+        Route::get('reports/champions-evaluation-summary/export', [\App\Http\Controllers\ChampionsEvaluationSummaryController::class, 'export'])->name('reports.champions-evaluation-summary.export');
+        Route::get('reports/champions-evaluation-summary/details', [\App\Http\Controllers\ChampionsEvaluationSummaryController::class, 'details'])->name('reports.champions-evaluation-summary.details');
+    });
+
+    // Regional, Production & Maintenance Evaluation summary report
+    Route::middleware('permission:view regional production maintenance evaluation summary')->group(function () {
+        Route::get('reports/regional-production-maintenance-summary', [\App\Http\Controllers\ConsolidatedEvaluationSummaryController::class, 'summary'])->name('reports.regional-production-maintenance-summary');
+        Route::get('reports/regional-production-maintenance-summary/export', [\App\Http\Controllers\ConsolidatedEvaluationSummaryController::class, 'export'])->name('reports.regional-production-maintenance-summary.export');
+        Route::get('reports/regional-production-maintenance-summary/details', [\App\Http\Controllers\ConsolidatedEvaluationSummaryController::class, 'details'])->name('reports.regional-production-maintenance-summary.details');
     });
 
     // Inventory Count summary report (permission-gated)
