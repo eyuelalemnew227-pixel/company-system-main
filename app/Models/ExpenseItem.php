@@ -23,12 +23,10 @@ class ExpenseItem extends Model
         'code',
         'expense_type',
         'frequent_expense',
-        'is_expense',
     ];
 
     protected $casts = [
         'frequent_expense' => 'boolean',
-        'is_expense' => 'boolean',
         'expense_parent_acc_code' => 'integer',
         'code' => 'integer',
     ];

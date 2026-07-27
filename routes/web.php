@@ -35,7 +35,6 @@ use App\Http\Controllers\{
     SparePartCategoryController,
     SparePartController,
     PreOrderTargetController,
-    WeeklyBudgetController,
 };
 
 Route::get('/', fn() => Inertia::render('welcome'))->name('home');
@@ -208,53 +207,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ]);
     });
 
-    // Finance View for Weekly Budgets
-    Route::middleware('permission:view finance budgets')->group(function () {
-        Route::get('budget/weekly-budget/finance', [WeeklyBudgetController::class, 'financeView'])->name('weekly-budget.finance');
-    });
-
-    Route::middleware('permission:manage finance budgets')->group(function () {
-        Route::patch('budget/weekly-budget/{weeklyBudget}/finance-status', [WeeklyBudgetController::class, 'updateFinance'])->name('weekly-budget.update-finance');
-        Route::patch('budget/weekly-budget/finance/bulk', [WeeklyBudgetController::class, 'bulkUpdateFinance'])->name('weekly-budget.bulk-update-finance');
-        Route::post('budget/weekly-budget/finance/override-paid', [WeeklyBudgetController::class, 'overridePaid'])->name('weekly-budget.override-paid');
-    });
-
-    // Department View for Weekly Budgets
-    Route::middleware('permission:view department budgets')->group(function () {
-        Route::get('budget/weekly-budget/department', [WeeklyBudgetController::class, 'departmentView'])->name('weekly-budget.department');
-        Route::patch('budget/weekly-budget/{weeklyBudget}/department-status', [WeeklyBudgetController::class, 'updateDepartment'])->name('weekly-budget.update-department');
-        Route::delete('budget/weekly-budget/{weeklyBudget}/department-delete', [WeeklyBudgetController::class, 'departmentDelete'])->name('weekly-budget.department-delete');
-    });
-
-    Route::middleware('permission:manage department budgets')->group(function () {
-        Route::patch('budget/weekly-budget/department/bulk', [WeeklyBudgetController::class, 'bulkUpdateDepartment'])->name('weekly-budget.bulk-update-department');
-    });
-
-    // CEO View for Weekly Budgets
-    Route::middleware('permission:view ceo budgets')->group(function () {
-        Route::get('budget/weekly-budget/ceo', [WeeklyBudgetController::class, 'ceoView'])->name('weekly-budget.ceo');
-    });
-
-    Route::middleware('permission:manage ceo budgets')->group(function () {
-        Route::patch('budget/weekly-budget/{weeklyBudget}/ceo-status', [WeeklyBudgetController::class, 'updateCeo'])->name('weekly-budget.update-ceo');
-        Route::patch('budget/weekly-budget/ceo/bulk', [WeeklyBudgetController::class, 'bulkUpdateCeo'])->name('weekly-budget.bulk-update-ceo');
-    });
-    // Weekly Budget (existing)
-    Route::middleware('permission:view weekly budgets')->group(function () {
-        Route::get('budget/weekly-budget', [WeeklyBudgetController::class, 'index'])->name('weekly-budget.index');
-    });
-
-    Route::middleware('permission:view weekly budget summary')->group(function () {
-        Route::get('budget/weekly-budget/analytics', [WeeklyBudgetController::class, 'analytics'])->name('weekly-budget.analytics');
-    });
-
-    Route::middleware('permission:manage weekly budgets')->group(function () {
-        Route::get('budget/weekly-budget/create', [WeeklyBudgetController::class, 'create'])->name('weekly-budget.create');
-        Route::post('budget/weekly-budget', [WeeklyBudgetController::class, 'store'])->name('weekly-budget.store');
-        Route::put('budget/weekly-budget/{weeklyBudget}', [WeeklyBudgetController::class, 'update'])->name('weekly-budget.update');
-        Route::delete('budget/weekly-budget/{weeklyBudget}', [WeeklyBudgetController::class, 'destroy'])->name('weekly-budget.destroy');
-    });
-
     // External Links Management
     Route::middleware('permission:manage external links')->group(function () {
         Route::get('external-links', [ExternalLinkController::class, 'index'])->name('external-links.index');
@@ -420,14 +372,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('ticket-notifications.mark-read');
     Route::delete('ticket-notifications', [\App\Http\Controllers\TicketNotificationController::class, 'clear'])
         ->name('ticket-notifications.clear');
-
-    // Weekly Budget notifications (for bell UI)
-    Route::get('weekly-budget-notifications', [\App\Http\Controllers\WeeklyBudgetNotificationController::class, 'index'])
-        ->name('weekly-budget-notifications.index');
-    Route::post('weekly-budget-notifications/mark-read/{notification?}', [\App\Http\Controllers\WeeklyBudgetNotificationController::class, 'markRead'])
-        ->name('weekly-budget-notifications.mark-read');
-    Route::delete('weekly-budget-notifications', [\App\Http\Controllers\WeeklyBudgetNotificationController::class, 'clear'])
-        ->name('weekly-budget-notifications.clear');
 
     // Ticket taxonomy management
     Route::middleware('permission:ticket.manage.taxonomy')->group(function () {

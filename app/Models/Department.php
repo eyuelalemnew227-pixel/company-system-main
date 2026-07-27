@@ -21,7 +21,6 @@ class Department extends Model
         'description',
         'is_active',
         'is_active_on_ticketing',
-        'is_active_on_weekly_budget',
     ];
     public function branches()
     {

@@ -15,7 +15,10 @@ class SalesBudget extends Model
         'branch_id',
         'fiscal_year_id',
         'fiscal_month_id',
+        'ethiopian_month',
+        'ethiopian_year',
         'sales_amount',
+        'prev_expense_budget',
         'created_by',
         'updated_by',
     ];
@@ -24,6 +27,9 @@ class SalesBudget extends Model
         'fiscal_year_id'      => 'integer',
         'fiscal_month_id'     => 'integer',
         'sales_amount'        => 'decimal:2',
+        'prev_expense_budget' => 'decimal:2',
+        'ethiopian_month'     => 'integer',
+        'ethiopian_year'      => 'integer',
     ];
 
     // Fiscal month names in the same order as the fiscal_months table
@@ -45,7 +51,7 @@ class SalesBudget extends Model
     // Get month name from number
     public function getMonthNameAttribute(): string
     {
-        return $this->fiscalMonth ? (self::$monthNames[$this->fiscalMonth->efy_month_number] ?? '') : '';
+        return self::$monthNames[$this->ethiopian_month] ?? '';
     }
 
     // Get previous fiscal month number and year within the app's 12-month cycle
