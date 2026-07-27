@@ -14,12 +14,10 @@ class ExpenseBudgetItem extends Model
     protected $fillable = [
         'expense_budget_id',
         'expense_item_id',
-        'prev_month_budget',
         'planned_budget',
     ];
 
     protected $casts = [
-        'prev_month_budget' => 'decimal:2',
         'planned_budget' => 'decimal:2',
     ];
 

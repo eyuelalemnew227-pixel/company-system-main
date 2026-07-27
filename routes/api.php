@@ -4,6 +4,8 @@ use App\Http\Controllers\ManagerController;
 use App\Http\Controllers\PowerBiRawController;
 use Illuminate\Support\Facades\Route;
 
+use App\Http\Controllers\WeeklyBudgetController;
+
 // Power BI endpoints secured by API key middleware (raw-only, no pagination)
 Route::middleware('powerbi')->group(function () {
     // Raw table access (whitelisted tables only)
@@ -14,4 +16,5 @@ Route::middleware('powerbi')->group(function () {
 // Departments by branch endpoint (for dynamic dropdowns)
 Route::middleware('auth')->group(function () {
     Route::get('/departments/by-branch', [ManagerController::class, 'departmentsByBranch'])->name('api.departments.byBranch');
+    Route::get('/payment-types', [WeeklyBudgetController::class, 'getPaymentTypes'])->name('api.payment-types');
 });
