@@ -16,6 +16,13 @@ class WeeklyBudget extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::updated(function (WeeklyBudget $budget) {
+            \App\Services\WeeklyBudgetNotificationService::handleStatusChanges($budget);
+        });
+    }
+
     protected $fillable = [
         'branch_id',
         'department_id',

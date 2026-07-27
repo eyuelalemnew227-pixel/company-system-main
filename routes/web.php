@@ -393,6 +393,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('ticket-notifications', [\App\Http\Controllers\TicketNotificationController::class, 'clear'])
         ->name('ticket-notifications.clear');
 
+    // Weekly Budget notifications (for bell UI)
+    Route::get('weekly-budget-notifications', [\App\Http\Controllers\WeeklyBudgetNotificationController::class, 'index'])
+        ->name('weekly-budget-notifications.index');
+    Route::post('weekly-budget-notifications/mark-read/{notification?}', [\App\Http\Controllers\WeeklyBudgetNotificationController::class, 'markRead'])
+        ->name('weekly-budget-notifications.mark-read');
+    Route::delete('weekly-budget-notifications', [\App\Http\Controllers\WeeklyBudgetNotificationController::class, 'clear'])
+        ->name('weekly-budget-notifications.clear');
+
     // Ticket taxonomy management
     Route::middleware('permission:ticket.manage.taxonomy')->group(function () {
         Route::get('ticket-settings', function () {
