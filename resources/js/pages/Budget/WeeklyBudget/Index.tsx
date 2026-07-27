@@ -74,6 +74,10 @@ type WeeklyBudgetRow = {
 	amount: string | number;
 	description: string | null;
 	note: string | null;
+	payment_category_id: number | null;
+	payment_type_id: number | null;
+	payment_category: string | null;
+	payment_type: string | null;
 	can_view_history: boolean;
 };
 
@@ -998,6 +1002,8 @@ export default function WeeklyBudgetIndex({
 									<TableHead className="font-bold text-white">Fiscal Month</TableHead>
 									<TableHead className="font-bold text-white">Week</TableHead>
 									<TableHead className="font-bold text-white">Request Type</TableHead>
+									<TableHead className="font-bold text-white">Budget Category</TableHead>
+									<TableHead className="font-bold text-white">Budget Type</TableHead>
 									<TableHead className="font-bold text-white">Status (Dept)</TableHead>
 									<TableHead className="font-bold text-white">Status (Finance)</TableHead>
 									<TableHead className="font-bold text-white">Status (CEO)</TableHead>
@@ -1020,6 +1026,8 @@ export default function WeeklyBudgetIndex({
 											{formatWeekLabelFull(item.week_number, item.week_start_date, item.week_end_date)}
 										</TableCell>
 										<TableCell>{requestTypeBadge(item.request_type)}</TableCell>
+										<TableCell>{item.payment_category ?? '-'}</TableCell>
+										<TableCell>{item.payment_type ?? '-'}</TableCell>
 										<TableCell>{statusBadge(item.status_department, 'department')}</TableCell>
 										<TableCell>{statusBadge(item.status_finance, 'finance')}</TableCell>
 										<TableCell>{statusBadge(item.status_ceo, 'ceo')}</TableCell>

@@ -8,14 +8,18 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('weekly_budgets', function (Blueprint $table) {
-            $table->foreignId('payment_category_id')
-                ->nullable()
-                ->constrained('payment_categories')
-                ->onDelete('set null');
-            $table->foreignId('payment_type_id')
-                ->nullable()
-                ->constrained('payment_types')
-                ->onDelete('set null');
+            if (!Schema::hasColumn('weekly_budgets', 'payment_category_id')) {
+                $table->foreignId('payment_category_id')
+                    ->nullable()
+                    ->constrained('payment_categories')
+                    ->onDelete('set null');
+            }
+            if (!Schema::hasColumn('weekly_budgets', 'payment_type_id')) {
+                $table->foreignId('payment_type_id')
+                    ->nullable()
+                    ->constrained('payment_types')
+                    ->onDelete('set null');
+            }
         });
     }
 
