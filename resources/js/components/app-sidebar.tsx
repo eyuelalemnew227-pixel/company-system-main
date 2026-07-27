@@ -7,84 +7,84 @@ import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, Sid
 import { type ExternalLinkSection, type NavItem, type PageProps } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
-	Award,
-	BarChart3,
-	Building,
-	Building2,
-	Calendar,
-	CalendarCheck,
-	CalendarDays,
-	Calendar as CalendarIcon,
-	ClipboardCheck,
-	ClipboardList,
-	ExternalLink,
-	FileQuestion,
-	FileText,
-	FolderKey,
-	Globe2,
-	History,
-	LayoutDashboard,
-	List,
-	ListChecks,
-	LockKeyhole,
-	MessageSquare,
-	Package,
-	Phone,
-	Plus,
-	Settings,
-	Shield,
-	ShieldCheck,
-	ShoppingCart,
-	Sparkles,
-	Target,
-	Ticket,
-	TrendingUp,
-	UserCircle,
-	UserCog,
-	Users,
-	Wallet,
-	Warehouse,
-	XCircle,
+  Award,
+  BarChart3,
+  Building,
+  Building2,
+  Calendar,
+  CalendarCheck,
+  CalendarDays,
+  Calendar as CalendarIcon,
+  ClipboardCheck,
+  ClipboardList,
+  ExternalLink,
+  FileQuestion,
+  FileText,
+  FolderKey,
+  Globe2,
+  History,
+  LayoutDashboard,
+  List,
+  ListChecks,
+  LockKeyhole,
+  MessageSquare,
+  Package,
+  Phone,
+  Plus,
+  Settings,
+  Shield,
+  ShieldCheck,
+  ShoppingCart,
+  Sparkles,
+  Target,
+  Ticket,
+  TrendingUp,
+  UserCircle,
+  UserCog,
+  Users,
+  Wallet,
+  Warehouse,
+  XCircle,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const iconMap = {
-	LayoutDashboard,
-	ShoppingCart,
-	BarChart3,
-	Warehouse,
-	TrendingUp,
-	Globe2,
-	Settings,
-	LockKeyhole,
-	Shield,
-	UserCog,
-	Building2,
-	ClipboardList,
-	Users,
-	Phone,
-	ShieldCheck,
-	FileText,
-	FolderKey,
-	MessageSquare,
-	Calendar,
-	CalendarDays,
-	CalendarCheck,
-	Award,
-	ListChecks,
-	FileQuestion,
-	UserCircle,
-	Target,
-	History,
-	XCircle,
-	Ticket,
-	Package,
-	Sparkles,
-	ExternalLink,
-	Wallet,
-	Plus,
-	List,
-	ClipboardCheck,
+  LayoutDashboard,
+  ShoppingCart,
+  BarChart3,
+  Warehouse,
+  TrendingUp,
+  Globe2,
+  Settings,
+  LockKeyhole,
+  Shield,
+  UserCog,
+  Building2,
+  ClipboardList,
+  Users,
+  Phone,
+  ShieldCheck,
+  FileText,
+  FolderKey,
+  MessageSquare,
+  Calendar,
+  CalendarDays,
+  CalendarCheck,
+  Award,
+  ListChecks,
+  FileQuestion,
+  UserCircle,
+  Target,
+  History,
+  XCircle,
+  Ticket,
+  Package,
+  Sparkles,
+  ExternalLink,
+  Wallet,
+  Plus,
+  List,
+  ClipboardCheck,
 } as const;
 
 const baseSections: NavSection[] = [
@@ -212,62 +212,78 @@ const baseSections: NavSection[] = [
           { title: 'Action Logs', href: '/budget/sales-budget/logs', icon: History, permission: 'manage sales budget' },
         ],
       },
+      {
+        label: 'Weekly Budget',
+        icon: CalendarDays,
+        items: [
+          { title: 'Weekly Budgets', href: '/budget/weekly-budget', icon: List, permission: 'view weekly budgets' },
+          { title: 'Analytics', href: '/budget/weekly-budget/analytics', icon: BarChart3, permission: 'view weekly budget summary' },
+          { title: 'Finance View', href: '/budget/weekly-budget/finance', icon: Wallet, permission: 'view finance budgets' },
+          { title: 'CEO View', href: '/budget/weekly-budget/ceo', icon: Wallet, permission: 'view ceo budgets' },
+          {
+            title: 'Department View',
+            href: '/budget/weekly-budget/department',
+            icon: Building,
+            permission: 'view department budgets',
+          },
+        ],
+      },
     ],
   },
 ];
 const footerNavItems: NavItem[] = [];
 
 export function AppSidebar() {
-	const { props } = usePage<PageProps>();
-	const externalGroups = buildExternalGroups(props.externalLinks as ExternalLinkSection[] | undefined);
-	const sections =
-		externalGroups.length > 0 ? [...baseSections, { label: 'Links', icon: ExternalLink, items: [], groups: externalGroups }] : baseSections;
+  const { props } = usePage<PageProps>();
+  const externalGroups = buildExternalGroups(props.externalLinks as ExternalLinkSection[] | undefined);
+  const sections =
+    externalGroups.length > 0 ? [...baseSections, { label: 'Links', icon: ExternalLink, items: [], groups: externalGroups }] : baseSections;
 
-	return (
-		<Sidebar collapsible="icon" variant="inset">
-			<SidebarHeader>
-				<SidebarMenu>
-					<SidebarMenuItem>
-						<SidebarMenuButton size="lg" asChild>
-							<Link href="/dashboard" prefetch>
-								<AppLogo />
-							</Link>
-						</SidebarMenuButton>
-					</SidebarMenuItem>
-				</SidebarMenu>
-			</SidebarHeader>
+  return (
+    <Sidebar collapsible="icon" variant="inset">
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild>
+              <Link href="/dashboard" prefetch>
+                <AppLogo />
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
 
-			<SidebarContent>
-				<NavMain sections={sections} />
-			</SidebarContent>
+      <SidebarContent>
+        <NavMain sections={sections} />
+      </SidebarContent>
 
-			<SidebarFooter>
-				<NavFooter items={footerNavItems} className="mt-auto" />
-				<NavUser />
-			</SidebarFooter>
-		</Sidebar>
-	);
+      <SidebarFooter>
+        <NavFooter items={footerNavItems} className="mt-auto" />
+        <NavUser />
+      </SidebarFooter>
+    </Sidebar>
+  );
 }
 
 function resolveIcon(name?: string | null) {
-	if (!name) return undefined;
-	return iconMap[name as keyof typeof iconMap] ?? ExternalLink;
+  if (!name) return undefined;
+  return iconMap[name as keyof typeof iconMap] ?? ExternalLink;
 }
 
 function buildExternalGroups(sections: ExternalLinkSection[] | undefined) {
-	if (!sections?.length) return [];
+  if (!sections?.length) return [];
 
-	return sections.map((section) => ({
-		label: section.label,
-		icon: resolveIcon(section.icon) ?? ExternalLink,
-		items: (section.items ?? section.links ?? []).map((item) => ({
-			title: item.title,
-			href: item.href,
-			permission: item.permission,
-			icon: resolveIcon(item.icon ?? item.iconName) ?? resolveIcon(section.icon) ?? ExternalLink,
-			target: item.target ?? '_blank',
-			rel: item.rel ?? 'noreferrer noopener',
-			external: item.external ?? item.is_external ?? true,
-		})),
-	}));
+  return sections.map((section) => ({
+    label: section.label,
+    icon: resolveIcon(section.icon) ?? ExternalLink,
+    items: (section.items ?? section.links ?? []).map((item) => ({
+      title: item.title,
+      href: item.href,
+      permission: item.permission,
+      icon: resolveIcon(item.icon ?? item.iconName) ?? resolveIcon(section.icon) ?? ExternalLink,
+      target: item.target ?? '_blank',
+      rel: item.rel ?? 'noreferrer noopener',
+      external: item.external ?? item.is_external ?? true,
+    })),
+  }));
 }
