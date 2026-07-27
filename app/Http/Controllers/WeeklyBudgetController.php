@@ -1221,7 +1221,11 @@ class WeeklyBudgetController extends Controller
         }
 
         if ($useCaseFilter) {
-            if ($useCaseFilter === 'ceo_not_paid') {
+            if ($useCaseFilter === 'all_status_pending') {
+                $query->where('status_department', WeeklyBudgetStatusDepartment::Pending->value)
+                      ->where('status_finance', WeeklyBudgetStatusFinance::Pending->value)
+                      ->where('status_ceo', WeeklyBudgetStatusCeo::Pending->value);
+            } elseif ($useCaseFilter === 'ceo_not_paid') {
                 $query->where('status_ceo', WeeklyBudgetStatusCeo::Approved->value)
                       ->where('status_finance', '!=', WeeklyBudgetStatusFinance::Paid->value);
             } elseif ($useCaseFilter === 'dept_not_finance') {
@@ -1254,9 +1258,17 @@ class WeeklyBudgetController extends Controller
         ];
 
         $counts = [
+            'all_status_pending' => (clone $kpiQuery)->where('status_department', WeeklyBudgetStatusDepartment::Pending->value)->where('status_finance', WeeklyBudgetStatusFinance::Pending->value)->where('status_ceo', WeeklyBudgetStatusCeo::Pending->value)->count(),
             'ceo_not_paid' => (clone $kpiQuery)->where('status_ceo', WeeklyBudgetStatusCeo::Approved->value)->where('status_finance', '!=', WeeklyBudgetStatusFinance::Paid->value)->count(),
             'dept_not_finance' => (clone $kpiQuery)->where('status_department', WeeklyBudgetStatusDepartment::Approved->value)->whereIn('status_finance', [WeeklyBudgetStatusFinance::Pending->value, WeeklyBudgetStatusFinance::OnHold->value])->count(),
             'finance_not_ceo' => (clone $kpiQuery)->where('status_finance', WeeklyBudgetStatusFinance::Approved->value)->whereIn('status_ceo', [WeeklyBudgetStatusCeo::Pending->value, WeeklyBudgetStatusCeo::OnHold->value])->count(),
+        ];
+
+        $amounts = [
+            'all_status_pending' => (float) (clone $kpiQuery)->where('status_department', WeeklyBudgetStatusDepartment::Pending->value)->where('status_finance', WeeklyBudgetStatusFinance::Pending->value)->where('status_ceo', WeeklyBudgetStatusCeo::Pending->value)->sum('amount'),
+            'ceo_not_paid' => (float) (clone $kpiQuery)->where('status_ceo', WeeklyBudgetStatusCeo::Approved->value)->where('status_finance', '!=', WeeklyBudgetStatusFinance::Paid->value)->sum('amount'),
+            'dept_not_finance' => (float) (clone $kpiQuery)->where('status_department', WeeklyBudgetStatusDepartment::Approved->value)->whereIn('status_finance', [WeeklyBudgetStatusFinance::Pending->value, WeeklyBudgetStatusFinance::OnHold->value])->sum('amount'),
+            'finance_not_ceo' => (float) (clone $kpiQuery)->where('status_finance', WeeklyBudgetStatusFinance::Approved->value)->whereIn('status_ceo', [WeeklyBudgetStatusCeo::Pending->value, WeeklyBudgetStatusCeo::OnHold->value])->sum('amount'),
         ];
 
         $expenseItems = ExpenseItem::query()->orderBy('expense_type')->get();
@@ -1293,6 +1305,7 @@ class WeeklyBudgetController extends Controller
 
         return Inertia::render('Budget/WeeklyBudget/Analytics', [
             'counts'       => $counts,
+            'amounts'      => $amounts,
             'kpis'         => $kpis,
             'matrixData'   => $matrixData,
             'fiscalYears'  => $this->fiscalYearOptions(),

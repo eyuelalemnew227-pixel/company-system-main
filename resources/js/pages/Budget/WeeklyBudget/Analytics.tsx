@@ -57,6 +57,13 @@ type Kpis = {
 
 type AnalyticsProps = {
 	counts: {
+		all_status_pending?: number;
+		ceo_not_paid: number;
+		dept_not_finance: number;
+		finance_not_ceo: number;
+	};
+	amounts: {
+		all_status_pending?: number;
 		ceo_not_paid: number;
 		dept_not_finance: number;
 		finance_not_ceo: number;
@@ -183,7 +190,7 @@ function buildFiscalMonthWeeks(fiscalYear: FiscalYearOption, fiscalMonth: Fiscal
 	return weeks;
 }
 
-export default function Analytics({ counts, kpis, matrixData, fiscalYears, fiscalMonths, filters }: AnalyticsProps) {
+export default function Analytics({ counts, amounts, kpis, matrixData, fiscalYears, fiscalMonths, filters }: AnalyticsProps) {
 	const handleFilterChange = (key: string, value: string) => {
 		router.get(
 			route('weekly-budget.analytics'),
@@ -350,43 +357,96 @@ export default function Analytics({ counts, kpis, matrixData, fiscalYears, fisca
 					</Card>
 				</div>
 
-				{/* ── Status Summary Cards (clickable) ─────────────────────────────── */}
-				<div className="grid gap-4 md:grid-cols-3">
+				{/* ── Status Summary Cards ─────────────────────────────── */}
+				<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
 					<Card
-						className={`cursor-pointer transition-all hover:bg-muted/50 hover:shadow-md ${filters.use_case === 'ceo_not_paid' ? 'ring-2 ring-primary' : ''}`}
-						onClick={() => handleUseCaseClick('ceo_not_paid')}
+						className={`relative transition-all hover:shadow-md ${filters.use_case === 'all_status_pending' ? 'ring-2 ring-primary' : ''}`}
 					>
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+						<div className="absolute right-4 top-1/2 -translate-y-1/2 h-[22.22%] aspect-square">
+							<input
+								type="checkbox"
+								className="h-full w-full cursor-pointer rounded border-input bg-transparent text-primary shadow-sm focus-visible:ring-1 focus-visible:ring-ring"
+								checked={filters.use_case === 'all_status_pending'}
+								onChange={() => handleUseCaseClick('all_status_pending')}
+							/>
+						</div>
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pr-20">
+							<CardTitle className="text-xs font-medium">All Status Pending</CardTitle>
+						</CardHeader>
+						<CardContent className="pr-20">
+							<div className="text-2xl font-bold">
+								{counts.all_status_pending || 0}
+								<span className="text-base font-semibold text-muted-foreground ml-1">({formatCurrency(amounts?.all_status_pending || 0)})</span>
+							</div>
+							<p className="mt-1 text-xs text-muted-foreground">Waiting on all approvals</p>
+						</CardContent>
+					</Card>
+
+					<Card
+						className={`relative transition-all hover:shadow-md ${filters.use_case === 'ceo_not_paid' ? 'ring-2 ring-primary' : ''}`}
+					>
+						<div className="absolute right-4 top-1/2 -translate-y-1/2 h-[22.22%] aspect-square">
+							<input
+								type="checkbox"
+								className="h-full w-full cursor-pointer rounded border-input bg-transparent text-primary shadow-sm focus-visible:ring-1 focus-visible:ring-ring"
+								checked={filters.use_case === 'ceo_not_paid'}
+								onChange={() => handleUseCaseClick('ceo_not_paid')}
+							/>
+						</div>
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pr-20">
 							<CardTitle className="text-xs font-medium">CEO Approved, Not Paid</CardTitle>
 						</CardHeader>
-						<CardContent>
-							<div className="text-2xl font-bold">{counts.ceo_not_paid}</div>
+						<CardContent className="pr-20">
+							<div className="text-2xl font-bold">
+								{counts.ceo_not_paid}
+								<span className="text-base font-semibold text-muted-foreground ml-1">({formatCurrency(amounts?.ceo_not_paid || 0)})</span>
+							</div>
 							<p className="mt-1 text-xs text-muted-foreground">Pending finance payment</p>
 						</CardContent>
 					</Card>
 
 					<Card
-						className={`cursor-pointer transition-all hover:bg-muted/50 hover:shadow-md ${filters.use_case === 'dept_not_finance' ? 'ring-2 ring-primary' : ''}`}
-						onClick={() => handleUseCaseClick('dept_not_finance')}
+						className={`relative transition-all hover:shadow-md ${filters.use_case === 'dept_not_finance' ? 'ring-2 ring-primary' : ''}`}
 					>
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+						<div className="absolute right-4 top-1/2 -translate-y-1/2 h-[22.22%] aspect-square">
+							<input
+								type="checkbox"
+								className="h-full w-full cursor-pointer rounded border-input bg-transparent text-primary shadow-sm focus-visible:ring-1 focus-visible:ring-ring"
+								checked={filters.use_case === 'dept_not_finance'}
+								onChange={() => handleUseCaseClick('dept_not_finance')}
+							/>
+						</div>
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pr-20">
 							<CardTitle className="text-xs font-medium">Dept Approved, Pending Finance</CardTitle>
 						</CardHeader>
-						<CardContent>
-							<div className="text-2xl font-bold">{counts.dept_not_finance}</div>
+						<CardContent className="pr-20">
+							<div className="text-2xl font-bold">
+								{counts.dept_not_finance}
+								<span className="text-base font-semibold text-muted-foreground ml-1">({formatCurrency(amounts?.dept_not_finance || 0)})</span>
+							</div>
 							<p className="mt-1 text-xs text-muted-foreground">Waiting on Finance</p>
 						</CardContent>
 					</Card>
 
 					<Card
-						className={`cursor-pointer transition-all hover:bg-muted/50 hover:shadow-md ${filters.use_case === 'finance_not_ceo' ? 'ring-2 ring-primary' : ''}`}
-						onClick={() => handleUseCaseClick('finance_not_ceo')}
+						className={`relative transition-all hover:shadow-md ${filters.use_case === 'finance_not_ceo' ? 'ring-2 ring-primary' : ''}`}
 					>
-						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+						<div className="absolute right-4 top-1/2 -translate-y-1/2 h-[22.22%] aspect-square">
+							<input
+								type="checkbox"
+								className="h-full w-full cursor-pointer rounded border-input bg-transparent text-primary shadow-sm focus-visible:ring-1 focus-visible:ring-ring"
+								checked={filters.use_case === 'finance_not_ceo'}
+								onChange={() => handleUseCaseClick('finance_not_ceo')}
+							/>
+						</div>
+						<CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 pr-20">
 							<CardTitle className="text-xs font-medium">Finance Approved, Pending CEO</CardTitle>
 						</CardHeader>
-						<CardContent>
-							<div className="text-2xl font-bold">{counts.finance_not_ceo}</div>
+						<CardContent className="pr-20">
+							<div className="text-2xl font-bold">
+								{counts.finance_not_ceo}
+								<span className="text-base font-semibold text-muted-foreground ml-1">({formatCurrency(amounts?.finance_not_ceo || 0)})</span>
+							</div>
 							<p className="mt-1 text-xs text-muted-foreground">Waiting on CEO</p>
 						</CardContent>
 					</Card>
