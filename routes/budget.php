@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ExpenseBudgetController;
 use App\Http\Controllers\SalesBudgetController;
+use App\Http\Controllers\WeeklyBudgetController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth', 'verified'])->group(function () {
@@ -31,5 +32,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('budget/sales-budget/{salesBudget}/edit', [SalesBudgetController::class, 'edit'])->name('sales-budget.edit');
         Route::put('budget/sales-budget/{salesBudget}', [SalesBudgetController::class, 'update'])->name('sales-budget.update');
         Route::delete('budget/sales-budget/{salesBudget}', [SalesBudgetController::class, 'destroy'])->name('sales-budget.destroy');
+    });
+    // Weekly Budget
+    Route::middleware('permission:view weekly budgets')->group(function () {
+        Route::get('budget/weekly-budget', [WeeklyBudgetController::class, 'index'])->name('weekly-budget.index');
+        Route::get('budget/weekly-budget/{weeklyBudget}/activity-logs', [WeeklyBudgetController::class, 'activityLogs'])
+            ->middleware('permission:view weekly budget activity logs')
+            ->name('weekly-budget.activity-logs');
+    });
+
+    Route::middleware('permission:view weekly budget summary')->group(function () {
+        Route::get('budget/weekly-budget/analytics', [WeeklyBudgetController::class, 'analytics'])->name('weekly-budget.analytics');
+    });
+
+    Route::middleware('permission:manage weekly budgets')->group(function () {
+        Route::get('budget/weekly-budget/create', [WeeklyBudgetController::class, 'create'])->name('weekly-budget.create');
+        Route::post('budget/weekly-budget', [WeeklyBudgetController::class, 'store'])->name('weekly-budget.store');
+        Route::put('budget/weekly-budget/{weeklyBudget}', [WeeklyBudgetController::class, 'update'])->name('weekly-budget.update');
+        Route::delete('budget/weekly-budget/{weeklyBudget}', [WeeklyBudgetController::class, 'destroy'])->name('weekly-budget.destroy');
     });
 });
