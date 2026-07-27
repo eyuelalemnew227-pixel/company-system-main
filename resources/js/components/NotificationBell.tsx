@@ -13,7 +13,6 @@ import {
 type Notification = {
   id: number;
   ticket_id?: number | null;
-  weekly_budget_id?: number | null;
   type?: string | null;
   title: string;
   body?: string | null;
@@ -38,25 +37,16 @@ export default function NotificationBell({ initialUnread = 0 }: Props) {
   }, []);
   const fetchNotifications = async () => {
     try {
-      const headers = {
-        "Accept": "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-      };
-      const [ticketRes, budgetRes] = await Promise.all([
-        fetch(route("ticket-notifications.index") + `?t=${Date.now()}`, { headers }),
-        fetch(route("weekly-budget-notifications.index") + `?t=${Date.now()}`, { headers })
-      ]);
-      
-      const [ticketJson, budgetJson] = await Promise.all([
-        ticketRes.ok ? ticketRes.json() : { data: [], unread: 0 },
-        budgetRes.ok ? budgetRes.json() : { data: [], unread: 0 }
-      ]);
-      
-      const mergedItems = [...(ticketJson.data || []), ...(budgetJson.data || [])];
-      mergedItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      
-      setItems(mergedItems.slice(0, 50));
-      setUnread((ticketJson.unread || 0) + (budgetJson.unread || 0));
+      const res = await fetch(route("ticket-notifications.index") + `?t=${Date.now()}`, {
+        headers: {
+          "Accept": "application/json",
+          "X-Requested-With": "XMLHttpRequest"
+        }
+      });
+      if (!res.ok) throw new Error("Network response was not ok");
+      const json = await res.json();
+      setItems(json.data || []);
+      setUnread(json.unread || 0);
     } catch (e) {
       console.error("Failed to fetch notifications", e);
     }
@@ -66,14 +56,13 @@ export default function NotificationBell({ initialUnread = 0 }: Props) {
     e.preventDefault();
     e.stopPropagation();
     try {
-      const headers = {
-        "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || "",
-        "Accept": "application/json"
-      };
-      await Promise.all([
-        fetch(route("ticket-notifications.mark-read"), { method: "POST", headers }),
-        fetch(route("weekly-budget-notifications.mark-read"), { method: "POST", headers })
-      ]);
+      await fetch(route("ticket-notifications.mark-read"), {
+        method: "POST",
+        headers: {
+          "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || "",
+          "Accept": "application/json"
+        },
+      });
       fetchNotifications();
     } catch (e) {
       console.error("Failed to mark read", e);
@@ -84,14 +73,13 @@ export default function NotificationBell({ initialUnread = 0 }: Props) {
     e.preventDefault();
     e.stopPropagation();
     try {
-      const headers = {
-        "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || "",
-        "Accept": "application/json"
-      };
-      await Promise.all([
-        fetch(route("ticket-notifications.clear"), { method: "DELETE", headers }),
-        fetch(route("weekly-budget-notifications.clear"), { method: "DELETE", headers })
-      ]);
+      await fetch(route("ticket-notifications.clear"), {
+        method: "DELETE",
+        headers: {
+          "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || "",
+          "Accept": "application/json"
+        },
+      });
       fetchNotifications();
     } catch (e) {
       console.error("Failed to clear notifications", e);
@@ -99,39 +87,27 @@ export default function NotificationBell({ initialUnread = 0 }: Props) {
   };
 
   const handleNotificationClick = async (n: Notification) => {
+    // If it's unread, mark it as read in the background
     if (!n.read_at) {
       try {
-        const isBudget = !!n.weekly_budget_id;
-        const markReadRoute = isBudget 
-            ? route("weekly-budget-notifications.mark-read", n.id)
-            : route("ticket-notifications.mark-read", n.id);
-
-        await fetch(markReadRoute, {
+        await fetch(route("ticket-notifications.mark-read", n.id), {
           method: "POST",
           headers: {
             "X-CSRF-TOKEN": document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || "",
             "Accept": "application/json"
           },
         });
+        // Update local state for unread count
         setUnread(prev => Math.max(0, prev - 1));
-        setItems(prev => prev.map(item => item.id === n.id && (!!item.weekly_budget_id === isBudget) ? { ...item, read_at: new Date().toISOString() } : item));
+        setItems(prev => prev.map(item => item.id === n.id ? { ...item, read_at: new Date().toISOString() } : item));
       } catch (e) {
         console.error("Failed to mark single notification as read", e);
       }
     }
 
+    // Navigate to the ticket
     if (n.ticket_id) {
       router.visit(route('tickets.show', n.ticket_id));
-    } else if (n.weekly_budget_id) {
-      if (n.type === 'budget.finance') {
-        router.visit(route('weekly-budget.finance'));
-      } else if (n.type === 'budget.ceo') {
-        router.visit(route('weekly-budget.ceo'));
-      } else if (n.type === 'budget.department') {
-        router.visit(route('weekly-budget.department'));
-      } else {
-        router.visit(route('weekly-budget.index'));
-      }
     }
   };
 

@@ -3,27 +3,44 @@
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain, type NavSection } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
-import { Sidebar, SidebarContent, SidebarFooter, SidebarHeader, SidebarMenu, SidebarMenuButton, SidebarMenuItem } from '@/components/ui/sidebar';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from '@/components/ui/sidebar';
 import { type ExternalLinkSection, type NavItem, type PageProps } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import {
   Award,
+<<<<<<< HEAD
   BarChart3,
   Building,
+=======
+>>>>>>> 28a593e8318fe238bf468d52532b64c58d769025
   Building2,
   Calendar,
   CalendarCheck,
   CalendarDays,
+<<<<<<< HEAD
   Calendar as CalendarIcon,
   ClipboardCheck,
   ClipboardList,
   ExternalLink,
   FileQuestion,
   FileText,
+=======
+  ClipboardList,
+  FileQuestion,
+>>>>>>> 28a593e8318fe238bf468d52532b64c58d769025
   FolderKey,
   Globe2,
   History,
   LayoutDashboard,
+<<<<<<< HEAD
   List,
   ListChecks,
   LockKeyhole,
@@ -45,6 +62,34 @@ import {
   Wallet,
   Warehouse,
   XCircle,
+=======
+  ListChecks,
+  LockKeyhole,
+  Shield,
+  ShieldCheck,
+  Sparkles,
+  Target,
+  Users,
+  UserCog,
+  UserCircle,
+  FileText,
+  ClipboardCheck,
+  XCircle,
+  BarChart3,
+  Settings,
+  Calendar as CalendarIcon,
+  TrendingUp,
+  Package,
+  Warehouse,
+  ShoppingCart,
+  MessageSquare,
+  Ticket,
+  Phone,
+  ExternalLink,
+  Wallet,
+  Plus,
+  List,
+>>>>>>> 28a593e8318fe238bf468d52532b64c58d769025
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
