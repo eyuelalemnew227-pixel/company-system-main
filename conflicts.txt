@@ -1,4 +1,0 @@
-﻿app/Http/Controllers/MyBranchOrdersController.php
-app/Http/Controllers/PreOrderController.php
-resources/js/pages/my-branch-orders/index.tsx
-resources/js/pages/pre-orders/index.tsx

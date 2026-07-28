@@ -1,7 +1,0 @@
-﻿Columns: id, order_number, client_name, phone_number, chat_id, order_type_id, collection_day_id, holiday_id, collection_branch_id, registering_branch_id, status, payment_method, late_payment, collected_at, collected_by, total_amount, payment_slip, cancel_reason, created_by, updated_by, voucher_code, transaction_reference, created_at, updated_at
-
-ID: 58 | Ref: DA67LNI97T
-ID: 59 | Ref: DA39ID7745
-ID: 61 | Ref: DA39ID7745
-ID: 63 | Ref: DA37ID7DMT
-ID: 64 | Ref: DA33IDFMZ5
