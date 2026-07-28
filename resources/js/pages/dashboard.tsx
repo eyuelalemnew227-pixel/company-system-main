@@ -35,7 +35,7 @@ export default function Dashboard() {
 									{greeting}, {userName}!
 								</h1>
 								<p className="text-xl text-amber-800 md:text-2xl dark:text-amber-200">Welcome to Kaldi's Coffee</p>
-								<p className="text-lg text-amber-700 dark:text-amber-300">Sip a Coffee, Make a Memory.</p>
+								<p className="text-lg text-amber-700 dark:text-amber-300"> Make a Memory.</p>
 							</div>
 
 							{/* Kaldi's Coffee Cup Image with Realistic Steam Animation */}
