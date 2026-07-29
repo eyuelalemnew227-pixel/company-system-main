@@ -26,6 +26,7 @@ export default function EditDepartment({ department }: { department: Department 
         description: department.description || '',
         is_active: (department as any).is_active ?? true,
         is_active_on_ticketing: (department as any).is_active_on_ticketing ?? true,
+        is_active_on_weekly_budget: (department as any).is_active_on_weekly_budget ?? false,
     });
 
     function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -92,6 +93,16 @@ export default function EditDepartment({ department }: { department: Department 
                                     onChange={(e) => setData('is_active_on_ticketing', e.target.checked)}
                                 />
                                 <InputError message={(errors as any).is_active_on_ticketing} />
+                            </div>
+                            <div className="mb-4 flex items-center gap-2">
+                                <Label htmlFor="is_active_on_weekly_budget">Active for Weekly Budget</Label>
+                                <input
+                                    id="is_active_on_weekly_budget"
+                                    type="checkbox"
+                                    checked={data.is_active_on_weekly_budget}
+                                    onChange={(e) => setData('is_active_on_weekly_budget', e.target.checked)}
+                                />
+                                <InputError message={errors.is_active_on_weekly_budget} />
                             </div>
                             <div className="flex justify-end">
                                 <Button size="lg" type="submit" disabled={processing}>
