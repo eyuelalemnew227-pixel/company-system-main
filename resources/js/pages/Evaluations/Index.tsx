@@ -25,9 +25,10 @@ type Props = PageProps & {
     };
     evaluatorGroups: { id: number; name: string }[];
     evaluatesGroups: { id: number; name: string }[];
+    evaluationCategories: { id: number; name: string }[];
 };
 
-export default function Index({ evaluations, request, evaluatorGroups, evaluatesGroups }: Props) {
+export default function Index({ evaluations, request, evaluatorGroups, evaluatesGroups, evaluationCategories }: Props) {
     const { can } = usePermission();
 
     const [evaluationName, setEvaluationName] = useState(request?.evaluation_name ?? 'all');
@@ -95,11 +96,11 @@ export default function Index({ evaluations, request, evaluatorGroups, evaluates
                                 onChange={(e) => setEvaluationName(e.target.value)}
                             >
                                 <option value="all">All Evaluations</option>
-                                <option value="Peer to Peer Evaluation">Peer to Peer Evaluation</option>
-                                <option value="Bottom Up Evaluation">Bottom Up Evaluation</option>
-                                <option value="Top Down Evaluation">Top Down Evaluation</option>
-                                <option value="Department to Department">Department to Department</option>
-                                <option value="Branch Managers Evaluation">Branch Managers Evaluation</option>
+                                {evaluationCategories.map((cat) => (
+                                    <option key={cat.id} value={cat.name}>
+                                        {cat.name}
+                                    </option>
+                                ))}
                             </select>
 
                             <Popover open={openEvaluator} onOpenChange={setOpenEvaluator}>

@@ -130,6 +130,7 @@ class EvaluationResponseController extends Controller
             'periods' => EvaluationPeriod::select('id', 'evaluation_period_name')->get(),
             'branches' => Branch::select('id', 'name')->get(),
             'departments' => Department::select('id', 'name')->get(),
+            'evaluationCategories' => \App\Models\EvaluationCategory::where('is_active', true)->select('id', 'name')->get(),
         ]);
     }
 

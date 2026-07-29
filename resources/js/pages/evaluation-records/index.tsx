@@ -25,9 +25,10 @@ type Props = PageProps & {
     periods: any[];
     branches: any[];
     departments: any[];
+    evaluationCategories: { id: number; name: string }[];
 };
 
-export default function Index({ auth, evaluationResponses, filters, periods, branches, departments, flash }: Props) {
+export default function Index({ auth, evaluationResponses, filters, periods, branches, departments, evaluationCategories, flash }: Props) {
 
     const [searchQuery, setSearchQuery] = useState(filters.search || '');
     const [selectedPeriod, setSelectedPeriod] = useState(filters.period_id || 'all');
@@ -175,11 +176,11 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
                             onChange={(e) => setTemplateFilter(e.target.value)}
                         >
                             <option value="all">All Evaluations</option>
-                            <option value="Peer to Peer Evaluation">Peer to Peer Evaluation</option>
-                            <option value="Bottom Up Evaluation">Bottom Up Evaluation</option>
-                            <option value="Top Down Evaluation">Top Down Evaluation</option>
-                            <option value="Department to Department">Department to Department</option>
-                            <option value="Branch Managers Evaluation">Branch Managers Evaluation</option>
+                            {evaluationCategories.map((cat) => (
+                                <option key={cat.id} value={cat.name}>
+                                    {cat.name}
+                                </option>
+                            ))}
                         </select>
                     </div>
 
