@@ -15,9 +15,10 @@ return new class extends Migration {
                     ->onDelete('set null');
             }
             if (!Schema::hasColumn('weekly_budgets', 'payment_type_id')) {
-                $table->foreignId('payment_type_id')
-                    ->nullable()
-                    ->constrained('payment_types')
+                $table->integer('payment_type_id')->nullable();
+                $table->foreign('payment_type_id')
+                    ->references('expense_parent_acc_code')
+                    ->on('expenses')
                     ->onDelete('set null');
             }
         });

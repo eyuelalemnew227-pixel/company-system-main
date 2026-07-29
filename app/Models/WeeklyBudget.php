@@ -85,7 +85,7 @@ class WeeklyBudget extends Model
 
     public function paymentType(): BelongsTo
     {
-        return $this->belongsTo(PaymentType::class, 'payment_type_id');
+        return $this->belongsTo(ExpenseItem::class, 'payment_type_id', 'expense_parent_acc_code');
     }
 
     public function activityLogs(): HasMany
