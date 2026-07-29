@@ -242,6 +242,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Weekly Budget (existing)
     Route::middleware('permission:view weekly budgets')->group(function () {
         Route::get('budget/weekly-budget', [WeeklyBudgetController::class, 'index'])->name('weekly-budget.index');
+        Route::get('budget/weekly-budget/{weeklyBudget}/activity-logs', [WeeklyBudgetController::class, 'activityLogs'])->name('weekly-budget.activity-logs');
     });
 
     Route::middleware('permission:view weekly budget summary')->group(function () {
