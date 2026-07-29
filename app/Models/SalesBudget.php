@@ -15,8 +15,6 @@ class SalesBudget extends Model
         'branch_id',
         'fiscal_year_id',
         'fiscal_month_id',
-        'ethiopian_month',
-        'ethiopian_year',
         'sales_amount',
         'prev_expense_budget',
         'created_by',
@@ -24,25 +22,39 @@ class SalesBudget extends Model
     ];
 
     protected $casts = [
-        'fiscal_year_id'      => 'integer',
-        'fiscal_month_id'     => 'integer',
-        'sales_amount'        => 'decimal:2',
+        'fiscal_year_id' => 'integer',
+        'fiscal_month_id' => 'integer',
+        'sales_amount' => 'decimal:2',
         'prev_expense_budget' => 'decimal:2',
-        'ethiopian_month'     => 'integer',
-        'ethiopian_year'      => 'integer',
     ];
+
+    protected $appends = ['ethiopian_month', 'ethiopian_year'];
+
+    public function getEthiopianMonthAttribute()
+    {
+        return $this->fiscalMonth ? $this->fiscalMonth->efy_month_number : null;
+    }
+
+    public function getEthiopianYearAttribute()
+    {
+        if ($this->fiscalYear) {
+            preg_match('/(\d+)/', $this->fiscalYear->name, $matches);
+            return isset($matches[1]) ? (int) $matches[1] : null;
+        }
+        return null;
+    }
 
     // Fiscal month names in the same order as the fiscal_months table
     public static array $monthNames = [
-        1  => 'ሐምሌ',
-        2  => 'ነሐሴ',
-        3  => 'መስከረም',
-        4  => 'ጥቅምት',
-        5  => 'ህዳር',
-        6  => 'ታህሳስ',
-        7  => 'ጥር',
-        8  => 'የካቲት',
-        9  => 'መጋቢት',
+        1 => 'ሐምሌ',
+        2 => 'ነሐሴ',
+        3 => 'መስከረም',
+        4 => 'ጥቅምት',
+        5 => 'ህዳር',
+        6 => 'ታህሳስ',
+        7 => 'ጥር',
+        8 => 'የካቲት',
+        9 => 'መጋቢት',
         10 => 'ሚያዝያ',
         11 => 'ግንቦት',
         12 => 'ሰኔ',

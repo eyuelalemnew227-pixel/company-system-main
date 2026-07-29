@@ -10,19 +10,29 @@ class SalesBudgetLog extends Model
 {
     use HasFactory;
 
-   protected $fillable = [
-    'sales_budget_id',
-    'branch_name',
-    'ethiopian_month',
-    'ethiopian_year',
-    'user_id',
-    'action',
-    'old_sales_amount',
-    'new_sales_amount',
-    'old_prev_expense',
-    'new_prev_expense',
-    'notes',
-];
+    protected $fillable = [
+        'sales_budget_id',
+        'branch_name',
+        'user_id',
+        'action',
+        'old_sales_amount',
+        'new_sales_amount',
+        'old_prev_expense',
+        'new_prev_expense',
+        'notes',
+    ];
+
+    protected $appends = ['ethiopian_month', 'ethiopian_year'];
+
+    public function getEthiopianMonthAttribute()
+    {
+        return $this->salesBudget ? $this->salesBudget->ethiopian_month : null;
+    }
+
+    public function getEthiopianYearAttribute()
+    {
+        return $this->salesBudget ? $this->salesBudget->ethiopian_year : null;
+    }
 
     protected $casts = [
         'old_sales_amount' => 'decimal:2',
