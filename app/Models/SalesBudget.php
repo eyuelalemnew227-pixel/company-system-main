@@ -16,7 +16,6 @@ class SalesBudget extends Model
         'fiscal_year_id',
         'fiscal_month_id',
         'sales_amount',
-        'prev_sales_budget',
         'created_by',
         'updated_by',
     ];
@@ -25,10 +24,28 @@ class SalesBudget extends Model
         'fiscal_year_id' => 'integer',
         'fiscal_month_id' => 'integer',
         'sales_amount' => 'decimal:2',
-        'prev_sales_budget' => 'decimal:2',
     ];
 
-    protected $appends = ['ethiopian_month', 'ethiopian_year'];
+    protected $appends = ['ethiopian_month', 'ethiopian_year', 'prev_sales_budget'];
+
+    public function getPrevSalesBudgetAttribute()
+    {
+        if (!$this->fiscalMonth || !$this->branch_id)
+            return 0;
+
+        $prevFiscalMonth = \App\Models\FiscalMonth::where('gregorian_start_date', '<', $this->fiscalMonth->gregorian_start_date)
+            ->orderByDesc('gregorian_start_date')
+            ->first();
+
+        if (!$prevFiscalMonth)
+            return 0;
+
+        $prevBudget = self::where('branch_id', $this->branch_id)
+            ->where('fiscal_month_id', $prevFiscalMonth->id)
+            ->first();
+
+        return $prevBudget ? $prevBudget->sales_amount : 0;
+    }
 
     public function getEthiopianMonthAttribute()
     {

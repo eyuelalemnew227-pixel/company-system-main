@@ -13,7 +13,6 @@ return new class extends Migration {
             $table->unsignedBigInteger('fiscal_year_id')->nullable();
             $table->unsignedBigInteger('fiscal_month_id')->nullable();
             $table->decimal('sales_amount', 15, 2)->nullable();
-            $table->decimal('prev_sales_budget', 15, 2)->default(0);
             $table->unsignedBigInteger('created_by')->nullable();
             $table->unsignedBigInteger('updated_by')->nullable();
             $table->timestamp('created_at')->nullable();
