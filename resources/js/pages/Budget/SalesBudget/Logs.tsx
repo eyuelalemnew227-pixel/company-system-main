@@ -37,8 +37,8 @@ interface LogEntry {
 	ethiopian_year: number | null;
 	old_sales_amount: string | null;
 	new_sales_amount: string | null;
-	old_prev_expense: string | null;
-	new_prev_expense: string | null;
+	old_prev_sales: string | null;
+	new_prev_sales: string | null;
 	notes: string | null;
 	created_at: string;
 	user: { name: string };
@@ -280,3 +280,4 @@ export default function SalesBudgetLogs({ logs, branches, fiscalYears, request }
 		</AppLayout>
 	);
 }
+

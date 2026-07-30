@@ -16,7 +16,7 @@ class SalesBudget extends Model
         'fiscal_year_id',
         'fiscal_month_id',
         'sales_amount',
-        'prev_expense_budget',
+        'prev_sales_budget',
         'created_by',
         'updated_by',
     ];
@@ -25,7 +25,7 @@ class SalesBudget extends Model
         'fiscal_year_id' => 'integer',
         'fiscal_month_id' => 'integer',
         'sales_amount' => 'decimal:2',
-        'prev_expense_budget' => 'decimal:2',
+        'prev_sales_budget' => 'decimal:2',
     ];
 
     protected $appends = ['ethiopian_month', 'ethiopian_year'];

@@ -17,8 +17,8 @@ class SalesBudgetLog extends Model
         'action',
         'old_sales_amount',
         'new_sales_amount',
-        'old_prev_expense',
-        'new_prev_expense',
+        'old_prev_sales',
+        'new_prev_sales',
         'notes',
     ];
 
@@ -37,8 +37,8 @@ class SalesBudgetLog extends Model
     protected $casts = [
         'old_sales_amount' => 'decimal:2',
         'new_sales_amount' => 'decimal:2',
-        'old_prev_expense' => 'decimal:2',
-        'new_prev_expense' => 'decimal:2',
+        'old_prev_sales' => 'decimal:2',
+        'new_prev_sales' => 'decimal:2',
     ];
 
     public function salesBudget(): BelongsTo

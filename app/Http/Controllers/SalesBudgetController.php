@@ -106,7 +106,7 @@ class SalesBudgetController extends Controller
                         'ethiopian_month' => $existing->ethiopian_month,
                         'ethiopian_year' => $existing->ethiopian_year,
                         'sales_amount' => $existing->sales_amount,
-                        'prev_expense_budget' => $existing->prev_expense_budget,
+                        'prev_sales_budget' => $existing->prev_sales_budget,
                         'created_by' => $existing->createdBy ? ['name' => $existing->createdBy->name] : null,
                         'updated_by' => $existing->updatedBy ? ['name' => $existing->updatedBy->name] : null,
                         'has_budget' => true,
@@ -119,7 +119,7 @@ class SalesBudgetController extends Controller
                     'ethiopian_month' => $selectedEthiopianMonth,
                     'ethiopian_year' => $selectedEthiopianYear,
                     'sales_amount' => null,
-                    'prev_expense_budget' => null,
+                    'prev_sales_budget' => null,
                     'created_by' => null,
                     'updated_by' => null,
                     'has_budget' => false,
@@ -147,7 +147,7 @@ class SalesBudgetController extends Controller
                     'ethiopian_month' => $budget->ethiopian_month,
                     'ethiopian_year' => $budget->ethiopian_year,
                     'sales_amount' => $budget->sales_amount,
-                    'prev_expense_budget' => $budget->prev_expense_budget,
+                    'prev_sales_budget' => $budget->prev_sales_budget,
                     'created_by' => $budget->createdBy ? ['name' => $budget->createdBy->name] : null,
                     'updated_by' => $budget->updatedBy ? ['name' => $budget->updatedBy->name] : null,
                     'has_budget' => true,
@@ -247,7 +247,7 @@ class SalesBudgetController extends Controller
             return [
                 'branch_id' => $branch->id,
                 'branch_name' => $branch->name,
-                'prev_expense_budget' => (float) ($previousBudget->sales_amount ?? 0),
+                'prev_sales_budget' => (float) ($previousBudget->sales_amount ?? 0),
                 'prev_month_name' => $previousFiscalMonth?->name ?? '',
                 'prev_year' => $previousYearLabel,
                 'sales_amount' => $currentBudget?->sales_amount !== null ? (string) $currentBudget->sales_amount : '',
@@ -296,7 +296,7 @@ class SalesBudgetController extends Controller
             'prev_month' => $previousFiscalMonth?->id,
             'prev_year' => $previousYearLabel,
             'prev_month_name' => $previousFiscalMonth?->name,
-            'prev_expense_budget' => $prevBudget
+            'prev_sales_budget' => $prevBudget
                 ? $prevBudget->sales_amount
                 : 0,
         ]);
@@ -320,7 +320,7 @@ class SalesBudgetController extends Controller
                 'ethiopian_month',
                 'ethiopian_year',
                 'sales_amount',
-                'prev_expense_budget',
+                'prev_sales_budget',
             ])
             ->where('branch_id', $request->branch_id)
             ->where('fiscal_year_id', $request->fiscal_year_id)
@@ -355,7 +355,7 @@ class SalesBudgetController extends Controller
             'budgets.*.budget_id' => 'nullable|integer|exists:sales_budgets,id',
             'budgets.*.branch_id' => 'required|exists:branches,id',
             'budgets.*.sales_amount' => 'nullable|numeric|min:0',
-            'budgets.*.prev_expense_budget' => 'nullable|numeric|min:0',
+            'budgets.*.prev_sales_budget' => 'nullable|numeric|min:0',
         ]);
 
         $fiscalYear = FiscalYear::findOrFail($request->fiscal_year_id);
@@ -410,7 +410,7 @@ class SalesBudgetController extends Controller
 
                         $existingBudget->update([
                             'sales_amount' => $salesAmount,
-                            'prev_expense_budget' => $item['prev_expense_budget'] ?? 0,
+                            'prev_sales_budget' => $item['prev_sales_budget'] ?? 0,
                             'updated_by' => Auth::id(),
                         ]);
 
@@ -421,8 +421,8 @@ class SalesBudgetController extends Controller
                             'action' => 'updated',
                             'old_sales_amount' => $oldAmount,
                             'new_sales_amount' => $salesAmount,
-                            'old_prev_expense' => $existingBudget->prev_expense_budget,
-                            'new_prev_expense' => $item['prev_expense_budget'] ?? 0,
+                            'old_prev_sales' => $existingBudget->prev_sales_budget,
+                            'new_prev_sales' => $item['prev_sales_budget'] ?? 0,
                         ]);
 
                         continue;
@@ -433,7 +433,7 @@ class SalesBudgetController extends Controller
                         'fiscal_year_id' => $request->fiscal_year_id,
                         'fiscal_month_id' => $request->fiscal_month_id,
                         'sales_amount' => $salesAmount,
-                        'prev_expense_budget' => $item['prev_expense_budget'] ?? 0,
+                        'prev_sales_budget' => $item['prev_sales_budget'] ?? 0,
                         'created_by' => Auth::id(),
                         'updated_by' => null,
                     ]);
@@ -444,8 +444,8 @@ class SalesBudgetController extends Controller
                         'action' => 'created',
                         'old_sales_amount' => null,
                         'new_sales_amount' => $salesAmount,
-                        'old_prev_expense' => null,
-                        'new_prev_expense' => $item['prev_expense_budget'] ?? 0,
+                        'old_prev_sales' => null,
+                        'new_prev_sales' => $item['prev_sales_budget'] ?? 0,
                     ]);
                 }
 
@@ -514,8 +514,8 @@ class SalesBudgetController extends Controller
             'action' => 'updated',
             'old_sales_amount' => $oldAmount,
             'new_sales_amount' => $request->sales_amount,
-            'old_prev_expense' => $salesBudget->prev_expense_budget,
-            'new_prev_expense' => $salesBudget->prev_expense_budget,
+            'old_prev_sales' => $salesBudget->prev_sales_budget,
+            'new_prev_sales' => $salesBudget->prev_sales_budget,
         ]);
 
         return to_route('sales-budget.index')
@@ -540,8 +540,8 @@ class SalesBudgetController extends Controller
             'action' => 'deleted',
             'old_sales_amount' => $salesBudget->sales_amount,
             'new_sales_amount' => null,
-            'old_prev_expense' => $salesBudget->prev_expense_budget,
-            'new_prev_expense' => null,
+            'old_prev_sales' => $salesBudget->prev_sales_budget,
+            'new_prev_sales' => null,
             'notes' => 'Deleted budget for ' . $branchName,
         ]);
 

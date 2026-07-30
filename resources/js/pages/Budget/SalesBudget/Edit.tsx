@@ -35,7 +35,7 @@ interface Budget {
 	ethiopian_month: number | null;
 	ethiopian_year: number | null;
 	sales_amount: string | null;
-	prev_expense_budget: string | null;
+	prev_sales_budget: string | null;
 	created_by: { name: string } | null;
 	updated_by?: { name: string } | null;
 }
@@ -122,8 +122,8 @@ export default function SalesBudgetEdit({ budget, monthNames, canModify }: Props
 						<div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
 							<p className="text-xs font-semibold tracking-wide text-gray-500 uppercase">Previous Expense Budget</p>
 							<p className="mt-2 text-sm font-semibold text-gray-800">
-								{budget.prev_expense_budget != null && budget.prev_expense_budget !== ''
-									? `${Number(budget.prev_expense_budget).toLocaleString('en-US', { minimumFractionDigits: 2 })} ETB`
+								{budget.prev_sales_budget != null && budget.prev_sales_budget !== ''
+									? `${Number(budget.prev_sales_budget).toLocaleString('en-US', { minimumFractionDigits: 2 })} ETB`
 									: '—'}
 							</p>
 						</div>
@@ -173,3 +173,4 @@ export default function SalesBudgetEdit({ budget, monthNames, canModify }: Props
 		</AppLayout>
 	);
 }
+

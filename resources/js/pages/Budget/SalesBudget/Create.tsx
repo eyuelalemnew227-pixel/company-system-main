@@ -46,7 +46,7 @@ const MONTH_NAMES: Record<number, string> = {
 interface BudgetRow {
 	branch_id: number;
 	branch_name: string;
-	prev_expense_budget: number;
+	prev_sales_budget: number;
 	prev_month_name: string;
 	prev_year?: string | null;
 	sales_amount: string;
@@ -106,7 +106,7 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 		return branches.map((branch) => ({
 			branch_id: branch.id,
 			branch_name: branch.name,
-			prev_expense_budget: 0,
+			prev_sales_budget: 0,
 			prev_month_name: '',
 			prev_year: null,
 			sales_amount: '',
@@ -229,7 +229,7 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 					budget_id: r.existing_budget_id,
 					branch_id: r.branch_id,
 					sales_amount: r.sales_amount,
-					prev_expense_budget: r.prev_expense_budget,
+					prev_sales_budget: r.prev_sales_budget,
 				})),
 			},
 			{
@@ -346,7 +346,7 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 												value={
 													row.loading
 														? 'Loading...'
-														: row.prev_expense_budget.toLocaleString('en-US', {
+														: row.prev_sales_budget.toLocaleString('en-US', {
 																minimumFractionDigits: 2,
 															})
 												}
@@ -440,3 +440,4 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 		</AppLayout>
 	);
 }
+

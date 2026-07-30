@@ -15,8 +15,8 @@ return new class extends Migration {
             $table->enum('action', ['created', 'updated', 'deleted'])->nullable();
             $table->decimal('old_sales_amount', 15, 2)->nullable();
             $table->decimal('new_sales_amount', 15, 2)->nullable();
-            $table->decimal('old_prev_expense', 15, 2)->nullable();
-            $table->decimal('new_prev_expense', 15, 2)->nullable();
+            $table->decimal('old_prev_sales', 15, 2)->nullable();
+            $table->decimal('new_prev_sales', 15, 2)->nullable();
             $table->string('notes', 191)->nullable();
             $table->timestamp('created_at')->nullable();
             $table->timestamp('updated_at')->nullable();

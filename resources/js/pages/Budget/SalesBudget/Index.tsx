@@ -50,7 +50,7 @@ interface SalesBudget {
 	ethiopian_month: number | null;
 	ethiopian_year: number | null;
 	sales_amount: string | null;
-	prev_expense_budget: string | null;
+	prev_sales_budget: string | null;
 	created_by: { name: string } | null;
 	updated_by?: { name: string } | null;
 	has_budget: boolean;
@@ -315,7 +315,7 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 								<th className="px-4 py-3 text-left font-bold text-white">Branch</th>
 								<th className="px-4 py-3 text-left font-bold text-white">Month</th>
 								<th className="px-4 py-3 text-left font-bold text-white">Year</th>
-								<th className="px-4 py-3 text-left font-bold text-white">Prev Expense Budget</th>
+								<th className="px-4 py-3 text-left font-bold text-white">Prev Sales Budget</th>
 								<th className="px-4 py-3 text-left font-bold text-white">Sales Budget (ETB)</th>
 								<th className="px-4 py-3 text-left font-bold text-white">Created By</th>
 								{canModify && <th className="px-4 py-3 text-left font-bold text-white">Actions</th>}
@@ -344,7 +344,7 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 										</td>
 										<td className="px-4 py-3 text-gray-500">
 											{budget.has_budget ? (
-												`${Number(budget.prev_expense_budget).toLocaleString('en-US', { minimumFractionDigits: 2 })} ETB`
+												`${Number(budget.prev_sales_budget).toLocaleString('en-US', { minimumFractionDigits: 2 })} ETB`
 											) : (
 												<span className="text-gray-300 italic">—</span>
 											)}
@@ -497,3 +497,4 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 		</AppLayout>
 	);
 }
+
