@@ -4,7 +4,6 @@ namespace App\Support;
 
 use App\Models\Branch;
 use App\Models\ExpenseBudget;
-use App\Models\ExpenseBudgetItem;
 use App\Models\User;
 use Carbon\CarbonInterface;
 
@@ -20,16 +19,32 @@ class ExpenseBudgetAccess
         return (string) config('expense_budget.permissions.manage_windowed', 'manage expense budget within time window');
     }
 
-    public static function viewPermission(): string
+    public static function viewOwnDepartmentPermission(): string
     {
-        return (string) config('expense_budget.permissions.view', 'view expense budgets');
+        return (string) config('expense_budget.permissions.view_own_department', 'view only own department expense budgets');
+    }
+
+    public static function viewOwnBranchPermission(): string
+    {
+        return (string) config('expense_budget.permissions.view_own_branch', 'view only own branch expense budgets');
+    }
+
+    public static function viewAllExceptHOPermission(): string
+    {
+        return (string) config('expense_budget.permissions.view_all_except_ho', 'view all branches except HO expense budgets');
     }
 
     public static function canView(?User $user = null): bool
     {
         $user ??= auth()->user();
 
-        return $user?->can(self::viewPermission()) ?? false;
+        if (! $user) {
+            return false;
+        }
+
+        return $user->can(self::viewOwnDepartmentPermission())
+            || $user->can(self::viewOwnBranchPermission())
+            || $user->can(self::viewAllExceptHOPermission());
     }
 
     public static function hasManagePermission(?User $user = null): bool
@@ -63,7 +78,7 @@ class ExpenseBudgetAccess
         return false;
     }
 
-    public static function canViewItemHistory(?User $user, ExpenseBudgetItem $item): bool
+    public static function canViewItemHistory(?User $user, ExpenseBudget $budget): bool
     {
         if (! self::canView($user)) {
             return false;
@@ -71,13 +86,6 @@ class ExpenseBudgetAccess
 
         if (self::hasUnrestrictedViewAccess($user)) {
             return true;
-        }
-
-        $item->loadMissing(['expenseBudget.branch', 'expenseBudget.department']);
-        $budget = $item->expenseBudget;
-
-        if (! $budget) {
-            return false;
         }
 
         return self::canViewBudgetHistory($user, $budget);
@@ -111,6 +119,25 @@ class ExpenseBudgetAccess
             $userBranchId = $user->employee?->branch_id;
 
             return $userBranchId && (int) $budget->branch_id === (int) $userBranchId;
+        }
+
+        if ($user->can(self::viewOwnDepartmentPermission())) {
+            $userDeptId = $user->employee?->department_id;
+            return $userDeptId && (int) $budget->department_id === (int) $userDeptId;
+        }
+
+        if ($user->can(self::viewOwnBranchPermission())) {
+            $userBranchId = $user->employee?->branch_id;
+            if ($userBranchId && (int) $budget->branch_id === (int) $userBranchId) {
+                if (self::isHeadOfficeBranch($budget->branch)) {
+                    return (int) $budget->department_id === (int) $user->employee?->department_id;
+                }
+                return true;
+            }
+        }
+
+        if ($user->can(self::viewAllExceptHOPermission())) {
+            return ! self::isHeadOfficeBranch($budget->branch);
         }
 
         return false;

@@ -14,23 +14,26 @@ class ExpenseBudget extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'fiscal_year_id',
-        'fiscal_month_id',
         'branch_id',
         'department_id',
-        'budget_amount',
+        'fiscal_year_id',
+        'fiscal_month_id',
+        'expense_item_id',
+        'planned_budget',
         'created_by',
+        'is_deleted',
     ];
 
     protected $casts = [
         'fiscal_year_id' => 'integer',
         'fiscal_month_id' => 'integer',
-        'budget_amount' => 'decimal:2',
+        'planned_budget' => 'decimal:2',
+        'is_deleted' => 'boolean',
     ];
 
-    public function items(): HasMany
+    public function expenseItem(): BelongsTo
     {
-        return $this->hasMany(ExpenseBudgetItem::class);
+        return $this->belongsTo(ExpenseItem::class, 'expense_item_id', 'expense_parent_acc_code');
     }
 
     public function activityLogs(): HasMany

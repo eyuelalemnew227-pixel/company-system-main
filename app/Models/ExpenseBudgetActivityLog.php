@@ -22,7 +22,6 @@ class ExpenseBudgetActivityLog extends Model
 
     protected $fillable = [
         'expense_budget_id',
-        'expense_budget_item_id',
         'user_id',
         'action',
         'summary',
@@ -42,10 +41,7 @@ class ExpenseBudgetActivityLog extends Model
         return $this->belongsTo(ExpenseBudget::class);
     }
 
-    public function expenseBudgetItem(): BelongsTo
-    {
-        return $this->belongsTo(ExpenseBudgetItem::class);
-    }
+
 
     public function user(): BelongsTo
     {

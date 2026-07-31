@@ -36,8 +36,8 @@ class ExpenseItem extends Model
         return $this->expense_type;
     }
 
-    public function budgetItems(): HasMany
+    public function expenseBudgets(): HasMany
     {
-        return $this->hasMany(ExpenseBudgetItem::class, 'expense_item_id', 'expense_parent_acc_code');
+        return $this->hasMany(ExpenseBudget::class, 'expense_item_id', 'expense_parent_acc_code');
     }
 }

@@ -31,17 +31,16 @@ class ExpenseBudgetController extends Controller
     {
         abort_unless(ExpenseBudgetAccess::canView(), 403);
 
-        $query = ExpenseBudgetItem::query()
+        $query = ExpenseBudget::query()
             ->with([
-                'expenseBudget.branch',
-                'expenseBudget.department',
-                'expenseBudget.creator',
-                'expenseBudget.fiscalYear',
-                'expenseBudget.fiscalMonth',
+                'branch',
+                'department',
+                'creator',
+                'fiscalYear',
+                'fiscalMonth',
                 'expenseItem',
             ])
-            ->whereNotNull('planned_budget')
-            ->whereHas('expenseBudget');
+            ->whereNotNull('planned_budget');
 
         if ($search = request('search')) {
             $query->whereHas('expenseItem', function ($q) use ($search) {
@@ -50,65 +49,108 @@ class ExpenseBudgetController extends Controller
         }
 
         if ($branchId = request('branch_id')) {
-            $query->whereHas('expenseBudget', function ($q) use ($branchId) {
-                $q->where('branch_id', $branchId);
-            });
+            $query->where('branch_id', $branchId);
         }
 
         if ($departmentId = request('department_id')) {
-            $query->whereHas('expenseBudget', function ($q) use ($departmentId) {
-                $q->where('department_id', $departmentId);
-            });
+            $query->where('department_id', $departmentId);
         }
 
         if ($fiscalMonthId = request('fiscal_month_id')) {
-            $query->whereHas('expenseBudget', function ($q) use ($fiscalMonthId) {
-                $q->where('fiscal_month_id', $fiscalMonthId);
-            });
+            $query->where('fiscal_month_id', $fiscalMonthId);
         }
 
         if ($fiscalYearId = request('fiscal_year_id')) {
-            $query->whereHas('expenseBudget', function ($q) use ($fiscalYearId) {
-                $q->where('fiscal_year_id', $fiscalYearId);
+            $query->where('fiscal_year_id', $fiscalYearId);
+        }
+
+        $user = auth()->user();
+
+        $isUserHO = false;
+        if ($user->employee?->branch_id) {
+            $isUserHO = ExpenseBudgetAccess::isHeadOfficeBranch(Branch::find($user->employee->branch_id));
+        }
+
+        if (! ExpenseBudgetAccess::hasUnrestrictedViewAccess($user)) {
+            $query->where(function ($q) use ($user, $isUserHO) {
+                if ($user->can(ExpenseBudgetAccess::viewOwnDepartmentPermission())) {
+                    $q->orWhere('department_id', $user->employee?->department_id);
+                }
+                
+                if ($user->can(ExpenseBudgetAccess::viewOwnBranchPermission())) {
+                    $q->orWhere(function ($branchQ) use ($user, $isUserHO) {
+                        $branchQ->where('branch_id', $user->employee?->branch_id);
+                        if ($isUserHO) {
+                            $branchQ->where('department_id', $user->employee?->department_id);
+                        }
+                    });
+                }
+                
+                if ($user->can(ExpenseBudgetAccess::viewAllExceptHOPermission())) {
+                    $q->orWhereNotIn('branch_id', function ($subQuery) {
+                        $subQuery->select('id')->from('branches')
+                          ->where('name', 'like', '%Head Office%')
+                          ->orWhereRaw('UPPER(branch_code) = ?', ['HO']);
+                    });
+                }
             });
         }
 
         $branches = Branch::query()
+            ->when(! ExpenseBudgetAccess::hasUnrestrictedViewAccess($user), function ($query) use ($user) {
+                $query->where(function ($q) use ($user) {
+                    if ($user->can(ExpenseBudgetAccess::viewOwnBranchPermission()) || $user->can(ExpenseBudgetAccess::viewOwnDepartmentPermission())) {
+                        $q->orWhere('id', $user->employee?->branch_id);
+                    }
+                    if ($user->can(ExpenseBudgetAccess::viewAllExceptHOPermission())) {
+                        $q->orWhereNotIn('id', function ($subQuery) {
+                            $subQuery->select('id')->from('branches')
+                              ->where('name', 'like', '%Head Office%')
+                              ->orWhereRaw('UPPER(branch_code) = ?', ['HO']);
+                        });
+                    }
+                });
+            })
             ->orderBy('name')
             ->get(['id', 'name', 'branch_code']);
 
         $departments = Department::query()
             ->where('is_active', true)
+            ->when(! ExpenseBudgetAccess::hasUnrestrictedViewAccess($user), function ($query) use ($user, $isUserHO) {
+                if ($user->can(ExpenseBudgetAccess::viewAllExceptHOPermission())) {
+                    // Do nothing, they can see all departments in their allowed branches
+                } elseif ($user->can(ExpenseBudgetAccess::viewOwnBranchPermission()) && ! $isUserHO) {
+                    // Do nothing, non-HO branch users can see all departments
+                } elseif ($user->can(ExpenseBudgetAccess::viewOwnDepartmentPermission()) || ($user->can(ExpenseBudgetAccess::viewOwnBranchPermission()) && $isUserHO)) {
+                    $query->where('id', $user->employee?->department_id);
+                }
+            })
             ->orderBy('name')
             ->get(['id', 'name']);
 
         $items = $query
-            ->join('expense_budgets', function ($join) {
-                $join->on('expense_budget_items.expense_budget_id', '=', 'expense_budgets.id')
-                    ->whereNull('expense_budgets.deleted_at');
-            })
             ->leftJoin('fiscal_years', 'expense_budgets.fiscal_year_id', '=', 'fiscal_years.id')
             ->leftJoin('fiscal_months', 'expense_budgets.fiscal_month_id', '=', 'fiscal_months.id')
             ->orderByDesc('fiscal_years.gregorian_start_date')
             ->orderByDesc('fiscal_months.efy_month_number')
-            ->orderByDesc('expense_budget_items.created_at')
-            ->select('expense_budget_items.*')
-            ->paginate(5)
+            ->orderByDesc('expense_budgets.created_at')
+            ->select('expense_budgets.*')
+            ->paginate(10)
             ->withQueryString()
-            ->through(fn (ExpenseBudgetItem $item) => [
+            ->through(fn (ExpenseBudget $item) => [
                 'id' => $item->id,
-                'fiscal_year_id' => $item->expenseBudget->fiscal_year_id,
-                'fiscal_month_id' => $item->expenseBudget->fiscal_month_id,
-                'fiscal_year' => $item->expenseBudget->fiscalYear?->name,
-                'fiscal_month' => $item->expenseBudget->fiscalMonth?->name,
-                'branch_id' => $item->expenseBudget->branch_id,
-                'department_id' => $item->expenseBudget->department_id,
-                'branch' => $item->expenseBudget->branch?->name,
-                'department' => $item->expenseBudget->department?->name,
+                'fiscal_year_id' => $item->fiscal_year_id,
+                'fiscal_month_id' => $item->fiscal_month_id,
+                'fiscal_year' => $item->fiscalYear?->name,
+                'fiscal_month' => $item->fiscalMonth?->name,
+                'branch_id' => $item->branch_id,
+                'department_id' => $item->department_id,
+                'branch' => $item->branch?->name,
+                'department' => $item->department?->name,
                 'expense_item_id' => $item->expense_item_id,
                 'expense_item' => $item->expenseItem?->expense_type,
                 'planned_budget' => $item->planned_budget,
-                'submitted_by' => $item->expenseBudget->creator?->name,
+                'submitted_by' => $item->creator?->name,
                 'can_view_history' => ExpenseBudgetAccess::canViewItemHistory(auth()->user(), $item),
             ]);
 
@@ -136,12 +178,42 @@ class ExpenseBudgetController extends Controller
     {
         abort_unless(ExpenseBudgetAccess::canView(), 403);
 
+        $user = auth()->user();
+
+        $isUserHO = false;
+        if ($user->employee?->branch_id) {
+            $isUserHO = ExpenseBudgetAccess::isHeadOfficeBranch(Branch::find($user->employee->branch_id));
+        }
+
         $branches = Branch::query()
+            ->when(! ExpenseBudgetAccess::hasUnrestrictedViewAccess($user), function ($query) use ($user) {
+                $query->where(function ($q) use ($user) {
+                    if ($user->can(ExpenseBudgetAccess::viewOwnBranchPermission()) || $user->can(ExpenseBudgetAccess::viewOwnDepartmentPermission())) {
+                        $q->orWhere('id', $user->employee?->branch_id);
+                    }
+                    if ($user->can(ExpenseBudgetAccess::viewAllExceptHOPermission())) {
+                        $q->orWhereNotIn('id', function ($subQuery) {
+                            $subQuery->select('id')->from('branches')
+                              ->where('name', 'like', '%Head Office%')
+                              ->orWhereRaw('UPPER(branch_code) = ?', ['HO']);
+                        });
+                    }
+                });
+            })
             ->orderBy('name')
             ->get(['id', 'name', 'branch_code']);
 
         $departments = Department::query()
             ->where('is_active', true)
+            ->when(! ExpenseBudgetAccess::hasUnrestrictedViewAccess($user), function ($query) use ($user, $isUserHO) {
+                if ($user->can(ExpenseBudgetAccess::viewAllExceptHOPermission())) {
+                    // Do nothing, they can see all departments in their allowed branches
+                } elseif ($user->can(ExpenseBudgetAccess::viewOwnBranchPermission()) && ! $isUserHO) {
+                    // Do nothing, non-HO branch users can see all departments
+                } elseif ($user->can(ExpenseBudgetAccess::viewOwnDepartmentPermission()) || ($user->can(ExpenseBudgetAccess::viewOwnBranchPermission()) && $isUserHO)) {
+                    $query->where('id', $user->employee?->department_id);
+                }
+            })
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -314,21 +386,16 @@ class ExpenseBudgetController extends Controller
             ->values()
             ->all();
 
-        $budgetedItemIds = ExpenseBudgetItem::query()
+        $budgetedItemIds = ExpenseBudget::query()
             ->whereNotNull('planned_budget')
-            ->whereHas('expenseBudget', function ($query) use ($validated, $isHeadOffice) {
-                $departmentId = $isHeadOffice ? ($validated['department_id'] ?? null) : null;
-
-                $query
-                    ->where('fiscal_year_id', $validated['fiscal_year_id'])
-                    ->where('fiscal_month_id', $validated['fiscal_month_id'])
-                    ->where('branch_id', $validated['branch_id'])
-                    ->when(
-                        $departmentId,
-                        fn ($q) => $q->where('department_id', $departmentId),
-                        fn ($q) => $q->whereNull('department_id')
-                    );
-            })
+            ->where('fiscal_year_id', $validated['fiscal_year_id'])
+            ->where('fiscal_month_id', $validated['fiscal_month_id'])
+            ->where('branch_id', $validated['branch_id'])
+            ->when(
+                $isHeadOffice ? ($validated['department_id'] ?? null) : null,
+                fn ($q, $deptId) => $q->where('department_id', $deptId),
+                fn ($q) => $q->whereNull('department_id')
+            )
             ->pluck('expense_item_id')
             ->all();
 
@@ -346,44 +413,18 @@ class ExpenseBudgetController extends Controller
             ]);
         }
 
-        $newBudgetAmount = collect($itemsToSave)->sum(fn (array $item) => (float) $item['planned_budget']);
+        DB::transaction(function () use ($validated, $itemsToSave, $isHeadOffice) {
+            $departmentId = $isHeadOffice ? ($validated['department_id'] ?? null) : null;
 
-        DB::transaction(function () use ($validated, $itemsToSave, $newBudgetAmount) {
-            $budget = $this->findExpenseBudgetForScope(
-                (int) $validated['fiscal_year_id'],
-                (int) $validated['fiscal_month_id'],
-                (int) $validated['branch_id'],
-                $validated['department_id'] ? (int) $validated['department_id'] : null,
-            );
-
-            $budgetWasCreated = false;
-
-            if ($budget) {
-                $budget->update([
-                    'budget_amount' => (float) $budget->budget_amount + $newBudgetAmount,
-                ]);
-            } else {
-                $budget = ExpenseBudget::create([
+            foreach ($itemsToSave as $item) {
+                $createdItem = ExpenseBudget::create([
                     'fiscal_year_id' => $validated['fiscal_year_id'],
                     'fiscal_month_id' => $validated['fiscal_month_id'],
                     'branch_id' => $validated['branch_id'],
-                    'department_id' => $validated['department_id'],
-                    'budget_amount' => $newBudgetAmount,
-                    'created_by' => auth()->id(),
-                ]);
-                $budgetWasCreated = true;
-            }
-
-            if ($budgetWasCreated) {
-                $this->activityLogger->logBudgetCreated($budget);
-            }
-
-            foreach ($itemsToSave as $item) {
-                $createdItem = ExpenseBudgetItem::create([
-                    'expense_budget_id' => $budget->id,
+                    'department_id' => $departmentId,
                     'expense_item_id' => $item['expense_item_id'],
-                    'prev_month_budget' => $item['prev_month_budget'] ?? null,
                     'planned_budget' => $item['planned_budget'],
+                    'created_by' => auth()->id(),
                 ]);
 
                 $this->activityLogger->logItemCreated($createdItem);
@@ -395,46 +436,29 @@ class ExpenseBudgetController extends Controller
             ->with('message', 'Expense budget saved successfully.');
     }
 
-    public function destroyItem(ExpenseBudgetItem $expenseBudgetItem): RedirectResponse
+    public function destroyItem(ExpenseBudget $expenseBudget): RedirectResponse
     {
         abort_unless(ExpenseBudgetAccess::canManage(), 403, ExpenseBudgetAccess::manageDeniedMessage());
 
-        $expenseBudgetItem->load([
+        $expenseBudget->load([
             'expenseItem',
-            'expenseBudget.fiscalYear',
-            'expenseBudget.fiscalMonth',
-            'expenseBudget.branch',
-            'expenseBudget.department',
+            'fiscalYear',
+            'fiscalMonth',
+            'branch',
+            'department',
         ]);
 
-        $budget = $expenseBudgetItem->expenseBudget;
-        $willDeleteBudget = $budget && $budget->items()->count() === 1;
-
-        DB::transaction(function () use ($expenseBudgetItem, $budget, $willDeleteBudget) {
-            if ($budget) {
-                $this->activityLogger->logItemDeleted($expenseBudgetItem, $budget);
-
-                $budget->update([
-                    'budget_amount' => max(0, (float) $budget->budget_amount - (float) $expenseBudgetItem->planned_budget),
-                ]);
-
-                $expenseBudgetItem->delete();
-
-                if ($willDeleteBudget) {
-                    $this->activityLogger->logBudgetDeleted($budget);
-                    $budget->delete();
-                }
-            } else {
-                $expenseBudgetItem->delete();
-            }
+        DB::transaction(function () use ($expenseBudget) {
+            $this->activityLogger->logItemDeleted($expenseBudget);
+            $expenseBudget->delete();
         });
 
         return redirect()
             ->route('expense-budget.index')
-            ->with('message', 'Expense budget item deleted successfully.');
+            ->with('message', 'Expense budget deleted successfully.');
     }
 
-    public function updateItem(Request $request, ExpenseBudgetItem $expenseBudgetItem): RedirectResponse
+    public function updateItem(Request $request, ExpenseBudget $expenseBudget): RedirectResponse
     {
         abort_unless(ExpenseBudgetAccess::canManage(), 403, ExpenseBudgetAccess::manageDeniedMessage());
 
@@ -467,22 +491,18 @@ class ExpenseBudgetController extends Controller
         }
 
         $departmentId = $validated['department_id'] ? (int) $validated['department_id'] : null;
-        $newPlannedBudget = (float) $validated['planned_budget'];
 
-        $duplicateExists = ExpenseBudgetItem::query()
-            ->where('id', '!=', $expenseBudgetItem->id)
+        $duplicateExists = ExpenseBudget::query()
+            ->where('id', '!=', $expenseBudget->id)
             ->where('expense_item_id', $validated['expense_item_id'])
-            ->whereHas('expenseBudget', function ($query) use ($validated, $departmentId) {
-                $query
-                    ->where('fiscal_year_id', $validated['fiscal_year_id'])
-                    ->where('fiscal_month_id', $validated['fiscal_month_id'])
-                    ->where('branch_id', $validated['branch_id'])
-                    ->when(
-                        $departmentId,
-                        fn ($q) => $q->where('department_id', $departmentId),
-                        fn ($q) => $q->whereNull('department_id')
-                    );
-            })
+            ->where('fiscal_year_id', $validated['fiscal_year_id'])
+            ->where('fiscal_month_id', $validated['fiscal_month_id'])
+            ->where('branch_id', $validated['branch_id'])
+            ->when(
+                $departmentId,
+                fn ($q) => $q->where('department_id', $departmentId),
+                fn ($q) => $q->whereNull('department_id')
+            )
             ->exists();
 
         if ($duplicateExists) {
@@ -491,73 +511,27 @@ class ExpenseBudgetController extends Controller
             ]);
         }
 
-        $expenseBudgetItem->load([
+        $expenseBudget->load([
             'expenseItem',
-            'expenseBudget.fiscalYear',
-            'expenseBudget.fiscalMonth',
-            'expenseBudget.branch',
-            'expenseBudget.department',
+            'fiscalYear',
+            'fiscalMonth',
+            'branch',
+            'department',
         ]);
 
-        $oldValues = $this->activityLogger->itemAttributes($expenseBudgetItem);
+        $oldValues = $this->activityLogger->itemAttributes($expenseBudget);
 
-        DB::transaction(function () use ($expenseBudgetItem, $validated, $departmentId, $newPlannedBudget, $oldValues) {
-            $oldBudget = $expenseBudgetItem->expenseBudget;
-            $oldPlannedBudget = (float) $expenseBudgetItem->planned_budget;
-
-            $targetBudget = $this->findExpenseBudgetForScope(
-                (int) $validated['fiscal_year_id'],
-                (int) $validated['fiscal_month_id'],
-                (int) $validated['branch_id'],
-                $departmentId,
-            );
-
-            $targetBudgetWasCreated = false;
-
-            if (! $targetBudget) {
-                $targetBudget = ExpenseBudget::create([
-                    'fiscal_year_id' => $validated['fiscal_year_id'],
-                    'fiscal_month_id' => $validated['fiscal_month_id'],
-                    'branch_id' => $validated['branch_id'],
-                    'department_id' => $validated['department_id'],
-                    'budget_amount' => 0,
-                    'created_by' => auth()->id(),
-                ]);
-                $targetBudgetWasCreated = true;
-            }
-
-            if ($oldBudget && $oldBudget->id !== $targetBudget->id) {
-                $oldBudget->update([
-                    'budget_amount' => max(0, (float) $oldBudget->budget_amount - $oldPlannedBudget),
-                ]);
-            } elseif ($oldBudget && $oldBudget->id === $targetBudget->id) {
-                $targetBudget->update([
-                    'budget_amount' => max(0, (float) $targetBudget->budget_amount - $oldPlannedBudget + $newPlannedBudget),
-                ]);
-            }
-
-            $expenseBudgetItem->update([
-                'expense_budget_id' => $targetBudget->id,
+        DB::transaction(function () use ($expenseBudget, $validated, $departmentId, $oldValues) {
+            $expenseBudget->update([
+                'fiscal_year_id' => $validated['fiscal_year_id'],
+                'fiscal_month_id' => $validated['fiscal_month_id'],
+                'branch_id' => $validated['branch_id'],
+                'department_id' => $departmentId,
                 'expense_item_id' => $validated['expense_item_id'],
-                'planned_budget' => $newPlannedBudget,
+                'planned_budget' => $validated['planned_budget'],
             ]);
 
-            if ($oldBudget && $oldBudget->id !== $targetBudget->id) {
-                $targetBudget->update([
-                    'budget_amount' => (float) $targetBudget->budget_amount + $newPlannedBudget,
-                ]);
-
-                if ($oldBudget->items()->count() === 0) {
-                    $this->activityLogger->logBudgetDeleted($oldBudget);
-                    $oldBudget->delete();
-                }
-            }
-
-            if ($targetBudgetWasCreated) {
-                $this->activityLogger->logBudgetCreated($targetBudget);
-            }
-
-            $newValues = $this->activityLogger->itemAttributes($expenseBudgetItem->fresh());
+            $newValues = $this->activityLogger->itemAttributes($expenseBudget->fresh());
             $changedOld = [];
             $changedNew = [];
 
@@ -571,13 +545,13 @@ class ExpenseBudgetController extends Controller
             }
 
             if ($changedNew !== []) {
-                $this->activityLogger->logItemUpdated($expenseBudgetItem, $changedOld, $changedNew);
+                $this->activityLogger->logItemUpdated($expenseBudget, $changedOld, $changedNew);
             }
         });
 
         return redirect()
             ->route('expense-budget.index')
-            ->with('message', 'Expense budget item updated successfully.');
+            ->with('message', 'Expense budget updated successfully.');
     }
 
     public function getPrevBudget(Request $request): JsonResponse
@@ -605,19 +579,16 @@ class ExpenseBudgetController extends Controller
             ]);
         }
 
-        $prevBudgetItem = ExpenseBudgetItem::query()
+        $prevBudgetItem = ExpenseBudget::query()
             ->where('expense_item_id', $validated['expense_item_id'])
-            ->whereHas('expenseBudget', function ($query) use ($validated, $departmentId, $previousFiscalMonth) {
-                $query
-                    ->where('fiscal_year_id', $previousFiscalMonth->fiscal_year_id)
-                    ->where('fiscal_month_id', $previousFiscalMonth->id)
-                    ->where('branch_id', $validated['branch_id'])
-                    ->when(
-                        $departmentId,
-                        fn ($q) => $q->where('department_id', $departmentId),
-                        fn ($q) => $q->whereNull('department_id')
-                    );
-            })
+            ->where('fiscal_year_id', $previousFiscalMonth->fiscal_year_id)
+            ->where('fiscal_month_id', $previousFiscalMonth->id)
+            ->where('branch_id', $validated['branch_id'])
+            ->when(
+                $departmentId,
+                fn ($q) => $q->where('department_id', $departmentId),
+                fn ($q) => $q->whereNull('department_id')
+            )
             ->first();
 
         return response()->json([
@@ -641,19 +612,16 @@ class ExpenseBudgetController extends Controller
             ? ($validated['department_id'] ?? null)
             : null;
 
-        $expenseItemIds = ExpenseBudgetItem::query()
+        $expenseItemIds = ExpenseBudget::query()
             ->whereNotNull('planned_budget')
-            ->whereHas('expenseBudget', function ($query) use ($validated, $departmentId) {
-                $query
-                    ->where('fiscal_year_id', $validated['fiscal_year_id'])
-                    ->where('fiscal_month_id', $validated['fiscal_month_id'])
-                    ->where('branch_id', $validated['branch_id'])
-                    ->when(
-                        $departmentId,
-                        fn ($q) => $q->where('department_id', $departmentId),
-                        fn ($q) => $q->whereNull('department_id')
-                    );
-            })
+            ->where('fiscal_year_id', $validated['fiscal_year_id'])
+            ->where('fiscal_month_id', $validated['fiscal_month_id'])
+            ->where('branch_id', $validated['branch_id'])
+            ->when(
+                $departmentId,
+                fn ($q) => $q->where('department_id', $departmentId),
+                fn ($q) => $q->whereNull('department_id')
+            )
             ->pluck('expense_item_id')
             ->unique()
             ->values();
@@ -663,27 +631,25 @@ class ExpenseBudgetController extends Controller
         ]);
     }
 
-    public function itemActivityLogs(ExpenseBudgetItem $expenseBudgetItem): JsonResponse
+    public function itemActivityLogs(ExpenseBudget $expenseBudget): JsonResponse
     {
         abort_unless(ExpenseBudgetAccess::canView(), 403);
         abort_unless(
-            ExpenseBudgetAccess::canViewItemHistory(auth()->user(), $expenseBudgetItem),
+            ExpenseBudgetAccess::canViewItemHistory(auth()->user(), $expenseBudget),
             403,
             ExpenseBudgetAccess::viewHistoryDeniedMessage(),
         );
 
-        $expenseBudgetItem->load([
+        $expenseBudget->load([
             'expenseItem',
-            'expenseBudget.fiscalYear',
-            'expenseBudget.fiscalMonth',
-            'expenseBudget.branch',
-            'expenseBudget.department',
+            'fiscalYear',
+            'fiscalMonth',
+            'branch',
+            'department',
         ]);
 
-        $budget = $expenseBudgetItem->expenseBudget;
-
         $logs = ExpenseBudgetActivityLog::query()
-            ->where('expense_budget_item_id', $expenseBudgetItem->id)
+            ->where('expense_budget_id', $expenseBudget->id)
             ->with('user:id,name')
             ->orderByDesc('created_at')
             ->get()
@@ -704,13 +670,13 @@ class ExpenseBudgetController extends Controller
 
         return response()->json([
             'item' => [
-                'id' => $expenseBudgetItem->id,
-                'expense_item' => $expenseBudgetItem->expenseItem?->expense_type,
-                'planned_budget' => $expenseBudgetItem->planned_budget,
-                'fiscal_year' => $budget?->fiscalYear?->name,
-                'fiscal_month' => $budget?->fiscalMonth?->name,
-                'branch' => $budget?->branch?->name,
-                'department' => $budget?->department?->name,
+                'id' => $expenseBudget->id,
+                'expense_item' => $expenseBudget->expenseItem?->expense_type,
+                'planned_budget' => $expenseBudget->planned_budget,
+                'fiscal_year' => $expenseBudget->fiscalYear?->name,
+                'fiscal_month' => $expenseBudget->fiscalMonth?->name,
+                'branch' => $expenseBudget->branch?->name,
+                'department' => $expenseBudget->department?->name,
             ],
             'logs' => $logs,
         ]);
@@ -779,31 +745,17 @@ class ExpenseBudgetController extends Controller
      */
     private function buildSubmissionLookup(?string $fiscalMonthId, ?string $fiscalYearId): array
     {
-        $items = ExpenseBudgetItem::query()
+        $items = ExpenseBudget::query()
             ->whereNotNull('planned_budget')
-            ->whereHas('expenseBudget', function ($query) use ($fiscalMonthId, $fiscalYearId) {
-                if ($fiscalMonthId && $fiscalMonthId !== 'all') {
-                    $query->where('fiscal_month_id', $fiscalMonthId);
-                }
-
-                if ($fiscalYearId && $fiscalYearId !== 'all') {
-                    $query->where('fiscal_year_id', $fiscalYearId);
-                }
-            })
-            ->with(['expenseBudget:id,branch_id,department_id'])
-            ->get(['id', 'expense_budget_id', 'expense_item_id']);
+            ->when($fiscalMonthId && $fiscalMonthId !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthId))
+            ->when($fiscalYearId && $fiscalYearId !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearId))
+            ->get(['id', 'branch_id', 'department_id', 'expense_item_id']);
 
         $lookup = [];
 
         foreach ($items as $item) {
-            $budget = $item->expenseBudget;
-
-            if (! $budget) {
-                continue;
-            }
-
-            $departmentKey = $budget->department_id ?? 0;
-            $lookupKey = "{$budget->branch_id}|{$departmentKey}|{$item->expense_item_id}";
+            $departmentKey = $item->department_id ?? 0;
+            $lookupKey = "{$item->branch_id}|{$departmentKey}|{$item->expense_item_id}";
             $lookup[$lookupKey] = true;
         }
 
