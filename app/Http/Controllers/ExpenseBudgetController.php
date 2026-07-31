@@ -74,20 +74,23 @@ class ExpenseBudgetController extends Controller
         if (! ExpenseBudgetAccess::hasUnrestrictedViewAccess($user)) {
             $query->where(function ($q) use ($user, $isUserHO) {
                 if ($user->can(ExpenseBudgetAccess::viewOwnDepartmentPermission())) {
-                    $q->orWhere('department_id', $user->employee?->department_id);
+                    $q->orWhere(function ($deptQ) use ($user) {
+                        $deptQ->where('expense_budgets.department_id', $user->employee?->department_id)
+                              ->where('expense_budgets.branch_id', $user->employee?->branch_id);
+                    });
                 }
                 
                 if ($user->can(ExpenseBudgetAccess::viewOwnBranchPermission())) {
                     $q->orWhere(function ($branchQ) use ($user, $isUserHO) {
-                        $branchQ->where('branch_id', $user->employee?->branch_id);
+                        $branchQ->where('expense_budgets.branch_id', $user->employee?->branch_id);
                         if ($isUserHO) {
-                            $branchQ->where('department_id', $user->employee?->department_id);
+                            $branchQ->where('expense_budgets.department_id', $user->employee?->department_id);
                         }
                     });
                 }
                 
                 if ($user->can(ExpenseBudgetAccess::viewAllExceptHOPermission())) {
-                    $q->orWhereNotIn('branch_id', function ($subQuery) {
+                    $q->orWhereNotIn('expense_budgets.branch_id', function ($subQuery) {
                         $subQuery->select('id')->from('branches')
                           ->where('name', 'like', '%Head Office%')
                           ->orWhereRaw('UPPER(branch_code) = ?', ['HO']);

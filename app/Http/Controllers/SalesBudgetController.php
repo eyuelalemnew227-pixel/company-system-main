@@ -73,18 +73,21 @@ class SalesBudgetController extends Controller
 
         $budgetQuery = SalesBudget::query()
             ->with(['branch', 'createdBy', 'updatedBy', 'fiscalYear', 'fiscalMonth'])
+            ->leftJoin('fiscal_years', 'sales_budgets.fiscal_year_id', '=', 'fiscal_years.id')
+            ->leftJoin('fiscal_months', 'sales_budgets.fiscal_month_id', '=', 'fiscal_months.id')
             ->when($request->filled('branch_id'), function ($query) use ($branchId) {
-                $query->where('branch_id', $branchId);
+                $query->where('sales_budgets.branch_id', $branchId);
             })
             ->when($request->filled('fiscal_year_id'), function ($query) use ($fiscalYearId) {
-                $query->where('fiscal_year_id', $fiscalYearId);
+                $query->where('sales_budgets.fiscal_year_id', $fiscalYearId);
             })
             ->when($request->filled('fiscal_month_id'), function ($query) use ($fiscalMonthId) {
-                $query->where('fiscal_month_id', $fiscalMonthId);
+                $query->where('sales_budgets.fiscal_month_id', $fiscalMonthId);
             })
-            ->orderBy('fiscal_year_id')
-            ->orderBy('fiscal_month_id')
-            ->orderBy('branch_id');
+            ->orderByDesc('fiscal_years.gregorian_start_date')
+            ->orderByDesc('fiscal_months.efy_month_number')
+            ->orderBy('sales_budgets.branch_id')
+            ->select('sales_budgets.*');
 
         if ($showUnbudgeted && $request->filled('fiscal_year_id') && $request->filled('fiscal_month_id')) {
             $selectedFiscalMonthModel = $fiscalMonths->firstWhere('id', (int) $fiscalMonthId);

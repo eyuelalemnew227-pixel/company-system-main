@@ -32,7 +32,7 @@ class WeeklyBudgetController extends Controller
     {
         $user = auth()->user();
 
-        $isGlobalRole = $user->hasRole(['Admin', 'Super Admin']) ||
+        $isGlobalRole = $user->hasRole(['Admin']) ||
             $user->canAny([
                 'view finance budgets',
                 'manage finance budgets',
@@ -40,21 +40,28 @@ class WeeklyBudgetController extends Controller
                 'manage ceo budgets'
             ]);
 
-        if (!$isGlobalRole && $user->canAny(['view department budgets', 'manage department budgets'])) {
+        if ($isGlobalRole) {
+            return;
+        }
+
+        if ($user->canAny(['view department budgets', 'manage department budgets'])) {
             $departmentId = $user->employee?->department_id;
             if (!$departmentId) {
                 $query->whereRaw('1 = 0'); // Force no results
             } else {
                 $query->where('department_id', $departmentId);
             }
+            return;
         }
+
+        $query->where('created_by', $user->id);
     }
 
     private function checkDepartmentScope(WeeklyBudget $weeklyBudget): void
     {
         $user = auth()->user();
 
-        $isGlobalRole = $user->hasRole(['Admin', 'Super Admin']) ||
+        $isGlobalRole = $user->hasRole(['Admin']) ||
             $user->canAny([
                 'view finance budgets',
                 'manage finance budgets',
@@ -62,11 +69,20 @@ class WeeklyBudgetController extends Controller
                 'manage ceo budgets'
             ]);
 
-        if (!$isGlobalRole && $user->canAny(['view department budgets', 'manage department budgets'])) {
+        if ($isGlobalRole) {
+            return;
+        }
+
+        if ($user->canAny(['view department budgets', 'manage department budgets'])) {
             $departmentId = $user->employee?->department_id;
             if (!$departmentId || $weeklyBudget->department_id !== $departmentId) {
                 abort(403, 'Unauthorized department access.');
             }
+            return;
+        }
+
+        if ($weeklyBudget->created_by !== $user->id) {
+            abort(403, 'Unauthorized access to this weekly budget.');
         }
     }
 
