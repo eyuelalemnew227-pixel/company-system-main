@@ -131,6 +131,11 @@ class ExpenseBudgetController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        $totalPlannedBudget = null;
+        if (request()->filled(['branch_id', 'fiscal_month_id', 'fiscal_year_id'])) {
+            $totalPlannedBudget = (clone $query)->sum('expense_budgets.planned_budget');
+        }
+
         $items = $query
             ->leftJoin('fiscal_years', 'expense_budgets.fiscal_year_id', '=', 'fiscal_years.id')
             ->leftJoin('fiscal_months', 'expense_budgets.fiscal_month_id', '=', 'fiscal_months.id')
@@ -174,6 +179,7 @@ class ExpenseBudgetController extends Controller
             'fiscalYears' => $this->fiscalYearOptions(),
             'fiscalMonths' => $this->fiscalMonthOptions(),
             'request' => request()->only(['search', 'branch_id', 'department_id', 'fiscal_month_id', 'fiscal_year_id']),
+            'totalPlannedBudget' => $totalPlannedBudget,
         ]);
     }
 
