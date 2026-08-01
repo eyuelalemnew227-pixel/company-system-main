@@ -40,7 +40,7 @@ class ExpenseBudgetController extends Controller
                 'fiscalMonth',
                 'expenseItem',
             ])
-            ->whereNotNull('planned_budget');
+            ->whereNotNull('expense_budgets.planned_budget');
 
         if ($search = request('search')) {
             $query->whereHas('expenseItem', function ($q) use ($search) {
@@ -49,19 +49,19 @@ class ExpenseBudgetController extends Controller
         }
 
         if ($branchId = request('branch_id')) {
-            $query->where('branch_id', $branchId);
+            $query->where('expense_budgets.branch_id', $branchId);
         }
 
         if ($departmentId = request('department_id')) {
-            $query->where('department_id', $departmentId);
+            $query->where('expense_budgets.department_id', $departmentId);
         }
 
         if ($fiscalMonthId = request('fiscal_month_id')) {
-            $query->where('fiscal_month_id', $fiscalMonthId);
+            $query->where('expense_budgets.fiscal_month_id', $fiscalMonthId);
         }
 
         if ($fiscalYearId = request('fiscal_year_id')) {
-            $query->where('fiscal_year_id', $fiscalYearId);
+            $query->where('expense_budgets.fiscal_year_id', $fiscalYearId);
         }
 
         $user = auth()->user();
