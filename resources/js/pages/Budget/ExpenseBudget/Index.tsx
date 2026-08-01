@@ -126,6 +126,7 @@ type IndexProps = {
         fiscal_month_id?: string;
         fiscal_year_id?: string;
     };
+    totalPlannedBudget?: string | number | null;
 };
 
 function formatCurrency(value: string | number | null | undefined): string {
@@ -230,6 +231,7 @@ export default function ExpenseBudgetIndex({
     fiscalYears,
     fiscalMonths,
     request,
+    totalPlannedBudget,
 }: IndexProps) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
     const { canManageExpenseBudget } = usePermission();
@@ -675,6 +677,11 @@ export default function ExpenseBudgetIndex({
                     </CardHeader>
                     <hr />
                     <CardContent>
+                        {totalPlannedBudget !== undefined && totalPlannedBudget !== null && (
+                            <div className="mb-4 flex justify-end font-semibold text-lg text-slate-700 dark:text-slate-300">
+                                Total Planned Budget: {formatCurrency(totalPlannedBudget)}
+                            </div>
+                        )}
                         <Table>
                             <TableHeader className="bg-slate-500 dark:bg-slate-700">
                                 <TableRow>
