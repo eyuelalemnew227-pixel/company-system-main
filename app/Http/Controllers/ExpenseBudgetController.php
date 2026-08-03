@@ -325,6 +325,7 @@ class ExpenseBudgetController extends Controller
 
         $frequentExpenseItems = ExpenseItem::query()
             ->where('frequent_expense', true)
+            ->where('is_expense', 1)
             ->orderBy('expense_type')
             ->get()
             ->map($mapExpenseItem)
@@ -332,6 +333,7 @@ class ExpenseBudgetController extends Controller
 
         $otherExpenseItems = ExpenseItem::query()
             ->where('frequent_expense', false)
+            ->where('is_expense', 1)
             ->orderBy('expense_type')
             ->get()
             ->map($mapExpenseItem)
@@ -635,8 +637,27 @@ class ExpenseBudgetController extends Controller
             ->unique()
             ->values();
 
+        $previousFiscalMonth = $this->findPreviousFiscalMonth((int) $validated['fiscal_month_id']);
+        $prevMonthBudgets = [];
+        
+        if ($previousFiscalMonth) {
+            $prevMonthBudgets = ExpenseBudget::query()
+                ->whereNotNull('planned_budget')
+                ->where('fiscal_year_id', $previousFiscalMonth->fiscal_year_id)
+                ->where('fiscal_month_id', $previousFiscalMonth->id)
+                ->where('branch_id', $validated['branch_id'])
+                ->when(
+                    $departmentId,
+                    fn ($q) => $q->where('department_id', $departmentId),
+                    fn ($q) => $q->whereNull('department_id')
+                )
+                ->pluck('planned_budget', 'expense_item_id')
+                ->toArray();
+        }
+
         return response()->json([
             'expense_item_ids' => $expenseItemIds,
+            'prev_month_budgets' => (object) $prevMonthBudgets,
         ]);
     }
 
