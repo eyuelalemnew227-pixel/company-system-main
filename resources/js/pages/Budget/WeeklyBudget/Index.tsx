@@ -148,6 +148,7 @@ type IndexProps = {
 		fiscal_month_id?: string;
 		week_start_date?: string;
 	};
+	totalBudget?: number | null;
 };
 
 function formatCurrency(value: string | number | null | undefined): string {
@@ -401,6 +402,7 @@ export default function WeeklyBudgetIndex({
 	currentFiscalYearId,
 	currentFiscalMonthId,
 	request,
+	totalBudget,
 }: IndexProps) {
 	const { flash } = usePage<{ flash: { message?: string } }>().props;
 	const { can } = usePermission();
@@ -992,6 +994,13 @@ export default function WeeklyBudgetIndex({
 					</CardHeader>
 					<hr />
 					<CardContent>
+						{totalBudget !== null && totalBudget !== undefined && (
+							<div className="mb-4 flex justify-end">
+								<div className="rounded-lg bg-blue-50 px-4 py-2 font-semibold text-blue-700 shadow-sm dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+									Total Budget: {formatCurrency(totalBudget)}
+								</div>
+							</div>
+						)}
 						<Table>
 							<TableHeader className="bg-slate-500 dark:bg-slate-700">
 								<TableRow>

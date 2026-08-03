@@ -74,6 +74,7 @@ type CeoProps = {
 	currentFiscalYearId?: number | null;
 	currentFiscalMonthId?: number | null;
 	request?: any;
+	totalBudget?: number | null;
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -229,6 +230,7 @@ export default function WeeklyBudgetCeoView({
 	currentFiscalYearId,
 	currentFiscalMonthId,
 	request,
+	totalBudget,
 }: CeoProps) {
 	const { flash, errors } = usePage<any>().props;
 	const { can } = usePermission();
@@ -758,6 +760,13 @@ export default function WeeklyBudgetCeoView({
 					</CardHeader>
 
 					<CardContent>
+						{totalBudget !== null && totalBudget !== undefined && (
+							<div className="mb-4 flex justify-end">
+								<div className="rounded-lg bg-blue-50 px-4 py-2 font-semibold text-blue-700 shadow-sm dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+									Total Budget: {formatCurrency(totalBudget)}
+								</div>
+							</div>
+						)}
 						<Table>
 							<TableHeader className="bg-slate-500 dark:bg-slate-700">
 								<TableRow>
