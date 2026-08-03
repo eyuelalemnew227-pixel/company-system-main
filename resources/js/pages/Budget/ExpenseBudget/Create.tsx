@@ -151,16 +151,7 @@ function formatBudgetInput(value: string): string {
     return formattedInteger;
 }
 
-function buildInitialItems(frequentExpenseItems: ExpenseItemOption[]): BudgetItemRow[] {
-    if (frequentExpenseItems.length === 0) {
-        return [{ expense_item_id: '', planned_budget: '' }];
-    }
 
-    return frequentExpenseItems.map((item) => ({
-        expense_item_id: item.id,
-        planned_budget: '',
-    }));
-}
 
 function getSavedItemIds(items: BudgetItemRow[]): Set<number> {
     return new Set(
@@ -195,23 +186,7 @@ function getItemsAfterSave(currentItems: BudgetItemRow[], savedItemIds: Set<numb
     return remaining;
 }
 
-function buildFrequentItemsForScope(
-    frequentExpenseItems: ExpenseItemOption[],
-    budgetedIds: Set<number>,
-): BudgetItemRow[] {
-    const items = frequentExpenseItems
-        .filter((item) => !budgetedIds.has(item.id))
-        .map((item) => ({
-            expense_item_id: item.id,
-            planned_budget: '',
-        }));
 
-    if (items.length === 0) {
-        return [{ expense_item_id: '', planned_budget: '' }];
-    }
-
-    return items;
-}
 
 function buildScopeKey(
     branchId: string,
@@ -254,7 +229,7 @@ export default function CreateExpenseBudget({
         fiscal_month_id: defaultFiscalMonthId ? String(defaultFiscalMonthId) : '',
         branch_id: '',
         department_id: '',
-        items: buildInitialItems(frequentExpenseItems),
+        items: [{ expense_item_id: '', planned_budget: '' }],
     });
 
     const [openBranch, setOpenBranch] = useState(false);
@@ -267,10 +242,9 @@ export default function CreateExpenseBudget({
     const [budgetedExpenseItemIds, setBudgetedExpenseItemIds] = useState<Set<number>>(new Set());
     const prevScopeRef = useRef('');
     const activeScopeRef = useRef('');
-    const prevFetchKeyRef = useRef('');
 
     const allExpenseItems = useMemo(
-        () => [...frequentExpenseItems, ...otherExpenseItems],
+        () => [...frequentExpenseItems, ...otherExpenseItems].sort((a, b) => a.name.localeCompare(b.name)),
         [frequentExpenseItems, otherExpenseItems],
     );
 
@@ -298,66 +272,7 @@ export default function CreateExpenseBudget({
         [data.items],
     );
 
-    const itemIdsSignature = useMemo(
-        () =>
-            data.items
-                .map((item) => item.expense_item_id)
-                .filter((id): id is number => typeof id === 'number')
-                .join('|'),
-        [data.items],
-    );
 
-    const fetchPrevBudget = useCallback(
-        async (
-            expenseItemId: number,
-            branchId: string,
-            departmentId: string,
-            fiscalYearId: string,
-            fiscalMonthId: string,
-            headOffice: boolean,
-            scopeKey: string,
-        ) => {
-            if (!branchId || !expenseItemId || !fiscalYearId || !fiscalMonthId) {
-                return;
-            }
-
-            if (headOffice && !departmentId) {
-                return;
-            }
-
-            setLoadingPrevBudget((prev) => ({ ...prev, [expenseItemId]: true }));
-
-            try {
-                const params = new URLSearchParams({
-                    expense_item_id: String(expenseItemId),
-                    branch_id: branchId,
-                    fiscal_year_id: fiscalYearId,
-                    fiscal_month_id: fiscalMonthId,
-                });
-
-                if (headOffice && departmentId) {
-                    params.set('department_id', departmentId);
-                }
-
-                const response = await fetch(`/budget/expense-budget/prev-budget?${params.toString()}`);
-                const result = (await response.json()) as { prev_month_budget: number | null };
-
-                if (activeScopeRef.current !== scopeKey) {
-                    return;
-                }
-
-                setPrevBudgets((prev) => ({
-                    ...prev,
-                    [expenseItemId]: result.prev_month_budget ?? null,
-                }));
-            } finally {
-                if (activeScopeRef.current === scopeKey) {
-                    setLoadingPrevBudget((prev) => ({ ...prev, [expenseItemId]: false }));
-                }
-            }
-        },
-        [],
-    );
 
     const fetchBudgetedExpenseItems = useCallback(
         async (
@@ -389,7 +304,7 @@ export default function CreateExpenseBudget({
             }
 
             const response = await fetch(`/budget/expense-budget/budgeted-items?${params.toString()}`);
-            const result = (await response.json()) as { expense_item_ids: number[] };
+            const result = (await response.json()) as { expense_item_ids: number[], prev_month_budgets: Record<number, number> };
             const budgetedIds = new Set(result.expense_item_ids);
 
             if (activeScopeRef.current !== scopeKey) {
@@ -397,12 +312,24 @@ export default function CreateExpenseBudget({
             }
 
             setBudgetedExpenseItemIds(budgetedIds);
+            setPrevBudgets(result.prev_month_budgets ?? {});
 
             if (rebuildItems) {
-                setData('items', buildFrequentItemsForScope(frequentExpenseItems, budgetedIds));
+                const items = allExpenseItems
+                    .filter((item) => result.prev_month_budgets[item.id] !== undefined && !budgetedIds.has(item.id))
+                    .map((item) => ({
+                        expense_item_id: item.id,
+                        planned_budget: '',
+                    }));
+
+                if (items.length === 0) {
+                    setData('items', [{ expense_item_id: '', planned_budget: '' }]);
+                } else {
+                    setData('items', items);
+                }
             }
         },
-        [frequentExpenseItems, setData],
+        [allExpenseItems, setData],
     );
 
     useEffect(() => {
@@ -450,7 +377,7 @@ export default function CreateExpenseBudget({
             return;
         }
 
-        setData('items', buildInitialItems(frequentExpenseItems));
+        setData('items', [{ expense_item_id: '', planned_budget: '' }]);
 
         const completeScope = hasCompleteScope(
             data.branch_id,
@@ -469,7 +396,6 @@ export default function CreateExpenseBudget({
         data.fiscal_year_id,
         data.fiscal_month_id,
         isHeadOffice,
-        frequentExpenseItems,
         setData,
     ]);
 
@@ -484,77 +410,7 @@ export default function CreateExpenseBudget({
         );
     }, [data.branch_id, data.department_id, data.fiscal_year_id, data.fiscal_month_id, isHeadOffice, fetchBudgetedExpenseItems]);
 
-    useEffect(() => {
-        if (
-            !hasCompleteScope(
-                data.branch_id,
-                data.department_id,
-                data.fiscal_year_id,
-                data.fiscal_month_id,
-                isHeadOffice,
-            )
-        ) {
-            prevFetchKeyRef.current = '';
-            return;
-        }
 
-        const scopeKey = buildScopeKey(
-            data.branch_id,
-            data.department_id,
-            data.fiscal_year_id,
-            data.fiscal_month_id,
-        );
-        const fetchKey = `${scopeKey}::${itemIdsSignature}`;
-
-        if (prevFetchKeyRef.current === fetchKey) {
-            return;
-        }
-
-        const previousFetchKey = prevFetchKeyRef.current;
-        prevFetchKeyRef.current = fetchKey;
-
-        const [previousScopeKey = ''] = previousFetchKey.split('::');
-        const scopeChanged = previousScopeKey !== scopeKey;
-
-        if (scopeChanged) {
-            setPrevBudgets({});
-            setLoadingPrevBudget({});
-        }
-
-        const previousItemIdsPart = previousFetchKey.includes('::')
-            ? previousFetchKey.split('::')[1] ?? ''
-            : '';
-        const previousItemIds = new Set(
-            previousItemIdsPart ? previousItemIdsPart.split('|').map((id) => Number(id)) : [],
-        );
-        const currentItemIds = itemIdsSignature
-            ? itemIdsSignature.split('|').map((id) => Number(id))
-            : [];
-
-        const idsToFetch = scopeChanged
-            ? currentItemIds
-            : currentItemIds.filter((id) => !previousItemIds.has(id));
-
-        idsToFetch.forEach((expenseItemId) => {
-            fetchPrevBudget(
-                expenseItemId,
-                data.branch_id,
-                data.department_id,
-                data.fiscal_year_id,
-                data.fiscal_month_id,
-                isHeadOffice,
-                scopeKey,
-            );
-        });
-    }, [
-        itemIdsSignature,
-        data.branch_id,
-        data.department_id,
-        data.fiscal_year_id,
-        data.fiscal_month_id,
-        isHeadOffice,
-        fetchPrevBudget,
-    ]);
 
     function handleBranchSelect(branch: BranchOption) {
         setSelectedBranch(branch);
