@@ -363,9 +363,40 @@ function SidebarSeparator({
   )
 }
 
-function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
+const SidebarContent = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentProps<"div">
+>(({ className, ...props }, ref) => {
+  const internalRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    if (internalRef.current) {
+      const saved = sessionStorage.getItem("sidebar_scroll_position")
+      if (saved) {
+        internalRef.current.scrollTop = parseInt(saved, 10)
+      }
+    }
+  }, [])
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    sessionStorage.setItem("sidebar_scroll_position", e.currentTarget.scrollTop.toString())
+    if (props.onScroll) {
+      props.onScroll(e)
+    }
+  }
+
   return (
     <div
+      ref={(node) => {
+        // @ts-expect-error - internal ref assignment
+        internalRef.current = node
+        if (typeof ref === "function") {
+          ref(node)
+        } else if (ref) {
+          ref.current = node
+        }
+      }}
+      onScroll={handleScroll}
       data-slot="sidebar-content"
       data-sidebar="content"
       className={cn(
@@ -375,7 +406,8 @@ function SidebarContent({ className, ...props }: React.ComponentProps<"div">) {
       {...props}
     />
   )
-}
+})
+SidebarContent.displayName = "SidebarContent"
 
 function SidebarGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
