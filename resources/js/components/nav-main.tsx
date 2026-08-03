@@ -12,7 +12,9 @@ import { usePermission } from '@/hooks/user-permissions';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 import { ChevronRight, ExternalLink } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, createContext, useContext } from 'react';
+
+const ActiveHrefContext = createContext<string | null>(null);
 
 export type NavSection = {
 	label: string;
@@ -28,12 +30,43 @@ export type NavSection = {
 
 export function NavMain({ sections = [] as NavSection[], items = [] as NavItem[] }: { sections?: NavSection[]; items?: NavItem[] }) {
 	const { can } = usePermission();
+	const page = usePage();
 
 	// Backwards compatibility: if sections not provided, render flat items under a default section
 	const sectionsToRender: NavSection[] = sections.length ? sections : [{ label: 'Platform', items }];
 
+	const activeHref = useMemo(() => {
+		const path = page.url.split('?')[0];
+		let bestMatch = '';
+
+		for (const section of sectionsToRender) {
+			const itemsToSearch = [...(section.items || [])];
+			if (section.groups) {
+				for (const group of section.groups) {
+					if (group.items) itemsToSearch.push(...group.items);
+				}
+			}
+
+			for (const item of itemsToSearch) {
+				const href = item.href;
+				if (!href) continue;
+
+				if (path === href) {
+					return href;
+				}
+
+				if (path.startsWith(href + '/')) {
+					if (href.length > bestMatch.length) {
+						bestMatch = href;
+					}
+				}
+			}
+		}
+		return bestMatch || null;
+	}, [page.url, sectionsToRender]);
+
 	return (
-		<>
+		<ActiveHrefContext.Provider value={activeHref}>
 			{sectionsToRender.map((section) => {
 				// Filter items by permission
 				const filterItems = (itemsToFilter: NavItem[]) =>
@@ -60,24 +93,21 @@ export function NavMain({ sections = [] as NavSection[], items = [] as NavItem[]
 
 				return <NavSection key={section.label} section={section} visibleItems={visibleItems} visibleGroups={visibleGroups} />;
 			})}
-		</>
+		</ActiveHrefContext.Provider>
 	);
 }
 
-function isNavItemActive(pageUrl: string, href: string): boolean {
-	return href.length > 0 && pageUrl.startsWith(href);
-}
-
 function NavSection({ section, visibleItems, visibleGroups }: { section: NavSection; visibleItems: NavItem[]; visibleGroups: NavSection['groups'] }) {
+	const activeHref = useContext(ActiveHrefContext);
 	const page = usePage();
 	const storageKey = `sidebar-section-${section.label}`;
 
 	const isSectionActive = useMemo(() => {
-		const itemActive = visibleItems.some((item) => isNavItemActive(page.url, item.href ?? ''));
-		const groupActive = visibleGroups?.some((group) => group.items.some((item) => isNavItemActive(page.url, item.href ?? ''))) ?? false;
+		const itemActive = visibleItems.some((item) => item.href && item.href === activeHref);
+		const groupActive = visibleGroups?.some((group) => group.items.some((item) => item.href && item.href === activeHref)) ?? false;
 
 		return itemActive || groupActive;
-	}, [page.url, visibleItems, visibleGroups]);
+	}, [activeHref, visibleItems, visibleGroups]);
 
 	const [isOpen, setIsOpen] = useState(() => {
 		if (typeof window === 'undefined') return isSectionActive;
@@ -121,7 +151,7 @@ function NavSection({ section, visibleItems, visibleGroups }: { section: NavSect
 											<SidebarMenuSubItem key={`${section.label}-${item.title}`}>
 												<SidebarMenuSubButton
 													asChild
-													isActive={!isExternalLink && isNavItemActive(page.url, href)}
+													isActive={!isExternalLink && item.href === activeHref}
 													tooltip={item.title}
 												>
 													{isExternalLink ? (
@@ -161,10 +191,10 @@ function NavSection({ section, visibleItems, visibleGroups }: { section: NavSect
 type NavGroupData = NonNullable<NavSection['groups']>[number];
 
 function NavGroup({ sectionLabel, group }: { sectionLabel: string; group: NavGroupData }) {
-	const page = usePage();
+	const activeHref = useContext(ActiveHrefContext);
 	const storageKey = `sidebar-group-${sectionLabel}-${group.label}`;
 
-	const isGroupActive = useMemo(() => group.items.some((item) => isNavItemActive(page.url, item.href ?? '')), [group.items, page.url]);
+	const isGroupActive = useMemo(() => group.items.some((item) => item.href && item.href === activeHref), [group.items, activeHref]);
 
 	const [isOpen, setIsOpen] = useState(() => {
 		if (typeof window === 'undefined') return isGroupActive;
@@ -194,7 +224,7 @@ function NavGroup({ sectionLabel, group }: { sectionLabel: string; group: NavGro
 					</SidebarMenuSubButton>
 				</CollapsibleTrigger>
 				<CollapsibleContent>
-					<SidebarMenuSub className="mx-0 border-0 px-0">
+					<SidebarMenuSub>
 						{group.items.map((item) => {
 							const href = item.href ?? '';
 							const isExternalLink = item.external ?? /^https?:\/\//.test(href);
@@ -203,7 +233,7 @@ function NavGroup({ sectionLabel, group }: { sectionLabel: string; group: NavGro
 
 							return (
 								<SidebarMenuSubItem key={`${sectionLabel}-${group.label}-${item.title}`}>
-									<SidebarMenuSubButton asChild isActive={!isExternalLink && isNavItemActive(page.url, href)} tooltip={item.title}>
+									<SidebarMenuSubButton asChild isActive={!isExternalLink && item.href === activeHref} tooltip={item.title}>
 										{isExternalLink ? (
 											<a href={href} target={target} rel={rel}>
 												{item.icon && <item.icon />}
