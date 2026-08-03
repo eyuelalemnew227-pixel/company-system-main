@@ -424,8 +424,6 @@ class SalesBudgetController extends Controller
                             'action' => 'updated',
                             'old_sales_amount' => $oldAmount,
                             'new_sales_amount' => $salesAmount,
-                            'old_prev_sales' => $existingBudget->prev_sales_budget,
-                            'new_prev_sales' => $item['prev_sales_budget'] ?? 0,
                         ]);
 
                         continue;
@@ -447,8 +445,6 @@ class SalesBudgetController extends Controller
                         'action' => 'created',
                         'old_sales_amount' => null,
                         'new_sales_amount' => $salesAmount,
-                        'old_prev_sales' => null,
-                        'new_prev_sales' => $item['prev_sales_budget'] ?? 0,
                     ]);
                 }
 
@@ -517,8 +513,6 @@ class SalesBudgetController extends Controller
             'action' => 'updated',
             'old_sales_amount' => $oldAmount,
             'new_sales_amount' => $request->sales_amount,
-            'old_prev_sales' => $salesBudget->prev_sales_budget,
-            'new_prev_sales' => $salesBudget->prev_sales_budget,
         ]);
 
         return to_route('sales-budget.index')
@@ -543,8 +537,6 @@ class SalesBudgetController extends Controller
             'action' => 'deleted',
             'old_sales_amount' => $salesBudget->sales_amount,
             'new_sales_amount' => null,
-            'old_prev_sales' => $salesBudget->prev_sales_budget,
-            'new_prev_sales' => null,
             'notes' => 'Deleted budget for ' . $branchName,
         ]);
 
