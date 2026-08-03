@@ -142,7 +142,7 @@ class SalesBudgetController extends Controller
                 ]
             );
         } else {
-            $paginatedBudgets = $budgetQuery->paginate(10);
+            $paginatedBudgets = $budgetQuery->paginate(10)->withQueryString();
             $paginatedBudgets->getCollection()->transform(function ($budget) {
                 return [
                     'id' => $budget->id,
