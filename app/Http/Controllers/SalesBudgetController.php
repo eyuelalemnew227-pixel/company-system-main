@@ -26,10 +26,10 @@ class SalesBudgetController extends Controller
 
     private function activeBranches()
     {
-        return Cache::remember('sales_budget_active_branches', 600, fn() => Branch::query()
+        return Branch::query()
             ->where('status', 'active')
             ->orderBy('name')
-            ->get(['id', 'name']));
+            ->get(['id', 'name']);
     }
 
     private function previousFiscalMonth(FiscalMonth $fiscalMonth): ?FiscalMonth
