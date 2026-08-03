@@ -122,6 +122,8 @@ class WeeklyBudgetController extends Controller
 
         $this->applyDepartmentScope($query);
 
+        $totalBudget = request()->filled('department_id') ? (clone $query)->sum('amount') : null;
+
         $items = $query
             ->latest()
             ->paginate(15)
@@ -183,6 +185,7 @@ class WeeklyBudgetController extends Controller
         }
 
         return Inertia::render('Budget/WeeklyBudget/Index', [
+            'totalBudget' => $totalBudget,
             'items' => $items,
             'branches' => $branches,
             'departments' => $departments,
@@ -509,6 +512,8 @@ class WeeklyBudgetController extends Controller
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
 
+        $totalBudget = request()->filled('department_id') ? (clone $query)->sum('amount') : null;
+
         $items = $query
             ->latest()
             ->paginate(15)
@@ -585,6 +590,7 @@ class WeeklyBudgetController extends Controller
         }
 
         return Inertia::render('Budget/WeeklyBudget/Finance', [
+            'totalBudget' => $totalBudget,
             'items' => $items,
             'branches' => $branches,
             'departments' => $departments,
@@ -801,6 +807,8 @@ class WeeklyBudgetController extends Controller
 
         $this->applyDepartmentScope($query);
 
+        $totalBudget = request()->filled('department_id') ? (clone $query)->sum('amount') : null;
+
         $items = $query
             ->latest()
             ->paginate(15)
@@ -869,6 +877,7 @@ class WeeklyBudgetController extends Controller
         }
 
         return Inertia::render('Budget/WeeklyBudget/DepartmentView', [
+            'totalBudget' => $totalBudget,
             'items' => $items,
             'branches' => $branches,
             'departments' => $departments,
@@ -1074,6 +1083,8 @@ class WeeklyBudgetController extends Controller
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
 
+        $totalBudget = request()->filled('department_id') ? (clone $query)->sum('amount') : null;
+
         $items = $query
             ->latest()
             ->paginate(15)
@@ -1132,6 +1143,7 @@ class WeeklyBudgetController extends Controller
         }
 
         return Inertia::render('Budget/WeeklyBudget/CeoView', [
+            'totalBudget' => $totalBudget,
             'items' => $items,
             'branches' => Branch::query()->orderBy('name')->get(['id', 'name', 'branch_code']),
             'departments' => Department::query()
