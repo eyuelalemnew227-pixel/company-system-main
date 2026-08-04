@@ -599,7 +599,7 @@ export default function CreateExpenseBudget({
 
                                 <div className="space-y-2">
                                     <Label>
-                                        Branch <span className="text-red-500">*</span>
+                                        Branch/Head Office <span className="text-red-500">*</span>
                                     </Label>
                                     <Popover open={openBranch} onOpenChange={setOpenBranch}>
                                         <PopoverTrigger asChild>
