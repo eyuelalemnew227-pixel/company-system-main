@@ -12,7 +12,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { useMemo, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2, ChevronDown, ChevronUp, Layers, Package, ShoppingCart, Check, ChevronsUpDown } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Layers, Package, ShoppingCart, Check, ChevronsUpDown, Warehouse, AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -59,6 +59,14 @@ type FiscalMonthOption = {
   id: number;
   name: string;
   fiscal_year_id: number;
+};
+
+type BalanceItem = {
+  article_name: string;
+  article_code: string;
+  category: string;
+  uom: string;
+  total_balance: number;
 };
 
 type PageProps = {
@@ -126,6 +134,13 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [productSearch, setProductSearch] = useState('');
 
+  // Store Balance
+  const [balanceItems, setBalanceItems] = useState<BalanceItem[]>([]);
+  const [balanceBranchName, setBalanceBranchName] = useState<string | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [balanceFetched, setBalanceFetched] = useState(false);
+  const [balanceCatOpen, setBalanceCatOpen] = useState<Set<string>>(new Set());
+
   const filteredFiscalMonths = useMemo(
     () => fiscalMonths.filter((m) => String(m.fiscal_year_id) === String(data.fiscal_year_id)),
     [fiscalMonths, data.fiscal_year_id]
@@ -152,6 +167,32 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
       ticket_asset_id: data.ticket_asset_id === 'none' ? null : data.ticket_asset_id,
     }));
   }, [transform]);
+
+  // Fetch store balance when branch is selected in purchase mode
+  useEffect(() => {
+    if (!isPurchaseMode || !data.beneficiary_branch_id) {
+      setBalanceItems([]);
+      setBalanceBranchName(null);
+      setBalanceFetched(false);
+      return;
+    }
+    setBalanceLoading(true);
+    setBalanceFetched(false);
+    fetch(`/tickets/store-balance?branch_id=${data.beneficiary_branch_id}`, {
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+    })
+      .then(r => r.json())
+      .then(json => {
+        setBalanceItems(json.items ?? []);
+        setBalanceBranchName(json.branch_name ?? null);
+        const cats = new Set<string>((json.items ?? []).map((i: BalanceItem) => i.category));
+        setBalanceCatOpen(cats);
+        setBalanceFetched(true);
+      })
+      .catch(() => toast.error('Failed to load store balance.'))
+      .finally(() => setBalanceLoading(false));
+  }, [isPurchaseMode, data.beneficiary_branch_id]);
 
   useEffect(() => {
     if (flash?.message) toast.success(flash.message);
@@ -454,6 +495,27 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
               )}
 
               {isPurchaseMode && (
+                <Field label="Requested For Branch" error={(errors as any).beneficiary_branch_id}>
+                  <div className="flex items-center gap-3">
+                    <select
+                      className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      value={data.beneficiary_branch_id}
+                      onChange={(e) => setData('beneficiary_branch_id', e.target.value)}
+                    >
+                      <option value="">— Select branch mapping to view balance —</option>
+                      {(branches ?? []).map((b) => (
+                        <option key={b.id} value={String(b.id)}>{b.name}</option>
+                      ))}
+                    </select>
+                    {balanceLoading && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+                    {balanceFetched && !balanceLoading && <span className="text-xs text-muted-foreground whitespace-nowrap">{balanceItems.length} items loaded</span>}
+                  </div>
+                </Field>
+              )}
+
+              {/* Removed standalone Store Balance Panel. Integrated into product list grid. */}
+
+              {isPurchaseMode && (
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field label="Fiscal Year" error={(errors as any).fiscal_year_id}>
                     <Select value={data.fiscal_year_id} onValueChange={(v) => setData('fiscal_year_id', v)}>
@@ -647,6 +709,9 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
                           <TableHeader className="bg-muted/50">
                             <TableRow className="hover:bg-transparent">
                               <TableHead className="text-[10px] font-bold uppercase tracking-widest pl-4">Product Name & Code</TableHead>
+                              {isPurchaseMode && data.beneficiary_branch_id && (
+                                <TableHead className="text-[10px] font-bold uppercase tracking-widest text-right w-[100px]">Balance</TableHead>
+                              )}
                               <TableHead className="text-[10px] font-bold uppercase tracking-widest text-center w-[120px]">Quantity</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -669,6 +734,29 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
                                         </span>
                                       </div>
                                     </TableCell>
+                                    {isPurchaseMode && data.beneficiary_branch_id && (() => {
+                                      const bItem = balanceItems.find(b =>
+                                        (p.product_code && b.article_code === p.product_code) ||
+                                        (b.article_name && p.product_name && b.article_name.toLowerCase() === p.product_name.toLowerCase())
+                                      );
+                                      const bal = bItem ? Number(bItem.total_balance) : null;
+                                      return (
+                                        <TableCell className="py-3 pr-6 text-right">
+                                          {balanceLoading ? (
+                                            <Loader2 className="h-3 w-3 animate-spin ml-auto text-muted-foreground" />
+                                          ) : bal !== null ? (
+                                            <span className={cn(
+                                              "font-mono text-xs font-bold",
+                                              bal <= 0 ? "text-destructive" : "text-primary"
+                                            )}>
+                                              {bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </span>
+                                          ) : (
+                                            <span className="text-xs text-muted-foreground">—</span>
+                                          )}
+                                        </TableCell>
+                                      );
+                                    })()}
                                     <TableCell className="py-2 text-center group-hover:bg-background/50 transition-colors">
                                       <div className="flex justify-center">
                                         <Input

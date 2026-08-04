@@ -12,6 +12,8 @@ use App\Http\Requests\TicketRateRequest;
 use App\Models\Department;
 use App\Models\FiscalMonth;
 use App\Models\FiscalYear;
+use App\Models\Branch;
+use App\Models\StoreBalance;
 use App\Models\Ticket;
 use App\Models\TicketAsset;
 use App\Models\TicketMainCategory;
@@ -562,5 +564,31 @@ class TicketController extends Controller
         );
 
         return back()->with('message', 'Priority updated successfully.');
+    }
+
+    public function getStoreBalance(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $branchId = $request->integer('branch_id');
+
+        if (!$branchId) {
+            return response()->json(['items' => [], 'branch_name' => null]);
+        }
+
+        $branch = Branch::find($branchId);
+        if (!$branch) {
+            return response()->json(['items' => [], 'branch_name' => null], 404);
+        }
+
+        try {
+            // StoreBalance points directly to the synced DB view
+            $items = StoreBalance::forBranch($branchId);
+        } catch (\Throwable $e) {
+            return response()->json(['error' => 'Could not load balance data: ' . $e->getMessage()], 500);
+        }
+
+        return response()->json([
+            'branch_name' => $branch->name,
+            'items' => $items,
+        ]);
     }
 }
