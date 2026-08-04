@@ -309,11 +309,13 @@ class ExpenseBudgetController extends Controller
                     ->orWhere('name', 'like', '%Head Office%')
                     ->orWhereRaw('UPPER(branch_code) = ?', ['HO']);
             })
+            ->orderByRaw("CASE WHEN name LIKE '%Head Office%' OR UPPER(branch_code) = 'HO' THEN 0 ELSE 1 END")
             ->orderBy('name')
             ->get(['id', 'name', 'branch_code']);
 
         $departments = Department::query()
             ->where('is_active', true)
+            ->where('is_active_on_weekly_budget', 1)
             ->orderBy('name')
             ->get(['id', 'name']);
 
@@ -861,6 +863,37 @@ class ExpenseBudgetController extends Controller
             ->first();
 
         if ($currentMonth) {
+            $ethiopianDay = \Carbon\Carbon::parse($currentMonth->gregorian_start_date)->diffInDays($today) + 1;
+
+            if ($ethiopianDay >= 21) {
+                $nextMonth = FiscalMonth::query()
+                    ->where('fiscal_year_id', $currentMonth->fiscal_year_id)
+                    ->where('efy_month_number', $currentMonth->efy_month_number + 1)
+                    ->first();
+
+                if (! $nextMonth) {
+                    $currentYear = FiscalYear::query()->find($currentMonth->fiscal_year_id);
+                    $nextYear = FiscalYear::query()
+                        ->where('gregorian_start_date', '>', $currentYear?->gregorian_start_date ?? $today)
+                        ->orderBy('gregorian_start_date')
+                        ->first();
+
+                    if ($nextYear) {
+                        $nextMonth = FiscalMonth::query()
+                            ->where('fiscal_year_id', $nextYear->id)
+                            ->orderBy('efy_month_number')
+                            ->first();
+                    }
+                }
+
+                if ($nextMonth) {
+                    return [
+                        'fiscal_year_id' => $nextMonth->fiscal_year_id,
+                        'fiscal_month_id' => $nextMonth->id,
+                    ];
+                }
+            }
+
             return [
                 'fiscal_year_id' => $currentMonth->fiscal_year_id,
                 'fiscal_month_id' => $currentMonth->id,
