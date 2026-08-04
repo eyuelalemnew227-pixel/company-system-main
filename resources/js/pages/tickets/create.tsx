@@ -184,13 +184,20 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
     })
       .then(r => r.json())
       .then(json => {
+        if (json.error) {
+          toast.error(json.error);
+          setBalanceItems([]);
+          setBalanceBranchName(null);
+          setBalanceFetched(false);
+          return;
+        }
         setBalanceItems(json.items ?? []);
         setBalanceBranchName(json.branch_name ?? null);
         const cats = new Set<string>((json.items ?? []).map((i: BalanceItem) => i.category));
         setBalanceCatOpen(cats);
         setBalanceFetched(true);
       })
-      .catch(() => toast.error('Failed to load store balance.'))
+      .catch((e) => toast.error('Failed to load store balance. ' + e.message))
       .finally(() => setBalanceLoading(false));
   }, [isPurchaseMode, data.beneficiary_branch_id]);
 
