@@ -375,6 +375,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('tickets', [\App\Http\Controllers\TicketController::class, 'index'])
         ->name('tickets.index')
         ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
+    Route::get('tickets/store-balance', [\App\Http\Controllers\TicketController::class, 'getStoreBalance'])
+        ->name('tickets.store-balance');
     Route::get('tickets/create', [\App\Http\Controllers\TicketController::class, 'create'])
         ->name('tickets.create');
     Route::post('tickets', [\App\Http\Controllers\TicketController::class, 'store'])
