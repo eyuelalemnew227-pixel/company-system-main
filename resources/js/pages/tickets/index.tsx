@@ -46,6 +46,7 @@ type PageProps = {
     fiscal_month_id?: string;
     start_date?: string;
     end_date?: string;
+    beneficiary_branch_id?: string;
   };
   flash: { message?: string };
   can_create: boolean;
@@ -57,6 +58,7 @@ type PageProps = {
     categories: { id: number; name: string }[];
     fiscalYears: { id: number; name: string }[];
     fiscalMonths: { id: number; name: string; fiscal_year_id: number }[];
+    branches: { id: number; name: string }[];
   };
 };
 
@@ -75,6 +77,7 @@ export default function TicketIndex() {
     fiscal_month_id: filters.fiscal_month_id ?? 'all',
     start_date: filters.start_date ?? '',
     end_date: filters.end_date ?? '',
+    beneficiary_branch_id: filters.beneficiary_branch_id ?? 'all',
   });
 
   const filteredFiscalMonths = options.fiscalMonths.filter(
@@ -104,6 +107,7 @@ export default function TicketIndex() {
       fiscal_month_id: 'all',
       start_date: '',
       end_date: '',
+      beneficiary_branch_id: 'all',
     });
     router.get('/tickets', {}, { replace: true });
   };
@@ -175,9 +179,22 @@ export default function TicketIndex() {
                   </SelectContent>
                 </Select>
               </div>
-
-
-
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Requestor Branch</label>
+                <Select value={params.beneficiary_branch_id} onValueChange={(v) => setParams({ ...params, beneficiary_branch_id: v })}>
+                  <SelectTrigger className="bg-white border-slate-200">
+                    <SelectValue placeholder="All Branches" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Branches</SelectItem>
+                    {options.branches?.map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</label>
                 <Select value={params.priority} onValueChange={(v) => setParams({ ...params, priority: v })}>
