@@ -46,7 +46,7 @@ type PageProps = {
     fiscal_month_id?: string;
     start_date?: string;
     end_date?: string;
-    beneficiary_branch_id?: string;
+    requestor_branch_id?: string;
   };
   flash: { message?: string };
   can_create: boolean;
@@ -77,7 +77,7 @@ export default function TicketIndex() {
     fiscal_month_id: filters.fiscal_month_id ?? 'all',
     start_date: filters.start_date ?? '',
     end_date: filters.end_date ?? '',
-    beneficiary_branch_id: filters.beneficiary_branch_id ?? 'all',
+    requestor_branch_id: filters.requestor_branch_id ?? 'all',
   });
 
   const filteredFiscalMonths = options.fiscalMonths.filter(
@@ -107,7 +107,7 @@ export default function TicketIndex() {
       fiscal_month_id: 'all',
       start_date: '',
       end_date: '',
-      beneficiary_branch_id: 'all',
+      requestor_branch_id: 'all',
     });
     router.get('/tickets', {}, { replace: true });
   };
@@ -181,7 +181,7 @@ export default function TicketIndex() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Requestor Branch</label>
-                <Select value={params.beneficiary_branch_id} onValueChange={(v) => setParams({ ...params, beneficiary_branch_id: v })}>
+                <Select value={params.requestor_branch_id} onValueChange={(v) => setParams({ ...params, requestor_branch_id: v })}>
                   <SelectTrigger className="bg-white border-slate-200">
                     <SelectValue placeholder="All Branches" />
                   </SelectTrigger>

@@ -75,7 +75,7 @@ class TicketController extends Controller
             ->when($request->main_category_id, fn($q, $v) => $q->where('ticket_main_category_id', $v))
             ->when($request->fiscal_year_id, fn($q, $v) => $q->where('fiscal_year_id', $v))
             ->when($request->fiscal_month_id, fn($q, $v) => $q->where('fiscal_month_id', $v))
-            ->when($request->beneficiary_branch_id, fn($q, $v) => $q->where('beneficiary_branch_id', $v))
+            ->when($request->requestor_branch_id, fn($q, $v) => $q->where('requestor_branch_id', $v))
             ->when($request->start_date, fn($q, $v) => $q->whereDate('created_at', '>=', $v))
             ->when($request->end_date, fn($q, $v) => $q->whereDate('created_at', '<=', $v));
 
@@ -87,7 +87,7 @@ class TicketController extends Controller
         // 3. Filter Options for UI
         return Inertia::render('tickets/index', [
             'tickets' => $tickets,
-            'filters' => $request->only(['search', 'status', 'department_id', 'severity', 'main_category_id', 'fiscal_year_id', 'fiscal_month_id', 'beneficiary_branch_id', 'start_date', 'end_date']),
+            'filters' => $request->only(['search', 'status', 'department_id', 'severity', 'main_category_id', 'fiscal_year_id', 'fiscal_month_id', 'requestor_branch_id', 'start_date', 'end_date']),
             'can_create' => $user->can('ticket.create'),
             'options' => [
                 'statuses' => array_column(TicketStatus::cases(), 'value'),
