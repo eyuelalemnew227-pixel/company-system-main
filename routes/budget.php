@@ -25,8 +25,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('budget/expense-budget/budgeted-items', [ExpenseBudgetController::class, 'getBudgetedExpenseItems'])->name('expense-budget.budgeted-items');
     });
 
-    Route::middleware('permission:manage sales budget')->group(function () {
+    Route::middleware('permission:view sales budget|manage sales budget')->group(function () {
         Route::get('budget/sales-budget', [SalesBudgetController::class, 'index'])->name('sales-budget.index');
+    });
+
+    Route::middleware('permission:manage sales budget')->group(function () {
         Route::get('budget/sales-budget/create', [SalesBudgetController::class, 'create'])->name('sales-budget.create');
         Route::post('budget/sales-budget', [SalesBudgetController::class, 'store'])->name('sales-budget.store');
         Route::get('budget/sales-budget/check', [SalesBudgetController::class, 'check'])->name('sales-budget.check');

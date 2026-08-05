@@ -21,7 +21,7 @@ class SalesBudgetController extends Controller
     // Check if user can add/edit/delete
     private function canModify(): bool
     {
-        return true;
+        return Auth::check() && Auth::user()->can('manage sales budget');
     }
 
     private function activeBranches()

@@ -10,13 +10,17 @@ class SalesBudgetPermissionSeeder extends Seeder
 {
     public function run(): void
     {
-        $permission = Permission::updateOrCreate(
+        $managePermission = Permission::updateOrCreate(
             ['name' => 'manage sales budget', 'guard_name' => 'web']
+        );
+
+        $viewPermission = Permission::updateOrCreate(
+            ['name' => 'view sales budget', 'guard_name' => 'web']
         );
 
         $adminRole = Role::where('name', 'Admin')->first();
         if ($adminRole) {
-            $adminRole->givePermissionTo($permission);
+            $adminRole->givePermissionTo([$managePermission, $viewPermission]);
         }
     }
 }

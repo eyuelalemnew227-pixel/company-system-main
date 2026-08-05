@@ -216,7 +216,7 @@ const baseSections: NavSection[] = [
         icon: TrendingUp,
         items: [
           { title: 'Add New Budget', href: '/budget/sales-budget/create', icon: ClipboardList, permission: 'manage sales budget' },
-          { title: 'View Budgets', href: '/budget/sales-budget', icon: BarChart3, permission: 'manage sales budget' },
+          { title: 'View Budgets', href: '/budget/sales-budget', icon: BarChart3, permission: 'manage sales budget|view sales budget' },
           { title: 'Action Logs', href: '/budget/sales-budget/logs', icon: History, permission: 'manage sales budget' },
         ],
       },
