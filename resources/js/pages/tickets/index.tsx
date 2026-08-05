@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Search, XCircle } from 'lucide-react';
+import { Search, XCircle, Download } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -21,6 +21,7 @@ type Ticket = {
   department?: { name: string };
   mainCategory?: { name: string };
   subCategory?: { name: string };
+  requestor_branch?: { name: string };
   main_category?: { name: string };
   sub_category?: { name: string };
   asset?: { name: string; bar_code?: string | null; article_code?: string | null } | null;
@@ -112,6 +113,14 @@ export default function TicketIndex() {
     router.get('/tickets', {}, { replace: true });
   };
 
+  const handleExport = () => {
+    const cleanParams = Object.fromEntries(
+      Object.entries(params).filter(([_, v]) => v !== '' && v !== 'all')
+    );
+    const queryString = new URLSearchParams(cleanParams).toString();
+    window.location.href = `/tickets/export?${queryString}`;
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') applyFilters();
   };
@@ -122,11 +131,17 @@ export default function TicketIndex() {
       <div className="flex h-full flex-1 flex-col gap-4 p-4">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold">Tickets</h1>
-          {can_create && (
-            <Button asChild>
-              <Link href={route('tickets.create')}>New Ticket</Link>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleExport} className="flex gap-2 bg-white hover:bg-slate-50 border-slate-200">
+              <Download className="h-4 w-4" />
+              Export CSV
             </Button>
-          )}
+            {can_create && (
+              <Button asChild>
+                <Link href={route('tickets.create')}>New Ticket</Link>
+              </Button>
+            )}
+          </div>
         </div>
 
         <Card className="bg-slate-50 border-slate-200 shadow-sm">
@@ -310,6 +325,7 @@ export default function TicketIndex() {
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="font-bold text-slate-700 w-20">ID</TableHead>
                     <TableHead className="font-bold text-slate-700">Category</TableHead>
+                    <TableHead className="font-bold text-slate-700">Requestor Branch</TableHead>
                     <TableHead className="font-bold text-slate-700">Department</TableHead>
                     <TableHead className="font-bold text-slate-700">Sub Category</TableHead>
                     <TableHead className="font-bold text-slate-700">Status</TableHead>
@@ -334,6 +350,7 @@ export default function TicketIndex() {
                             {t.main_category?.name ?? t.mainCategory?.name ?? t.title}
                           </Link>
                         </TableCell>
+                        <TableCell className="text-sm text-slate-600">{t.requestor_branch?.name ?? '—'}</TableCell>
                         <TableCell className="text-sm text-slate-600">{t.department?.name ?? '—'}</TableCell>
                         <TableCell>
                           <div className="text-sm text-slate-600 line-clamp-1">

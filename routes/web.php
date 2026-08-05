@@ -377,6 +377,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
     Route::get('tickets/store-balance', [\App\Http\Controllers\TicketController::class, 'getStoreBalance'])
         ->name('tickets.store-balance');
+    Route::get('tickets/export', [\App\Http\Controllers\TicketController::class, 'export'])
+        ->name('tickets.export')
+        ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
     Route::get('tickets/create', [\App\Http\Controllers\TicketController::class, 'create'])
         ->name('tickets.create');
     Route::post('tickets', [\App\Http\Controllers\TicketController::class, 'store'])

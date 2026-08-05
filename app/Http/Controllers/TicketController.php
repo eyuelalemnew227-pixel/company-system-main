@@ -40,7 +40,7 @@ class TicketController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = Ticket::query()->with(['department', 'mainCategory', 'subCategory', 'asset']);
+        $query = Ticket::query()->with(['department', 'mainCategory', 'subCategory', 'asset', 'requestorBranch']);
 
         // 1. Authorization Scoping
         if ($user->can('ticket.view.all')) {
@@ -100,6 +100,146 @@ class TicketController extends Controller
                 'branches' => \App\Models\Branch::select('id', 'name')->orderBy('name')->get(),
             ]
         ]);
+    }
+
+    public function export(Request $request)
+    {
+        $user = $request->user();
+        $query = \App\Models\Ticket::query()->with([
+            'department',
+            'mainCategory',
+            'subCategory',
+            'asset',
+            'requestorBranch',
+            'beneficiaryBranch',
+            'fiscalYear',
+            'fiscalMonth',
+            'productRequests.product',
+            'productRequests.sparePart'
+        ]);
+
+        // 1. Authorization Scoping
+        if ($user->can('ticket.view.all')) {
+            // Full global access
+        } else {
+            $managedIds = $user->managedDepartmentIds();
+            $query->where(function ($q) use ($user, $managedIds) {
+                $q->where('user_id', $user->id)
+                    ->orWhereHas('assignments', function ($sq) use ($user) {
+                        $sq->where('assigned_to', $user->id);
+                    })
+                    ->orWhereIn('department_id', $managedIds);
+            });
+        }
+
+        // 2. Filters & Search
+        $query->when($request->search, function ($q, $search) {
+            $q->where(function ($inner) use ($search) {
+                $inner->where('id', 'like', "%{$search}%")
+                    ->orWhere('title', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhere('requestor_full_name', 'like', "%{$search}%");
+            });
+        })
+            ->when($request->status, fn($q, $v) => $q->where('status', $v))
+            ->when($request->department_id, fn($q, $v) => $q->where('department_id', $v))
+            ->when($request->severity, fn($q, $v) => $q->where('severity', $v))
+            ->when($request->priority, fn($q, $v) => $q->where('priority', $v))
+            ->when($request->main_category_id, fn($q, $v) => $q->where('ticket_main_category_id', $v))
+            ->when($request->fiscal_year_id, fn($q, $v) => $q->where('fiscal_year_id', $v))
+            ->when($request->fiscal_month_id, fn($q, $v) => $q->where('fiscal_month_id', $v))
+            ->when($request->requestor_branch_id, fn($q, $v) => $q->where('requestor_branch_id', $v))
+            ->when($request->start_date, fn($q, $v) => $q->whereDate('created_at', '>=', $v))
+            ->when($request->end_date, fn($q, $v) => $q->whereDate('created_at', '<=', $v));
+
+        $tickets = $query->latest()->get();
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="tickets-export-' . date('Y-m-d-His') . '.csv"',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate',
+        ];
+
+        return response()->stream(function () use ($tickets, $request) {
+            $out = fopen('php://output', 'w');
+            fprintf($out, chr(0xEF) . chr(0xBB) . chr(0xBF)); // BOM for Excel
+
+            // If the filter is explicitly set to Purchase Department (18068)
+            $isPurchaseDept = $request->department_id == self::PURCHASE_DEPT_ID;
+
+            if ($isPurchaseDept) {
+                fputcsv($out, [
+                    'Ticket ID',
+                    'Fiscal Year',
+                    'Fiscal Month',
+                    'Requestor Branch',
+                    'Beneficiary Branch',
+                    'Child Category',
+                    'Product / Spare Part',
+                    'Product Code',
+                    'Quantity',
+                    'UOM',
+                    'Ticket Date',
+                    'Status',
+                ]);
+
+                foreach ($tickets as $ticket) {
+                    if ($ticket->productRequests->isEmpty()) {
+                        continue;
+                    }
+                    foreach ($ticket->productRequests as $req) {
+                        $productName = $req->product ? $req->product->product_name : ($req->sparePart ? $req->sparePart->name : 'Unknown');
+                        $productCode = $req->product ? $req->product->product_code : ($req->sparePart ? $req->sparePart->article_code : '');
+
+                        fputcsv($out, [
+                            $ticket->id,
+                            $ticket->fiscalYear?->name ?? '-',
+                            $ticket->fiscalMonth?->name ?? '-',
+                            $ticket->requestorBranch?->name ?? '-',
+                            $ticket->beneficiaryBranch?->name ?? '-',
+                            $ticket->subCategory?->name ?? '-',
+                            $productName,
+                            $productCode,
+                            $req->quantity,
+                            $req->uom,
+                            $ticket->created_at->format('Y-m-d H:i:s'),
+                            $ticket->status->value ?? '-',
+                        ]);
+                    }
+                }
+            } else {
+                fputcsv($out, [
+                    'ID',
+                    'Fiscal Year',
+                    'Fiscal Month',
+                    'Title',
+                    'Department',
+                    'Main Category',
+                    'Sub Category',
+                    'Requestor Branch',
+                    'Status',
+                    'Priority',
+                    'Date Created'
+                ]);
+
+                foreach ($tickets as $ticket) {
+                    fputcsv($out, [
+                        $ticket->id,
+                        $ticket->fiscalYear?->name ?? '-',
+                        $ticket->fiscalMonth?->name ?? '-',
+                        $ticket->title,
+                        $ticket->department?->name ?? '-',
+                        $ticket->mainCategory?->name ?? '-',
+                        $ticket->subCategory?->name ?? '-',
+                        $ticket->requestorBranch?->name ?? '-',
+                        $ticket->status->value ?? '-',
+                        $ticket->priority->value ?? '-',
+                        $ticket->created_at->format('Y-m-d H:i:s'),
+                    ]);
+                }
+            }
+            fclose($out);
+        }, 200, $headers);
     }
 
     public function create(Request $request)
