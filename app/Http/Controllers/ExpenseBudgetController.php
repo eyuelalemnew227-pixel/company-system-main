@@ -114,11 +114,12 @@ class ExpenseBudgetController extends Controller
                     }
                 });
             })
+            ->orderByRaw("CASE WHEN name LIKE '%Head Office%' OR UPPER(branch_code) = 'HO' THEN 0 ELSE 1 END")
             ->orderBy('name')
             ->get(['id', 'name', 'branch_code']);
 
         $departments = Department::query()
-            ->where('is_active', true)
+            ->where('is_active_on_weekly_budget', 1)
             ->when(! ExpenseBudgetAccess::hasUnrestrictedViewAccess($user), function ($query) use ($user, $isUserHO) {
                 if ($user->can(ExpenseBudgetAccess::viewAllExceptHOPermission())) {
                     // Do nothing, they can see all departments in their allowed branches

@@ -540,7 +540,7 @@ export default function ExpenseBudgetIndex({
                                             role="combobox"
                                             className="w-[180px] justify-between font-normal"
                                         >
-                                            {selectedBranchOption?.name ?? 'All Branches'}
+                                            {selectedBranchOption?.name ?? 'All Branches/HO'}
                                             <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
                                         </Button>
                                     </PopoverTrigger>
@@ -551,7 +551,7 @@ export default function ExpenseBudgetIndex({
                                                 <CommandEmpty>No branches found.</CommandEmpty>
                                                 <CommandGroup>
                                                     <CommandItem
-                                                        value="All Branches"
+                                                        value="All Branches/HO"
                                                         onSelect={() => handleBranchFilterSelect('all')}
                                                     >
                                                         <Check
@@ -560,7 +560,7 @@ export default function ExpenseBudgetIndex({
                                                                 selectedBranch === 'all' ? 'opacity-100' : 'opacity-0',
                                                             )}
                                                         />
-                                                        All Branches
+                                                        All Branches/HO
                                                     </CommandItem>
                                                     {branches.map((branch) => (
                                                         <CommandItem
@@ -917,9 +917,9 @@ export default function ExpenseBudgetIndex({
                                             >
                                                 {editForm.department_id
                                                     ? departments.find(
-                                                          (department) =>
-                                                              department.id.toString() === editForm.department_id,
-                                                      )?.name
+                                                        (department) =>
+                                                            department.id.toString() === editForm.department_id,
+                                                    )?.name
                                                     : 'Select Department'}
                                                 <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
                                             </Button>
@@ -1069,8 +1069,8 @@ export default function ExpenseBudgetIndex({
                             {historyData?.item
                                 ? `${historyData.item.expense_item ?? 'Expense item'} · ${historyData.item.fiscal_month ?? 'N/A'} / ${historyData.item.fiscal_year ?? 'N/A'} · ${historyData.item.branch ?? 'N/A'}${historyData.item.department ? ` (${historyData.item.department})` : ''}`
                                 : historyItem
-                                  ? `${historyItem.expense_item ?? 'Expense item'} · ${historyItem.fiscal_month ?? 'N/A'} / ${historyItem.fiscal_year ?? 'N/A'}`
-                                  : 'Expense budget item activity'}
+                                    ? `${historyItem.expense_item ?? 'Expense item'} · ${historyItem.fiscal_month ?? 'N/A'} / ${historyItem.fiscal_year ?? 'N/A'}`
+                                    : 'Expense budget item activity'}
                         </DialogDescription>
                     </DialogHeader>
 
