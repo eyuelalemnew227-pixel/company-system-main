@@ -2,7 +2,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { usePopup } from '@/hooks/use-popup';
 
 const breadcrumbs: BreadcrumbItem[] = [
 	{ title: 'Sales Budgets', href: '/budget/sales-budget' },
@@ -63,6 +63,7 @@ interface Props {
 
 export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths, monthNames }: Props) {
 	const { flash } = usePage<{ flash: { message?: string; error?: string } }>().props;
+	const { triggerPopup, PopupComponent } = usePopup();
 
 	// Find current fiscal year based on today's date
 	function getCurrentFiscalYear() {
@@ -116,9 +117,9 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 	}
 
 	useEffect(() => {
-		if (flash?.message) toast.success(flash.message);
-		if (flash?.error) toast.error(flash.error);
-	}, [flash]);
+		if (flash?.message) triggerPopup('Success', flash.message, 'success');
+		if (flash?.error) triggerPopup('Error', flash.error, 'error');
+	}, [flash, triggerPopup]);
 
 	// Initialize rows from all branches
 	useEffect(() => {
@@ -208,12 +209,12 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 	// Submit
 	function handleSubmit() {
 		if (!selectedFiscalYearId || !selectedFiscalMonthId || !ethiopianYear || !ethiopianMonth) {
-			toast.error('Please select fiscal year and fiscal month.');
+			triggerPopup('Error', 'Please select fiscal year and fiscal month.', 'error');
 			return;
 		}
 		const hasAtLeastOne = rows.some((r) => r.sales_amount !== '');
 		if (!hasAtLeastOne) {
-			toast.error('Please fill in sales amount for at least one branch.');
+			triggerPopup('Error', 'Please fill in sales amount for at least one branch.', 'error');
 			return;
 		}
 
@@ -437,6 +438,7 @@ export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths,
 					</div>
 				</div>
 			</div>
+			<PopupComponent />
 		</AppLayout>
 	);
 }

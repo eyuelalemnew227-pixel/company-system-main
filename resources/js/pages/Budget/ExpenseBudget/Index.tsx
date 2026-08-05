@@ -24,8 +24,8 @@ import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Check, ChevronsUpDown, Filter, History, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { debounce } from 'lodash';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { usePopup } from '@/hooks/use-popup';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'View Expense Budget', href: '/budget/expense-budget' },
@@ -235,6 +235,7 @@ export default function ExpenseBudgetIndex({
 }: IndexProps) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
     const { canManageExpenseBudget } = usePermission();
+    const { triggerPopup, PopupComponent } = usePopup();
 
     const [search, setSearch] = useState<string>(request?.search ?? '');
     const [selectedBranch, setSelectedBranch] = useState<string>(request?.branch_id ?? 'all');
@@ -302,9 +303,9 @@ export default function ExpenseBudgetIndex({
 
     useEffect(() => {
         if (flash.message) {
-            toast.success(flash.message);
+            triggerPopup('Success', flash.message, 'success');
         }
-    }, [flash.message]);
+    }, [flash.message, triggerPopup]);
 
     const debouncedSearch = useCallback(
         debounce((value: string) => {
@@ -406,7 +407,7 @@ export default function ExpenseBudgetIndex({
             const data = (await response.json()) as ActivityLogResponse;
             setHistoryData(data);
         } catch (error) {
-            toast.error(error instanceof Error ? error.message : 'Failed to load activity history.');
+            triggerPopup('Error', error instanceof Error ? error.message : 'Failed to load activity history.', 'error');
             setHistoryItem(null);
         } finally {
             setHistoryLoading(false);
@@ -477,13 +478,13 @@ export default function ExpenseBudgetIndex({
         }
 
         if (canEditDepartment && !editForm.department_id) {
-            toast.error('The department field is required when the selected branch is Head Office.');
+            triggerPopup('Error', 'The department field is required when the selected branch is Head Office.', 'error');
             return;
         }
 
         const parsedBudget = parseFormattedNumber(editForm.planned_budget);
         if (Number.isNaN(parsedBudget) || parsedBudget < 0) {
-            toast.error('Please enter a valid planned budget.');
+            triggerPopup('Error', 'Please enter a valid planned budget.', 'error');
             return;
         }
 
@@ -1122,6 +1123,7 @@ export default function ExpenseBudgetIndex({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+            <PopupComponent />
         </AppLayout>
     );
 }

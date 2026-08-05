@@ -8,7 +8,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { usePopup } from '@/hooks/use-popup';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Sales Budgets', href: '/budget/sales-budget' }];
 
@@ -83,6 +83,7 @@ interface Props {
 
 export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fiscalMonths, canModify, request }: Props) {
 	const { flash } = usePage<{ flash: { message?: string; error?: string } }>().props;
+	const { triggerPopup, PopupComponent } = usePopup();
 
 	const [deleteModal, setDeleteModal] = useState<{
 		open: boolean;
@@ -102,9 +103,9 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 	const [deleting, setDeleting] = useState(false);
 
 	useEffect(() => {
-		if (flash?.message) toast.success(flash.message);
-		if (flash?.error) toast.error(flash.error);
-	}, [flash]);
+		if (flash?.message) triggerPopup('Success', flash.message, 'success');
+		if (flash?.error) triggerPopup('Error', flash.error, 'error');
+	}, [flash, triggerPopup]);
 
 	useEffect(() => {
 		setSelectedBranch(request?.branch_id ?? '');
@@ -485,6 +486,7 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 					</div>
 				</div>
 			)}
+			<PopupComponent />
 		</AppLayout>
 	);
 }

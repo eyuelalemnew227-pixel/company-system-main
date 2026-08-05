@@ -13,7 +13,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { Check, ChevronsUpDown, FileText, Save } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { usePopup } from '@/hooks/use-popup';
 
 const breadcrumbs: BreadcrumbItem[] = [
 	{ title: 'Weekly Budgets', href: '/budget/weekly-budget' },
@@ -236,6 +236,7 @@ export default function CreateWeeklyBudget({
 	currentFiscalMonthId,
 	request,
 }: CreateProps) {
+	const { triggerPopup, PopupComponent } = usePopup();
 	const { data, setData, post, processing, errors, clearErrors, setError, transform } = useForm({
 		request_type: 'normal',
 		branch_id: request?.branch_id || '',
@@ -389,7 +390,7 @@ export default function CreateWeeklyBudget({
 			onSuccess: (page) => {
 				const message = (page.props as { flash?: { message?: string } }).flash?.message;
 				if (message) {
-					toast.success(message);
+					triggerPopup('Success', message, 'success');
 				}
 			},
 		});
@@ -673,6 +674,7 @@ export default function CreateWeeklyBudget({
 					</CardContent>
 				</Card>
 			</div>
+			<PopupComponent />
 		</AppLayout>
 	);
 }

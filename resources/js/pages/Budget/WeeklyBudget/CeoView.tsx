@@ -15,7 +15,7 @@ import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Check, ChevronsUpDown, Filter, MessageSquare, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { usePopup } from '@/hooks/use-popup';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Weekly Budgets CEO', href: '/budget/weekly-budget/ceo' }];
 
@@ -233,6 +233,7 @@ export default function WeeklyBudgetCeoView({
 	totalBudget,
 }: CeoProps) {
 	const { flash, errors } = usePage<any>().props;
+	const { triggerPopup, PopupComponent } = usePopup();
 	const { can } = usePermission();
 	const canManageCeo = can('manage ceo budgets');
 
@@ -303,9 +304,9 @@ export default function WeeklyBudgetCeoView({
 	}, [selectedFiscalYear, selectedFiscalMonth, fiscalYears, fiscalMonths, currentFiscalYearId, today]);
 
 	useEffect(() => {
-		if (flash?.message) toast.success(flash.message);
-		if (errors?.status_ceo) toast.error(errors.status_ceo);
-	}, [flash?.message, errors]);
+		if (flash?.message) triggerPopup('Success', flash.message, 'success');
+		if (errors?.status_ceo) triggerPopup('Error', errors.status_ceo, 'error');
+	}, [flash?.message, errors, triggerPopup]);
 
 	const allSelectableIds = useMemo(() => {
 		return items.data.filter((item) => item.status_finance !== 'paid').map((item) => item.id);
@@ -379,8 +380,8 @@ export default function WeeklyBudgetCeoView({
 	}
 
 	function handleBulkUpdate() {
-		if (!bulkStatus) return toast.error('Select a status to apply.');
-		if (selectedIds.length === 0) return toast.error('Select at least one item.');
+		if (!bulkStatus) return triggerPopup('Error', 'Select a status to apply.', 'error');
+		if (selectedIds.length === 0) return triggerPopup('Error', 'Select at least one item.', 'error');
 
 		router.patch(
 			'/budget/weekly-budget/ceo/bulk',
@@ -922,6 +923,7 @@ export default function WeeklyBudgetCeoView({
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+			<PopupComponent />
 		</AppLayout>
 	);
 }

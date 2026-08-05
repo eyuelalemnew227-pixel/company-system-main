@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { PopupNotification } from '@/components/shared/popup-notification';
 
 type Activity = {
   id: number;
@@ -1085,33 +1086,15 @@ export default function TicketShow() {
       </Dialog>
 
       {/* Status Change Confirmation Modal */}
-      <Dialog open={!!statusChangedTo} onOpenChange={(open) => !open && setStatusChangedTo(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader className="flex flex-col items-center gap-2 pt-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 mb-2">
-              <CheckCircle2 className="h-6 w-6 text-green-600" />
-            </div>
-            <DialogTitle className="text-xl text-center">
-              {flash.just_created ? 'Ticket Submitted Successfully' : 'Status Updated Successfully'}
-            </DialogTitle>
-            <DialogDescription className="text-center">
-              {flash.just_created ? 'Your ticket has been created and is now:' : 'The ticket status has been changed to:'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-center py-6">
-            <StatusBadge status={statusChangedTo || ''} />
-          </div>
-          <DialogFooter className="sm:justify-center">
-            <Button
-              type="button"
-              className="px-8 bg-green-600 hover:bg-green-700 font-bold"
-              onClick={() => setStatusChangedTo(null)}
-            >
-              Done
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <PopupNotification
+        isOpen={!!statusChangedTo}
+        onClose={() => setStatusChangedTo(null)}
+        title={flash.just_created ? 'Ticket Submitted Successfully' : 'Status Updated Successfully'}
+        description={flash.just_created ? 'Your ticket has been created and is now:' : 'The ticket status has been changed to:'}
+        type="success"
+      >
+        <StatusBadge status={statusChangedTo || ''} />
+      </PopupNotification>
 
       {/* Rating Modal */}
       <Dialog open={isRatingModalOpen} onOpenChange={setIsRatingModalOpen}>

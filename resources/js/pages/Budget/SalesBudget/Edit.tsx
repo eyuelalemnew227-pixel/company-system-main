@@ -2,7 +2,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { usePopup } from '@/hooks/use-popup';
 
 const breadcrumbs: BreadcrumbItem[] = [
 	{ title: 'Sales Budgets', href: '/budget/sales-budget' },
@@ -48,29 +48,30 @@ interface Props {
 
 export default function SalesBudgetEdit({ budget, monthNames, canModify }: Props) {
 	const { flash } = usePage<{ flash: { message?: string; error?: string } }>().props;
+	const { triggerPopup, PopupComponent } = usePopup();
 	const [salesAmount, setSalesAmount] = useState(budget.sales_amount ?? '');
 	const [processing, setProcessing] = useState(false);
 
 	useEffect(() => {
-		if (flash?.message) toast.success(flash.message);
-		if (flash?.error) toast.error(flash.error);
-	}, [flash]);
+		if (flash?.message) triggerPopup('Success', flash.message, 'success');
+		if (flash?.error) triggerPopup('Error', flash.error, 'error');
+	}, [flash, triggerPopup]);
 
 	function handleSubmit() {
 		if (!canModify) {
-			toast.error('You do not have permission to edit budgets.');
+			triggerPopup('Error', 'You do not have permission to edit budgets.', 'error');
 			return;
 		}
 
 		const value = salesAmount.trim();
 		if (value === '') {
-			toast.error('Please enter a sales amount.');
+			triggerPopup('Error', 'Please enter a sales amount.', 'error');
 			return;
 		}
 
 		const parsed = Number(value);
 		if (Number.isNaN(parsed) || parsed < 0) {
-			toast.error('Sales amount must be a valid non-negative number.');
+			triggerPopup('Error', 'Sales amount must be a valid non-negative number.', 'error');
 			return;
 		}
 
@@ -170,6 +171,7 @@ export default function SalesBudgetEdit({ budget, monthNames, canModify }: Props
 					</div>
 				</div>
 			</div>
+			<PopupComponent />
 		</AppLayout>
 	);
 }

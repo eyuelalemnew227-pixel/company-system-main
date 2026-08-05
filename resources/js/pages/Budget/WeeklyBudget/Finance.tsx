@@ -16,7 +16,7 @@ import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Check, ChevronsUpDown, FileText, Filter, MessageSquare, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { usePopup } from '@/hooks/use-popup';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Weekly Budgets Finance', href: '/budget/weekly-budget/finance' }];
 
@@ -289,6 +289,7 @@ export default function WeeklyBudgetFinance({
 	totalBudget,
 }: IndexProps) {
 	const { flash, errors } = usePage<any>().props;
+	const { triggerPopup, PopupComponent } = usePopup();
 	const { can } = usePermission();
 	const canManageFinance = can('manage finance budgets');
 	const canOverridePaid = can('override_paid_status');
@@ -366,9 +367,9 @@ export default function WeeklyBudgetFinance({
 	}, [selectedFiscalYear, selectedFiscalMonth, fiscalYears, fiscalMonths, currentFiscalYearId, today]);
 
 	useEffect(() => {
-		if (flash?.message) toast.success(flash.message);
-		if (errors?.status_finance) toast.error(errors.status_finance);
-	}, [flash?.message, errors]);
+		if (flash?.message) triggerPopup('Success', flash.message, 'success');
+		if (errors?.status_finance) triggerPopup('Error', errors.status_finance, 'error');
+	}, [flash?.message, errors, triggerPopup]);
 
 	function buildFilterParams(): Record<string, string> {
 		const params: Record<string, string> = {};
@@ -464,8 +465,8 @@ export default function WeeklyBudgetFinance({
 	}
 
 	function handleBulkUpdate() {
-		if (!bulkStatus) return toast.error('Select a status to apply.');
-		if (selectedIds.length === 0) return toast.error('Select at least one item.');
+		if (!bulkStatus) return triggerPopup('Error', 'Select a status to apply.', 'error');
+		if (selectedIds.length === 0) return triggerPopup('Error', 'Select at least one item.', 'error');
 
 		router.patch(
 			'/budget/weekly-budget/finance/bulk',
@@ -499,15 +500,15 @@ export default function WeeklyBudgetFinance({
 
 		if (editForm.status_finance === 'paid') {
 			if (item.status_ceo !== 'approved') {
-				return toast.error('Cannot mark as Paid until CEO Status is Approved.');
+				return triggerPopup('Error', 'Cannot mark as Paid until CEO Status is Approved.', 'error');
 			}
 			if (!editForm.payment_category_id || !editForm.payment_type_id) {
-				return toast.error('Payment Category and Payment Type are required to mark as Paid.');
+				return triggerPopup('Error', 'Payment Category and Payment Type are required to mark as Paid.', 'error');
 			}
 		}
 
 		if (item.status_finance === 'paid' && editForm.status_finance === 'approved' && !canOverridePaid) {
-			return toast.error('You do not have permission to revert Paid status.');
+			return triggerPopup('Error', 'You do not have permission to revert Paid status.', 'error');
 		}
 
 		router.patch(
@@ -1204,6 +1205,7 @@ export default function WeeklyBudgetFinance({
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+			<PopupComponent />
 		</AppLayout>
 	);
 }

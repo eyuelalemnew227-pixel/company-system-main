@@ -17,7 +17,7 @@ import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Check, ChevronsUpDown, Filter, History, MessageSquare, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import { usePopup } from '@/hooks/use-popup';
 
 const breadcrumbs: BreadcrumbItem[] = [{ title: 'Weekly Budgets', href: '/budget/weekly-budget' }];
 
@@ -405,6 +405,7 @@ export default function WeeklyBudgetIndex({
 	totalBudget,
 }: IndexProps) {
 	const { flash } = usePage<{ flash: { message?: string } }>().props;
+	const { triggerPopup, PopupComponent } = usePopup();
 	const { can } = usePermission();
 	const canManageWeeklyBudget = can('manage weekly budgets');
 
@@ -452,7 +453,7 @@ export default function WeeklyBudgetIndex({
 
 	function handleNewRequestContinue() {
 		if (!newRequestDept) {
-			toast.error('Please select a department.');
+			triggerPopup('Error', 'Please select a department.', 'error');
 			return;
 		}
 
@@ -512,7 +513,7 @@ export default function WeeklyBudgetIndex({
 			const data = (await response.json()) as ActivityLogResponse;
 			setHistoryData(data);
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : 'Failed to load activity history.');
+			triggerPopup('Error', error instanceof Error ? error.message : 'Failed to load activity history.', 'error');
 			setHistoryItem(null);
 		} finally {
 			setHistoryLoading(false);
@@ -573,18 +574,18 @@ export default function WeeklyBudgetIndex({
 		if (!editingItem || !editForm) return;
 
 		if (canEditDepartment && !editForm.department_id) {
-			toast.error('The department field is required when the selected branch is Head Office.');
+			triggerPopup('Error', 'The department field is required when the selected branch is Head Office.', 'error');
 			return;
 		}
 
 		const parsedAmount = parseFormattedNumber(editForm.amount);
 		if (Number.isNaN(parsedAmount) || parsedAmount < 0) {
-			toast.error('Please enter a valid amount.');
+			triggerPopup('Error', 'Please enter a valid amount.', 'error');
 			return;
 		}
 
 		if (!editForm.week_start_date || !editForm.week_end_date || !editForm.week_number) {
-			toast.error('Please select a valid budget week date.');
+			triggerPopup('Error', 'Please select a valid budget week date.', 'error');
 			return;
 		}
 
@@ -659,9 +660,9 @@ export default function WeeklyBudgetIndex({
 
 	useEffect(() => {
 		if (flash?.message) {
-			toast.success(flash.message);
+			triggerPopup('Success', flash.message, 'success');
 		}
-	}, [flash?.message]);
+	}, [flash, triggerPopup]);
 
 	function buildFilterParams(): Record<string, string> {
 		const params: Record<string, string> = {};
@@ -1589,6 +1590,7 @@ export default function WeeklyBudgetIndex({
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+			<PopupComponent />
 		</AppLayout>
 	);
 }

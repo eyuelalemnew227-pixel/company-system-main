@@ -38,7 +38,7 @@ import {
     type LucideIcon,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from 'sonner';
+import { usePopup } from '@/hooks/use-popup';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Add Expense Budget', href: '/budget/expense-budget/create' },
@@ -223,6 +223,7 @@ export default function CreateExpenseBudget({
 }: CreateProps) {
     const now = new Date();
     const ethiopianDate = formatEthiopianDate(now);
+    const { triggerPopup, PopupComponent } = usePopup();
 
     const { data, setData, post, processing, errors, transform, setError, clearErrors } = useForm({
         fiscal_year_id: defaultFiscalYearId ? String(defaultFiscalYearId) : '',
@@ -498,7 +499,7 @@ export default function CreateExpenseBudget({
                 const message = (page.props as { flash?: { message?: string } }).flash?.message;
 
                 if (message) {
-                    toast.success(message);
+                    triggerPopup('Success', message, 'success');
                 }
 
                 setBudgetedExpenseItemIds((prev) => new Set([...prev, ...savedItemIds]));
@@ -849,6 +850,7 @@ export default function CreateExpenseBudget({
                     </CardContent>
                 </Card>
             </div>
+            <PopupComponent />
         </AppLayout>
     );
 }
