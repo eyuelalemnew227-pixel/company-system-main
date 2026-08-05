@@ -25,7 +25,8 @@ import {
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
-const SIDEBAR_WIDTH = "16rem"
+const SIDEBAR_WIDTH_COOKIE = "sidebar_width"
+const SIDEBAR_WIDTH = "17rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
@@ -38,6 +39,8 @@ type SidebarContext = {
   setOpenMobile: (open: boolean) => void
   isMobile: boolean
   toggleSidebar: () => void
+  sidebarWidth: string
+  setSidebarWidth: (width: string) => void
 }
 
 const SidebarContext = React.createContext<SidebarContext | null>(null)
@@ -66,6 +69,18 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
+
+  const [sidebarWidth, setSidebarWidth] = React.useState(() => {
+    if (typeof document !== "undefined") {
+      const match = document.cookie.match(new RegExp(`(^| )${SIDEBAR_WIDTH_COOKIE}=([^;]+)`))
+      if (match && match[2]) return match[2]
+    }
+    return SIDEBAR_WIDTH
+  })
+
+  React.useEffect(() => {
+    document.cookie = `${SIDEBAR_WIDTH_COOKIE}=${sidebarWidth}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+  }, [sidebarWidth])
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -120,8 +135,10 @@ function SidebarProvider({
       openMobile,
       setOpenMobile,
       toggleSidebar,
+      sidebarWidth,
+      setSidebarWidth,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, sidebarWidth, setSidebarWidth]
   )
 
   return (
@@ -131,7 +148,7 @@ function SidebarProvider({
           data-slot="sidebar-wrapper"
           style={
             {
-              "--sidebar-width": SIDEBAR_WIDTH,
+              "--sidebar-width": sidebarWidth,
               "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
               ...style,
             } as React.CSSProperties
@@ -161,7 +178,54 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const { isMobile, state, openMobile, setOpenMobile, sidebarWidth, setSidebarWidth } = useSidebar()
+  const [isResizing, setIsResizing] = React.useState(false)
+  const isResizingRef = React.useRef(false)
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    isResizingRef.current = true
+    setIsResizing(true)
+    document.addEventListener("mousemove", handleMouseMove)
+    document.addEventListener("mouseup", handleMouseUp)
+    document.body.style.cursor = "col-resize"
+    document.body.style.userSelect = "none"
+  }
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isResizingRef.current) return
+    let newWidth = e.clientX
+    if (side === "right") {
+      newWidth = document.body.clientWidth - e.clientX
+    }
+    // Convert to rem (assuming 16px root font size)
+    const newWidthRem = newWidth / 16
+    
+    if (newWidthRem >= 14 && newWidthRem <= 24) {
+      setSidebarWidth(`${newWidthRem}rem`)
+    } else if (newWidthRem < 14) {
+      setSidebarWidth(`14rem`)
+    } else if (newWidthRem > 24) {
+      setSidebarWidth(`24rem`)
+    }
+  }
+
+  const handleMouseUp = () => {
+    isResizingRef.current = false
+    setIsResizing(false)
+    document.removeEventListener("mousemove", handleMouseMove)
+    document.removeEventListener("mouseup", handleMouseUp)
+    document.body.style.cursor = ""
+    document.body.style.userSelect = ""
+  }
+
+  React.useEffect(() => {
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
+    }
+  }, [])
 
   if (collapsible === "none") {
     return (
@@ -210,6 +274,7 @@ function Sidebar({
       data-collapsible={state === "collapsed" ? collapsible : ""}
       data-variant={variant}
       data-side={side}
+      data-resizing={isResizing ? "true" : "false"}
       data-slot="sidebar"
     >
       {/* This is what handles the sidebar gap on desktop */}
@@ -225,7 +290,8 @@ function Sidebar({
       />
       <div
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
+          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) md:flex",
+          !isResizing && "transition-[left,right,width] duration-200 ease-linear",
           side === "left"
             ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
             : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
@@ -243,6 +309,17 @@ function Sidebar({
         >
           {children}
         </div>
+        {variant !== "floating" && state === "expanded" && (
+            <div
+              className={cn(
+                "absolute inset-y-0 z-50 w-2 cursor-col-resize hover:bg-sidebar-border/80 transition-colors flex items-center justify-center group/resizer",
+                side === "left" ? "-right-1" : "-left-1"
+              )}
+              onMouseDown={handleMouseDown}
+            >
+              <div className="w-[2px] h-full bg-transparent group-hover/resizer:bg-sidebar-border transition-colors" />
+            </div>
+        )}
       </div>
     </div>
   )
@@ -596,7 +673,7 @@ function SidebarMenuAction({
         "peer-data-[size=lg]/menu-button:top-2.5",
         "group-data-[collapsible=icon]:hidden",
         showOnHover &&
-          "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
+        "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
         className
       )}
       {...props}
@@ -670,7 +747,7 @@ function SidebarMenuSub({ className, ...props }: React.ComponentProps<"ul">) {
       data-slot="sidebar-menu-sub"
       data-sidebar="menu-sub"
       className={cn(
-        "border-sidebar-border mx-3.5 flex min-w-0 translate-x-px flex-col gap-1 border-l px-2.5 py-0.5",
+        "border-sidebar-border ml-3.5 mr-0 flex min-w-0 translate-x-px flex-col gap-1 border-l pl-2.5 pr-0 py-0.5",
         "group-data-[collapsible=icon]:hidden",
         className
       )}
