@@ -15,6 +15,7 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Validation\Rule;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Carbon\Carbon;
+use App\Services\CsvExportService;
 
 class SalesBudgetController extends Controller
 {
@@ -174,6 +175,128 @@ class SalesBudgetController extends Controller
                 'show_unbudgeted' => $showUnbudgeted,
             ],
         ]);
+    }
+
+    public function export(Request $request, CsvExportService $csvExportService)
+    {
+        $branchId = $request->input('branch_id');
+        $fiscalYearId = $request->input('fiscal_year_id');
+        $fiscalMonthId = $request->input('fiscal_month_id');
+        $ethiopianYear = $request->input('ethiopian_year');
+        $showUnbudgeted = filter_var($request->input('show_unbudgeted', false), FILTER_VALIDATE_BOOLEAN);
+
+        $allBranches = Branch::query()
+            ->where(function ($query) {
+                $query->where('status', 'active')
+                    ->orWhere('name', 'like', '%Head Office%')
+                    ->orWhereRaw('UPPER(branch_code) = ?', ['HO']);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name', 'branch_code']);
+            
+        $fiscalYears = FiscalYear::orderByDesc('id')->get();
+        $fiscalMonths = FiscalMonth::query()
+            ->select('id', 'fiscal_year_id', 'name', 'efy_month_number')
+            ->orderBy('fiscal_year_id')
+            ->orderBy('efy_month_number')
+            ->get();
+
+        $selectedFiscalYear = $fiscalYearId ? $fiscalYears->firstWhere('id', $fiscalYearId) : null;
+        $selectedEthiopianYear = $request->filled('ethiopian_year')
+            ? (int) $ethiopianYear
+            : ($selectedFiscalYear ? (int) str_replace('EFY ', '', $selectedFiscalYear->name) : null);
+
+        $budgetQuery = SalesBudget::query()
+            ->with(['branch', 'createdBy', 'updatedBy', 'fiscalYear', 'fiscalMonth'])
+            ->leftJoin('fiscal_years', 'sales_budgets.fiscal_year_id', '=', 'fiscal_years.id')
+            ->leftJoin('fiscal_months', 'sales_budgets.fiscal_month_id', '=', 'fiscal_months.id')
+            ->when($request->filled('branch_id'), function ($query) use ($branchId) {
+                $query->where('sales_budgets.branch_id', $branchId);
+            })
+            ->when($request->filled('fiscal_year_id'), function ($query) use ($fiscalYearId) {
+                $query->where('sales_budgets.fiscal_year_id', $fiscalYearId);
+            })
+            ->when($request->filled('fiscal_month_id'), function ($query) use ($fiscalMonthId) {
+                $query->where('sales_budgets.fiscal_month_id', $fiscalMonthId);
+            })
+            ->orderByDesc('fiscal_years.gregorian_start_date')
+            ->orderByDesc('fiscal_months.efy_month_number')
+            ->orderBy('sales_budgets.branch_id')
+            ->select('sales_budgets.*');
+
+        if ($showUnbudgeted && $request->filled('fiscal_year_id') && $request->filled('fiscal_month_id')) {
+            $selectedFiscalMonthModel = $fiscalMonths->firstWhere('id', (int) $fiscalMonthId);
+            $selectedEthiopianMonth = $selectedFiscalMonthModel?->efy_month_number;
+
+            $budgetsWithBudget = $budgetQuery->get()->keyBy('branch_id');
+
+            $filteredBranches = $request->filled('branch_id')
+                ? $allBranches->where('id', (int) $branchId)->values()
+                : $allBranches;
+
+            $budgets = $filteredBranches->map(function ($branch) use ($budgetsWithBudget, $selectedEthiopianMonth, $selectedEthiopianYear) {
+                $existing = $budgetsWithBudget->get($branch->id);
+
+                if ($existing) {
+                    return (object) [
+                        'id' => $existing->id,
+                        'branch' => (object) ['id' => $branch->id, 'name' => $branch->name],
+                        'ethiopian_month' => $existing->ethiopian_month,
+                        'ethiopian_year' => $existing->ethiopian_year,
+                        'sales_amount' => $existing->sales_amount,
+                        'prev_sales_budget' => $existing->prev_sales_budget,
+                        'created_by' => $existing->createdBy ? (object) ['name' => $existing->createdBy->name] : null,
+                        'updated_by' => $existing->updatedBy ? (object) ['name' => $existing->updatedBy->name] : null,
+                        'has_budget' => true,
+                    ];
+                }
+
+                return (object) [
+                    'id' => null,
+                    'branch' => (object) ['id' => $branch->id, 'name' => $branch->name],
+                    'ethiopian_month' => $selectedEthiopianMonth,
+                    'ethiopian_year' => $selectedEthiopianYear,
+                    'sales_amount' => null,
+                    'prev_sales_budget' => null,
+                    'created_by' => null,
+                    'updated_by' => null,
+                    'has_budget' => false,
+                ];
+            })->values();
+        } else {
+            $budgets = $budgetQuery->get()->map(function ($budget) {
+                return (object) [
+                    'id' => $budget->id,
+                    'branch' => (object) ['id' => $budget->branch->id, 'name' => $budget->branch->name],
+                    'ethiopian_month' => $budget->ethiopian_month,
+                    'ethiopian_year' => $budget->ethiopian_year,
+                    'sales_amount' => $budget->sales_amount,
+                    'prev_sales_budget' => $budget->prev_sales_budget,
+                    'created_by' => $budget->createdBy ? (object) ['name' => $budget->createdBy->name] : null,
+                    'updated_by' => $budget->updatedBy ? (object) ['name' => $budget->updatedBy->name] : null,
+                    'has_budget' => true,
+                ];
+            });
+        }
+
+        return $csvExportService->export(
+            'sales-budgets-' . date('Y-m-d'),
+            ['Branch', 'Year', 'Month', 'Target Sales', 'Previous Month Target Sales', 'Created By', 'Status'],
+            $budgets,
+            function ($budget) {
+                $monthName = SalesBudget::$monthNames[$budget->ethiopian_month] ?? $budget->ethiopian_month;
+                $status = $budget->has_budget ? 'Budgeted' : 'Not Budgeted';
+                return [
+                    $budget->branch->name ?? '',
+                    $budget->ethiopian_year ?? '',
+                    $monthName ?? '',
+                    $budget->sales_amount,
+                    $budget->prev_sales_budget,
+                    $budget->created_by->name ?? '',
+                    $status,
+                ];
+            }
+        );
     }
     // GET /budget/sales-budget/create → show form
     public function create()

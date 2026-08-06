@@ -742,6 +742,21 @@ export default function WeeklyBudgetIndex({
 		applyFilters({ status_ceo: value });
 	}
 
+	function exportCsv() {
+		if (items.data.length === 0) {
+			triggerPopup('Error', 'No records found to export.', 'error');
+			return;
+		}
+		const params = { ...buildFilterParams() };
+		Object.keys(params).forEach((key) => {
+			if (params[key] === 'all' && key !== 'fiscal_year_id' && key !== 'fiscal_month_id') {
+				delete params[key];
+			}
+		});
+		const queryString = new URLSearchParams(params as any).toString();
+		window.location.href = `/budget/weekly-budget/export?${queryString}`;
+	}
+
 	function clearFilters() {
 		setSelectedRequestType('all');
 		setSelectedStatusFinance('all');
@@ -786,10 +801,15 @@ export default function WeeklyBudgetIndex({
 			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
 				<div className="flex items-center justify-between">
 					<h1 className="text-2xl font-bold">Weekly Budgets</h1>
-					<Button onClick={() => setOpenNewRequest(true)}>
-						<Plus className="mr-1 size-4" />
-						New Request
-					</Button>
+					<div className="flex items-center gap-2">
+						<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
+							📥 Export CSV
+						</Button>
+						<Button onClick={() => setOpenNewRequest(true)}>
+							<Plus className="mr-1 size-4" />
+							New Request
+						</Button>
+					</div>
 				</div>
 
 				<Card>

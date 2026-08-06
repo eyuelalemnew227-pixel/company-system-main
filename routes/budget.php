@@ -11,6 +11,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         config('expense_budget.permissions.view_all_except_ho', 'view all branches except HO expense budgets'),
     ]);
     Route::middleware("permission:{$viewPermissions}")->group(function () {
+        Route::get('budget/expense-budget/export', [ExpenseBudgetController::class, 'export'])->name('expense-budget.export');
         Route::get('budget/expense-budget', [ExpenseBudgetController::class, 'index'])->name('expense-budget.index');
         Route::get('budget/expense-budget/submission-tracker', [ExpenseBudgetController::class, 'submissionTracker'])->name('expense-budget.submission-tracker');
         Route::get('budget/expense-budget/items/{expenseBudget}/activity-logs', [ExpenseBudgetController::class, 'itemActivityLogs'])->name('expense-budget.items.activity-logs');
@@ -26,6 +27,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::middleware('permission:view sales budget|manage sales budget')->group(function () {
+        Route::get('budget/sales-budget/export', [SalesBudgetController::class, 'export'])->name('sales-budget.export');
         Route::get('budget/sales-budget', [SalesBudgetController::class, 'index'])->name('sales-budget.index');
     });
 

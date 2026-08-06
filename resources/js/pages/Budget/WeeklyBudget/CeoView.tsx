@@ -358,6 +358,32 @@ export default function WeeklyBudgetCeoView({
 		);
 	}
 
+	function exportCsv() {
+		if (items.data.length === 0) {
+			triggerPopup('Error', 'No records found to export.', 'error');
+			return;
+		}
+		const params: Record<string, string> = {
+			fiscal_year_id: selectedFiscalYear,
+			fiscal_month_id: selectedFiscalMonth,
+		};
+		if (selectedRequestType !== 'all') params.request_type = selectedRequestType;
+		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
+		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
+		if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
+		if (selectedWeekStartDate !== 'all') params.week_start_date = selectedWeekStartDate;
+		if (selectedPaymentCategory !== 'all') params.payment_category_id = selectedPaymentCategory;
+		if (selectedPaymentType !== 'all') params.payment_type_id = selectedPaymentType;
+
+		Object.keys(params).forEach((key) => {
+			if (params[key] === 'all' && key !== 'fiscal_year_id' && key !== 'fiscal_month_id') {
+				delete params[key];
+			}
+		});
+		const queryString = new URLSearchParams(params).toString();
+		window.location.href = `/budget/weekly-budget/ceo/export?${queryString}`;
+	}
+
 	const hasActiveFilters =
 		selectedRequestType !== 'all' ||
 		selectedStatusCeo !== 'all' ||
@@ -428,7 +454,10 @@ export default function WeeklyBudgetCeoView({
 			<Head title="Weekly Budgets - CEO View" />
 			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
 				<div className="flex items-center justify-between">
-					<h1 className="text-2xl font-bold">Weekly Budgets — CEO View</h1>
+					<h1 className="text-2xl font-bold">Weekly Budgets - CEO View</h1>
+					<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
+						📥 Export CSV
+					</Button>
 				</div>
 
 				<Card>

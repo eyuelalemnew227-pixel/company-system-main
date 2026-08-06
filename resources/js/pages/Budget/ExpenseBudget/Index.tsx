@@ -378,6 +378,16 @@ export default function ExpenseBudgetIndex({
         router.get('/budget/expense-budget', {}, { preserveState: true, replace: true });
     }
 
+    function exportCsv() {
+        if (items.data.length === 0) {
+            triggerPopup('Error', 'No records found to export.', 'error');
+            return;
+        }
+        const params = buildFilterParams(search, selectedBranch, selectedDepartment, selectedFiscalMonth, selectedFiscalYear);
+        const queryString = new URLSearchParams(params as any).toString();
+        window.location.href = `/budget/expense-budget/export?${queryString}`;
+    }
+
     function confirmDeleteItem() {
         if (deleteItemId === null) {
             return;
@@ -522,10 +532,15 @@ export default function ExpenseBudgetIndex({
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Filter className="size-4 text-muted-foreground" />
-                            Filters
-                        </CardTitle>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="flex items-center gap-2">
+                                <Filter className="size-4 text-muted-foreground" />
+                                Filters
+                            </CardTitle>
+                            <Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
+                                📥 Export CSV
+                            </Button>
+                        </div>
                         <div className="flex flex-wrap items-end gap-3 pt-2">
                             <Input
                                 value={search}

@@ -414,6 +414,21 @@ export default function WeeklyBudgetDepartmentView({
 		applyFilters({ branch_id: branchId, week_start_date: 'all' });
 	}
 
+	function exportCsv() {
+		if (items.data.length === 0) {
+			triggerPopup('Error', 'No records found to export.', 'error');
+			return;
+		}
+		const params = { ...buildFilterParams() };
+		Object.keys(params).forEach((key) => {
+			if (params[key] === 'all' && key !== 'fiscal_year_id' && key !== 'fiscal_month_id') {
+				delete params[key];
+			}
+		});
+		const queryString = new URLSearchParams(params as any).toString();
+		window.location.href = `/budget/weekly-budget/department/export?${queryString}`;
+	}
+
 	function clearFilters() {
 		setSelectedRequestType('all');
 		setSelectedStatusFinance('all');
@@ -589,9 +604,13 @@ export default function WeeklyBudgetDepartmentView({
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Weekly Budgets - Department View" />
+
 			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
 				<div className="flex items-center justify-between">
-					<h1 className="text-2xl font-bold">Weekly Budgets — Department View</h1>
+					<h1 className="text-2xl font-bold">Weekly Budgets - Department View</h1>
+					<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
+						📥 Export CSV
+					</Button>
 				</div>
 
 				<Card>

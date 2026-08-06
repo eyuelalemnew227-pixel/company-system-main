@@ -210,6 +210,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Finance View for Weekly Budgets
     Route::middleware('permission:view finance budgets')->group(function () {
+        Route::get('budget/weekly-budget/finance/export', [WeeklyBudgetController::class, 'exportFinance'])->name('weekly-budget.finance.export');
         Route::get('budget/weekly-budget/finance', [WeeklyBudgetController::class, 'financeView'])->name('weekly-budget.finance');
     });
 
@@ -221,6 +222,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Department View for Weekly Budgets
     Route::middleware('permission:view department budgets')->group(function () {
+        Route::get('budget/weekly-budget/department/export', [WeeklyBudgetController::class, 'exportDepartment'])->name('weekly-budget.department.export');
         Route::get('budget/weekly-budget/department', [WeeklyBudgetController::class, 'departmentView'])->name('weekly-budget.department');
         Route::patch('budget/weekly-budget/{weeklyBudget}/department-status', [WeeklyBudgetController::class, 'updateDepartment'])->name('weekly-budget.update-department');
         Route::delete('budget/weekly-budget/{weeklyBudget}/department-delete', [WeeklyBudgetController::class, 'departmentDelete'])->name('weekly-budget.department-delete');
@@ -232,6 +234,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // CEO View for Weekly Budgets
     Route::middleware('permission:view ceo budgets')->group(function () {
+        Route::get('budget/weekly-budget/ceo/export', [WeeklyBudgetController::class, 'exportCeo'])->name('weekly-budget.ceo.export');
         Route::get('budget/weekly-budget/ceo', [WeeklyBudgetController::class, 'ceoView'])->name('weekly-budget.ceo');
     });
 
@@ -241,6 +244,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
     // Weekly Budget (existing)
     Route::middleware('permission:view weekly budgets')->group(function () {
+        Route::get('budget/weekly-budget/export', [WeeklyBudgetController::class, 'exportIndex'])->name('weekly-budget.index.export');
         Route::get('budget/weekly-budget', [WeeklyBudgetController::class, 'index'])->name('weekly-budget.index');
         Route::get('budget/weekly-budget/{weeklyBudget}/activity-logs', [WeeklyBudgetController::class, 'activityLogs'])->name('weekly-budget.activity-logs');
     });

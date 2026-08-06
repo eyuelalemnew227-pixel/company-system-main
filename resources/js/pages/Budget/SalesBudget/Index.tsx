@@ -186,6 +186,21 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 		});
 	}
 
+	function exportCsv() {
+		if (budgets.data.length === 0) {
+			triggerPopup('Error', 'No records found to export.', 'error');
+			return;
+		}
+		const params: Record<string, string> = {};
+		if (selectedBranch) params.branch_id = selectedBranch;
+		if (selectedFiscalYear) params.fiscal_year_id = selectedFiscalYear;
+		if (selectedFiscalMonth) params.fiscal_month_id = selectedFiscalMonth;
+		if (showUnbudgeted) params.show_unbudgeted = 'true';
+		
+		const queryString = new URLSearchParams(params).toString();
+		window.location.href = `/budget/sales-budget/export?${queryString}`;
+	}
+
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Sales Budgets" />
@@ -197,25 +212,30 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 						<h1 className="text-xl font-semibold text-gray-800">Sales Budgets</h1>
 						<p className="mt-1 text-sm text-gray-500">View and manage monthly sales budgets per branch</p>
 					</div>
-					{canModify && (
-						<Link
-							href="/budget/sales-budget/create"
-							className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								className="h-4 w-4"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="2"
+					<div className="flex items-center gap-2">
+						<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
+							📥 Export CSV
+						</Button>
+						{canModify && (
+							<Link
+								href="/budget/sales-budget/create"
+								className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
 							>
-								<line x1="12" y1="5" x2="12" y2="19" />
-								<line x1="5" y1="12" x2="19" y2="12" />
-							</svg>
-							Add New Budget
-						</Link>
-					)}
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									className="h-4 w-4"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="2"
+								>
+									<line x1="12" y1="5" x2="12" y2="19" />
+									<line x1="5" y1="12" x2="19" y2="12" />
+								</svg>
+								Add New Budget
+							</Link>
+						)}
+					</div>
 				</div>
 
 				{/* Filter */}

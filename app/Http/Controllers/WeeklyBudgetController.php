@@ -20,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Services\CsvExportService;
 
 class WeeklyBudgetController extends Controller
 {
@@ -200,6 +201,70 @@ class WeeklyBudgetController extends Controller
             'currentFiscalMonthId' => $currentFiscalMonth?->id,
             'request' => $filters,
         ]);
+    }
+
+    public function exportIndex(CsvExportService $csvExportService)
+    {
+        abort_unless(auth()->user()->can('view weekly budgets'), 403);
+
+        [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
+        $hasFiscalYearFilter = request()->has('fiscal_year_id');
+        $fiscalYearFilter = $hasFiscalYearFilter
+            ? request('fiscal_year_id')
+            : $currentFiscalYear?->id;
+        $fiscalMonthFilter = request()->has('fiscal_month_id')
+            ? request('fiscal_month_id')
+            : ($hasFiscalYearFilter ? null : $currentFiscalMonth?->id);
+
+        $query = WeeklyBudget::query()->with([
+            'branch',
+            'department',
+            'fiscalYear',
+            'fiscalMonth',
+            'creator',
+        ]);
+
+        $query
+            ->when(request('request_type'), fn($q, $v) => $q->where('request_type', $v))
+            ->when(request('status_finance'), fn($q, $v) => $q->where('status_finance', $v))
+            ->when(request('status_department'), fn($q, $v) => $q->where('status_department', $v))
+            ->when(request('status_ceo'), fn($q, $v) => $q->where('status_ceo', $v))
+            ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
+            ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
+            ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when(request('week_start_date'), fn($q, $v) => $q->where('week_start_date', $v));
+
+        $this->applyDepartmentScope($query);
+
+        $items = $query->latest()->get();
+        $expenseItems = ExpenseItem::query()->orderBy('expense_type')->get();
+
+        return $csvExportService->export(
+            'weekly-budgets-' . date('Y-m-d'),
+            ['Branch', 'Department', 'Fiscal Year', 'Fiscal Month', 'Week', 'Week Start', 'Week End', 'Category', 'Type', 'Request Type', 'Amount', 'Description', 'Note', 'Status (Dept)', 'Status (CEO)', 'Status (Finance)'],
+            $items,
+            function (WeeklyBudget $wb) use ($expenseItems) {
+                return [
+                    $wb->branch?->name ?? '',
+                    $wb->department?->name ?? '',
+                    $wb->fiscalYear?->name ?? '',
+                    $wb->fiscalMonth?->name ?? '',
+                    $wb->week_number,
+                    $wb->week_start_date?->toDateString() ?? '',
+                    $wb->week_end_date?->toDateString() ?? '',
+                    $wb->payment_category_id === 1 ? 'Expense' : ($wb->payment_category_id === 2 ? 'Cost of Sales' : ''),
+                    $expenseItems->firstWhere('expense_parent_acc_code', $wb->payment_type_id)?->expense_type ?? '',
+                    $wb->request_type?->value ?? '',
+                    $wb->amount,
+                    $wb->description,
+                    $wb->note,
+                    $wb->status_department?->value ?? '',
+                    $wb->status_ceo?->value ?? '',
+                    $wb->status_finance?->value ?? '',
+                ];
+            }
+        );
     }
 
     public function create(): Response
@@ -609,6 +674,67 @@ class WeeklyBudgetController extends Controller
         ]);
     }
 
+    public function exportFinance(CsvExportService $csvExportService)
+    {
+        abort_unless(auth()->user()->can('view finance budgets'), 403);
+
+        [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
+        $hasFiscalYearFilter = request()->has('fiscal_year_id');
+        $fiscalYearFilter = $hasFiscalYearFilter
+            ? request('fiscal_year_id')
+            : $currentFiscalYear?->id;
+        $fiscalMonthFilter = request()->has('fiscal_month_id')
+            ? request('fiscal_month_id')
+            : ($hasFiscalYearFilter ? null : $currentFiscalMonth?->id);
+
+        $query = WeeklyBudget::query()->with([
+            'branch',
+            'department',
+            'fiscalYear',
+            'fiscalMonth',
+            'creator',
+        ]);
+
+        $query
+            ->when(request('request_type'), fn($q, $v) => $q->where('request_type', $v))
+            ->when(request('status_finance'), fn($q, $v) => $q->where('status_finance', $v))
+            ->when(request('status_department'), fn($q, $v) => $q->where('status_department', $v))
+            ->when(request('status_ceo'), fn($q, $v) => $q->where('status_ceo', $v))
+            ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
+            ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
+            ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when(request('week_start_date'), fn($q, $v) => $q->where('week_start_date', $v))
+            ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
+            ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
+
+        $items = $query->latest()->get();
+        $expenseItems = ExpenseItem::query()->orderBy('expense_type')->get();
+
+        return $csvExportService->export(
+            'weekly-budgets-finance-' . date('Y-m-d'),
+            ['Branch', 'Department', 'Fiscal Year', 'Fiscal Month', 'Week Start', 'Week End', 'Category', 'Type', 'Amount', 'Description', 'Status (Dept)', 'Status (CEO)', 'Status (Finance)'],
+            $items,
+            function (WeeklyBudget $wb) use ($expenseItems) {
+                return [
+                    $wb->branch?->name ?? '',
+                    $wb->department?->name ?? '',
+                    $wb->fiscalYear?->name ?? '',
+                    $wb->fiscalMonth?->name ?? '',
+                    $wb->week_start_date?->toDateString() ?? '',
+                    $wb->week_end_date?->toDateString() ?? '',
+                    $wb->payment_category_id === 1 ? 'Expense' : ($wb->payment_category_id === 2 ? 'Cost of Sales' : ''),
+                    $expenseItems->firstWhere('expense_parent_acc_code', $wb->payment_type_id)?->expense_type ?? '',
+                    $wb->amount,
+                    $wb->description,
+                    $wb->status_department?->value ?? '',
+                    $wb->status_ceo?->value ?? '',
+                    $wb->status_finance?->value ?? '',
+                ];
+            }
+        );
+    }
+
     public function updateFinance(Request $request, WeeklyBudget $weeklyBudget): RedirectResponse
     {
         abort_unless(auth()->user()->can('manage finance budgets'), 403);
@@ -896,6 +1022,68 @@ class WeeklyBudgetController extends Controller
         ]);
     }
 
+    public function exportDepartment(CsvExportService $csvExportService)
+    {
+        abort_unless(auth()->user()->can('view department budgets'), 403);
+
+        [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
+        $hasFiscalYearFilter = request()->has('fiscal_year_id');
+        $fiscalYearFilter = $hasFiscalYearFilter
+            ? request('fiscal_year_id')
+            : $currentFiscalYear?->id;
+        $fiscalMonthFilter = request()->has('fiscal_month_id')
+            ? request('fiscal_month_id')
+            : ($hasFiscalYearFilter ? null : $currentFiscalMonth?->id);
+
+        $query = WeeklyBudget::query()->with([
+            'branch',
+            'department',
+            'fiscalYear',
+            'fiscalMonth',
+        ]);
+
+        $query
+            ->when(request('request_type'), fn($q, $v) => $q->where('request_type', $v))
+            ->when(request('status_finance'), fn($q, $v) => $q->where('status_finance', $v))
+            ->when(request('status_department'), fn($q, $v) => $q->where('status_department', $v))
+            ->when(request('status_ceo'), fn($q, $v) => $q->where('status_ceo', $v))
+            ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
+            ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
+            ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when(request('week_start_date'), fn($q, $v) => $q->where('week_start_date', $v))
+            ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
+            ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
+
+        $this->applyDepartmentScope($query);
+
+        $items = $query->latest()->get();
+        $expenseItems = ExpenseItem::query()->orderBy('expense_type')->get();
+
+        return $csvExportService->export(
+            'weekly-budgets-department-' . date('Y-m-d'),
+            ['Branch', 'Department', 'Fiscal Year', 'Fiscal Month', 'Week Start', 'Week End', 'Category', 'Type', 'Amount', 'Description', 'Status (Dept)', 'Status (CEO)', 'Status (Finance)'],
+            $items,
+            function (WeeklyBudget $wb) use ($expenseItems) {
+                return [
+                    $wb->branch?->name ?? '',
+                    $wb->department?->name ?? '',
+                    $wb->fiscalYear?->name ?? '',
+                    $wb->fiscalMonth?->name ?? '',
+                    $wb->week_start_date?->toDateString() ?? '',
+                    $wb->week_end_date?->toDateString() ?? '',
+                    $wb->payment_category_id === 1 ? 'Expense' : ($wb->payment_category_id === 2 ? 'Cost of Sales' : ''),
+                    $expenseItems->firstWhere('expense_parent_acc_code', $wb->payment_type_id)?->expense_type ?? '',
+                    $wb->amount,
+                    $wb->description,
+                    $wb->status_department?->value ?? '',
+                    $wb->status_ceo?->value ?? '',
+                    $wb->status_finance?->value ?? '',
+                ];
+            }
+        );
+    }
+
     public function updateDepartment(Request $request, WeeklyBudget $weeklyBudget): RedirectResponse
     {
         abort_unless(auth()->user()->can('manage department budgets'), 403);
@@ -1162,6 +1350,70 @@ class WeeklyBudgetController extends Controller
             'currentFiscalMonthId' => $currentFiscalMonth?->id,
             'request' => $filters,
         ]);
+    }
+
+    public function exportCeo(CsvExportService $csvExportService)
+    {
+        abort_unless(auth()->user()->can('view ceo budgets'), 403);
+
+        [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
+        $hasFiscalYearFilter = request()->has('fiscal_year_id');
+        $fiscalYearFilter = $hasFiscalYearFilter
+            ? request('fiscal_year_id')
+            : $currentFiscalYear?->id;
+        $fiscalMonthFilter = request()->has('fiscal_month_id')
+            ? request('fiscal_month_id')
+            : ($hasFiscalYearFilter ? null : $currentFiscalMonth?->id);
+
+        $query = WeeklyBudget::query()->with([
+            'branch',
+            'department',
+            'fiscalYear',
+            'fiscalMonth',
+        ]);
+
+        // Permanently filter to where both are approved
+        $query->where('status_finance', WeeklyBudgetStatusFinance::Approved->value)
+            ->where('status_department', WeeklyBudgetStatusDepartment::Approved->value);
+
+        $query
+            ->when(request('request_type'), fn($q, $v) => $q->where('request_type', $v))
+            ->when(request('status_finance'), fn($q, $v) => $q->where('status_finance', $v))
+            ->when(request('status_department'), fn($q, $v) => $q->where('status_department', $v))
+            ->when(request('status_ceo'), fn($q, $v) => $q->where('status_ceo', $v))
+            ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
+            ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
+            ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when(request('week_start_date'), fn($q, $v) => $q->where('week_start_date', $v))
+            ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
+            ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
+
+        $items = $query->latest()->get();
+        $expenseItems = ExpenseItem::query()->orderBy('expense_type')->get();
+
+        return $csvExportService->export(
+            'weekly-budgets-ceo-' . date('Y-m-d'),
+            ['Branch', 'Department', 'Fiscal Year', 'Fiscal Month', 'Week Start', 'Week End', 'Category', 'Type', 'Amount', 'Description', 'Status (Dept)', 'Status (CEO)', 'Status (Finance)'],
+            $items,
+            function (WeeklyBudget $wb) use ($expenseItems) {
+                return [
+                    $wb->branch?->name ?? '',
+                    $wb->department?->name ?? '',
+                    $wb->fiscalYear?->name ?? '',
+                    $wb->fiscalMonth?->name ?? '',
+                    $wb->week_start_date?->toDateString() ?? '',
+                    $wb->week_end_date?->toDateString() ?? '',
+                    $wb->payment_category_id === 1 ? 'Expense' : ($wb->payment_category_id === 2 ? 'Cost of Sales' : ''),
+                    $expenseItems->firstWhere('expense_parent_acc_code', $wb->payment_type_id)?->expense_type ?? '',
+                    $wb->amount,
+                    $wb->description,
+                    $wb->status_department?->value ?? '',
+                    $wb->status_ceo?->value ?? '',
+                    $wb->status_finance?->value ?? '',
+                ];
+            }
+        );
     }
 
     public function updateCeo(Request $request, WeeklyBudget $weeklyBudget): RedirectResponse

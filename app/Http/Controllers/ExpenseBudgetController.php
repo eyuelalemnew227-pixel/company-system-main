@@ -20,6 +20,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Services\CsvExportService;
 
 class ExpenseBudgetController extends Controller
 {
@@ -182,6 +183,103 @@ class ExpenseBudgetController extends Controller
             'request' => request()->only(['search', 'branch_id', 'department_id', 'fiscal_month_id', 'fiscal_year_id']),
             'totalPlannedBudget' => $totalPlannedBudget,
         ]);
+    }
+
+    public function export(CsvExportService $csvExportService)
+    {
+        abort_unless(ExpenseBudgetAccess::canView(), 403);
+
+        $query = ExpenseBudget::query()
+            ->with([
+                'branch',
+                'department',
+                'creator',
+                'fiscalYear',
+                'fiscalMonth',
+                'expenseItem',
+            ])
+            ->whereNotNull('expense_budgets.planned_budget');
+
+        if ($search = request('search')) {
+            $query->whereHas('expenseItem', function ($q) use ($search) {
+                $q->where('expense_type', 'like', "%{$search}%");
+            });
+        }
+
+        if ($branchId = request('branch_id')) {
+            $query->where('expense_budgets.branch_id', $branchId);
+        }
+
+        if ($departmentId = request('department_id')) {
+            $query->where('expense_budgets.department_id', $departmentId);
+        }
+
+        if ($fiscalMonthId = request('fiscal_month_id')) {
+            $query->where('expense_budgets.fiscal_month_id', $fiscalMonthId);
+        }
+
+        if ($fiscalYearId = request('fiscal_year_id')) {
+            $query->where('expense_budgets.fiscal_year_id', $fiscalYearId);
+        }
+
+        $user = auth()->user();
+
+        $isUserHO = false;
+        if ($user->employee?->branch_id) {
+            $isUserHO = ExpenseBudgetAccess::isHeadOfficeBranch(Branch::find($user->employee->branch_id));
+        }
+
+        if (! ExpenseBudgetAccess::hasUnrestrictedViewAccess($user)) {
+            $query->where(function ($q) use ($user, $isUserHO) {
+                if ($user->can(ExpenseBudgetAccess::viewOwnDepartmentPermission())) {
+                    $q->orWhere(function ($deptQ) use ($user) {
+                        $deptQ->where('expense_budgets.department_id', $user->employee?->department_id)
+                              ->where('expense_budgets.branch_id', $user->employee?->branch_id);
+                    });
+                }
+                
+                if ($user->can(ExpenseBudgetAccess::viewOwnBranchPermission())) {
+                    $q->orWhere(function ($branchQ) use ($user, $isUserHO) {
+                        $branchQ->where('expense_budgets.branch_id', $user->employee?->branch_id);
+                        if ($isUserHO) {
+                            $branchQ->where('expense_budgets.department_id', $user->employee?->department_id);
+                        }
+                    });
+                }
+                
+                if ($user->can(ExpenseBudgetAccess::viewAllExceptHOPermission())) {
+                    $q->orWhereNotIn('expense_budgets.branch_id', function ($subQuery) {
+                        $subQuery->select('id')->from('branches')
+                          ->where('name', 'like', '%Head Office%')
+                          ->orWhereRaw('UPPER(branch_code) = ?', ['HO']);
+                    });
+                }
+            });
+        }
+
+        $items = $query
+            ->leftJoin('fiscal_years', 'expense_budgets.fiscal_year_id', '=', 'fiscal_years.id')
+            ->leftJoin('fiscal_months', 'expense_budgets.fiscal_month_id', '=', 'fiscal_months.id')
+            ->orderByDesc('fiscal_years.gregorian_start_date')
+            ->orderByDesc('fiscal_months.efy_month_number')
+            ->orderByDesc('expense_budgets.created_at')
+            ->select('expense_budgets.*')
+            ->get();
+
+        return $csvExportService->export(
+            'expense-budgets-' . date('Y-m-d'),
+            ['Fiscal Year', 'Fiscal Month', 'Branch', 'Department', 'Expense Item', 'Planned Budget', 'Submitted By'],
+            $items,
+            fn (ExpenseBudget $item) => [
+                $item->fiscalYear?->name ?? '',
+                $item->fiscalMonth?->name ?? '',
+                $item->branch?->name ?? '',
+                $item->department?->name ?? '',
+                $item->expenseItem?->expense_type ?? '',
+                $item->planned_budget,
+                $item->creator?->name ?? '',
+            ]
+        );
     }
 
     public function submissionTracker(): Response
