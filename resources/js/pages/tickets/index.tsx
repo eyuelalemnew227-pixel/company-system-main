@@ -13,13 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
-<<<<<<< HEAD
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Search, XCircle, Download } from 'lucide-react';
-=======
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Edit3, Eye, Lock, Search, XCircle } from 'lucide-react';
->>>>>>> f70e61b (telegram bot features)
+import { Check, ChevronsUpDown, Download, Edit3, Eye, Lock, Search, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
