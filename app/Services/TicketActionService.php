@@ -57,6 +57,48 @@ class TicketActionService
             $this->logActivity($ticket, $actor, $action, $from?->value, $to->value, $reason, $meta);
             $this->notifyStatusChange($ticket, $to, $actor, $reason, $action);
 
+            // Trigger Telegram Notifications according to workflow steps (background dispatch)
+            dispatch(function () use ($ticket, $actor, $from, $to, $reason, $action) {
+                try {
+                    $telegramNotif = app(TelegramTicketNotificationService::class);
+                    if ($action === 'rejected' || $to === TicketStatus::Rejected) {
+                        $isActorRequestor = (int) $actor->id === (int) $ticket->user_id
+                            || ($ticket->requestor_branch_id && $actor->employee?->branch_id && (int) $ticket->requestor_branch_id === (int) $actor->employee->branch_id);
+
+                        if ($isActorRequestor) {
+                            $telegramNotif->notifyCompletionRejectedByBranch($ticket, $actor, $reason);
+                        } else {
+                            $telegramNotif->notifyTicketRejectedByManager($ticket, $actor, $reason);
+                        }
+                    } elseif ($to === TicketStatus::Approved) {
+                        // Manager approves ticket -> Do NOT send notification per workflow rule
+                    } elseif ($to === TicketStatus::Done) {
+                        if ($from === TicketStatus::Escalated) {
+                            // Manager Fixes Escalated Case to Done
+                            $telegramNotif->notifyEscalationResolvedByManager($ticket, $actor);
+                        } else {
+                            // Technical Marks Status as Done
+                            $telegramNotif->notifyStatusDoneByTechnical($ticket, $actor);
+                        }
+                    } elseif ($to === TicketStatus::Escalated) {
+                        $telegramNotif->notifyStatusEscalated($ticket, $actor, $reason);
+                    } elseif ($to === TicketStatus::Hold) {
+                        $telegramNotif->notifyStatusHold($ticket, $actor, $reason);
+                    } elseif ($to === TicketStatus::Closed) {
+                        $telegramNotif->notifyTicketClosed($ticket, $actor);
+                    } elseif ($to === TicketStatus::InProgress) {
+                        $telegramNotif->notifyStatusInProgress($ticket, $actor);
+                    } elseif ($to === TicketStatus::TicketApproved) {
+                        // Branch approved ticket -> Do NOT send notification on status change.
+                        // Notification will be sent when Branch submits the Feedback & Rating modal.
+                    } else {
+                        $telegramNotif->notifyGenericStatusChange($ticket, $to, $actor, $reason);
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::error("Telegram notification error in setStatus: " . $e->getMessage());
+                }
+            })->afterResponse();
+
             return $ticket;
         });
     }
@@ -66,12 +108,6 @@ class TicketActionService
      */
     public function assign(Ticket $ticket, User $assignee, User $actor): Ticket
     {
-        if ($ticket->status === TicketStatus::PendingApproval) {
-            throw ValidationException::withMessages([
-                'status' => 'Ticket must be approved before assignment.',
-            ]);
-        }
-
         return DB::transaction(function () use ($ticket, $assignee, $actor) {
             // Close previous assignments
             TicketAssignment::where('ticket_id', $ticket->id)
@@ -86,13 +122,13 @@ class TicketActionService
                 'is_current' => true,
             ]);
 
-            // Only move into NotStarted when currently Approved or Escalated
-            if (in_array($ticket->status, [TicketStatus::Approved, TicketStatus::Escalated], true)) {
+            // Move into NotStarted when currently PendingApproval, Approved, or Escalated
+            if (in_array($ticket->status, [TicketStatus::PendingApproval, TicketStatus::Approved, TicketStatus::Escalated], true)) {
                 $from = $ticket->status;
                 $ticket->status = TicketStatus::NotStarted;
                 $ticket->assigned_at = now();
                 $ticket->save();
-                $this->logStatusHistory($ticket, $actor, $from->value, TicketStatus::NotStarted->value, null);
+                $this->logStatusHistory($ticket, $actor, $from->value, TicketStatus::NotStarted->value, 'Assigned to staff');
             }
             $this->logActivity($ticket, $actor, 'assigned', $ticket->status->value, $ticket->status->value, null, [
                 'assigned_to' => $assignee->only(['id', 'name', 'email']),
@@ -130,34 +166,47 @@ class TicketActionService
 
     private function notifyStatusChange(Ticket $ticket, TicketStatus $to, User $actor, ?string $reason, string $action = 'status_changed'): void
     {
+        if ($action === 'approved' || $to === TicketStatus::Approved) {
+            // Manager approved ticket -> Do NOT send notification per workflow requirement
+            return;
+        }
+
         $actorName = $actor->name;
         $title = "Ticket #{$ticket->id} status: " . str_replace('_', ' ', $to->value);
         $body = "{$actorName} updated the status to " . str_replace('_', ' ', $to->value) . ($reason ? ". Reason: {$reason}" : "");
 
-        $recipients = [$ticket->user_id];
-
-        if ($action === 'rejected') {
+        if ($action === 'rejected' || $to === TicketStatus::Rejected) {
             if ($to === TicketStatus::Rejected) {
-                // Initial approval rejection
+                // Initial approval rejection by Manager -> notify requestor / branch
                 $title = "Ticket Rejected";
-                $body = "Your ticket request #{$ticket->id} was rejected. Reason: {$reason}";
+                $body = "Your ticket request #{$ticket->id} was rejected by Department Manager. Reason: {$reason}";
+                $recipients = [$ticket->user_id];
             } else {
-                // Done -> In Progress rejection
+                // Done -> In Progress completion rejection by Branch -> notify assigned technician & department managers
                 $title = "Ticket Completion Rejected";
-                $body = "{$actorName} rejected the completion of ticket #{$ticket->id}. Ticket reopened. Reason: {$reason}";
-                // Notify assignees and managers
-                $recipients = array_merge($recipients, $this->currentAssigneeUserIds($ticket), $this->departmentManagerUserIds($ticket->department_id));
+                $body = "{$actorName} (Branch) rejected the completion of ticket #{$ticket->id}. Reason: {$reason}";
+                $recipients = array_merge($this->currentAssigneeUserIds($ticket), $this->departmentManagerUserIds($ticket->department_id));
             }
-        } elseif ($action === 'approved') {
-            $title = "Ticket Approved";
-            $body = "Your ticket #{$ticket->id} has been accepted and is now in the queue.";
-            $recipients = array_merge($recipients, $this->departmentManagerUserIds($ticket->department_id));
-        } elseif ($action === 'closed') {
+        } elseif ($action === 'closed' || $to === TicketStatus::Closed) {
+            // Manager closed ticket -> notify requestor and assigned technician
             $title = "Ticket Closed";
-            $body = "Ticket #{$ticket->id} has been closed correctly.";
+            $body = "Ticket #{$ticket->id} has been closed by manager {$actorName}.";
+            $recipients = array_merge([$ticket->user_id], $this->currentAssigneeUserIds($ticket));
+        } elseif ($action === 'ticket_approved' || $to === TicketStatus::TicketApproved) {
+            // Branch approved ticket completion -> notify department manager only
+            $title = "Ticket Completion Approved";
+            $body = "Branch user {$actorName} approved ticket #{$ticket->id}.";
+            $recipients = $this->departmentManagerUserIds($ticket->department_id);
+        } elseif ($to === TicketStatus::Done) {
+            // Technical marked status to Done -> notify requestor and department managers
+            $title = "Ticket Marked Done";
+            $body = "Technical {$actorName} marked ticket #{$ticket->id} as Done.";
+            $recipients = array_merge([$ticket->user_id], $this->departmentManagerUserIds($ticket->department_id));
+        } elseif (in_array($to, [TicketStatus::Hold, TicketStatus::Escalated, TicketStatus::InProgress], true)) {
+            // Hold / Escalated / InProgress -> notify requestor and department managers
+            $recipients = array_merge([$ticket->user_id], $this->departmentManagerUserIds($ticket->department_id));
         } else {
-            // For all other status changes (InProgress, Hold, etc.), notify managers and requestor
-            $recipients = array_merge($recipients, $this->departmentManagerUserIds($ticket->department_id));
+            $recipients = array_merge([$ticket->user_id], $this->departmentManagerUserIds($ticket->department_id));
         }
 
         $this->notifyUsers($ticket, array_unique($recipients), 'ticket.status', $title, $body);
@@ -173,6 +222,15 @@ class TicketActionService
             "New Ticket: #{$ticket->id}",
             "A new request \"{$ticket->title}\" needs your approval."
         );
+
+        // Step 1: Telegram Notification to Department Manager (Background dispatch)
+        dispatch(function () use ($ticket) {
+            try {
+                app(TelegramTicketNotificationService::class)->notifyRequestSubmitted($ticket);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error("Telegram notifyCreated error: " . $e->getMessage());
+            }
+        })->afterResponse();
     }
 
     public function notifyAssigned(Ticket $ticket, User $assignee, User $actor): void
@@ -193,6 +251,15 @@ class TicketActionService
             "Staff Assigned",
             "Staff {$assignee->name} has been assigned to your ticket."
         );
+
+        // Step 2: Telegram Notification to Assigned Technical & Request Branch (Background dispatch)
+        dispatch(function () use ($ticket, $assignee, $actor) {
+            try {
+                app(TelegramTicketNotificationService::class)->notifyTicketAssigned($ticket, $assignee, $actor);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error("Telegram notifyAssigned error: " . $e->getMessage());
+            }
+        })->afterResponse();
     }
 
     public function notifyUsers(Ticket $ticket, array $userIds, string $type, string $title, ?string $body = null): void
@@ -215,25 +282,40 @@ class TicketActionService
 
     public function departmentManagerUserIds(int $departmentId): array
     {
-        // Path specified by USER:
-        // 1. take the department id 
-        // 2. managers table-> employee_id 
-        // 3. Employee table ->employee_id -> department_id 
-        // 4. users table employee_id -> id
-
-        // In terms of SQL joins:
-        // SELECT users.id FROM users
-        // JOIN employees ON users.employee_id = employees.id
-        // JOIN managers ON employees.id = managers.employee_id
-        // WHERE employees.department_id = $departmentId
-
-        return DB::table('users')
+        // 1. Direct Managers from the `managers` table for this department
+        $idsFromManagers = DB::table('users')
             ->join('employees', 'users.employee_id', '=', 'employees.id')
             ->join('managers', 'employees.id', '=', 'managers.employee_id')
             ->where('employees.department_id', $departmentId)
             ->pluck('users.id')
             ->map(fn($id) => (int) $id)
             ->all();
+
+        // 2. Department Manager / Head roles for this specific department
+        $idsFromDeptRoles = DB::table('users')
+            ->join('employees', 'users.employee_id', '=', 'employees.id')
+            ->join('model_has_roles', 'users.id', '=', 'model_has_roles.model_id')
+            ->join('roles', 'model_has_roles.role_id', '=', 'roles.id')
+            ->where('employees.department_id', $departmentId)
+            ->whereIn('roles.name', ['department head', 'Department Manager', 'Ticket Department Manager'])
+            ->pluck('users.id')
+            ->map(fn($id) => (int) $id)
+            ->all();
+
+        $managerIds = array_values(array_unique(array_merge($idsFromManagers, $idsFromDeptRoles)));
+
+        // 3. Fallback: If no manager found for this specific department, query global Ticket Department Manager role
+        if (empty($managerIds)) {
+            $managerIds = DB::table('users')
+                ->join('model_has_roles', 'users.id', '=', 'model_has_roles.model_id')
+                ->join('roles', 'model_has_roles.role_id', '=', 'roles.id')
+                ->whereIn('roles.name', ['Ticket Department Manager'])
+                ->pluck('users.id')
+                ->map(fn($id) => (int) $id)
+                ->all();
+        }
+
+        return array_values(array_unique($managerIds));
     }
 
     private function currentAssigneeUserIds(Ticket $ticket): array

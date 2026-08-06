@@ -15,3 +15,6 @@ Route::middleware('powerbi')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/departments/by-branch', [ManagerController::class, 'departmentsByBranch'])->name('api.departments.byBranch');
 });
+
+// Telegram Webhook Endpoint
+Route::post('/telegram/webhook', [\App\Http\Controllers\TelegramWebhookController::class, 'handle']);

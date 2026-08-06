@@ -40,7 +40,7 @@ class TicketController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = Ticket::query()->with(['department', 'mainCategory', 'subCategory', 'asset', 'requestorBranch']);
+        $query = Ticket::query()->with(['department', 'mainCategory', 'subCategory', 'asset', 'requestorBranch', 'assignments.assignee']);
 
         // 1. Authorization Scoping
         if ($user->can('ticket.view.all')) {
@@ -84,6 +84,12 @@ class TicketController extends Controller
             ->paginate(15)
             ->withQueryString();
 
+        $tickets->getCollection()->transform(function ($t) use ($user) {
+            $t->allowed_statuses = $this->getAvailableStatusesForUser($user, $t);
+            $t->can_assign = $this->canUserAssignTicket($user, $t);
+            return $t;
+        });
+
         // 3. Filter Options for UI
         return Inertia::render('tickets/index', [
             'tickets' => $tickets,
@@ -98,6 +104,16 @@ class TicketController extends Controller
                 'fiscalYears' => FiscalYear::all(['id', 'name']),
                 'fiscalMonths' => FiscalMonth::all(['id', 'name', 'fiscal_year_id']),
                 'branches' => \App\Models\Branch::select('id', 'name')->orderBy('name')->get(),
+                'assignableUsers' => User::select('users.id', 'users.name', 'users.email', 'employees.department_id')
+                    ->leftJoin('employees', 'users.employee_id', '=', 'employees.id')
+                    ->orderBy('users.name')
+                    ->get()
+                    ->map(fn($u) => [
+                        'id' => $u->id,
+                        'name' => $u->name,
+                        'email' => $u->email,
+                        'department_id' => $u->department_id,
+                    ]),
             ]
         ]);
     }
@@ -408,10 +424,17 @@ class TicketController extends Controller
             'fiscalMonth:id,name,fiscal_year_id',
         ]);
         $currentAssignment = $ticket->assignments()->where('is_current', true)->with('assignee')->first();
-        $staffOptions = User::whereHas('employee', fn($q) => $q->where('department_id', $ticket->department_id))
+        $staffOptions = User::where(function ($q) use ($ticket) {
+            $q->whereHas('employee', fn($sq) => $sq->where('department_id', $ticket->department_id))
+              ->orWhereHas('roles', fn($sq) => $sq->whereIn('name', ['Super Admin', 'Ticket Super Admin', 'IT Staff', 'Staff', 'Technician']));
+        })
             ->select('id', 'name', 'email')
             ->orderBy('name')
             ->get();
+
+        if ($staffOptions->isEmpty()) {
+            $staffOptions = User::select('id', 'name', 'email')->orderBy('name')->get();
+        }
 
         $user = $request->user();
         $managerUserIds = $this->actionService->departmentManagerUserIds($ticket->department_id);
@@ -448,11 +471,74 @@ class TicketController extends Controller
             'ticket' => $ticket,
             'currentAssignment' => $currentAssignment,
             'staffOptions' => $staffOptions,
-            'statuses' => array_values($availableStatuses),
+            'statuses' => $this->getAvailableStatusesForUser($user, $ticket),
             'priorityOptions' => array_column(TicketPriority::cases(), 'value'),
             'assetOptions' => $assetOptions,
-            'abilities' => $ticket->getAbilities($user),
+            'abilities' => array_merge($ticket->getAbilities($user), [
+                'canAssign' => $this->canUserAssignTicket($user, $ticket),
+            ]),
         ]);
+    }
+
+    public function getAvailableStatusesForUser(User $user, Ticket $ticket): array
+    {
+        $managerUserIds = $this->actionService->departmentManagerUserIds($ticket->department_id);
+        $isManager = in_array((int) $user->id, $managerUserIds)
+            || $user->hasRole('Ticket Super Admin')
+            || $user->hasRole('Super Admin')
+            || $user->can('ticket.view.all');
+
+        $allowedTransitions = $this->statusService->getAllowedTransitions($ticket->status);
+        $allowedTransitions = array_values(array_unique(array_merge([$ticket->status->value], $allowedTransitions)));
+
+        if ($isManager) {
+            return $allowedTransitions;
+        }
+
+        $isRequestor = (int) $ticket->user_id === (int) $user->id
+            || ($ticket->requestor_branch_id && $user->employee?->branch_id && (int) $ticket->requestor_branch_id === (int) $user->employee->branch_id);
+
+        if ($isRequestor) {
+            if ($ticket->status->value === 'done') {
+                return array_values(array_intersect([TicketStatus::TicketApproved->value, TicketStatus::InProgress->value, TicketStatus::Rejected->value], $allowedTransitions));
+            }
+            if (!in_array($ticket->status, [TicketStatus::Closed, TicketStatus::Rejected], true)) {
+                return array_values(array_unique(array_merge([$ticket->status->value], array_intersect([TicketStatus::Rejected->value], $allowedTransitions))));
+            }
+        }
+
+        $isAssignee = $ticket->assignments()->where('is_current', true)->where('assigned_to', $user->id)->exists();
+        $canUpdateStaffStatus = $isAssignee || $user->can('ticket.status.update') || $user->can('ticket.view.department');
+
+        if ($canUpdateStaffStatus) {
+            $staffAllowed = [
+                TicketStatus::NotStarted->value,
+                TicketStatus::InProgress->value,
+                TicketStatus::Hold->value,
+                TicketStatus::Escalated->value,
+                TicketStatus::Done->value,
+            ];
+            $filtered = array_intersect($allowedTransitions, $staffAllowed);
+            if (!empty($filtered)) {
+                return array_values($filtered);
+            }
+        }
+
+        // Non-managers must not be allowed to close tickets directly
+        return array_values(array_diff($allowedTransitions, [TicketStatus::Closed->value]));
+    }
+
+    public function canUserAssignTicket(User $user, Ticket $ticket): bool
+    {
+        $managerUserIds = $this->actionService->departmentManagerUserIds($ticket->department_id);
+        $isManager = in_array((int) $user->id, $managerUserIds)
+            || $user->hasRole('Ticket Super Admin')
+            || $user->hasRole('Super Admin')
+            || $user->can('ticket.assign');
+
+        $isClosedOrRejected = in_array($ticket->status->value, ['closed', 'rejected']);
+
+        return $isManager && !$isClosedOrRejected;
     }
 
     public function downloadProductsPdf(Ticket $ticket)
@@ -481,32 +567,9 @@ class TicketController extends Controller
         $to = TicketStatus::from($request->input('status'));
         $user = $request->user();
 
-        // Check if user is manager or has global permissions
-        $managerUserIds = $this->actionService->departmentManagerUserIds($ticket->department_id);
-
-        // Use non-strict comparison for IDs to handle potential string/int mismatches
-        $isManager = false;
-        foreach ($managerUserIds as $id) {
-            if ((string) $id === (string) $user->id) {
-                $isManager = true;
-                break;
-            }
-        }
-
-        $hasGlobalPower = $isManager || $user->hasRole('Ticket Super Admin') || $user->can('ticket.view.all');
-
-        if (!$hasGlobalPower) {
-            // Staff are only allowed to set these specific statuses
-            $staffAllowed = [
-                TicketStatus::InProgress->value,
-                TicketStatus::Hold->value,
-                TicketStatus::Escalated->value,
-                TicketStatus::Done->value
-            ];
-
-            if (!in_array($to->value, $staffAllowed)) {
-                return back()->withErrors(['status' => 'You are not allowed to set this status.']);
-            }
+        $allowedStatuses = $this->getAvailableStatusesForUser($user, $ticket);
+        if (!in_array($to->value, $allowedStatuses)) {
+            return back()->withErrors(['status' => 'You are not authorized to update to this status.']);
         }
 
         $reason = $request->input('reason');
@@ -517,6 +580,7 @@ class TicketController extends Controller
 
     public function assign(TicketAssignRequest $request, Ticket $ticket)
     {
+        $this->authorize('assign', $ticket);
         $assignee = User::findOrFail($request->validated('assigned_to'));
         $this->actionService->assign($ticket, $assignee, $request->user());
 
@@ -527,26 +591,41 @@ class TicketController extends Controller
     {
         $this->authorize('approveCompletion', $ticket);
 
-        if (!in_array($ticket->status, [TicketStatus::Done, TicketStatus::PendingApproval], true)) {
+        if (!in_array($ticket->status, [TicketStatus::Done, TicketStatus::PendingApproval, TicketStatus::TicketApproved], true)) {
             return back()->withErrors(['status' => 'Ticket is not in a status that can be approved.']);
         }
 
-        $nextStatus = $ticket->status === TicketStatus::PendingApproval
-            ? TicketStatus::Approved
-            : TicketStatus::Closed;
+        $user = $request->user();
+        $isManager = $user->isManagerOfDepartment($ticket->department_id) || $user->hasRole('Ticket Super Admin');
+
+        if ($ticket->status === TicketStatus::PendingApproval) {
+            $nextStatus = TicketStatus::Approved;
+            $action = 'approved';
+            $msg = 'Ticket approved and moved to queue.';
+        } elseif ($ticket->status === TicketStatus::Done) {
+            if ($isManager) {
+                $nextStatus = TicketStatus::Closed;
+                $action = 'closed';
+                $msg = 'Ticket officially closed by Manager.';
+            } else {
+                $nextStatus = TicketStatus::TicketApproved;
+                $action = 'ticket_approved';
+                $msg = 'Ticket completion approved by Branch.';
+            }
+        } else {
+            $nextStatus = TicketStatus::Closed;
+            $action = 'closed';
+            $msg = 'Approved ticket officially closed by Manager.';
+        }
 
         $this->actionService->setStatus(
             $ticket,
             $nextStatus,
-            $request->user(),
+            $user,
             null,
             [],
-            $nextStatus === TicketStatus::Closed ? 'closed' : 'approved'
+            $action
         );
-
-        $msg = $nextStatus === TicketStatus::Approved
-            ? 'Ticket approved and move to the queue.'
-            : 'Ticket closed. You can now rate the work.';
 
         return back()->with('message', $msg);
     }
@@ -555,7 +634,7 @@ class TicketController extends Controller
     {
         $this->authorize('rejectCompletion', $ticket);
 
-        if (!in_array($ticket->status, [TicketStatus::Done, TicketStatus::PendingApproval], true)) {
+        if (!in_array($ticket->status, [TicketStatus::Done, TicketStatus::PendingApproval, TicketStatus::TicketApproved], true)) {
             return back()->withErrors(['status' => 'Ticket is not in a status that can be rejected.']);
         }
 
@@ -580,20 +659,32 @@ class TicketController extends Controller
     public function rate(TicketRateRequest $request, Ticket $ticket)
     {
         $this->authorize('rate', $ticket);
-        if ($ticket->status !== TicketStatus::Closed) {
-            return back()->withErrors(['status' => 'Rating allowed only after closure.']);
+        if ($ticket->status !== TicketStatus::TicketApproved) {
+            return back()->withErrors(['status' => 'Rating allowed only when ticket is approved by branch.']);
         }
 
         $data = $request->validated();
 
-        $ticket->ratings()->updateOrCreate(
-            ['user_id' => $request->user()->id],
-            $data
-        );
+        $ticket->ratings()->create([
+            'user_id' => $request->user()->id,
+            'stars' => $data['stars'],
+            'comment' => $data['comment'] ?? null,
+        ]);
 
         $this->actionService->logActivity($ticket, $request->user(), 'rated', $ticket->status->value, $ticket->status->value, null, ['stars' => $data['stars']]);
 
-        return back()->with('message', 'Rating saved.');
+        try {
+            app(\App\Services\TelegramTicketNotificationService::class)->notifyApprovedAndRated(
+                $ticket,
+                $request->user(),
+                (int) $data['stars'],
+                $data['comment'] ?? null
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Telegram rate notification error: " . $e->getMessage());
+        }
+
+        return back()->with('message', 'Rating saved successfully.');
     }
 
     public function updateAsset(Request $request, Ticket $ticket)
@@ -732,5 +823,56 @@ class TicketController extends Controller
             'branch_name' => $branch->name,
             'items' => $items,
         ]);
+    }
+
+    public function quickUpdate(Request $request, Ticket $ticket): \Illuminate\Http\RedirectResponse
+    {
+        $validated = $request->validate([
+            'status' => ['nullable', 'string'],
+            'assigned_to' => ['nullable'],
+            'comment' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $actor = $request->user();
+        $comment = trim($validated['comment'] ?? '');
+
+        $canAssign = $this->canUserAssignTicket($actor, $ticket);
+
+        $isAssigningStaff = !empty($validated['assigned_to']) && $validated['assigned_to'] !== 'unassigned';
+
+        // 1. Update status if changed (unless assigning staff which handles moving status to NotStarted)
+        if (!empty($validated['status']) && $validated['status'] !== $ticket->status->value) {
+            $toStatus = TicketStatus::from($validated['status']);
+            if (!($isAssigningStaff && $toStatus === TicketStatus::NotStarted)) {
+                $allowedStatuses = $this->getAvailableStatusesForUser($actor, $ticket);
+                if (!in_array($toStatus->value, $allowedStatuses)) {
+                    return back()->withErrors(['status' => 'You are not authorized to update to this status.']);
+                }
+                $this->statusService->assertCanTransition($ticket, $toStatus, $comment ?: null);
+                $this->actionService->setStatus($ticket, $toStatus, $actor, $comment ?: null);
+            }
+        }
+
+        // 2. Update assignment if provided and changed
+        if ($isAssigningStaff) {
+            $assigneeId = (int) $validated['assigned_to'];
+            $currentAssigneeId = (int) ($ticket->assignments()->where('is_current', true)->first()?->assigned_to ?? 0);
+
+            if ($assigneeId > 0 && $assigneeId !== $currentAssigneeId) {
+                if (!$canAssign) {
+                    return back()->withErrors(['assigned_to' => 'Only Department Managers can assign or reassign staff members.']);
+                }
+                $this->authorize('assign', $ticket);
+                $assignee = User::findOrFail($assigneeId);
+                $this->actionService->assign($ticket, $assignee, $actor);
+            }
+        }
+
+        // 3. Log comment if provided (when status was not changed)
+        if (!empty($comment) && (empty($validated['status']) || $validated['status'] === $ticket->status->value)) {
+            $this->actionService->logActivity($ticket, $actor, 'commented', $ticket->status->value, $ticket->status->value, $comment);
+        }
+
+        return back()->with('message', 'Case updated successfully.');
     }
 }

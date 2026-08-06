@@ -25,6 +25,7 @@ class TicketPermissionSeeder extends Seeder
         'ticket.delete',
         'ticket.manage.taxonomy',
         'ticket.view.logs',
+        'ticket.report.view',
     ];
 
     public function run(): void
@@ -51,6 +52,7 @@ class TicketPermissionSeeder extends Seeder
                 'ticket.view.logs',
                 'ticket.status.update',
                 'ticket.close',
+                'ticket.report.view',
             ],
             'Ticket Staff' => [
                 'ticket.view.department',
@@ -72,6 +74,7 @@ class TicketPermissionSeeder extends Seeder
                 'ticket.delete',
                 'ticket.manage.taxonomy',
                 'ticket.view.logs',
+                'ticket.report.view',
             ],
         ];
 

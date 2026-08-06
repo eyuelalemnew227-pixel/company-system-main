@@ -32,6 +32,7 @@ class Branch extends Model
         'location',
         'contact_email',
         'contact_phone',
+        'telegram_chat_id',
         'description',
     ];
 

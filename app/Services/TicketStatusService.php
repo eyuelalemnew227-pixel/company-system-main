@@ -14,10 +14,13 @@ class TicketStatusService
     private array $matrix = [
         TicketStatus::PendingApproval->value => [
             TicketStatus::Approved->value,
+            TicketStatus::NotStarted->value,
+            TicketStatus::InProgress->value,
             TicketStatus::Rejected->value,
         ],
         TicketStatus::Approved->value => [
             TicketStatus::NotStarted->value,
+            TicketStatus::InProgress->value,
             TicketStatus::Rejected->value,
         ],
         TicketStatus::NotStarted->value => [
@@ -43,8 +46,12 @@ class TicketStatusService
             TicketStatus::Done->value,
         ],
         TicketStatus::Done->value => [
+            TicketStatus::TicketApproved->value,
             TicketStatus::Closed->value,
             TicketStatus::InProgress->value, // when requester rejects the completion
+        ],
+        TicketStatus::TicketApproved->value => [
+            TicketStatus::Closed->value,
         ],
     ];
 

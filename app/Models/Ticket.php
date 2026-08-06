@@ -152,13 +152,11 @@ class Ticket extends Model
         $isPendingOrDone = in_array($this->status, [TicketStatus::PendingApproval, TicketStatus::Done]);
 
         return [
-            'canAssign' => ($hasManagerPower || $user->can('ticket.assign'))
-                && !$isClosedOrRejected && $this->status !== TicketStatus::PendingApproval,
-            'canUpdateStatus' => ($isAssignee || $hasManagerPower)
-                && !$isClosedOrRejected && !$isPendingOrDone,
+            'canAssign' => $hasManagerPower && !$isClosedOrRejected,
+            'canUpdateStatus' => ($isAssignee || $hasManagerPower) && !$isClosedOrRejected,
             'canApproveReject' => ($hasManagerPower && $isPendingOrDone)
                 || ($this->status === TicketStatus::Done && (int) $this->user_id === (int) $user->id),
-            'canRate' => $this->status === TicketStatus::Closed
+            'canRate' => $this->status === TicketStatus::TicketApproved
                 && (int) $this->user_id === (int) $user->id
                 && $this->ratings()->where('user_id', $user->id)->doesntExist(),
             'hasRated' => (int) $this->user_id === (int) $user->id

@@ -11,11 +11,12 @@ enum TicketStatus: string
     case Hold = 'hold';
     case Escalated = 'escalated';
     case Done = 'done';
+    case TicketApproved = 'ticket_approved';
     case Rejected = 'rejected';
     case Closed = 'closed';
 
     public static function closable(): array
     {
-        return [self::Done];
+        return [self::Done, self::TicketApproved];
     }
 }

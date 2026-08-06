@@ -3,6 +3,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
@@ -33,7 +34,7 @@ export default function TicketAssetCreate({
     name: '',
     article_code: '',
     bar_code: '',
-    is_active: true,
+    is_active: true as boolean,
   });
 
   const submit = (e: React.FormEvent) => {
@@ -55,18 +56,13 @@ export default function TicketAssetCreate({
           <CardContent className="space-y-4">
             <div className="space-y-1">
               <Label>Department</Label>
-              <select
-                className="w-full rounded border px-3 py-2"
+              <SearchableSelect
+                options={departments}
                 value={data.department_id}
-                onChange={(e) => setData('department_id', e.target.value)}
-              >
-                <option value="">Select department</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
+                onValueChange={(v) => setData('department_id', v)}
+                placeholder="Select department"
+                searchPlaceholder="Search department..."
+              />
               {errors.department_id && <p className="text-sm text-red-600">{errors.department_id}</p>}
             </div>
 

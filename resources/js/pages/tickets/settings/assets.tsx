@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Link, router } from '@inertiajs/react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Search } from 'lucide-react';
 import { useState, useCallback } from 'react';
 import { debounce } from 'lodash';
@@ -85,22 +86,15 @@ export default function AssetsPage({ assets, filters, departments, mainCategorie
                                 className="pl-9"
                             />
                         </div>
-                        <Select
+                        <SearchableSelect
+                            options={departments}
                             value={filters.department_id ?? 'all'}
                             onValueChange={(v) => handleFilterChange('department_id', v)}
-                        >
-                            <SelectTrigger className="w-[160px]">
-                                <SelectValue placeholder="All Depts" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Departments</SelectItem>
-                                {departments.map((d) => (
-                                    <SelectItem key={d.id} value={String(d.id)}>
-                                        {d.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            allowAll
+                            allLabel="All Departments"
+                            searchPlaceholder="Search department..."
+                            className="w-[160px]"
+                        />
                         <Select
                             value={filters.main_category_id ?? 'all'}
                             onValueChange={(v) => handleFilterChange('main_category_id', v)}

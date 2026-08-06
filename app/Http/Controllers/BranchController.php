@@ -51,6 +51,7 @@ class BranchController extends Controller
             'location' => 'nullable|string|max:150',
             'contact_email' => 'nullable|email|max:150',
             'contact_phone' => 'nullable|string|max:20',
+            'telegram_chat_id' => 'nullable|string|max:100',
             'description' => 'nullable|string',
             'departments' => 'array',
             'departments.*' => 'string|exists:departments,name'
@@ -62,6 +63,7 @@ class BranchController extends Controller
             'location',
             'contact_email',
             'contact_phone',
+            'telegram_chat_id',
             'description',
         ]));
 
@@ -85,6 +87,7 @@ class BranchController extends Controller
             'location' => $branch->location,
             'contact_email' => $branch->contact_email,
             'contact_phone' => $branch->contact_phone,
+            'telegram_chat_id' => $branch->telegram_chat_id,
             'description' => $branch->description,
             'created_at' => $branch->created_at?->format('d-m-Y'),
             'departments' => $branch->departments->pluck('name'),
@@ -109,6 +112,7 @@ class BranchController extends Controller
             'location' => 'nullable|string|max:150',
             'contact_email' => 'nullable|email|max:150',
             'contact_phone' => 'nullable|string|max:20',
+            'telegram_chat_id' => 'nullable|string|max:100',
             'description' => 'nullable|string',
             'departments' => 'array',
             'departments.*' => 'string|exists:departments,name'
@@ -120,6 +124,7 @@ class BranchController extends Controller
             'location',
             'contact_email',
             'contact_phone',
+            'telegram_chat_id',
             'description',
         ]));
 

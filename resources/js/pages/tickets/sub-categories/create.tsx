@@ -19,7 +19,7 @@ export default function TicketSubCategoryCreate({ mainCategories }: { mainCatego
   const { data, setData, post, processing, errors } = useForm({
     ticket_main_category_id: '',
     name: '',
-    is_active: true,
+    is_active: true as boolean,
   });
 
   const submit = (e: React.FormEvent) => {

@@ -2,7 +2,7 @@ import TablePagination from '@/components/table-pagination';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Link, router } from '@inertiajs/react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import { useState, useCallback } from 'react';
@@ -78,22 +78,15 @@ export default function MainCategories({ mainCategories, filters, departments }:
                                 className="pl-9"
                             />
                         </div>
-                        <Select
+                        <SearchableSelect
+                            options={departments}
                             value={filters.department_id ?? 'all'}
                             onValueChange={handleDepartmentChange}
-                        >
-                            <SelectTrigger className="w-[200px]">
-                                <SelectValue placeholder="All Departments" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Departments</SelectItem>
-                                {departments.map((d) => (
-                                    <SelectItem key={d.id} value={String(d.id)}>
-                                        {d.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            allowAll
+                            allLabel="All Departments"
+                            searchPlaceholder="Search department..."
+                            className="w-[200px]"
+                        />
                     </div>
                     <Button asChild>
                         <Link href="/ticket-main-categories/create">Add Main Category</Link>

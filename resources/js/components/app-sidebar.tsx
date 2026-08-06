@@ -39,6 +39,7 @@ import {
   Package,
   Phone,
   Plus,
+  Send,
   Settings,
   Shield,
   ShieldCheck,
@@ -123,6 +124,7 @@ const baseSections: NavSection[] = [
       { title: 'Child Categories', href: '/child-categories', icon: FolderKey, permission: 'view child categories' },
       { title: 'Products', href: '/products', icon: ClipboardList, permission: 'view products' },
       { title: 'SMS Management', href: '/sms-balance', icon: MessageSquare, permission: 'view sms balance' },
+      { title: 'Telegram Config', href: '/telegram-config', icon: Send, permission: 'view telegram config' },
       { title: 'External Links', href: '/external-links', icon: ExternalLink, permission: 'manage external links' },
     ],
   },
@@ -169,6 +171,7 @@ const baseSections: NavSection[] = [
     icon: Ticket,
     items: [
       { title: 'Tickets', href: '/tickets', icon: Ticket, permission: 'ticket.view.own|ticket.view.department|ticket.view.all' },
+      { title: 'Ticketing Report', href: '/tickets/reports', icon: BarChart3, permission: 'ticket.report.view' },
       { title: 'Ticket Settings', href: '/ticket-settings', icon: Settings, permission: 'ticket.manage.taxonomy|ticket.view.all' },
     ],
   },

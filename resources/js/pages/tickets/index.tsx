@@ -1,14 +1,25 @@
 import TablePagination from '@/components/table-pagination';
 import { StatusBadge } from '@/components/tickets/status-badge';
+import { SuccessModal } from '@/components/tickets/success-modal';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
+<<<<<<< HEAD
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Search, XCircle, Download } from 'lucide-react';
+=======
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { Check, ChevronsUpDown, Edit3, Eye, Lock, Search, XCircle } from 'lucide-react';
+>>>>>>> f70e61b (telegram bot features)
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -18,6 +29,7 @@ type Ticket = {
   status: string;
   severity: string;
   priority: string;
+  department_id?: number;
   department?: { name: string };
   mainCategory?: { name: string };
   subCategory?: { name: string };
@@ -25,6 +37,9 @@ type Ticket = {
   main_category?: { name: string };
   sub_category?: { name: string };
   asset?: { name: string; bar_code?: string | null; article_code?: string | null } | null;
+  assignments?: { id: number; assigned_to: number; is_current: boolean; assignee?: { name: string } }[];
+  allowed_statuses?: string[];
+  can_assign?: boolean;
   created_at: string;
 };
 
@@ -59,7 +74,8 @@ type PageProps = {
     categories: { id: number; name: string }[];
     fiscalYears: { id: number; name: string }[];
     fiscalMonths: { id: number; name: string; fiscal_year_id: number }[];
-    branches: { id: number; name: string }[];
+    branches?: { id: number; name: string }[];
+    assignableUsers?: { id: number; name: string; email: string; department_id?: number }[];
   };
 };
 
@@ -81,12 +97,94 @@ export default function TicketIndex() {
     requestor_branch_id: filters.requestor_branch_id ?? 'all',
   });
 
+  const [deptOpen, setDeptOpen] = useState(false);
+  const [statusModalOpen, setStatusModalOpen] = useState(false);
+  const [assigneeModalOpen, setAssigneeModalOpen] = useState(false);
+
+  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [successModal, setSuccessModal] = useState<{
+    open: boolean;
+    title?: string;
+    description?: string;
+    status?: string | null;
+    assigneeName?: string | null;
+  }>({ open: false });
+
+  const { data: updateData, setData: setUpdateData, post: postQuickUpdate, processing: updatingQuick, errors: updateErrors, reset: resetUpdate } = useForm({
+    status: '',
+    assigned_to: '',
+    comment: '',
+  });
+
+  const handleOpenUpdateModal = (ticket: Ticket) => {
+    setSelectedTicket(ticket);
+    const currentAssignee = ticket.assignments?.find((a) => a.is_current)?.assigned_to ?? '';
+    const baseStatuses = ticket.allowed_statuses && ticket.allowed_statuses.length > 0
+      ? ticket.allowed_statuses
+      : options.statuses;
+    const remaining = baseStatuses.filter((s: string) => s !== 'in_progress' && s !== ticket.status);
+    setUpdateData({
+      status: remaining[0] ?? '',
+      assigned_to: currentAssignee ? String(currentAssignee) : '',
+      comment: '',
+    });
+    setIsUpdateModalOpen(true);
+  };
+
+  const handleQuickSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTicket) return;
+    postQuickUpdate(route('tickets.quick-update', selectedTicket.id), {
+      onSuccess: () => {
+        setIsUpdateModalOpen(false);
+        if (updateData.status === 'ticket_approved') {
+          router.visit(route('tickets.show', selectedTicket.id));
+          return;
+        }
+        const assignedStaff = options.assignableUsers?.find((s) => String(s.id) === updateData.assigned_to)?.name;
+        const currentAssignee = selectedTicket.assignments?.find((a) => a.is_current)?.assigned_to;
+        const isAssigning = !!updateData.assigned_to && updateData.assigned_to !== String(currentAssignee || '');
+        const isStatusChanging = !!updateData.status && updateData.status !== selectedTicket.status;
+
+        setSuccessModal({
+          open: true,
+          title: isAssigning ? 'Technician Assigned Successfully' : isStatusChanging ? 'Status Updated Successfully' : 'Case Updated Successfully',
+          description: isAssigning
+            ? 'The ticket technician assignment has been updated to:'
+            : isStatusChanging
+            ? 'The ticket status has been changed to:'
+            : 'Your case update has been recorded successfully.',
+          status: updateData.status || selectedTicket.status,
+          assigneeName: assignedStaff ?? null,
+        });
+
+        setSelectedTicket(null);
+        resetUpdate();
+      },
+    });
+  };
+
   const filteredFiscalMonths = options.fiscalMonths.filter(
     (m) => params.fiscal_year_id === 'all' || String(m.fiscal_year_id) === params.fiscal_year_id
   );
 
   useEffect(() => {
-    if (flash?.message) toast.success(flash.message);
+    if (flash?.message) {
+      const msg = flash.message.toLowerCase();
+      const isAssign = msg.includes('assign');
+      const isStatus = msg.includes('status') || msg.includes('case');
+      setSuccessModal({
+        open: true,
+        title: isAssign ? 'Technician Assigned Successfully' : isStatus ? 'Status Updated Successfully' : 'Action Completed Successfully',
+        description: isAssign
+          ? 'The ticket technician assignment is now:'
+          : isStatus
+          ? 'The ticket status has been changed to:'
+          : flash.message,
+        status: selectedTicket?.status,
+      });
+    }
   }, [flash?.message]);
 
   const applyFilters = () => {
@@ -180,19 +278,56 @@ export default function TicketIndex() {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Department</label>
-                <Select value={params.department_id} onValueChange={(v) => setParams({ ...params, department_id: v })}>
-                  <SelectTrigger className="bg-white border-slate-200">
-                    <SelectValue placeholder="All Departments" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {options.departments.map((d) => (
-                      <SelectItem key={d.id} value={String(d.id)}>
-                        {d.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={deptOpen} onOpenChange={setDeptOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={deptOpen}
+                      className="w-full justify-between bg-white border-slate-200 text-left font-normal text-sm"
+                    >
+                      <span className="truncate">
+                        {params.department_id === 'all'
+                          ? 'All Departments'
+                          : options.departments.find((d) => String(d.id) === params.department_id)?.name ?? 'Select Department'}
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[240px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search department..." />
+                      <CommandList>
+                        <CommandEmpty>No department found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            value="all All Departments"
+                            onSelect={() => {
+                              setParams({ ...params, department_id: 'all' });
+                              setDeptOpen(false);
+                            }}
+                          >
+                            <Check className={cn('mr-2 h-4 w-4', params.department_id === 'all' ? 'opacity-100' : 'opacity-0')} />
+                            All Departments
+                          </CommandItem>
+                          {options.departments.map((d) => (
+                            <CommandItem
+                              key={d.id}
+                              value={`${d.id} ${d.name}`}
+                              onSelect={() => {
+                                setParams({ ...params, department_id: String(d.id) });
+                                setDeptOpen(false);
+                              }}
+                            >
+                              <Check className={cn('mr-2 h-4 w-4', params.department_id === String(d.id) ? 'opacity-100' : 'opacity-0')} />
+                              {d.name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Requestor Branch</label>
@@ -329,15 +464,15 @@ export default function TicketIndex() {
                     <TableHead className="font-bold text-slate-700">Department</TableHead>
                     <TableHead className="font-bold text-slate-700">Sub Category</TableHead>
                     <TableHead className="font-bold text-slate-700">Status</TableHead>
-
                     <TableHead className="font-bold text-slate-700">Priority</TableHead>
                     <TableHead className="font-bold text-slate-700 text-right">Created</TableHead>
+                    <TableHead className="font-bold text-slate-700 text-right w-48">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {tickets.data.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="h-40 text-center text-slate-400 italic">
+                      <TableCell colSpan={8} className="h-40 text-center text-slate-400 italic">
                         No tickets matching your filters.
                       </TableCell>
                     </TableRow>
@@ -346,7 +481,7 @@ export default function TicketIndex() {
                       <TableRow key={t.id} className="hover:bg-slate-50/50 transition-colors">
                         <TableCell className="font-mono text-xs text-slate-500">#{t.id}</TableCell>
                         <TableCell className="font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-md">
-                          <Link className="text-blue-600 hover:text-blue-800 transition-colors" href={route('tickets.show', t.id)}>
+                          <Link className="text-blue-600 hover:text-blue-800 transition-colors font-semibold" href={route('tickets.show', t.id)}>
                             {t.main_category?.name ?? t.mainCategory?.name ?? t.title}
                           </Link>
                         </TableCell>
@@ -360,7 +495,6 @@ export default function TicketIndex() {
                         <TableCell>
                           <StatusBadge status={t.status} />
                         </TableCell>
-
                         <TableCell>
                           <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border shadow-sm ${t.priority === 'urgent' ? 'bg-red-50 text-red-700 border-red-200' :
                             t.priority === 'high' ? 'bg-orange-50 text-orange-700 border-orange-200' :
@@ -376,6 +510,26 @@ export default function TicketIndex() {
                             {new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </div>
                         </TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button asChild size="icon" variant="ghost" className="size-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700" title="View Detail">
+                              <Link href={route('tickets.show', t.id)}>
+                                <Eye className="size-4" />
+                              </Link>
+                            </Button>
+                            {((t.allowed_statuses && t.allowed_statuses.length > 0) || t.can_assign) && (
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="size-8 border-slate-200 text-slate-700 hover:bg-slate-100"
+                                title="Update Case"
+                                onClick={() => handleOpenUpdateModal(t)}
+                              >
+                                <Edit3 className="size-4 text-slate-600" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -388,6 +542,131 @@ export default function TicketIndex() {
           </div>
         </Card>
       </div>
+
+      <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
+        <DialogContent className="sm:max-w-md p-6 bg-background rounded-xl border shadow-xl">
+          <DialogHeader className="pb-2 border-b">
+            <DialogTitle className="text-xl font-bold">
+              Update Case
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleQuickSubmit} className="space-y-4 pt-3">
+            {/* Progress / Status dropdown */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-foreground/80">Progress / Status</label>
+              <select
+                className="w-full h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                value={updateData.status}
+                onChange={(e) => setUpdateData('status', e.target.value)}
+              >
+                {(() => {
+                  const baseStatuses = selectedTicket?.allowed_statuses && selectedTicket.allowed_statuses.length > 0
+                    ? selectedTicket.allowed_statuses
+                    : options.statuses;
+                  const remaining = baseStatuses.filter((s: string) => s !== 'in_progress' && s !== selectedTicket?.status);
+                  if (remaining.length === 0) {
+                    return <option value="">No other status transitions available</option>;
+                  }
+                  return remaining.map((s: string) => (
+                    <option key={s} value={s}>
+                      {s.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                    </option>
+                  ));
+                })()}
+              </select>
+              {updateErrors.status && <p className="text-xs text-red-500">{updateErrors.status}</p>}
+            </div>
+
+            {/* Assignee selection */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold text-foreground/80">Assignee</label>
+                {!selectedTicket?.can_assign && (
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded flex items-center gap-1">
+                    <Lock className="size-3" /> Manager Only
+                  </span>
+                )}
+              </div>
+
+              {!selectedTicket?.can_assign ? (
+                <div className="p-3 bg-slate-100 rounded-lg text-xs text-slate-700 border border-slate-200 flex items-center gap-2.5">
+                  <Lock className="size-4 text-slate-400 shrink-0" />
+                  <span className="font-semibold truncate">
+                    {(() => {
+                      const currentAssignee = selectedTicket?.assignments?.find((a: any) => a.is_current)?.assigned_to;
+                      const staff = (options.assignableUsers ?? []).find((s: any) => String(s.id) === String(currentAssignee));
+                      return staff ? `${staff.name} ${staff.email ? `(${staff.email})` : ''}` : 'Unassigned (Manager assignment required)';
+                    })()}
+                  </span>
+                </div>
+              ) : (
+                <select
+                  className="w-full h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  value={updateData.assigned_to}
+                  onChange={(e) => setUpdateData('assigned_to', e.target.value)}
+                >
+                  <option value="">Select staff member...</option>
+                  {(() => {
+                    const deptStaff = (options.assignableUsers ?? []).filter((u: any) =>
+                      !selectedTicket?.department_id || String(u.department_id) === String(selectedTicket.department_id)
+                    );
+                    const list = deptStaff.length > 0 ? deptStaff : (options.assignableUsers ?? []);
+                    return list.map((s: any) => (
+                      <option key={s.id} value={String(s.id)}>
+                        {s.name} ({s.email})
+                      </option>
+                    ));
+                  })()}
+                </select>
+              )}
+              {updateErrors.assigned_to && <p className="text-xs text-red-500">{updateErrors.assigned_to}</p>}
+            </div>
+
+            {/* Comment / Reason */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-foreground/80">Comment / Reason</label>
+              <Textarea
+                placeholder="Add update note or reason..."
+                value={updateData.comment}
+                onChange={(e) => setUpdateData('comment', e.target.value)}
+                className="min-h-[90px] border-input rounded-lg text-sm placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary"
+              />
+              {(updateErrors.comment || (updateErrors as any).reason) && (
+                <p className="text-xs font-semibold text-red-500">{updateErrors.comment || (updateErrors as any).reason}</p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsUpdateModalOpen(false)}
+                className="flex-1 h-10 font-semibold border-input hover:bg-slate-100 rounded-lg"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={updatingQuick}
+                className="flex-1 h-10 font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors rounded-lg shadow-sm"
+              >
+                {updatingQuick ? 'Saving...' : 'Update Case'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* System Success Modal ("System Toaster") */}
+      <SuccessModal
+        open={successModal.open}
+        onClose={() => setSuccessModal({ open: false })}
+        title={successModal.title}
+        description={successModal.description}
+        status={successModal.status}
+        assigneeName={successModal.assigneeName}
+      />
     </AppLayout>
   );
 }

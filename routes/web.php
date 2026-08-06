@@ -375,6 +375,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('sms-balance/deactivate', [SmsBalanceController::class, 'deactivate'])->name('sms-balance.deactivate');
     });
 
+    // Tickets Reports
+    Route::get('tickets/reports', [\App\Http\Controllers\TicketReportController::class, 'index'])
+        ->name('tickets.reports')
+        ->middleware('permission:ticket.report.view');
+
     // Tickets
     Route::get('tickets', [\App\Http\Controllers\TicketController::class, 'index'])
         ->name('tickets.index')
@@ -391,6 +396,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('tickets/{ticket}', [\App\Http\Controllers\TicketController::class, 'show'])
         ->name('tickets.show')
         ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
+    Route::post('tickets/{ticket}/quick-update', [\App\Http\Controllers\TicketController::class, 'quickUpdate'])
+        ->name('tickets.quick-update')
+        ->middleware('permission:ticket.status.update|ticket.assign|ticket.view.all|ticket.view.department');
     Route::get('tickets/{ticket}/download-products', [\App\Http\Controllers\TicketController::class, 'downloadProductsPdf'])
         ->name('tickets.download-products')
         ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
@@ -451,8 +459,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('spare-part-categories', SparePartCategoryController::class)->except(['show']);
     Route::resource('spare-parts', SparePartController::class)->except(['show']);
 
-    // Pre-Order Targets
-    Route::resource('pre-order-targets', PreOrderTargetController::class)->except(['show', 'create', 'edit']);
+    // Telegram Configuration Management
+    Route::middleware('permission:view telegram config')->group(function () {
+        Route::get('telegram-config', [\App\Http\Controllers\TelegramConfigController::class, 'index'])->name('telegram-config.index');
+    });
+    Route::middleware('permission:manage telegram config')->group(function () {
+        Route::post('telegram-config/settings', [\App\Http\Controllers\TelegramConfigController::class, 'updateSettings'])->name('telegram-config.update-settings');
+        Route::post('telegram-config/set-webhook', [\App\Http\Controllers\TelegramConfigController::class, 'setWebhook'])->name('telegram-config.set-webhook');
+        Route::post('telegram-config/remove-webhook', [\App\Http\Controllers\TelegramConfigController::class, 'removeWebhook'])->name('telegram-config.remove-webhook');
+        Route::post('telegram-config/test-message', [\App\Http\Controllers\TelegramConfigController::class, 'sendTestMessage'])->name('telegram-config.test-message');
+        Route::put('telegram-config/users/{user}', [\App\Http\Controllers\TelegramConfigController::class, 'updateUserChatId'])->name('telegram-config.update-user');
+        Route::put('telegram-config/branches/{branch}', [\App\Http\Controllers\TelegramConfigController::class, 'updateBranchChatId'])->name('telegram-config.update-branch');
+    });
 });
 
 require __DIR__ . '/settings.php';

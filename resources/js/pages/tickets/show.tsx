@@ -1,3 +1,4 @@
+import { SuccessModal } from '@/components/tickets/success-modal';
 import { StatusBadge } from '@/components/tickets/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -38,7 +39,9 @@ import {
   Download,
   Wrench,
   Users,
+  Lock,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { PopupNotification } from '@/components/shared/popup-notification';
@@ -131,7 +134,7 @@ type AssetOption = {
 type PageProps = {
   ticket: Ticket;
   statuses: string[];
-  currentAssignment?: { assignee?: { id: number; name: string } } | null;
+  currentAssignment?: { assignee?: { id: number; name: string; email?: string } } | null;
   staffOptions: { id: number; name: string; email: string }[];
   priorityOptions: string[];
   assetOptions: AssetOption[];
@@ -141,10 +144,64 @@ type PageProps = {
 
 export default function TicketShow() {
   const { ticket, statuses, currentAssignment, abilities, staffOptions, assetOptions, priorityOptions, flash } = usePage<PageProps>().props;
-  const { data, setData, post, processing, reset, errors } = useForm({
-    status: statuses.includes(ticket.status) ? ticket.status : (statuses[0] ?? ticket.status),
-    reason: '',
+
+  const remainingStatuses = React.useMemo(() => {
+    return (statuses ?? []).filter((s) => s !== 'in_progress' && s !== ticket.status);
+  }, [statuses, ticket.status]);
+
+  const { data: updateData, setData: setUpdateData, post: postQuickUpdate, processing: updatingQuick, errors: updateErrors } = useForm({
+    status: (statuses ?? []).filter((s) => s !== 'in_progress' && s !== ticket.status)[0] ?? '',
+    assigned_to: currentAssignment?.assignee?.id?.toString() ?? '',
+    comment: '',
   });
+
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (isUpdateModalOpen) {
+      const defaultStatus = remainingStatuses[0] ?? '';
+      setUpdateData((prev) => ({
+        ...prev,
+        status: remainingStatuses.includes(prev.status) ? prev.status : defaultStatus,
+      }));
+    }
+  }, [isUpdateModalOpen, remainingStatuses]);
+  const [successModal, setSuccessModal] = React.useState<{
+    open: boolean;
+    title?: string;
+    description?: string;
+    status?: string | null;
+    assigneeName?: string | null;
+  }>({ open: false });
+
+  const handleQuickUpdateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    postQuickUpdate(route('tickets.quick-update', ticket.id), {
+      onSuccess: () => {
+        setIsUpdateModalOpen(false);
+        if (updateData.status === 'ticket_approved') {
+          setIsRatingModalOpen(true);
+          setSuccessModal({ open: false });
+        } else {
+          const assignedStaff = staffOptions.find((s) => String(s.id) === updateData.assigned_to)?.name;
+          const isAssigning = !!updateData.assigned_to && updateData.assigned_to !== (currentAssignment?.assignee?.id?.toString() ?? '');
+          const isStatusChanging = !!updateData.status && updateData.status !== ticket.status;
+
+          setSuccessModal({
+            open: true,
+            title: isAssigning ? 'Technician Assigned Successfully' : isStatusChanging ? 'Status Updated Successfully' : 'Case Updated Successfully',
+            description: isAssigning
+              ? 'The ticket technician assignment has been updated to:'
+              : isStatusChanging
+              ? 'The ticket status has been changed to:'
+              : 'Your case update has been recorded successfully.',
+            status: updateData.status || ticket.status,
+            assigneeName: assignedStaff ?? currentAssignment?.assignee?.name ?? null,
+          });
+        }
+      },
+    });
+  };
 
   const { data: assignData, setData: setAssignData, post: postAssign, processing: assigning } = useForm({
     assigned_to: currentAssignment?.assignee?.id?.toString() ?? '',
@@ -169,7 +226,6 @@ export default function TicketShow() {
 
   const [isRejectModalOpen, setIsRejectModalOpen] = React.useState(false);
   const [rejectReason, setRejectReason] = React.useState('');
-  const [statusChangedTo, setStatusChangedTo] = React.useState<string | null>(null);
   const [isRatingModalOpen, setIsRatingModalOpen] = React.useState(false);
   const [assetOpen, setAssetOpen] = React.useState(false);
   const [isProductsModalOpen, setIsProductsModalOpen] = React.useState(false);
@@ -187,14 +243,36 @@ export default function TicketShow() {
   }, [ticket.product_requests]);
 
   React.useEffect(() => {
-    if (flash.just_created) {
-      setStatusChangedTo(ticket.status);
-    }
-    // Auto-open rating modal if the ticket is closed and user hasn't rated yet
-    if (abilities.canRate) {
+    if (abilities.canRate && ticket.status === 'ticket_approved') {
       setIsRatingModalOpen(true);
+      setSuccessModal({ open: false });
+      return;
     }
-  }, [flash.just_created, ticket.status, abilities.canRate]);
+
+    if (flash?.just_created) {
+      setSuccessModal({
+        open: true,
+        title: 'Ticket Submitted Successfully',
+        description: 'Your ticket has been created and is now:',
+        status: ticket.status,
+      });
+    } else if (flash?.message && ticket.status !== 'ticket_approved') {
+      const msg = flash.message.toLowerCase();
+      const isAssign = msg.includes('assign');
+      const isStatus = msg.includes('status') || msg.includes('case');
+      setSuccessModal({
+        open: true,
+        title: isAssign ? 'Technician Assigned Successfully' : isStatus ? 'Status Updated Successfully' : 'Action Completed Successfully',
+        description: isAssign
+          ? 'The ticket technician assignment is now:'
+          : isStatus
+          ? 'The ticket status has been changed to:'
+          : flash.message,
+        status: ticket.status,
+        assigneeName: currentAssignment?.assignee?.name ?? null,
+      });
+    }
+  }, [flash?.just_created, flash?.message, ticket.status, currentAssignment, abilities.canRate]);
 
   const submitAsset = () => {
     postAsset(route('tickets.update-asset', ticket.id));
@@ -211,24 +289,39 @@ export default function TicketShow() {
   const submitRating = (e: React.FormEvent) => {
     e.preventDefault();
     postRating(route('tickets.rate', ticket.id), {
-      onSuccess: () => setIsRatingModalOpen(false),
-    });
-  };
-
-  const submitStatus = (e: React.FormEvent) => {
-    e.preventDefault();
-    post(route('tickets.status', ticket.id), {
       onSuccess: () => {
-        reset('reason');
-        setStatusChangedTo(data.status);
+        setIsRatingModalOpen(false);
+        setSuccessModal({
+          open: true,
+          title: 'Rating Submitted Successfully',
+          description: 'Thank you for your feedback! The department manager will be notified to officially close the ticket.',
+          status: 'ticket_approved',
+        });
       },
     });
   };
 
   const approveCompletion = () => {
-    const nextStatus = ticket.status === 'pending_approval' ? 'approved' : 'closed';
+    let nextStatus = 'approved';
+    if (ticket.status === 'done') {
+      nextStatus = abilities.hasManagerPower ? 'closed' : 'ticket_approved';
+    } else if (ticket.status === 'ticket_approved') {
+      nextStatus = 'closed';
+    }
     router.post(route('tickets.approve-completion', ticket.id), {}, {
-      onSuccess: () => setStatusChangedTo(nextStatus)
+      onSuccess: () => {
+        if (!abilities.hasManagerPower) {
+          setIsRatingModalOpen(true);
+          setSuccessModal({ open: false });
+        } else {
+          setSuccessModal({
+            open: true,
+            title: 'Status Updated Successfully',
+            description: 'The ticket status has been changed to:',
+            status: nextStatus,
+          });
+        }
+      }
     });
   };
 
@@ -246,7 +339,12 @@ export default function TicketShow() {
       onSuccess: () => {
         setIsRejectModalOpen(false);
         setRejectReason('');
-        setStatusChangedTo(nextStatus);
+        setSuccessModal({
+          open: true,
+          title: 'Status Updated Successfully',
+          description: 'The ticket status has been changed to:',
+          status: nextStatus,
+        });
       }
     });
   };
@@ -304,6 +402,40 @@ export default function TicketShow() {
             </Button>
           </div>
         </div>
+
+        {/* Status Workflow Progress Stepper */}
+        <Card className="mb-6 border-slate-200 shadow-sm bg-slate-50/50">
+          <CardContent className="p-4">
+            <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Case Workflow Lifecycle Progress</div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {[
+                { key: 'created', label: '1. Ticket Created', done: true },
+                { key: 'assigned', label: '2. Assigned Technical', done: ['in_progress', 'hold', 'escalated', 'done', 'ticket_approved', 'closed'].includes(ticket.status) },
+                { key: 'done', label: '3. Technical Done', done: ['done', 'ticket_approved', 'closed'].includes(ticket.status) },
+                { key: 'approved', label: '4. Branch Approved', done: ['ticket_approved', 'closed'].includes(ticket.status) },
+                { key: 'closed', label: '5. Manager Closed', done: ticket.status === 'closed' },
+              ].map((step, idx) => (
+                <div
+                  key={step.key}
+                  className={`flex items-center gap-2 p-2.5 rounded-lg border text-xs font-semibold transition-all ${
+                    step.done
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-sm'
+                      : 'bg-white text-slate-400 border-slate-200 opacity-70'
+                  }`}
+                >
+                  <div
+                    className={`flex items-center justify-center size-5 rounded-full text-[10px] font-bold shrink-0 ${
+                      step.done ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {step.done ? '✓' : idx + 1}
+                  </div>
+                  <span className="truncate">{step.label}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Primary Management Info */}
@@ -583,180 +715,18 @@ export default function TicketShow() {
               <div className="space-y-4">
                 <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground px-1">Actions</h3>
 
-                {abilities.canApproveReject && (
-                  <Card className="border-green-200 shadow-sm overflow-hidden bg-green-50/30">
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm font-bold flex items-center gap-2 text-green-700">
-                        <CheckCircle2 className="h-4 w-4" />
-                        {ticket.status === 'pending_approval' ? 'Approve Request' : 'Review Work'}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-2 space-y-3">
-                      <p className="text-xs text-muted-foreground italic mb-2">
-                        {ticket.status === 'pending_approval'
-                          ? 'This new ticket request requires your approval before it can be assigned.'
-                          : 'The staff has marked the ticket as "Done". Please confirm or reopen.'}
-                      </p>
-                      <div className="flex gap-2">
-                        <Button className="flex-1 bg-green-600 hover:bg-green-700 h-9 text-xs" onClick={approveCompletion}>
-                          Approve
-                        </Button>
-                        <Button variant="outline" className="flex-1 border-red-200 text-red-600 hover:bg-red-50 h-9 text-xs" onClick={rejectCompletion}>
-                          Reject
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
+                {(abilities.canUpdateStatus || abilities.canAssign || abilities.canApproveReject || (statuses && statuses.length > 0)) && (
+                  <Button
+                    onClick={() => setIsUpdateModalOpen(true)}
+                    className="w-full h-11 text-sm font-bold text-white bg-primary hover:bg-primary/90 transition-colors rounded-lg shadow-sm flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle2 className="size-4" />
+                    Update Case
+                  </Button>
                 )}
 
-                {abilities.canUpdateStatus && (
-                  <Card className="border-primary/20 shadow-sm overflow-hidden bg-primary/5">
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm font-bold flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Update Status
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-2 space-y-3">
-                      <select
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        value={data.status}
-                        onChange={(e) => setData('status', e.target.value)}
-                      >
-                        {statuses.map((s) => (
-                          <option key={s} value={s}>
-                            {s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                          </option>
-                        ))}
-                      </select>
-                      {errors.status && (
-                        <p className="text-xs font-medium text-red-500 mt-1">{errors.status}</p>
-                      )}
-                      {['hold', 'escalated'].includes(data.status) && (
-                        <div className="space-y-1">
-                          <Textarea
-                            placeholder="Reason is required..."
-                            className={`text-xs min-h-[80px] ${!data.reason.trim() ? 'border-orange-300 focus:border-red-400' : ''}`}
-                            value={data.reason}
-                            onChange={(e) => setData('reason', e.target.value)}
-                          />
-                          {errors.reason && (
-                            <p className="text-xs font-medium text-red-500 mt-1">{errors.reason}</p>
-                          )}
-                        </div>
-                      )}
-                      <Button className="w-full" size="sm" onClick={submitStatus} disabled={processing}>
-                        Submit Update
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
 
-                {abilities.canRequestSparePart && (
-                  <Card className="border-orange-200 shadow-sm overflow-hidden bg-orange-50/30">
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm font-bold flex items-center gap-2 text-orange-700">
-                        <Wrench className="h-4 w-4" />
-                        Spare Part Required?
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-2 space-y-3">
-                      <p className="text-xs text-muted-foreground italic mb-2">
-                        If you need spare parts to complete this repair, you can create a purchase request.
-                      </p>
-                      <Link href={`/tickets/create?spare_part_request=1&parent_ticket_id=${ticket.id}`}>
-                        <Button className="w-full bg-orange-600 hover:bg-orange-700 h-9 text-xs">
-                          <Wrench className="mr-2 h-3.5 w-3.5" />
-                          Request Spare Part Purchase
-                        </Button>
-                      </Link>
-                    </CardContent>
-                  </Card>
-                )}
 
-                {!abilities.canAssign && ticket.status === 'pending_approval' && (
-                  <Card className="border-blue-100 bg-blue-50/50 shadow-none border-dashed">
-                    <CardContent className="p-4 flex gap-3 items-start">
-                      <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
-                      <div className="space-y-1">
-                        <p className="text-xs font-medium text-blue-900">Assignment Pending</p>
-                        <p className="text-[11px] text-blue-700 leading-normal">
-                          Please "Accept" the request above before you can assign a staff member.
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {abilities.canAssign && (
-                  <Card className="border-secondary/20 shadow-sm overflow-hidden bg-secondary/5">
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm font-bold flex items-center gap-2 text-secondary-foreground">
-                        <UserPlus className="h-4 w-4" />
-                        Assign Representative
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-2">
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <select
-                          className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                          value={assignData.assigned_to}
-                          onChange={(e) => setAssignData('assigned_to', e.target.value)}
-                          required
-                        >
-                          <option value="">Select staff member</option>
-                          {staffOptions.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                        </select>
-                        <Button
-                          onClick={(e) => {
-                            e.preventDefault();
-                            postAssign(route('tickets.assign', ticket.id));
-                          }}
-                          size="sm"
-                          disabled={assigning}
-                          className="bg-blue-600 hover:bg-blue-700 text-white font-bold whitespace-nowrap"
-                        >
-                          <UserPlus className="mr-2 h-3.5 w-3.5" />
-                          Set Assignee
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Show existing rating when already rated */}
-                {abilities.hasRated && ticket.ratings && ticket.ratings.length > 0 && (
-                  <Card className="border-yellow-200 shadow-sm overflow-hidden bg-yellow-50/30">
-                    <CardHeader className="p-4 pb-2">
-                      <CardTitle className="text-sm font-bold flex items-center gap-2 text-yellow-700">
-                        <Star className="h-4 w-4 fill-yellow-500 text-yellow-500" />
-                        Your Rating
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-2 space-y-2">
-                      <div className="flex items-center gap-1 justify-center py-1">
-                        {[1, 2, 3, 4, 5].map((n) => (
-                          <Star
-                            key={n}
-                            className={`h-6 w-6 ${(ticket.ratings[0].stars / 3) >= n ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200 fill-gray-200'}`}
-                          />
-                        ))}
-                        <span className="ml-2 text-sm font-semibold text-yellow-700">
-                          {Math.round(ticket.ratings[0].stars / 3)} / 5
-                        </span>
-                      </div>
-                      {ticket.ratings[0].comment && (
-                        <p className="text-xs text-muted-foreground text-center italic">
-                          "{ticket.ratings[0].comment}"
-                        </p>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
                 {abilities.canUpdatePriority && (
                   <Card className="border-orange-200 shadow-sm overflow-hidden bg-orange-50/20">
                     <CardHeader className="p-4 pb-2">
@@ -821,7 +791,7 @@ export default function TicketShow() {
                   </div>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <p className="whitespace-pre-wrap text-base leading-relaxed text-foreground/90">
+                  <p className="whitespace-pre-wrap text-base font-bold leading-relaxed text-emerald-700 dark:text-emerald-400">
                     {ticket.description}
                   </p>
                 </CardContent>
@@ -1085,20 +1055,24 @@ export default function TicketShow() {
         </DialogContent>
       </Dialog>
 
-      {/* Status Change Confirmation Modal */}
-      <PopupNotification
-        isOpen={!!statusChangedTo}
-        onClose={() => setStatusChangedTo(null)}
-        title={flash.just_created ? 'Ticket Submitted Successfully' : 'Status Updated Successfully'}
-        description={flash.just_created ? 'Your ticket has been created and is now:' : 'The ticket status has been changed to:'}
-        type="success"
-      >
-        <StatusBadge status={statusChangedTo || ''} />
-      </PopupNotification>
+      {/* System Success Modal ("System Toaster") */}
+      <SuccessModal
+        open={successModal.open}
+        onClose={() => setSuccessModal({ open: false })}
+        title={successModal.title}
+        description={successModal.description}
+        status={successModal.status}
+        assigneeName={successModal.assigneeName}
+      />
 
       {/* Rating Modal */}
       <Dialog open={isRatingModalOpen} onOpenChange={setIsRatingModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent
+          className="sm:max-w-md"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <DialogHeader className="flex flex-col items-center gap-2 pt-4">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 mb-2">
               <Star className="h-6 w-6 text-yellow-600 fill-yellow-600" />
@@ -1146,18 +1120,10 @@ export default function TicketShow() {
             </div>
           </div>
 
-          <DialogFooter className="sm:justify-center gap-3">
+          <DialogFooter className="sm:justify-center">
             <Button
               type="button"
-              variant="ghost"
-              onClick={() => setIsRatingModalOpen(false)}
-              className="flex-1 sm:flex-none"
-            >
-              Maybe Later
-            </Button>
-            <Button
-              type="button"
-              className="px-8 bg-yellow-500 hover:bg-yellow-600 text-black font-bold flex-1 sm:flex-none"
+              className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold"
               onClick={submitRating}
               disabled={ratingProcessing || ratingData.stars === 0}
             >
@@ -1167,8 +1133,110 @@ export default function TicketShow() {
         </DialogContent>
       </Dialog>
 
+      {/* Update Case Modal */}
+      <Dialog open={isUpdateModalOpen} onOpenChange={setIsUpdateModalOpen}>
+        <DialogContent className="sm:max-w-md p-6 bg-background rounded-xl border shadow-xl">
+          <DialogHeader className="pb-2 border-b">
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <CheckCircle2 className="size-5 text-primary" />
+              Update Case
+            </DialogTitle>
+          </DialogHeader>
 
-    </AppLayout >
+          <form onSubmit={handleQuickUpdateSubmit} className="space-y-4 pt-3">
+            {/* Progress / Status dropdown */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-foreground/80">Progress / Status</label>
+              <select
+                className="w-full h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                value={updateData.status}
+                onChange={(e) => setUpdateData('status', e.target.value)}
+              >
+                {remainingStatuses.length === 0 ? (
+                  <option value="">No other status transitions available</option>
+                ) : (
+                  remainingStatuses.map((s) => (
+                    <option key={s} value={s}>
+                      {s.split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                    </option>
+                  ))
+                )}
+              </select>
+              {updateErrors.status && <p className="text-xs text-red-500">{updateErrors.status}</p>}
+            </div>
+
+            {/* Assignee selection */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold text-foreground/80">Assignee</label>
+                {!abilities.canAssign && (
+                  <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded flex items-center gap-1">
+                    <Lock className="size-3" /> Manager Only
+                  </span>
+                )}
+              </div>
+
+              {!abilities.canAssign ? (
+                <div className="p-3 bg-slate-100 rounded-lg text-xs text-slate-700 border border-slate-200 flex items-center gap-2.5">
+                  <Lock className="size-4 text-slate-400 shrink-0" />
+                  <span className="font-semibold truncate">
+                    {currentAssignment?.assignee?.name
+                      ? `${currentAssignment.assignee.name} ${currentAssignment.assignee.email ? `(${currentAssignment.assignee.email})` : ''}`
+                      : 'Unassigned (Manager assignment required)'}
+                  </span>
+                </div>
+              ) : (
+                <select
+                  className="w-full h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  value={updateData.assigned_to}
+                  onChange={(e) => setUpdateData('assigned_to', e.target.value)}
+                >
+                  <option value="">Select staff member...</option>
+                  {staffOptions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.email})
+                    </option>
+                  ))}
+                </select>
+              )}
+              {updateErrors.assigned_to && <p className="text-xs text-red-500">{updateErrors.assigned_to}</p>}
+            </div>
+
+            {/* Comment / Reason */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-foreground/80">Comment / Reason</label>
+              <Textarea
+                placeholder="Add update note or reason..."
+                value={updateData.comment}
+                onChange={(e) => setUpdateData('comment', e.target.value)}
+                className="min-h-[90px] border-input rounded-lg text-sm placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary"
+              />
+              {(updateErrors.comment || (updateErrors as any).reason) && (
+                <p className="text-xs font-semibold text-red-500">{updateErrors.comment || (updateErrors as any).reason}</p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsUpdateModalOpen(false)}
+                className="flex-1 h-10 font-semibold border-input hover:bg-slate-100 rounded-lg"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={updatingQuick}
+                className="flex-1 h-10 font-bold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors rounded-lg shadow-sm"
+              >
+                {updatingQuick ? 'Saving...' : 'Update Case'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </AppLayout>
   );
 }
 

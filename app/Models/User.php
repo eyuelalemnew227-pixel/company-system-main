@@ -26,6 +26,8 @@ class User extends Authenticatable
 		'email',
 		'password',
 		'phone_number',
+		'telegram_chat_id',
+		'telegram_username',
 		'country_code',
 		'is_paid_user',
 		'sms_notifications_enabled',
@@ -112,5 +114,13 @@ class User extends Authenticatable
     public function preOrders(): HasMany
     {
         return $this->hasMany(PreOrder::class, 'created_by');
+    }
+
+    /**
+     * Ticket assignments assigned to this user.
+     */
+    public function ticketAssignments(): HasMany
+    {
+        return $this->hasMany(TicketAssignment::class, 'assigned_to');
     }
 }

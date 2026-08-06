@@ -228,6 +228,10 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'view sms balance']);
         Permission::firstOrCreate(['name' => 'manage sms settings']); // Activate/Deactivate SMS service
 
+        // Telegram Config & Management
+        Permission::firstOrCreate(['name' => 'view telegram config']);
+        Permission::firstOrCreate(['name' => 'manage telegram config']);
+
         // My Branch Orders
         Permission::firstOrCreate(['name' => 'view my branch orders']);
         Permission::firstOrCreate(['name' => 'collect branch orders']);
