@@ -142,6 +142,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('inventory-periods', \App\Http\Controllers\InventoryPeriodController::class)->except(['show']);
     });
 
+    // Expense Budget Periods
+    Route::resource('expense-budget-periods', \App\Http\Controllers\ExpenseBudgetPeriodController::class)->except(['show']);
+
+
     // Inventory Counts
     Route::middleware('permission:view inventory counts')->group(function () {
         Route::post('inventory-counts/auto-save', [\App\Http\Controllers\InventoryCountController::class, 'autoSave'])->name('inventory-counts.auto-save');

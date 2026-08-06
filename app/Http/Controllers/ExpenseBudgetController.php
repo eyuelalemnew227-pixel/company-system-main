@@ -440,17 +440,36 @@ class ExpenseBudgetController extends Controller
             ->map($mapExpenseItem)
             ->values();
 
-        $defaultPeriod = $this->resolveDefaultFiscalPeriod();
+        $activePeriods = \App\Models\ExpenseBudgetPeriod::with(['fiscalYear', 'fiscalMonth'])
+            ->where('status', 'active')
+            ->get();
+
+        if ($activePeriods->isEmpty()) {
+            return redirect()->route('expense-budget.index')->with('error', 'No active Expense Budget Periods found. Please contact an administrator to open a period.');
+        }
+
+        $activeFiscalMonths = $activePeriods->map(fn ($p) => [
+            'id' => $p->fiscalMonth->id,
+            'name' => $p->fiscalMonth->name,
+            'fiscal_year_id' => $p->fiscalMonth->fiscal_year_id,
+        ])->unique('id')->values()->all();
+
+        $activeFiscalYears = $activePeriods->map(fn ($p) => [
+            'id' => $p->fiscalYear->id,
+            'name' => $p->fiscalYear->name,
+        ])->unique('id')->values()->all();
+
+        $defaultPeriod = $activePeriods->first();
 
         return Inertia::render('Budget/ExpenseBudget/Create', [
             'branches' => $branches,
             'departments' => $departments,
             'frequentExpenseItems' => $frequentExpenseItems,
             'otherExpenseItems' => $otherExpenseItems,
-            'fiscalYears' => $this->fiscalYearOptions(),
-            'fiscalMonths' => $this->fiscalMonthOptions(),
-            'defaultFiscalYearId' => $defaultPeriod['fiscal_year_id'],
-            'defaultFiscalMonthId' => $defaultPeriod['fiscal_month_id'],
+            'fiscalYears' => $activeFiscalYears,
+            'fiscalMonths' => $activeFiscalMonths,
+            'defaultFiscalYearId' => $defaultPeriod->fiscal_year_id,
+            'defaultFiscalMonthId' => $defaultPeriod->fiscal_month_id,
         ]);
     }
 
@@ -474,6 +493,17 @@ class ExpenseBudgetController extends Controller
             'items.*.planned_budget' => ['nullable', 'numeric', 'min:0'],
             'items.*.prev_month_budget' => ['nullable', 'numeric', 'min:0'],
         ]);
+
+        $periodActive = \App\Models\ExpenseBudgetPeriod::where('fiscal_year_id', $validated['fiscal_year_id'])
+            ->where('fiscal_month_id', $validated['fiscal_month_id'])
+            ->where('status', 'active')
+            ->exists();
+        
+        if (!$periodActive) {
+            throw ValidationException::withMessages([
+                'fiscal_month_id' => 'The selected period is not active for expense budgets. Please activate the period first.',
+            ]);
+        }
 
         $branch = Branch::findOrFail($validated['branch_id']);
         $isHeadOffice = $this->isHeadOfficeBranch($branch);
@@ -552,6 +582,15 @@ class ExpenseBudgetController extends Controller
     {
         abort_unless(ExpenseBudgetAccess::canManage(), 403, ExpenseBudgetAccess::manageDeniedMessage());
 
+        $periodActive = \App\Models\ExpenseBudgetPeriod::where('fiscal_year_id', $expenseBudget->fiscal_year_id)
+            ->where('fiscal_month_id', $expenseBudget->fiscal_month_id)
+            ->where('status', 'active')
+            ->exists();
+
+        if (!$periodActive) {
+            return redirect()->back()->with('error', 'Cannot delete this expense budget because the corresponding period is locked or inactive.');
+        }
+
         $expenseBudget->load([
             'expenseItem',
             'fiscalYear',
@@ -588,6 +627,17 @@ class ExpenseBudgetController extends Controller
             'expense_item_id' => ['required', 'exists:expenses,expense_parent_acc_code'],
             'planned_budget' => ['required', 'numeric', 'min:0'],
         ]);
+
+        $periodActive = \App\Models\ExpenseBudgetPeriod::where('fiscal_year_id', $validated['fiscal_year_id'])
+            ->where('fiscal_month_id', $validated['fiscal_month_id'])
+            ->where('status', 'active')
+            ->exists();
+        
+        if (!$periodActive) {
+            throw ValidationException::withMessages([
+                'fiscal_month_id' => 'The selected period is not active for expense budgets. Please activate the period first.',
+            ]);
+        }
 
         $branch = Branch::findOrFail($validated['branch_id']);
         $isHeadOffice = $this->isHeadOfficeBranch($branch);
@@ -909,118 +959,6 @@ class ExpenseBudgetController extends Controller
                 fn ($query) => $query->whereNull('department_id'),
             )
             ->first();
-    }
-
-    private function findPreviousFiscalMonth(int $fiscalMonthId): ?FiscalMonth
-    {
-        $current = FiscalMonth::query()->find($fiscalMonthId);
-
-        if (! $current) {
-            return null;
-        }
-
-        $previousInYear = FiscalMonth::query()
-            ->where('fiscal_year_id', $current->fiscal_year_id)
-            ->where('efy_month_number', $current->efy_month_number - 1)
-            ->first();
-
-        if ($previousInYear) {
-            return $previousInYear;
-        }
-
-        $currentYear = FiscalYear::query()->find($current->fiscal_year_id);
-
-        if (! $currentYear) {
-            return null;
-        }
-
-        $previousYear = FiscalYear::query()
-            ->where('gregorian_end_date', '<', $currentYear->gregorian_start_date)
-            ->orderByDesc('gregorian_end_date')
-            ->first();
-
-        if (! $previousYear) {
-            return null;
-        }
-
-        return FiscalMonth::query()
-            ->where('fiscal_year_id', $previousYear->id)
-            ->orderByDesc('efy_month_number')
-            ->first();
-    }
-
-    /**
-     * @return array{fiscal_year_id: int|null, fiscal_month_id: int|null}
-     */
-    private function resolveDefaultFiscalPeriod(): array
-    {
-        $today = now()->toDateString();
-
-        $currentMonth = FiscalMonth::query()
-            ->whereDate('gregorian_start_date', '<=', $today)
-            ->whereDate('gregorian_end_date', '>=', $today)
-            ->first();
-
-        if ($currentMonth) {
-            $ethiopianDay = \Carbon\Carbon::parse($currentMonth->gregorian_start_date)->diffInDays($today) + 1;
-
-            if ($ethiopianDay >= 21) {
-                $nextMonth = FiscalMonth::query()
-                    ->where('fiscal_year_id', $currentMonth->fiscal_year_id)
-                    ->where('efy_month_number', $currentMonth->efy_month_number + 1)
-                    ->first();
-
-                if (! $nextMonth) {
-                    $currentYear = FiscalYear::query()->find($currentMonth->fiscal_year_id);
-                    $nextYear = FiscalYear::query()
-                        ->where('gregorian_start_date', '>', $currentYear?->gregorian_start_date ?? $today)
-                        ->orderBy('gregorian_start_date')
-                        ->first();
-
-                    if ($nextYear) {
-                        $nextMonth = FiscalMonth::query()
-                            ->where('fiscal_year_id', $nextYear->id)
-                            ->orderBy('efy_month_number')
-                            ->first();
-                    }
-                }
-
-                if ($nextMonth) {
-                    return [
-                        'fiscal_year_id' => $nextMonth->fiscal_year_id,
-                        'fiscal_month_id' => $nextMonth->id,
-                    ];
-                }
-            }
-
-            return [
-                'fiscal_year_id' => $currentMonth->fiscal_year_id,
-                'fiscal_month_id' => $currentMonth->id,
-            ];
-        }
-
-        $activeYear = FiscalYear::query()
-            ->where('is_active', true)
-            ->orderByDesc('gregorian_start_date')
-            ->first()
-            ?? FiscalYear::query()->orderByDesc('gregorian_start_date')->first();
-
-        if (! $activeYear) {
-            return [
-                'fiscal_year_id' => null,
-                'fiscal_month_id' => null,
-            ];
-        }
-
-        $latestMonth = FiscalMonth::query()
-            ->where('fiscal_year_id', $activeYear->id)
-            ->orderByDesc('efy_month_number')
-            ->first();
-
-        return [
-            'fiscal_year_id' => $activeYear->id,
-            'fiscal_month_id' => $latestMonth?->id,
-        ];
     }
 
     /**

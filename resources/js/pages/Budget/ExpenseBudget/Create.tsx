@@ -256,13 +256,7 @@ export default function CreateExpenseBudget({
 
     const isHeadOffice = isHeadOfficeBranch(selectedBranch);
 
-    const filteredFiscalMonths = useMemo(() => {
-        if (!data.fiscal_year_id) {
-            return fiscalMonths;
-        }
-
-        return fiscalMonths.filter((month) => String(month.fiscal_year_id) === data.fiscal_year_id);
-    }, [data.fiscal_year_id, fiscalMonths]);
+    const filteredFiscalMonths = fiscalMonths;
 
     const totalBudget = useMemo(
         () =>
@@ -549,13 +543,7 @@ export default function CreateExpenseBudget({
                                     </Label>
                                     <Select
                                         value={data.fiscal_year_id}
-                                        onValueChange={(value) =>
-                                            setData({
-                                                ...data,
-                                                fiscal_year_id: value,
-                                                fiscal_month_id: '',
-                                            })
-                                        }
+                                        disabled={true}
                                     >
                                         <SelectTrigger id="fiscal_year_id">
                                             <SelectValue placeholder="Select fiscal year" />
@@ -577,15 +565,17 @@ export default function CreateExpenseBudget({
                                     </Label>
                                     <Select
                                         value={data.fiscal_month_id}
-                                        onValueChange={(value) => setData('fiscal_month_id', value)}
-                                        disabled={!data.fiscal_year_id}
+                                        onValueChange={(value) => {
+                                            const selectedMonth = fiscalMonths.find((m) => String(m.id) === value);
+                                            setData({
+                                                ...data,
+                                                fiscal_month_id: value,
+                                                fiscal_year_id: selectedMonth ? String(selectedMonth.fiscal_year_id) : data.fiscal_year_id,
+                                            });
+                                        }}
                                     >
                                         <SelectTrigger id="fiscal_month_id">
-                                            <SelectValue
-                                                placeholder={
-                                                    data.fiscal_year_id ? 'Select fiscal month' : 'Select fiscal year first'
-                                                }
-                                            />
+                                            <SelectValue placeholder="Select fiscal month" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             {filteredFiscalMonths.map((month) => (
