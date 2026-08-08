@@ -6,6 +6,7 @@ export interface Branch {
     contact_email: string | null;
     contact_phone: string | null;
     description: string | null;
+    is_sales_generating: boolean;
     created_at: string;
     departments: string[];
 }

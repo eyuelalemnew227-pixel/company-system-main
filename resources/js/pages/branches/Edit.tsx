@@ -30,6 +30,7 @@ export default function EditBranch({ branch, departments }: { branch: Branch; de
         contact_email: branch.contact_email || '',
         contact_phone: branch.contact_phone || '',
         description: branch.description || '',
+        is_sales_generating: branch.is_sales_generating || false,
         departments: departmentList,
     });
 
@@ -125,6 +126,14 @@ export default function EditBranch({ branch, departments }: { branch: Branch; de
                                     placeholder="Enter description (optional)"
                                 />
                                 <InputError message={errors.description} />
+                            </div>
+                            <div className="mb-4 flex items-center gap-3">
+                                <Checkbox
+                                    id="is_sales_generating"
+                                    checked={data.is_sales_generating}
+                                    onCheckedChange={(checked) => setData('is_sales_generating', checked === true)}
+                                />
+                                <Label htmlFor="is_sales_generating">Is Sales Generating</Label>
                             </div>
                             <Label>Select Departments</Label>
                             <div className="my-4">

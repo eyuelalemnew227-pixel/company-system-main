@@ -34,6 +34,11 @@ class Branch extends Model
         'contact_phone',
         'telegram_chat_id',
         'description',
+        'is_sales_generating',
+    ];
+
+    protected $casts = [
+        'is_sales_generating' => 'boolean',
     ];
 
     public function departments()

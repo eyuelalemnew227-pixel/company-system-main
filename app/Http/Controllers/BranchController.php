@@ -25,6 +25,7 @@ class BranchController extends Controller
                     'branch_code' => $branch->branch_code,
                     'name' => $branch->name,
                     'location' => $branch->location,
+                    'is_sales_generating' => $branch->is_sales_generating,
                     'created_at' => $branch->created_at->format('d-m-Y'),
                     'departments' => $branch->departments->pluck('name')
                 ];
@@ -53,6 +54,7 @@ class BranchController extends Controller
             'contact_phone' => 'nullable|string|max:20',
             'telegram_chat_id' => 'nullable|string|max:100',
             'description' => 'nullable|string',
+            'is_sales_generating' => 'boolean',
             'departments' => 'array',
             'departments.*' => 'string|exists:departments,name'
         ]);
@@ -65,6 +67,7 @@ class BranchController extends Controller
             'contact_phone',
             'telegram_chat_id',
             'description',
+            'is_sales_generating',
         ]));
 
         if ($request->has('departments')) {
@@ -89,6 +92,7 @@ class BranchController extends Controller
             'contact_phone' => $branch->contact_phone,
             'telegram_chat_id' => $branch->telegram_chat_id,
             'description' => $branch->description,
+            'is_sales_generating' => $branch->is_sales_generating,
             'created_at' => $branch->created_at?->format('d-m-Y'),
             'departments' => $branch->departments->pluck('name'),
         ];
@@ -114,6 +118,7 @@ class BranchController extends Controller
             'contact_phone' => 'nullable|string|max:20',
             'telegram_chat_id' => 'nullable|string|max:100',
             'description' => 'nullable|string',
+            'is_sales_generating' => 'boolean',
             'departments' => 'array',
             'departments.*' => 'string|exists:departments,name'
         ]);
@@ -126,6 +131,7 @@ class BranchController extends Controller
             'contact_phone',
             'telegram_chat_id',
             'description',
+            'is_sales_generating',
         ]));
 
         if ($request->has('departments')) {
