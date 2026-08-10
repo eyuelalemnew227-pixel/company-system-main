@@ -58,6 +58,11 @@ type FiscalMonthOption = {
     fiscal_year_id: number;
 };
 
+type SubmitterOption = {
+    id: number;
+    name: string;
+};
+
 type ExpenseBudgetRow = {
     id: number;
     fiscal_year_id: number;
@@ -117,6 +122,7 @@ type IndexProps = {
     branches: BranchOption[];
     departments: DepartmentOption[];
     expenseItems: ExpenseItemOption[];
+    submitters: SubmitterOption[];
     fiscalYears: FiscalYearOption[];
     fiscalMonths: FiscalMonthOption[];
     request?: {
@@ -125,6 +131,7 @@ type IndexProps = {
         department_id?: string;
         fiscal_month_id?: string;
         fiscal_year_id?: string;
+        submitted_by?: string;
     };
     totalPlannedBudget?: string | number | null;
 };
@@ -189,6 +196,7 @@ function buildFilterParams(
     selectedDepartment: string,
     selectedFiscalMonth: string,
     selectedFiscalYear: string,
+    selectedSubmitter: string,
 ): Record<string, string> {
     const params: Record<string, string> = {};
 
@@ -206,6 +214,9 @@ function buildFilterParams(
     }
     if (selectedFiscalYear !== 'all') {
         params.fiscal_year_id = selectedFiscalYear;
+    }
+    if (selectedSubmitter !== 'all') {
+        params.submitted_by = selectedSubmitter;
     }
 
     return params;
@@ -228,6 +239,7 @@ export default function ExpenseBudgetIndex({
     branches,
     departments,
     expenseItems,
+    submitters,
     fiscalYears,
     fiscalMonths,
     request,
@@ -242,6 +254,7 @@ export default function ExpenseBudgetIndex({
     const [selectedDepartment, setSelectedDepartment] = useState<string>(request?.department_id ?? 'all');
     const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(request?.fiscal_month_id ?? 'all');
     const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(request?.fiscal_year_id ?? 'all');
+    const [selectedSubmitter, setSelectedSubmitter] = useState<string>(request?.submitted_by ?? 'all');
     const [deleteItemId, setDeleteItemId] = useState<number | null>(null);
     const [historyItem, setHistoryItem] = useState<ExpenseBudgetRow | null>(null);
     const [historyData, setHistoryData] = useState<ActivityLogResponse | null>(null);
@@ -254,6 +267,7 @@ export default function ExpenseBudgetIndex({
     const [openEditExpenseItem, setOpenEditExpenseItem] = useState(false);
     const [openBranchFilter, setOpenBranchFilter] = useState(false);
     const [openDepartmentFilter, setOpenDepartmentFilter] = useState(false);
+    const [openSubmitterFilter, setOpenSubmitterFilter] = useState(false);
 
     const selectedBranchOption = useMemo(
         () => (selectedBranch === 'all' ? null : branches.find((branch) => branch.id.toString() === selectedBranch) ?? null),
@@ -261,14 +275,16 @@ export default function ExpenseBudgetIndex({
     );
 
     const selectedDepartmentOption = useMemo(
-        () =>
-            selectedDepartment === 'all'
-                ? null
-                : departments.find((department) => department.id.toString() === selectedDepartment) ?? null,
+        () => (selectedDepartment === 'all' ? null : (departments.find((d) => d.id.toString() === selectedDepartment) ?? null)),
         [selectedDepartment, departments],
     );
 
     const canFilterByDepartment = isHeadOfficeBranch(selectedBranchOption);
+
+    const selectedSubmitterOption = useMemo(
+        () => (selectedSubmitter === 'all' ? null : (submitters.find((s) => s.id.toString() === selectedSubmitter) ?? null)),
+        [selectedSubmitter, submitters],
+    );
 
     const editBranchOption = useMemo(
         () =>
@@ -307,65 +323,95 @@ export default function ExpenseBudgetIndex({
         }
     }, [flash.message, triggerPopup]);
 
-    const debouncedSearch = useCallback(
-        debounce((value: string) => {
-            router.get(
-                '/budget/expense-budget',
-                buildFilterParams(value, selectedBranch, selectedDepartment, selectedFiscalMonth, selectedFiscalYear),
-                { preserveState: true, replace: true },
-            );
-        }, 500),
-        [selectedBranch, selectedDepartment, selectedFiscalMonth, selectedFiscalYear],
+    const debouncedSearch = useMemo(
+        () =>
+            debounce((value: string) => {
+                const params = buildFilterParams(
+                    value,
+                    selectedBranch,
+                    selectedDepartment,
+                    selectedFiscalMonth,
+                    selectedFiscalYear,
+                    selectedSubmitter,
+                );
+                router.get('/budget/expense-budget', params, { preserveState: true, replace: true });
+            }, 300),
+        [selectedBranch, selectedDepartment, selectedFiscalMonth, selectedFiscalYear, selectedSubmitter],
     );
 
-    function handleSearchChange(event: React.ChangeEvent<HTMLInputElement>) {
-        const value = event.target.value;
-        setSearch(value);
-        debouncedSearch(value);
+    function handleSearchChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const val = e.target.value;
+        setSearch(val);
+        debouncedSearch(val);
     }
 
-    function applyFilters(
-        overrides: Partial<{
-            search: string;
-            branch: string;
-            department: string;
-            fiscal_month: string;
-            fiscal_year: string;
-        }> = {},
-    ) {
+    function handleBranchFilterSelect(val: string) {
+        setSelectedBranch(val);
+        setOpenBranchFilter(false);
         const params = buildFilterParams(
-            overrides.search ?? search,
-            overrides.branch ?? selectedBranch,
-            overrides.department ?? selectedDepartment,
-            overrides.fiscal_month ?? selectedFiscalMonth,
-            overrides.fiscal_year ?? selectedFiscalYear,
+            search,
+            val,
+            selectedDepartment,
+            selectedFiscalMonth,
+            selectedFiscalYear,
+            selectedSubmitter,
         );
-
         router.get('/budget/expense-budget', params, { preserveState: true, replace: true });
     }
 
-    function handleBranchFilterSelect(branchId: string) {
-        setOpenBranchFilter(false);
-        setSelectedBranch(branchId);
-        setSelectedDepartment('all');
-        applyFilters({ branch: branchId, department: 'all' });
-    }
-
-    function handleDepartmentFilterSelect(departmentId: string) {
+    function handleDepartmentFilterSelect(val: string) {
+        setSelectedDepartment(val);
         setOpenDepartmentFilter(false);
-        setSelectedDepartment(departmentId);
-        applyFilters({ department: departmentId });
+        const params = buildFilterParams(
+            search,
+            selectedBranch,
+            val,
+            selectedFiscalMonth,
+            selectedFiscalYear,
+            selectedSubmitter,
+        );
+        router.get('/budget/expense-budget', params, { preserveState: true, replace: true });
     }
 
-    function handleFiscalMonthChange(value: string) {
-        setSelectedFiscalMonth(value);
-        applyFilters({ fiscal_month: value });
-    }
-
-    function handleFiscalYearChange(value: string) {
-        setSelectedFiscalYear(value);
+    function handleFiscalYearChange(val: string) {
+        setSelectedFiscalYear(val);
         setSelectedFiscalMonth('all');
-        applyFilters({ fiscal_year: value, fiscal_month: 'all' });
+        const params = buildFilterParams(
+            search,
+            selectedBranch,
+            selectedDepartment,
+            'all',
+            val,
+            selectedSubmitter,
+        );
+        router.get('/budget/expense-budget', params, { preserveState: true, replace: true });
+    }
+
+    function handleFiscalMonthChange(val: string) {
+        setSelectedFiscalMonth(val);
+        const params = buildFilterParams(
+            search,
+            selectedBranch,
+            selectedDepartment,
+            val,
+            selectedFiscalYear,
+            selectedSubmitter,
+        );
+        router.get('/budget/expense-budget', params, { preserveState: true, replace: true });
+    }
+
+    function handleSubmitterFilterSelect(val: string) {
+        setSelectedSubmitter(val);
+        setOpenSubmitterFilter(false);
+        const params = buildFilterParams(
+            search,
+            selectedBranch,
+            selectedDepartment,
+            selectedFiscalMonth,
+            selectedFiscalYear,
+            val,
+        );
+        router.get('/budget/expense-budget', params, { preserveState: true, replace: true });
     }
 
     function clearFilters() {
@@ -375,6 +421,7 @@ export default function ExpenseBudgetIndex({
         setSelectedDepartment('all');
         setSelectedFiscalMonth('all');
         setSelectedFiscalYear('all');
+        setSelectedSubmitter('all');
         router.get('/budget/expense-budget', {}, { preserveState: true, replace: true });
     }
 
@@ -383,7 +430,14 @@ export default function ExpenseBudgetIndex({
             triggerPopup('Error', 'No records found to export.', 'error');
             return;
         }
-        const params = buildFilterParams(search, selectedBranch, selectedDepartment, selectedFiscalMonth, selectedFiscalYear);
+        const params = buildFilterParams(
+            search,
+            selectedBranch,
+            selectedDepartment,
+            selectedFiscalMonth,
+            selectedFiscalYear,
+            selectedSubmitter,
+        );
         const queryString = new URLSearchParams(params as any).toString();
         window.location.href = `/budget/expense-budget/export?${queryString}`;
     }
@@ -523,7 +577,8 @@ export default function ExpenseBudgetIndex({
         selectedBranch !== 'all' ||
         selectedDepartment !== 'all' ||
         selectedFiscalMonth !== 'all' ||
-        selectedFiscalYear !== 'all';
+        selectedFiscalYear !== 'all' ||
+        selectedSubmitter !== 'all';
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -600,6 +655,7 @@ export default function ExpenseBudgetIndex({
                                         </Command>
                                     </PopoverContent>
                                 </Popover>
+
                                 <Popover open={openDepartmentFilter} onOpenChange={setOpenDepartmentFilter}>
                                     <div className={cn(!canFilterByDepartment && 'cursor-not-allowed')}>
                                         <PopoverTrigger asChild>
@@ -682,6 +738,57 @@ export default function ExpenseBudgetIndex({
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                <Popover open={openSubmitterFilter} onOpenChange={setOpenSubmitterFilter}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            className="w-[180px] justify-between font-normal"
+                                        >
+                                            {selectedSubmitterOption?.name ?? 'All Submitters'}
+                                            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Search submitters..." />
+                                            <CommandList className="max-h-60">
+                                                <CommandEmpty>No submitters found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    <CommandItem
+                                                        value="All Submitters"
+                                                        onSelect={() => handleSubmitterFilterSelect('all')}
+                                                    >
+                                                        <Check
+                                                            className={cn(
+                                                                'mr-2 size-4',
+                                                                selectedSubmitter === 'all' ? 'opacity-100' : 'opacity-0',
+                                                            )}
+                                                        />
+                                                        All Submitters
+                                                    </CommandItem>
+                                                    {submitters.map((submitter) => (
+                                                        <CommandItem
+                                                            key={submitter.id}
+                                                            value={submitter.name}
+                                                            onSelect={() => handleSubmitterFilterSelect(submitter.id.toString())}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    'mr-2 size-4',
+                                                                    selectedSubmitter === submitter.id.toString()
+                                                                        ? 'opacity-100'
+                                                                        : 'opacity-0',
+                                                                )}
+                                                            />
+                                                            {submitter.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                                 {hasActiveFilters && (
                                     <Button type="button" variant="secondary" onClick={clearFilters}>
                                         <X className="mr-1 size-4" />

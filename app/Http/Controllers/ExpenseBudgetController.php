@@ -65,6 +65,10 @@ class ExpenseBudgetController extends Controller
             $query->where('expense_budgets.fiscal_year_id', $fiscalYearId);
         }
 
+        if ($submittedBy = request('submitted_by')) {
+            $query->where('expense_budgets.created_by', $submittedBy);
+        }
+
         $user = auth()->user();
 
         $isUserHO = false;
@@ -173,14 +177,22 @@ class ExpenseBudgetController extends Controller
             ])
             ->values();
 
+        $submitters = \App\Models\User::query()
+            ->join('employees', 'users.employee_id', '=', 'employees.id')
+            ->where('employees.branch_id', 5)
+            ->select('users.id', 'users.name')
+            ->orderBy('users.name')
+            ->get();
+
         return Inertia::render('Budget/ExpenseBudget/Index', [
             'items' => $items,
             'branches' => $branches,
             'departments' => $departments,
             'expenseItems' => $expenseItems,
+            'submitters' => $submitters,
             'fiscalYears' => $this->fiscalYearOptions(),
             'fiscalMonths' => $this->fiscalMonthOptions(),
-            'request' => request()->only(['search', 'branch_id', 'department_id', 'fiscal_month_id', 'fiscal_year_id']),
+            'request' => request()->only(['search', 'branch_id', 'department_id', 'fiscal_month_id', 'fiscal_year_id', 'submitted_by']),
             'totalPlannedBudget' => $totalPlannedBudget,
         ]);
     }
@@ -220,6 +232,10 @@ class ExpenseBudgetController extends Controller
 
         if ($fiscalYearId = request('fiscal_year_id')) {
             $query->where('expense_budgets.fiscal_year_id', $fiscalYearId);
+        }
+
+        if ($submittedBy = request('submitted_by')) {
+            $query->where('expense_budgets.created_by', $submittedBy);
         }
 
         $user = auth()->user();
