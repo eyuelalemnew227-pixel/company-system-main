@@ -29,6 +29,7 @@ class SalesBudgetController extends Controller
     {
         return Branch::query()
             ->where('status', 'active')
+            ->where('is_sales_generating', 1)
             ->orderBy('name')
             ->get(['id', 'name']);
     }
@@ -53,6 +54,7 @@ class SalesBudgetController extends Controller
         $showUnbudgeted = filter_var($request->input('show_unbudgeted', false), FILTER_VALIDATE_BOOLEAN);
 
         $allBranches = Branch::query()
+            ->where('is_sales_generating', 1)
             ->where(function ($query) {
                 $query->where('status', 'active')
                     ->orWhere('name', 'like', '%Head Office%')
@@ -186,6 +188,7 @@ class SalesBudgetController extends Controller
         $showUnbudgeted = filter_var($request->input('show_unbudgeted', false), FILTER_VALIDATE_BOOLEAN);
 
         $allBranches = Branch::query()
+            ->where('is_sales_generating', 1)
             ->where(function ($query) {
                 $query->where('status', 'active')
                     ->orWhere('name', 'like', '%Head Office%')

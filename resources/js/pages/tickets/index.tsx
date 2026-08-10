@@ -238,8 +238,9 @@ export default function TicketIndex() {
         </div>
 
         <Card className="bg-slate-50 border-slate-200 shadow-sm">
-          <CardContent className="p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-10 gap-3 items-end">
+          <CardContent className="p-4 space-y-4">
+            {/* Row 1 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3 items-end">
               <div className="space-y-1.5 xl:col-span-2">
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Search</label>
                 <div className="relative">
@@ -258,10 +259,10 @@ export default function TicketIndex() {
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</label>
                 <Select value={params.status} onValueChange={(v) => setParams({ ...params, status: v })}>
                   <SelectTrigger className="bg-white border-slate-200">
-                    <SelectValue placeholder="All Statuses" />
+                    <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     {options.statuses.map((s) => (
                       <SelectItem key={s} value={s}>
                         {s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' ')}
@@ -283,7 +284,7 @@ export default function TicketIndex() {
                     >
                       <span className="truncate">
                         {params.department_id === 'all'
-                          ? 'All Departments'
+                          ? 'All'
                           : options.departments.find((d) => String(d.id) === params.department_id)?.name ?? 'Select Department'}
                       </span>
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -296,14 +297,14 @@ export default function TicketIndex() {
                         <CommandEmpty>No department found.</CommandEmpty>
                         <CommandGroup>
                           <CommandItem
-                            value="all All Departments"
+                            value="all All"
                             onSelect={() => {
                               setParams({ ...params, department_id: 'all' });
                               setDeptOpen(false);
                             }}
                           >
                             <Check className={cn('mr-2 h-4 w-4', params.department_id === 'all' ? 'opacity-100' : 'opacity-0')} />
-                            All Departments
+                            All
                           </CommandItem>
                           {options.departments.map((d) => (
                             <CommandItem
@@ -328,10 +329,10 @@ export default function TicketIndex() {
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Requestor Branch</label>
                 <Select value={params.requestor_branch_id} onValueChange={(v) => setParams({ ...params, requestor_branch_id: v })}>
                   <SelectTrigger className="bg-white border-slate-200">
-                    <SelectValue placeholder="All Branches" />
+                    <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Branches</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     {options.branches?.map((b) => (
                       <SelectItem key={b.id} value={String(b.id)}>
                         {b.name}
@@ -344,10 +345,10 @@ export default function TicketIndex() {
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</label>
                 <Select value={params.priority} onValueChange={(v) => setParams({ ...params, priority: v })}>
                   <SelectTrigger className="bg-white border-slate-200">
-                    <SelectValue placeholder="All Priorities" />
+                    <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Priorities</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     {options.priorities.map((p) => (
                       <SelectItem key={p} value={p}>
                         {p.charAt(0).toUpperCase() + p.slice(1)}
@@ -361,10 +362,10 @@ export default function TicketIndex() {
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</label>
                 <Select value={params.main_category_id} onValueChange={(v) => setParams({ ...params, main_category_id: v })}>
                   <SelectTrigger className="bg-white border-slate-200">
-                    <SelectValue placeholder="All Categories" />
+                    <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     {options.categories.map((c) => (
                       <SelectItem key={c.id} value={String(c.id)}>
                         {c.name}
@@ -373,7 +374,10 @@ export default function TicketIndex() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
 
+            {/* Row 2 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-3 items-end">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fiscal Year</label>
                 <Select
@@ -381,10 +385,10 @@ export default function TicketIndex() {
                   onValueChange={(v) => setParams({ ...params, fiscal_year_id: v, fiscal_month_id: 'all' })}
                 >
                   <SelectTrigger className="bg-white border-slate-200">
-                    <SelectValue placeholder="All Fiscal Years" />
+                    <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Fiscal Years</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     {options.fiscalYears.map((y) => (
                       <SelectItem key={y.id} value={String(y.id)}>
                         {y.name}
@@ -402,10 +406,10 @@ export default function TicketIndex() {
                   disabled={params.fiscal_year_id === 'all'}
                 >
                   <SelectTrigger className="bg-white border-slate-200">
-                    <SelectValue placeholder="All Fiscal Months" />
+                    <SelectValue placeholder="All" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Fiscal Months</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
                     {filteredFiscalMonths.map((m) => (
                       <SelectItem key={m.id} value={String(m.id)}>
                         {m.name}
