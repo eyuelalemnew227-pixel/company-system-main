@@ -16,7 +16,7 @@ class PermissionController extends Controller {
 			$query->where('name', 'like', "%{$search}%");
 		}
 
-        $permissions = $query->latest()->paginate(5)->withQueryString();
+        $permissions = $query->latest()->paginate(10)->withQueryString();
 		$permissions->getCollection()->transform(function ($permission) {
 			return [
 				'id' => $permission->id,

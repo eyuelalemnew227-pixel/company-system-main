@@ -17,7 +17,7 @@ class PositionController extends Controller
                   ->orWhere('description', 'like', "%{$search}%");
         }
 
-        $positions = $query->paginate(5)->withQueryString()->through(function ($position) {
+        $positions = $query->paginate(10)->withQueryString()->through(function ($position) {
                 return [
                     'id' => $position->id,
                     'title' => $position->title,

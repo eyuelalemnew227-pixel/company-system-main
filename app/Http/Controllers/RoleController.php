@@ -19,7 +19,7 @@ class RoleController extends Controller {
             $query->where('name', 'like', "%{$search}%");
         }
 
-        $roles = $query->paginate(5)->withQueryString()->through(function ($role) {
+        $roles = $query->paginate(10)->withQueryString()->through(function ($role) {
             return [
                 'id' => $role->id,
                 'name' => $role->name,

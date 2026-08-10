@@ -65,7 +65,7 @@ class UserController extends Controller {
 
         $roles = Role::select('name')->get()->pluck('name');
 
-        $users = $query->latest()->paginate(5)
+        $users = $query->latest()->paginate(10)
             ->withQueryString()
             ->through(fn($user) => [
                 'id' => $user->id,

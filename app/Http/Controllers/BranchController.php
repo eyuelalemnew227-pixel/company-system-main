@@ -19,7 +19,7 @@ class BranchController extends Controller
                   ->orWhere('branch_code', 'like', "%{$search}%");
         }
 
-        $branches = $query->paginate(5)->withQueryString()->through(function ($branch) {
+        $branches = $query->paginate(10)->withQueryString()->through(function ($branch) {
                 return [
                     'id' => $branch->id,
                     'branch_code' => $branch->branch_code,
