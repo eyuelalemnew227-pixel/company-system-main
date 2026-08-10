@@ -145,6 +145,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Expense Budget Periods
     Route::resource('expense-budget-periods', \App\Http\Controllers\ExpenseBudgetPeriodController::class)->except(['show']);
 
+    // Weekly Budget Periods
+    Route::get('weekly-budget-periods', [\App\Http\Controllers\WeeklyBudgetPeriodController::class, 'index'])->name('weekly-budget-periods.index');
+    Route::post('weekly-budget-periods', [\App\Http\Controllers\WeeklyBudgetPeriodController::class, 'store'])->name('weekly-budget-periods.store');
+
 
     // Inventory Counts
     Route::middleware('permission:view inventory counts')->group(function () {

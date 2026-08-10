@@ -301,6 +301,11 @@ class WeeklyBudgetController extends Controller
                 ->first()
             : null;
 
+        $setting = \App\Models\WeeklyBudgetSetting::first() ?? new \App\Models\WeeklyBudgetSetting([
+            'submission_deadline_day' => 'Friday',
+            'is_urgent_enabled' => true,
+        ]);
+
         return Inertia::render('Budget/WeeklyBudget/Create', [
             'branches' => $branches,
             'departments' => $departments,
@@ -310,6 +315,7 @@ class WeeklyBudgetController extends Controller
             'currentFiscalYearId' => $currentFiscalYear?->id,
             'currentFiscalMonthId' => $currentFiscalMonth?->id,
             'request' => request()->only(['department_id', 'branch_id']),
+            'setting' => $setting,
         ]);
     }
 
@@ -336,6 +342,15 @@ class WeeklyBudgetController extends Controller
             'description' => ['required', 'string'],
             'note' => ['nullable', 'string'],
         ]);
+
+        $setting = \App\Models\WeeklyBudgetSetting::first() ?? new \App\Models\WeeklyBudgetSetting([
+            'submission_deadline_day' => 'Friday',
+            'is_urgent_enabled' => true,
+        ]);
+
+        if ($validated['request_type'] === 'urgent' && !$setting->is_urgent_enabled) {
+            return back()->withErrors(['request_type' => 'Urgent requests are currently disabled system-wide.'])->withInput();
+        }
 
         $department = Department::findOrFail($validated['department_id']);
         $deptName = strtolower($department->name);

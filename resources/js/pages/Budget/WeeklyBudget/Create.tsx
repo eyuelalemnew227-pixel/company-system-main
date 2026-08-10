@@ -51,6 +51,12 @@ type WeekOption = {
 	disabled: boolean;
 };
 
+type Setting = {
+	id: number;
+	submission_deadline_day: string;
+	is_urgent_enabled: boolean;
+};
+
 type CreateProps = {
 	branches: BranchOption[];
 	departments: DepartmentOption[];
@@ -63,6 +69,7 @@ type CreateProps = {
 		department_id?: string;
 		branch_id?: string;
 	};
+	setting: Setting;
 };
 
 function isHeadOfficeBranch(branch: BranchOption | null): boolean {
@@ -166,22 +173,17 @@ function buildWeekOption(monday: Date, isDisabled: boolean, fiscalYearStartDate:
 
 /**
  * Get available week options based on request type and today's date.
- *
- * Urgent: two options — next week and the week after.
- *   Deadline: Sunday (always open; both stay selectable all week).
- *
- * Normal: two options — next week and the week after.
- *   Deadline: Friday.
- *   Exception: on Saturday or Sunday, the immediate next week is disabled;
- *   only the week after remains selectable.
  */
-function getWeekOptions(requestType: string, todayStr: string, fiscalYearStartDate: Date): WeekOption[] {
+function getWeekOptions(requestType: string, todayStr: string, fiscalYearStartDate: Date, setting: Setting): WeekOption[] {
 	if (!requestType) {
 		return [];
 	}
 
 	const today = new Date(todayStr + 'T00:00:00');
-	const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+	
+	// Convert JS dayOfWeek (0=Sun, 1=Mon, ..., 6=Sat) to 1-7 scale (1=Mon, ..., 7=Sun)
+	const jsDay = today.getDay();
+	const currentDayMapped = jsDay === 0 ? 7 : jsDay;
 
 	const currentMonday = getMondayOfWeek(today);
 
@@ -193,35 +195,40 @@ function getWeekOptions(requestType: string, todayStr: string, fiscalYearStartDa
 	const weekAfterNextMonday = new Date(currentMonday);
 	weekAfterNextMonday.setDate(currentMonday.getDate() + 14);
 
-    if (requestType === 'urgent') {
-        // Monday–Friday: current week + next week; Weekend: only next week
-        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-            return [
-                buildWeekOption(currentMonday, false, fiscalYearStartDate),
-                buildWeekOption(nextMonday, false, fiscalYearStartDate),
-            ];
-        } else {
-            // Saturday (6) or Sunday (0)
-            return [
-                buildWeekOption(nextMonday, false, fiscalYearStartDate),
-            ];
-        }
-    }
+	if (requestType === 'urgent') {
+		// Urgent: Next week is always selectable, week after next is not typically needed but kept per logic.
+		// For urgent, deadline is Sunday (mapped to 7). So it's always valid during the current week.
+		return [
+			buildWeekOption(currentMonday, false, fiscalYearStartDate),
+			buildWeekOption(nextMonday, false, fiscalYearStartDate),
+		];
+	}
 
-    if (requestType === 'normal') {
-        // Monday–Friday: next week + week after next; Weekend: only week after next
-        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-            return [
-                buildWeekOption(nextMonday, false, fiscalYearStartDate),
-                buildWeekOption(weekAfterNextMonday, false, fiscalYearStartDate),
-            ];
-        } else {
-            // Saturday (6) or Sunday (0)
-            return [
-                buildWeekOption(weekAfterNextMonday, false, fiscalYearStartDate),
-            ];
-        }
-    }
+	if (requestType === 'normal') {
+		const daysMap: Record<string, number> = {
+			'Monday': 1,
+			'Tuesday': 2,
+			'Wednesday': 3,
+			'Thursday': 4,
+			'Friday': 5,
+			'Saturday': 6,
+			'Sunday': 7,
+		};
+		const deadlineMapped = daysMap[setting.submission_deadline_day] || 5;
+
+		if (currentDayMapped <= deadlineMapped) {
+			// On or before deadline day: next week + week after next
+			return [
+				buildWeekOption(nextMonday, false, fiscalYearStartDate),
+				buildWeekOption(weekAfterNextMonday, false, fiscalYearStartDate),
+			];
+		} else {
+			// After deadline day: only week after next
+			return [
+				buildWeekOption(weekAfterNextMonday, false, fiscalYearStartDate),
+			];
+		}
+	}
 
 	return [];
 }
@@ -235,6 +242,7 @@ export default function CreateWeeklyBudget({
 	currentFiscalYearId,
 	currentFiscalMonthId,
 	request,
+	setting,
 }: CreateProps) {
 	const { triggerPopup, PopupComponent } = usePopup();
 	const { data, setData, post, processing, errors, clearErrors, setError, transform } = useForm({
@@ -281,8 +289,8 @@ export default function CreateWeeklyBudget({
 			return [];
 		}
 		const fiscalYearStartDate = new Date(fiscalYear.gregorian_start_date + 'T00:00:00');
-		return getWeekOptions(data.request_type, today, fiscalYearStartDate);
-	}, [data.request_type, data.fiscal_month_id, data.fiscal_year_id, today, fiscalYears]);
+		return getWeekOptions(data.request_type, today, fiscalYearStartDate, setting);
+	}, [data.request_type, data.fiscal_month_id, data.fiscal_year_id, today, fiscalYears, setting]);
 
 	// Reset week selection when request_type or fiscal_month changes
 	useEffect(() => {
@@ -528,7 +536,9 @@ export default function CreateWeeklyBudget({
 											<SelectValue placeholder="Select request type" />
 										</SelectTrigger>
 										<SelectContent>
-											<SelectItem value="urgent">Urgent</SelectItem>
+											{setting.is_urgent_enabled && (
+												<SelectItem value="urgent">Urgent</SelectItem>
+											)}
 											<SelectItem value="normal">Normal</SelectItem>
 										</SelectContent>
 									</Select>
