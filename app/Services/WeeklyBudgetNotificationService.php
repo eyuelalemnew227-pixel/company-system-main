@@ -13,6 +13,11 @@ class WeeklyBudgetNotificationService
 {
     public static function handleStatusChanges(WeeklyBudget $budget): void
     {
+        $budget->loadMissing(['department', 'branch']);
+        $deptName = $budget->department?->name ?? 'N/A';
+        $branchName = $budget->branch?->name ?? 'N/A';
+        $amountStr = number_format((float) $budget->amount, 2);
+
         // Finance Alert: If department status changes to Approved
         if ($budget->wasChanged('status_department') && $budget->status_department === WeeklyBudgetStatusDepartment::Approved) {
             self::notifyUsersByPermission(
@@ -20,7 +25,7 @@ class WeeklyBudgetNotificationService
                 'view finance budgets', 
                 'budget.finance', 
                 "Budget Ready for Finance: #{$budget->id}",
-                "The budget for {$budget->department?->name} has been department-approved and requires your review."
+                "The budget for {$deptName} for {$amountStr} has been department-approved and requires your review."
             );
         }
 
@@ -28,22 +33,42 @@ class WeeklyBudgetNotificationService
         $deptApproved = $budget->status_department === WeeklyBudgetStatusDepartment::Approved;
         $financeApproved = $budget->status_finance === WeeklyBudgetStatusFinance::Approved;
         if (($budget->wasChanged('status_department') || $budget->wasChanged('status_finance')) && $deptApproved && $financeApproved) {
-            self::notifyUsersByPermission(
-                $budget, 
-                'view ceo budgets', 
+            // Fetch users with the 'ceo role'
+            $ceoIds = \App\Models\User::role('ceo role')->pluck('id')->toArray();
+            
+            self::insertNotifications(
+                $budget,
+                $ceoIds,
                 'budget.ceo', 
                 "Budget Ready for CEO: #{$budget->id}",
-                "The budget for {$budget->department?->name} has been finance-approved and requires your final review."
+                "The budget for {$deptName} for {$amountStr} has been finance-approved and requires your final review.",
+                false // Do not send Telegram for CEO
             );
         }
 
         // Department Alert: If ANY status changes
         if ($budget->wasChanged(['status_department', 'status_finance', 'status_ceo'])) {
+            $changes = [];
+            if ($budget->wasChanged('status_department')) {
+                $status = is_object($budget->status_department) ? $budget->status_department->value : $budget->status_department;
+                $changes[] = "Department: " . ucfirst((string) $status);
+            }
+            if ($budget->wasChanged('status_finance')) {
+                $status = is_object($budget->status_finance) ? $budget->status_finance->value : $budget->status_finance;
+                $changes[] = "Finance: " . ucfirst((string) $status);
+            }
+            if ($budget->wasChanged('status_ceo')) {
+                $status = is_object($budget->status_ceo) ? $budget->status_ceo->value : $budget->status_ceo;
+                $changes[] = "CEO: " . ucfirst((string) $status);
+            }
+            
+            $changesStr = implode(', ', $changes);
+
             self::notifyDepartmentUsers(
                 $budget,
                 'budget.department',
                 "Budget Status Updated: #{$budget->id}",
-                "The status of your department's budget has changed."
+                "The status of your department's budget for {$amountStr} has changed. Updates - {$changesStr}."
             );
         }
     }
@@ -51,7 +76,8 @@ class WeeklyBudgetNotificationService
     private static function notifyUsersByPermission(WeeklyBudget $budget, string $permission, string $type, string $title, string $body): void
     {
         $userIds = User::permission($permission)->pluck('id')->toArray();
-        self::insertNotifications($budget, $userIds, $type, $title, $body);
+        $sendTelegram = $permission !== 'view ceo budgets';
+        self::insertNotifications($budget, $userIds, $type, $title, $body, $sendTelegram);
     }
 
     private static function notifyDepartmentUsers(WeeklyBudget $budget, string $type, string $title, string $body): void
@@ -68,12 +94,13 @@ class WeeklyBudgetNotificationService
             ->pluck('id')
             ->toArray();
 
-        self::insertNotifications($budget, $userIds, $type, $title, $body);
+        self::insertNotifications($budget, $userIds, $type, $title, $body, true);
     }
 
-    private static function insertNotifications(WeeklyBudget $budget, array $userIds, string $type, string $title, string $body): void
+    private static function insertNotifications(WeeklyBudget $budget, array $userIds, string $type, string $title, string $body, bool $sendTelegram = true): void
     {
-        $rows = collect($userIds)->filter()->unique()->map(fn($id) => [
+        $uniqueUserIds = collect($userIds)->filter()->unique()->toArray();
+        $rows = array_map(fn($id) => [
             'user_id' => $id,
             'weekly_budget_id' => $budget->id,
             'type' => $type,
@@ -82,10 +109,18 @@ class WeeklyBudgetNotificationService
             'created_at' => now(),
             'updated_at' => now(),
             'read_at' => null,
-        ])->all();
+        ], $uniqueUserIds);
 
         if (!empty($rows)) {
             WeeklyBudgetNotification::insert($rows);
+
+            if ($sendTelegram) {
+                $telegramUsers = User::whereIn('id', $uniqueUserIds)->whereNotNull('telegram_chat_id')->pluck('id')->toArray();
+                if (!empty($telegramUsers)) {
+                    $telegramService = app(\App\Services\TelegramWeeklyBudgetNotificationService::class);
+                    $telegramService->notifyUsers($budget, $telegramUsers, $title, $body, $type);
+                }
+            }
         }
     }
 }

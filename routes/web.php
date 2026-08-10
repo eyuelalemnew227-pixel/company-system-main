@@ -267,6 +267,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('budget/weekly-budget/{weeklyBudget}', [WeeklyBudgetController::class, 'update'])->name('weekly-budget.update');
         Route::delete('budget/weekly-budget/{weeklyBudget}', [WeeklyBudgetController::class, 'destroy'])->name('weekly-budget.destroy');
     });
+    // Weekly Budget Notifications (for bell UI)
+    Route::get('weekly-budget-notifications', [\App\Http\Controllers\WeeklyBudgetNotificationController::class, 'index'])
+        ->name('weekly-budget-notifications.index');
+    Route::post('weekly-budget-notifications/mark-read/{notification?}', [\App\Http\Controllers\WeeklyBudgetNotificationController::class, 'markRead'])
+        ->name('weekly-budget-notifications.mark-read');
+    Route::delete('weekly-budget-notifications', [\App\Http\Controllers\WeeklyBudgetNotificationController::class, 'clear'])
+        ->name('weekly-budget-notifications.clear');
+
     // External Links Management
     Route::middleware('permission:manage external links')->group(function () {
         Route::get('external-links', [ExternalLinkController::class, 'index'])->name('external-links.index');
