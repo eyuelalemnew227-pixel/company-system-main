@@ -123,6 +123,12 @@ interface WeeklyBudgetList extends Pagination {
 	data: WeeklyBudgetRow[];
 }
 
+type Setting = {
+	id: number;
+	submission_deadline_day: string;
+	is_urgent_enabled: boolean;
+};
+
 type IndexProps = {
 	items: WeeklyBudgetList;
 	branches: BranchOption[];
@@ -148,6 +154,7 @@ type IndexProps = {
 		fiscal_month_id?: string;
 		week_start_date?: string;
 	};
+	setting: Setting;
 	totalBudget?: number | null;
 };
 
@@ -388,6 +395,62 @@ function buildFiscalMonthWeeks(fiscalYear: FiscalYearOption, fiscalMonth: Fiscal
 	return weeks;
 }
 
+function buildWeekOption(monday: Date, isDisabled: boolean, fiscalYearStartDate: Date): WeekOption {
+	const sunday = new Date(monday);
+	sunday.setDate(monday.getDate() + 6);
+	const weekNumber = getFiscalWeekNumber(monday, fiscalYearStartDate);
+
+	return {
+		weekNumber,
+		startDate: toDateString(monday),
+		endDate: toDateString(sunday),
+		label: `Week ${weekNumber} (${toMonthDayLabel(monday)} – ${toMonthDayLabel(sunday)})`,
+		disabled: isDisabled,
+	};
+}
+
+function getWeekOptions(requestType: string, todayStr: string, fiscalYearStartDate: Date, setting: Setting): WeekOption[] {
+	if (!requestType) return [];
+
+	const today = new Date(todayStr + 'T00:00:00');
+	const jsDay = today.getDay();
+	const currentDayMapped = jsDay === 0 ? 7 : jsDay;
+	const currentMonday = getMondayOfWeek(today);
+
+	const nextMonday = new Date(currentMonday);
+	nextMonday.setDate(currentMonday.getDate() + 7);
+
+	const weekAfterNextMonday = new Date(currentMonday);
+	weekAfterNextMonday.setDate(currentMonday.getDate() + 14);
+
+	if (requestType === 'urgent') {
+		return [
+			buildWeekOption(currentMonday, false, fiscalYearStartDate),
+			buildWeekOption(nextMonday, false, fiscalYearStartDate),
+		];
+	}
+
+	if (requestType === 'normal') {
+		const daysMap: Record<string, number> = {
+			'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4,
+			'Friday': 5, 'Saturday': 6, 'Sunday': 7,
+		};
+		const deadlineMapped = daysMap[setting.submission_deadline_day] || 5;
+
+		if (currentDayMapped <= deadlineMapped) {
+			return [
+				buildWeekOption(nextMonday, false, fiscalYearStartDate),
+				buildWeekOption(weekAfterNextMonday, false, fiscalYearStartDate),
+			];
+		} else {
+			return [
+				buildWeekOption(weekAfterNextMonday, false, fiscalYearStartDate),
+			];
+		}
+	}
+	return [];
+}
+
 export default function WeeklyBudgetIndex({
 	items,
 	branches,
@@ -403,11 +466,12 @@ export default function WeeklyBudgetIndex({
 	currentFiscalMonthId,
 	request,
 	totalBudget,
+	setting,
 }: IndexProps) {
 	const { flash } = usePage<{ flash: { message?: string } }>().props;
 	const { triggerPopup, PopupComponent } = usePopup();
 	const { can } = usePermission();
-	const canManageWeeklyBudget = can('manage weekly budgets');
+	const canManageWeeklyBudgetAdmin = can('manage weekly budgets admin');
 
 	const [selectedRequestType, setSelectedRequestType] = useState<string>(request?.request_type ?? 'all');
 	const [selectedStatusFinance, setSelectedStatusFinance] = useState<string>(request?.status_finance ?? 'all');
@@ -473,12 +537,12 @@ export default function WeeklyBudgetIndex({
 		setOpenNewBranch(false);
 	}
 
-	const editBranchOption = useMemo(
-		() => (editForm?.branch_id ? (branches.find((branch) => branch.id.toString() === editForm.branch_id) ?? null) : null),
-		[editForm?.branch_id, branches],
+	const editDepartmentOption = useMemo(
+		() => (editForm?.department_id ? (departments.find((d) => d.id.toString() === editForm.department_id) ?? null) : null),
+		[editForm?.department_id, departments],
 	);
 
-	const canEditDepartment = isHeadOfficeBranch(editBranchOption);
+	const canEditBranch = isBranchEnabledForDepartment(editDepartmentOption);
 
 	const editFilteredFiscalMonths = useMemo(() => {
 		if (!editForm?.fiscal_year_id) {
@@ -486,6 +550,14 @@ export default function WeeklyBudgetIndex({
 		}
 		return fiscalMonths.filter((month) => String(month.fiscal_year_id) === editForm.fiscal_year_id);
 	}, [editForm?.fiscal_year_id, fiscalMonths]);
+
+	const editWeekOptions = useMemo(() => {
+		if (!editForm || !editForm.request_type || !editForm.fiscal_year_id) return [];
+		const fiscalYearOption = fiscalYears.find((fy) => String(fy.id) === editForm.fiscal_year_id);
+		if (!fiscalYearOption || !fiscalYearOption.gregorian_start_date) return [];
+		const fiscalYearStartDate = new Date(fiscalYearOption.gregorian_start_date + 'T00:00:00');
+		return getWeekOptions(editForm.request_type, today, fiscalYearStartDate, setting);
+	}, [editForm?.request_type, editForm?.fiscal_year_id, today, fiscalYears, setting]);
 
 	function confirmDeleteItem() {
 		if (deleteItemId === null) return;
@@ -554,18 +626,20 @@ export default function WeeklyBudgetIndex({
 
 	function handleEditBranchSelect(branch: BranchOption) {
 		if (!editForm) return;
-		const headOffice = isHeadOfficeBranch(branch);
-		setEditForm({
-			...editForm,
-			branch_id: String(branch.id),
-			department_id: headOffice ? editForm.department_id : '',
-		});
+		setEditForm({ ...editForm, branch_id: String(branch.id) });
 		setOpenEditBranch(false);
 	}
 
 	function handleEditDepartmentSelect(department: DepartmentOption) {
 		if (!editForm) return;
-		setEditForm({ ...editForm, department_id: String(department.id) });
+		const dept = departments.find((d) => d.id === department.id);
+		const branchEnabled = isBranchEnabledForDepartment(dept);
+		
+		setEditForm({ 
+			...editForm, 
+			department_id: String(department.id),
+			branch_id: branchEnabled ? editForm.branch_id : '',
+		});
 		setOpenEditDepartment(false);
 	}
 
@@ -573,8 +647,13 @@ export default function WeeklyBudgetIndex({
 		event.preventDefault();
 		if (!editingItem || !editForm) return;
 
-		if (canEditDepartment && !editForm.department_id) {
-			triggerPopup('Error', 'The department field is required when the selected branch is Head Office.', 'error');
+		if (!editForm.department_id) {
+			triggerPopup('Error', 'The department field is required.', 'error');
+			return;
+		}
+
+		if (canEditBranch && !editForm.branch_id) {
+			triggerPopup('Error', 'The branch field is required for the selected department.', 'error');
 			return;
 		}
 
@@ -594,7 +673,8 @@ export default function WeeklyBudgetIndex({
 			`/budget/weekly-budget/${editingItem.id}`,
 			{
 				...editForm,
-				department_id: canEditDepartment ? editForm.department_id : null,
+				department_id: editForm.department_id,
+				branch_id: canEditBranch ? editForm.branch_id : null,
 				amount: parsedAmount,
 			},
 			{
@@ -1041,7 +1121,7 @@ export default function WeeklyBudgetIndex({
 									<TableHead className="font-bold text-white">Desc</TableHead>
 									<TableHead className="font-bold text-white">Note</TableHead>
 									<TableHead className="font-bold text-white">History</TableHead>
-									{/* <TableHead className="font-bold text-white">Actions</TableHead> */}
+									{canManageWeeklyBudgetAdmin && <TableHead className="font-bold text-white">Actions</TableHead>}
 								</TableRow>
 							</TableHeader>
 							<TableBody>
@@ -1095,8 +1175,8 @@ export default function WeeklyBudgetIndex({
 												</Button>
 											)}
 										</TableCell>
-										{/* <TableCell>
-											{canManageWeeklyBudget && (
+										<TableCell>
+											{canManageWeeklyBudgetAdmin && item.status_ceo !== 'approved' && (
 												<div className="flex flex-wrap gap-2">
 													<Button variant="outline" size="sm" onClick={() => openEditDialog(item)}>
 														Edit
@@ -1106,7 +1186,7 @@ export default function WeeklyBudgetIndex({
 													</Button>
 												</div>
 											)}
-										</TableCell> */}
+										</TableCell>
 									</TableRow>
 								))}
 							</TableBody>
@@ -1261,12 +1341,21 @@ export default function WeeklyBudgetIndex({
 							<div className="space-y-2">
 								<Label>Branch</Label>
 								<Popover modal={false} open={openEditBranch} onOpenChange={setOpenEditBranch}>
-									<PopoverTrigger asChild>
-										<Button variant="outline" role="combobox" className="w-full justify-between font-normal">
-											{editBranchOption?.name ?? 'Select branch'}
-											<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-										</Button>
-									</PopoverTrigger>
+									<div className={cn(!canEditBranch && 'cursor-not-allowed')}>
+										<PopoverTrigger asChild>
+											<Button 
+												variant="outline" 
+												role="combobox" 
+												className="w-full justify-between font-normal"
+												disabled={!canEditBranch}
+											>
+												{editForm.branch_id
+													? branches.find((branch) => branch.id.toString() === editForm.branch_id)?.name
+													: 'Select branch'}
+												<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+											</Button>
+										</PopoverTrigger>
+									</div>
 									<PopoverContent portalled={false} className="z-[100] w-[var(--radix-popover-trigger-width)] p-0" align="start">
 										<Command>
 											<CommandInput placeholder="Search branches..." />
@@ -1300,13 +1389,12 @@ export default function WeeklyBudgetIndex({
 							<div className="space-y-2">
 								<Label>Department</Label>
 								<Popover modal={false} open={openEditDepartment} onOpenChange={setOpenEditDepartment}>
-									<div className={cn(!canEditDepartment && 'cursor-not-allowed')}>
+									<div>
 										<PopoverTrigger asChild>
 											<Button
 												variant="outline"
 												role="combobox"
 												className="w-full justify-between font-normal"
-												disabled={!canEditDepartment}
 											>
 												{editForm.department_id
 													? departments.find((d) => d.id.toString() === editForm.department_id)?.name
@@ -1403,41 +1491,32 @@ export default function WeeklyBudgetIndex({
 
 							<div className="space-y-2">
 								<Label htmlFor="edit_budget_week">Budget Week Date</Label>
-								<Input
-									id="edit_budget_week"
-									type="date"
-									disabled={!editForm.fiscal_month_id}
+								<Select
 									value={editForm.week_start_date}
-									onChange={(e) => {
-										const selectedDateStr = e.target.value;
-										if (!selectedDateStr) {
+									onValueChange={(val) => {
+										const option = editWeekOptions.find((opt) => opt.startDate === val);
+										if (option) {
 											setEditForm({
 												...editForm,
-												week_number: '',
-												week_start_date: '',
-												week_end_date: '',
-											});
-											return;
-										}
-										const dateObj = new Date(selectedDateStr);
-										if (!isNaN(dateObj.getTime())) {
-											const monday = getMondayOfWeek(dateObj);
-											const sunday = new Date(monday);
-											sunday.setDate(monday.getDate() + 6);
-											setEditForm({
-												...editForm,
-												week_number: String(getISOWeekNumber(dateObj)),
-												week_start_date: toDateString(monday),
-												week_end_date: toDateString(sunday),
+												week_number: String(option.weekNumber),
+												week_start_date: option.startDate,
+												week_end_date: option.endDate,
 											});
 										}
 									}}
-								/>
-								{editForm.week_number && (
-									<p className="mt-1 text-xs text-slate-500">
-										{formatWeekLabelFull(Number(editForm.week_number), editForm.week_start_date, editForm.week_end_date)}
-									</p>
-								)}
+									disabled={!editForm.fiscal_month_id || editWeekOptions.length === 0}
+								>
+									<SelectTrigger id="edit_budget_week">
+										<SelectValue placeholder={editWeekOptions.length === 0 ? 'No weeks available' : 'Select week'} />
+									</SelectTrigger>
+									<SelectContent>
+										{editWeekOptions.map((week) => (
+											<SelectItem key={week.startDate} value={week.startDate} disabled={week.disabled}>
+												{week.label}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
 							</div>
 
 							<div className="space-y-2">

@@ -13,6 +13,7 @@ class WeeklyBudgetPermissionSeeder extends Seeder
         $permissions = [
             'view weekly budgets',
             'manage weekly budgets',
+            'manage weekly budgets admin',
             'manage weekly budget periods',
         ];
 

@@ -185,6 +185,11 @@ class WeeklyBudgetController extends Controller
             $filters['fiscal_month_id'] = (string) $currentFiscalMonth->id;
         }
 
+        $setting = \App\Models\WeeklyBudgetSetting::first() ?? new \App\Models\WeeklyBudgetSetting([
+            'submission_deadline_day' => 'Friday',
+            'is_urgent_enabled' => true,
+        ]);
+
         return Inertia::render('Budget/WeeklyBudget/Index', [
             'totalBudget' => $totalBudget,
             'items' => $items,
@@ -200,6 +205,7 @@ class WeeklyBudgetController extends Controller
             'currentFiscalYearId' => $currentFiscalYear?->id,
             'currentFiscalMonthId' => $currentFiscalMonth?->id,
             'request' => $filters,
+            'setting' => $setting,
         ]);
     }
 
@@ -382,7 +388,8 @@ class WeeklyBudgetController extends Controller
 
     public function update(Request $request, WeeklyBudget $weeklyBudget): RedirectResponse
     {
-        abort_unless(auth()->user()->can('manage weekly budgets'), 403);
+        abort_unless(auth()->user()->can('manage weekly budgets admin'), 403);
+        abort_if($weeklyBudget->status_ceo === WeeklyBudgetStatusCeo::Approved, 403, 'Cannot modify an approved weekly budget.');
 
         $validated = $request->validate([
             'department_id' => ['required', 'exists:departments,id'],
@@ -429,7 +436,8 @@ class WeeklyBudgetController extends Controller
 
     public function destroy(WeeklyBudget $weeklyBudget): RedirectResponse
     {
-        abort_unless(auth()->user()->can('manage weekly budgets'), 403);
+        abort_unless(auth()->user()->can('manage weekly budgets admin'), 403);
+        abort_if($weeklyBudget->status_ceo === WeeklyBudgetStatusCeo::Approved, 403, 'Cannot modify an approved weekly budget.');
 
         $this->activityLogger->logDeleted($weeklyBudget);
         $weeklyBudget->delete();
