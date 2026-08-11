@@ -467,7 +467,7 @@ export default function CreateWeeklyBudget({
 											</Command>
 										</PopoverContent>
 									</Popover>
-									<InputError message={errors.department_id} />
+									<InputError alert={true} message={errors.department_id} />
 								</div>
 
 								{/* Branch */}
@@ -513,7 +513,7 @@ export default function CreateWeeklyBudget({
 											</Command>
 										</PopoverContent>
 									</Popover>
-									<InputError message={errors.branch_id} />
+									<InputError alert={true} message={errors.branch_id} />
 								</div>
 
 								<div className="space-y-2">
@@ -542,7 +542,7 @@ export default function CreateWeeklyBudget({
 											<SelectItem value="normal">Normal</SelectItem>
 										</SelectContent>
 									</Select>
-									<InputError message={errors.request_type} />
+									<InputError alert={true} message={errors.request_type} />
 								</div>
 
 								{/* Fiscal Year */}
@@ -571,7 +571,7 @@ export default function CreateWeeklyBudget({
 											))}
 										</SelectContent>
 									</Select>
-									<InputError message={errors.fiscal_year_id} />
+									<InputError alert={true} message={errors.fiscal_year_id} />
 								</div>
 
 								{/* Fiscal Month */}
@@ -595,7 +595,7 @@ export default function CreateWeeklyBudget({
 											))}
 										</SelectContent>
 									</Select>
-									<InputError message={errors.fiscal_month_id} />
+									<InputError alert={true} message={errors.fiscal_month_id} />
 								</div>
 
 								{/* Budget Week */}
@@ -631,9 +631,9 @@ export default function CreateWeeklyBudget({
 											))}
 										</SelectContent>
 									</Select>
-									<InputError message={errors.week_number} />
-									<InputError message={errors.week_start_date} />
-									<InputError message={errors.week_end_date} />
+									<InputError alert={true} message={errors.week_number} />
+									<InputError alert={true} message={errors.week_start_date} />
+									<InputError alert={true} message={errors.week_end_date} />
 								</div>
 
 								{/* Amount */}
@@ -650,7 +650,7 @@ export default function CreateWeeklyBudget({
 										onChange={(e) => handleAmountChange(e.target.value)}
 										className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
 									/>
-									<InputError message={errors.amount} />
+									<InputError alert={true} message={errors.amount} />
 								</div>
 
 								{/* Description */}
@@ -665,7 +665,7 @@ export default function CreateWeeklyBudget({
 										onChange={(e) => setData('description', e.target.value)}
 										rows={3}
 									/>
-									<InputError message={errors.description} />
+									<InputError alert={true} message={errors.description} />
 								</div>
 							</div>
 

@@ -556,7 +556,7 @@ export default function CreateExpenseBudget({
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                    <InputError message={errors.fiscal_year_id} />
+                                    <InputError alert={true} message={errors.fiscal_year_id} />
                                 </div>
 
                                 <div className="space-y-2">
@@ -585,7 +585,7 @@ export default function CreateExpenseBudget({
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                    <InputError message={errors.fiscal_month_id} />
+                                    <InputError alert={true} message={errors.fiscal_month_id} />
                                 </div>
 
                                 <div className="space-y-2">
@@ -629,7 +629,7 @@ export default function CreateExpenseBudget({
                                             </Command>
                                         </PopoverContent>
                                     </Popover>
-                                    <InputError message={errors.branch_id} />
+                                    <InputError alert={true} message={errors.branch_id} />
                                 </div>
 
                                 <div className="space-y-2">
@@ -676,7 +676,7 @@ export default function CreateExpenseBudget({
                                             </Command>
                                         </PopoverContent>
                                     </Popover>
-                                    <InputError message={errors.department_id} />
+                                    <InputError alert={true} message={errors.department_id} />
                                 </div>
                             </div>
 
@@ -759,7 +759,7 @@ export default function CreateExpenseBudget({
                                                                 </PopoverContent>
                                                             </Popover>
                                                         )}
-                                                        <InputError message={errors[`items.${rowIndex}.expense_item_id` as keyof typeof errors]} />
+                                                        <InputError alert={true} message={errors[`items.${rowIndex}.expense_item_id` as keyof typeof errors]} />
                                                     </TableCell>
 
                                                     <TableCell className="align-middle text-sm">
@@ -785,7 +785,7 @@ export default function CreateExpenseBudget({
                                                             }
                                                             className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                                         />
-                                                        <InputError message={errors[`items.${rowIndex}.planned_budget` as keyof typeof errors]} />
+                                                        <InputError alert={true} message={errors[`items.${rowIndex}.planned_budget` as keyof typeof errors]} />
                                                     </TableCell>
 
                                                     <TableCell className="align-middle">
@@ -807,7 +807,7 @@ export default function CreateExpenseBudget({
                                 </Table>
                             </div>
 
-                            <InputError message={errors.items} />
+                            <InputError alert={true} message={errors.items} />
 
                             <Button
                                 type="button"
