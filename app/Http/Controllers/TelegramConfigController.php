@@ -25,7 +25,7 @@ class TelegramConfigController extends Controller
         $botInfo = $botService->getMe();
         $webhookInfo = $botService->getWebhookInfo();
 
-        $users = User::with(['employee.department', 'roles'])
+        $users = User::with(['employee.department', 'employee.branch', 'roles'])
             ->select('id', 'name', 'email', 'telegram_chat_id', 'telegram_username', 'employee_id')
             ->orderBy('name')
             ->get()
@@ -38,6 +38,8 @@ class TelegramConfigController extends Controller
                     'telegram_chat_id' => $user->telegram_chat_id,
                     'telegram_username' => $user->telegram_username,
                     'department' => $user->employee?->department?->name ?? 'N/A',
+                    'branch' => $user->employee?->branch?->name ?? 'N/A',
+                    'branch_id' => $user->employee?->branch_id,
                     'roles' => $user->roles->pluck('name')->toArray(),
                     'is_linked' => !empty($user->telegram_chat_id),
                 ];

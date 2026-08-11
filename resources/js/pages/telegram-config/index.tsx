@@ -1,7 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
     AlertCircle,
@@ -72,6 +72,8 @@ type UserItem = {
     telegram_chat_id: string | null;
     telegram_username: string | null;
     department: string;
+    branch: string;
+    branch_id?: number | null;
     roles: string[];
     is_linked: boolean;
 };
@@ -115,6 +117,21 @@ export default function TelegramConfigIndex({
     // Filter states for Branches table
     const [branchSearchQuery, setBranchSearchQuery] = useState('');
     const [branchStatusFilter, setBranchStatusFilter] = useState<'all' | 'linked' | 'unlinked'>('all');
+
+    const [branchesPage, setBranchesPage] = useState(1);
+    const [usersPage, setUsersPage] = useState(1);
+    const [budgetUsersPage, setBudgetUsersPage] = useState(1);
+    const ITEMS_PER_PAGE = 15;
+
+    // Reset pagination when filters change
+    useEffect(() => {
+        setUsersPage(1);
+        setBudgetUsersPage(1);
+    }, [searchQuery, statusFilter]);
+
+    useEffect(() => {
+        setBranchesPage(1);
+    }, [branchSearchQuery, branchStatusFilter]);
 
     // Edit User Chat ID Dialog State
     const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
@@ -253,6 +270,28 @@ export default function TelegramConfigIndex({
         return matchesSearch && matchesStatus;
     });
 
+    const paginatedUsers = filteredUsers.slice((usersPage - 1) * ITEMS_PER_PAGE, usersPage * ITEMS_PER_PAGE);
+    const totalUsersPages = Math.max(1, Math.ceil(filteredUsers.length / ITEMS_PER_PAGE));
+
+    const budgetUsers = users.filter((user) => user.branch_id === 5);
+    const filteredBudgetUsers = budgetUsers.filter((user) => {
+        const matchesSearch =
+            user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            user.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (user.telegram_chat_id && user.telegram_chat_id.includes(searchQuery));
+
+        const matchesStatus =
+            statusFilter === 'all' ||
+            (statusFilter === 'linked' && user.is_linked) ||
+            (statusFilter === 'unlinked' && !user.is_linked);
+
+        return matchesSearch && matchesStatus;
+    });
+
+    const paginatedBudgetUsers = filteredBudgetUsers.slice((budgetUsersPage - 1) * ITEMS_PER_PAGE, budgetUsersPage * ITEMS_PER_PAGE);
+    const totalBudgetUsersPages = Math.max(1, Math.ceil(filteredBudgetUsers.length / ITEMS_PER_PAGE));
+
     // Filter Branches
     const filteredBranches = branches.filter((branch) => {
         const matchesSearch =
@@ -268,6 +307,9 @@ export default function TelegramConfigIndex({
 
         return matchesSearch && matchesStatus;
     });
+
+    const paginatedBranches = filteredBranches.slice((branchesPage - 1) * ITEMS_PER_PAGE, branchesPage * ITEMS_PER_PAGE);
+    const totalBranchesPages = Math.max(1, Math.ceil(filteredBranches.length / ITEMS_PER_PAGE));
 
     const isBotOk = botInfo?.ok && botInfo?.result?.id;
 
@@ -569,19 +611,29 @@ export default function TelegramConfigIndex({
                                 Configure dedicated Chat IDs for Branches vs. individual User Chat IDs for IT, Maintenance & Operations staff.
                             </p>
                         </div>
-                        <TabsList className="grid grid-cols-2 w-full sm:w-[420px]">
+                        <TabsList className="grid grid-cols-3 w-full sm:w-[620px]">
                             <TabsTrigger value="branches" className="flex items-center gap-2">
                                 <Building2 className="size-4" />
-                                <span>Branch Mappings</span>
+                                <span className="hidden sm:inline">Branch Mappings</span>
+                                <span className="sm:hidden">Branches</span>
                                 <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
                                     {branches.filter((b) => b.is_linked).length}/{branches.length}
                                 </Badge>
                             </TabsTrigger>
                             <TabsTrigger value="users" className="flex items-center gap-2">
                                 <Users className="size-4" />
-                                <span>IT & Operations Users</span>
+                                <span className="hidden sm:inline">IT & Ops Users</span>
+                                <span className="sm:hidden">IT/Ops</span>
                                 <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
                                     {users.filter((u) => u.is_linked).length}/{users.length}
+                                </Badge>
+                            </TabsTrigger>
+                            <TabsTrigger value="budget-users" className="flex items-center gap-2">
+                                <UserCheck className="size-4" />
+                                <span className="hidden sm:inline">Weekly Budget Users</span>
+                                <span className="sm:hidden">Budget</span>
+                                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
+                                    {budgetUsers.filter((u) => u.is_linked).length}/{budgetUsers.length}
                                 </Badge>
                             </TabsTrigger>
                         </TabsList>
@@ -644,7 +696,7 @@ export default function TelegramConfigIndex({
                                                     </TableCell>
                                                 </TableRow>
                                             ) : (
-                                                filteredBranches.map((branch) => (
+                                                paginatedBranches.map((branch) => (
                                                     <TableRow key={branch.id}>
                                                         <TableCell className="font-mono text-xs font-semibold">
                                                             {branch.branch_code}
@@ -685,6 +737,18 @@ export default function TelegramConfigIndex({
                                         </TableBody>
                                     </Table>
                                 </div>
+                                {totalBranchesPages > 1 && (
+                                    <div className="flex items-center justify-between mt-4">
+                                        <div className="text-xs text-muted-foreground">
+                                            Showing {(branchesPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(branchesPage * ITEMS_PER_PAGE, filteredBranches.length)} of {filteredBranches.length}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => setBranchesPage(p => Math.max(1, p - 1))} disabled={branchesPage === 1}>Previous</Button>
+                                            <div className="text-xs font-medium px-2">Page {branchesPage} of {totalBranchesPages}</div>
+                                            <Button variant="outline" size="sm" onClick={() => setBranchesPage(p => Math.min(totalBranchesPages, p + 1))} disabled={branchesPage === totalBranchesPages}>Next</Button>
+                                        </div>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </TabsContent>
@@ -747,7 +811,7 @@ export default function TelegramConfigIndex({
                                                     </TableCell>
                                                 </TableRow>
                                             ) : (
-                                                filteredUsers.map((user) => (
+                                                paginatedUsers.map((user) => (
                                                     <TableRow key={user.id}>
                                                         <TableCell className="font-medium">
                                                             <div>
@@ -800,6 +864,144 @@ export default function TelegramConfigIndex({
                                         </TableBody>
                                     </Table>
                                 </div>
+                                {totalUsersPages > 1 && (
+                                    <div className="flex items-center justify-between mt-4">
+                                        <div className="text-xs text-muted-foreground">
+                                            Showing {(usersPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(usersPage * ITEMS_PER_PAGE, filteredUsers.length)} of {filteredUsers.length}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => setUsersPage(p => Math.max(1, p - 1))} disabled={usersPage === 1}>Previous</Button>
+                                            <div className="text-xs font-medium px-2">Page {usersPage} of {totalUsersPages}</div>
+                                            <Button variant="outline" size="sm" onClick={() => setUsersPage(p => Math.min(totalUsersPages, p + 1))} disabled={usersPage === totalUsersPages}>Next</Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                    {/* Tab 3: Weekly Budget Users Telegram Linking Table */}
+                    <TabsContent value="budget-users" className="space-y-4">
+                        <Card>
+                            <CardHeader>
+                                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                    <div>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <UserCheck className="size-5 text-primary" />
+                                            Weekly Budget Users Telegram Chat ID Mapping (Head Office)
+                                        </CardTitle>
+                                        <CardDescription>
+                                            Manage Telegram Chat IDs for Head Office users involved in the Weekly Budget workflow.
+                                        </CardDescription>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                        <Input
+                                            placeholder="Search users, dept, chat ID..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            className="w-full sm:w-64"
+                                        />
+
+                                        <Select value={statusFilter} onValueChange={(val: any) => setStatusFilter(val)}>
+                                            <SelectTrigger className="w-full sm:w-36">
+                                                <SelectValue placeholder="Status Filter" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Users</SelectItem>
+                                                <SelectItem value="linked">Linked</SelectItem>
+                                                <SelectItem value="unlinked">Not Linked</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="rounded-md border overflow-x-auto">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>User Name</TableHead>
+                                                <TableHead>Department</TableHead>
+                                                <TableHead>Roles</TableHead>
+                                                <TableHead>Telegram Chat ID</TableHead>
+                                                <TableHead>Username</TableHead>
+                                                <TableHead>Telegram Status</TableHead>
+                                                <TableHead className="text-right">Actions</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {filteredBudgetUsers.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
+                                                        No users found matching your filter criteria.
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                paginatedBudgetUsers.map((user) => (
+                                                    <TableRow key={user.id}>
+                                                        <TableCell className="font-medium">
+                                                            <div>
+                                                                <div>{user.name}</div>
+                                                                <div className="text-xs text-muted-foreground">{user.email}</div>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell>{user.department}</TableCell>
+                                                        <TableCell>
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {user.roles.map((r, i) => (
+                                                                    <Badge key={i} variant="secondary" className="text-xs">
+                                                                        {r}
+                                                                    </Badge>
+                                                                ))}
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="font-mono text-xs">
+                                                            {user.telegram_chat_id ? user.telegram_chat_id : <span className="text-muted-foreground italic">None</span>}
+                                                        </TableCell>
+                                                        <TableCell className="font-mono text-xs">
+                                                            {user.telegram_username ? `@${user.telegram_username}` : '-'}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {user.is_linked ? (
+                                                                <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                                                    <UserCheck className="mr-1 size-3" /> Linked
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge variant="outline" className="border-amber-500 text-amber-600">
+                                                                    <UserX className="mr-1 size-3" /> Not Linked
+                                                                </Badge>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            {canManage && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    onClick={() => handleOpenEditUser(user)}
+                                                                    title="Edit Chat ID"
+                                                                >
+                                                                    <Edit3 className="size-4" />
+                                                                </Button>
+                                                            )}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                                {totalBudgetUsersPages > 1 && (
+                                    <div className="flex items-center justify-between mt-4">
+                                        <div className="text-xs text-muted-foreground">
+                                            Showing {(budgetUsersPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(budgetUsersPage * ITEMS_PER_PAGE, filteredBudgetUsers.length)} of {filteredBudgetUsers.length}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => setBudgetUsersPage(p => Math.max(1, p - 1))} disabled={budgetUsersPage === 1}>Previous</Button>
+                                            <div className="text-xs font-medium px-2">Page {budgetUsersPage} of {totalBudgetUsersPages}</div>
+                                            <Button variant="outline" size="sm" onClick={() => setBudgetUsersPage(p => Math.min(totalBudgetUsersPages, p + 1))} disabled={budgetUsersPage === totalBudgetUsersPages}>Next</Button>
+                                        </div>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </TabsContent>
