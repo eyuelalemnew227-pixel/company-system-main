@@ -241,7 +241,7 @@ class TelegramBotService
             if ($user) {
                 $reply = "👋 <b>Welcome back, " . e($user->name) . "!</b>\n\nYour Telegram account is active and receiving ticket notifications.\n\n<b>Your Chat ID:</b> <code>{$chatId}</code>";
             } else {
-                $reply = "🤖 <b>Company Ticketing Bot</b>\n\nYour Telegram Chat ID is: <code>{$chatId}</code>\n\nTo link your account, please enter this Chat ID on your user profile or ask your Administrator to set it in System Administration > Telegram Config.";
+                $reply = "🤖 <b>Company System Bot</b>\n\nYour Telegram Chat ID is: <code>{$chatId}</code>\n\nTo link your account, please enter this Chat ID on your user profile or ask your Administrator to set it in System Administration > Telegram Config.";
             }
 
             $this->sendMessage($chatId, $reply);
