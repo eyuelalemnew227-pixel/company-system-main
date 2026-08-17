@@ -413,15 +413,16 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                 </Card>
 
                 <Dialog open={isOpen} onOpenChange={(val) => { setIsOpen(val); if (!val) { setStep(1); setFormBalances({}); reset(); } }}>
-                    <DialogContent className="max-w-[95vw] sm:max-w-6xl md:max-w-7xl overflow-x-hidden">
+                    <DialogContent className={`overflow-x-hidden rounded-2xl border border-gray-100 backdrop-blur-sm transition-none ${step === 1 ? 'max-w-xl' : 'max-w-[95vw] sm:max-w-4xl md:max-w-5xl'}`}>
                         <DialogHeader>
                             <DialogTitle>{step === 1 ? 'Record Bank Balances - Step 1: Period' : 'Record Bank Balances - Step 2: Amounts'}</DialogTitle>
                         </DialogHeader>
                         {step === 1 ? (
-                            <div className="space-y-4">
+                            <>
+                                <div className="space-y-6">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="fiscal_year_id">Fiscal Year</Label>
+                                        <Label htmlFor="fiscal_year_id" className="text-slate-600 font-medium">Fiscal Year</Label>
                                         <Select
                                             value={data.fiscal_year_id}
                                             onValueChange={(val) => {
@@ -433,7 +434,7 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                                                 }));
                                             }}
                                         >
-                                            <SelectTrigger><SelectValue placeholder="Select Year" /></SelectTrigger>
+                                            <SelectTrigger className="rounded-xl border-gray-200 shadow-sm"><SelectValue placeholder="Select Year" /></SelectTrigger>
                                             <SelectContent>
                                                 {fiscalYears.map((fy) => (
                                                     <SelectItem key={fy.id} value={fy.id.toString()}>{fy.name}</SelectItem>
@@ -443,13 +444,13 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                                         {errors.fiscal_year_id && <p className="text-red-500 text-sm">{errors.fiscal_year_id}</p>}
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="fiscal_month_id">Fiscal Month</Label>
+                                        <Label htmlFor="fiscal_month_id" className="text-slate-600 font-medium">Fiscal Month</Label>
                                         <Select
                                             value={data.fiscal_month_id}
                                             onValueChange={(val) => setData('fiscal_month_id', val)}
                                             disabled={!data.fiscal_year_id || filteredFiscalMonths.length === 0}
                                         >
-                                            <SelectTrigger>
+                                            <SelectTrigger className="rounded-xl border-gray-200 shadow-sm">
                                                 <SelectValue placeholder={data.fiscal_year_id ? "Select Month" : "Select Year First"} />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -462,9 +463,9 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="week_number">Budget Week</Label>
+                                    <Label htmlFor="week_number" className="text-slate-600 font-medium">Budget Week</Label>
                                     <Select value={data.week_number} onValueChange={(val) => setData('week_number', val)} disabled={!data.fiscal_month_id || weekOptions.length === 0}>
-                                        <SelectTrigger>
+                                        <SelectTrigger className="rounded-xl border-gray-200 shadow-sm">
                                             <SelectValue placeholder={data.fiscal_month_id ? "Select Budget Week" : "Select Month First"} />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -475,11 +476,12 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                                     </Select>
                                     {errors.week_number && <p className="text-red-500 text-sm">{errors.week_number}</p>}
                                 </div>
+                                </div>
                                 <DialogFooter>
                                     <Button type="button" variant="outline" onClick={() => { setIsOpen(false); setStep(1); reset(); }}>Cancel</Button>
                                     <Button type="button" onClick={() => setStep(2)} disabled={!data.fiscal_year_id || !data.fiscal_month_id || !data.week_number}>Next</Button>
                                 </DialogFooter>
-                            </div>
+                            </>
                         ) : (
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 <div className="relative w-full max-h-[60vh] overflow-auto rounded-md border">
