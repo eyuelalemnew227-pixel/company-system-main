@@ -414,7 +414,7 @@ class ExpenseBudgetController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(): Response|RedirectResponse
     {
         abort_unless(ExpenseBudgetAccess::canManage(), 403, ExpenseBudgetAccess::manageDeniedMessage());
 
