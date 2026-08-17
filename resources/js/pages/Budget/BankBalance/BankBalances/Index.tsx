@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -103,7 +103,7 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
             String(b.week_number) === data.week_number
         );
         if (existing.length > 0 && existing[0].estimated_weekly_sale) {
-            setEstimatedSales(existing[0].estimated_weekly_sale.amount.toString());
+            setEstimatedSales(parseFloat(existing[0].estimated_weekly_sale.amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
         } else {
             setEstimatedSales('');
         }
@@ -112,14 +112,33 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
             initialForm[b.bank_branch_id] = {
                 bank_id: b.bank_id,
                 bank_branch_id: b.bank_branch_id,
-                amount: b.amount,
-                exchange_rate: b.exchange_rate,
+                amount: parseFloat(b.amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
+                exchange_rate: parseFloat(b.exchange_rate).toFixed(4),
                 currency: b.currency
             };
         });
         setFormBalances(initialForm);
         setFormBalances(initialForm);
     }, [step, isOpen, data.fiscal_year_id, data.fiscal_month_id, data.week_number, bankBalances]);
+
+    const sortedBranches = useMemo(() => {
+        return [...branches].sort((a, b) => {
+            const bankA = banks.find(bk => bk.id === a.bank_id)?.name || '';
+            const bankB = banks.find(bk => bk.id === b.bank_id)?.name || '';
+            const cmp = bankA.localeCompare(bankB);
+            if (cmp !== 0) return cmp;
+            return a.name.localeCompare(b.name);
+        });
+    }, [branches, banks]);
+
+    const sumDifference = useMemo(() => {
+        return sortedBranches.reduce((acc, branch) => {
+            const val = formBalances[branch.id] || { amount: '', exchange_rate: '1.0000' };
+            const amt = parseFloat(String(val.amount).replace(/,/g, '')) || 0;
+            const rate = parseFloat(String(val.exchange_rate).replace(/,/g, '')) || 1;
+            return acc + (amt * rate);
+        }, 0);
+    }, [sortedBranches, formBalances]);
 
     const groupedBalances = useMemo(() => {
         const groups: Record<string, any> = {};
@@ -191,12 +210,25 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
         return weeks;
     }, [data.fiscal_year_id, data.fiscal_month_id, fiscalYears, fiscalMonths]);
 
+    function formatAsYouType(val: string): string {
+        const isNegative = val.startsWith('-');
+        let clean = val.replace(/[^0-9.]/g, '');
+        const parts = clean.split('.');
+        if (parts.length > 2) {
+            clean = parts[0] + '.' + parts.slice(1).join('');
+        }
+        const [whole, decimal] = clean.split('.');
+        const formattedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        const result = decimal !== undefined ? formattedWhole + '.' + decimal : formattedWhole;
+        return isNegative && result ? '-' + result : result;
+    }
+
     function handleAmountChange(branchId: number, bankId: number, bankCurrency: string, val: string) {
         setFormBalances(prev => ({
             ...prev,
             [branchId]: {
                 ...(prev[branchId] || { bank_id: bankId, bank_branch_id: branchId, exchange_rate: '1.0000', currency: bankCurrency }),
-                amount: val
+                amount: formatAsYouType(val)
             }
         }));
     }
@@ -206,7 +238,7 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
             ...prev,
             [branchId]: {
                 ...(prev[branchId] || { bank_id: bankId, bank_branch_id: branchId, amount: '', currency: bankCurrency }),
-                exchange_rate: val
+                exchange_rate: formatAsYouType(val)
             }
         }));
     }
@@ -235,9 +267,32 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
             setIsOpen(true);
         } else {
             setStep(1);
+            
+            const todayStr = toDateString(new Date());
+            let defaultYearId = '';
+            let defaultMonthId = '';
+            
+            const activeYear = fiscalYears.find((y: any) => {
+                const start = y.gregorian_start_date?.split('T')[0];
+                const end = y.gregorian_end_date?.split('T')[0];
+                return start && end && start <= todayStr && end >= todayStr;
+            });
+            
+            if (activeYear) {
+                defaultYearId = activeYear.id.toString();
+                const activeMonth = fiscalMonths.find((m: any) => {
+                    const start = m.gregorian_start_date?.split('T')[0];
+                    const end = m.gregorian_end_date?.split('T')[0];
+                    return m.fiscal_year_id === activeYear.id && start && end && start <= todayStr && end >= todayStr;
+                });
+                if (activeMonth) {
+                    defaultMonthId = activeMonth.id.toString();
+                }
+            }
+
             setData({
-                fiscal_year_id: '',
-                fiscal_month_id: '',
+                fiscal_year_id: defaultYearId,
+                fiscal_month_id: defaultMonthId,
                 week_number: '',
                 estimated_weekly_sales: '',
                 balances: []
@@ -252,10 +307,14 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
         e.preventDefault();
         transform((data) => ({
             ...data,
-            estimated_weekly_sales: estimatedSales,
+            estimated_weekly_sales: estimatedSales.replace(/,/g, ''),
             balances: Object.values(formBalances)
-                .filter(b => b.amount !== '' && parseFloat(b.amount) >= 0)
-                .map(({ currency, ...rest }) => rest)
+                .filter(b => b.amount !== '' && parseFloat(String(b.amount).replace(/,/g, '')) > 0)
+                .map(({ currency, ...rest }) => ({
+                    ...rest,
+                    amount: String(rest.amount).replace(/,/g, ''),
+                    exchange_rate: String(rest.exchange_rate).replace(/,/g, '')
+                }))
         }));
         post(route('bank-balances.store'), {
             onSuccess: () => {
@@ -423,9 +482,9 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                             </div>
                         ) : (
                             <form onSubmit={handleSubmit} className="space-y-4">
-                                <div className="max-h-[60vh] overflow-y-auto overflow-x-auto">
-                                    <Table>
-                                        <TableHeader className="bg-slate-100 dark:bg-slate-800 sticky top-0 z-10 w-full min-w-max">
+                                <div className="relative w-full max-h-[60vh] overflow-auto rounded-md border">
+                                    <table className="w-full caption-bottom text-sm min-w-max">
+                                        <TableHeader className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-20 shadow-sm">
                                             <TableRow>
                                                 <TableHead>Bank</TableHead>
                                                 <TableHead>Branch</TableHead>
@@ -436,10 +495,12 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {branches.map(branch => {
+                                            {sortedBranches.map(branch => {
                                                 const bank = banks.find(b => b.id === branch.bank_id);
                                                 const bankCurrency = bank?.currency || 'ETB';
                                                 const val = formBalances[branch.id] || { amount: '', exchange_rate: '1.0000', currency: bankCurrency };
+                                                const cleanAmount = parseFloat(String(val.amount).replace(/,/g, '')) || 0;
+                                                const cleanRate = parseFloat(String(val.exchange_rate).replace(/,/g, '')) || 1;
                                                 return (
                                                     <TableRow key={branch.id}>
                                                         <TableCell className="font-medium text-xs">{bank?.name}</TableCell>
@@ -447,48 +508,69 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                                                         <TableCell className="text-xs font-bold text-slate-700">{bankCurrency}</TableCell>
                                                         <TableCell>
                                                             <Input
-                                                                type="number" step="0.01" value={val.amount}
+                                                                type="text" value={val.amount}
                                                                 onChange={(e) => handleAmountChange(branch.id, branch.bank_id, bankCurrency, e.target.value)}
+                                                                onBlur={(e) => {
+                                                                    const parsed = parseFloat(e.target.value.replace(/,/g, ''));
+                                                                    handleAmountChange(branch.id, branch.bank_id, bankCurrency, isNaN(parsed) ? '0.00' : parsed.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                                                                }}
                                                                 placeholder="0.00"
-                                                                className="h-8 text-sm min-w-32 w-full"
+                                                                className="h-8 text-sm min-w-32 w-full text-right"
                                                             />
                                                         </TableCell>
                                                         <TableCell>
                                                             <Input
-                                                                type="number" step="0.0001" value={val.exchange_rate}
+                                                                type="text" value={val.exchange_rate}
                                                                 onChange={(e) => handleRateChange(branch.id, branch.bank_id, bankCurrency, e.target.value)}
-                                                                className="h-8 text-sm min-w-28 w-full disabled:opacity-100 disabled:bg-slate-50 disabled:text-slate-500"
+                                                                onBlur={(e) => {
+                                                                    const parsed = parseFloat(e.target.value.replace(/,/g, ''));
+                                                                    handleRateChange(branch.id, branch.bank_id, bankCurrency, isNaN(parsed) ? '1.0000' : parsed.toFixed(4));
+                                                                }}
+                                                                className="h-8 text-sm min-w-28 w-full text-right disabled:opacity-100 disabled:bg-slate-50 disabled:text-slate-500"
                                                                 disabled={bankCurrency === 'ETB'}
                                                             />
                                                         </TableCell>
-                                                        <TableCell className="font-bold text-sm text-green-700 min-w-32">
-                                                            {((parseFloat(val.amount) || 0) * (parseFloat(val.exchange_rate) || 1)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                        <TableCell className="font-bold text-sm text-green-700 min-w-32 text-right pr-6">
+                                                            {(cleanAmount * cleanRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </TableCell>
                                                     </TableRow>
                                                 )
                                             })}
                                         </TableBody>
-                                    </Table>
+
+                                    </table>
                                 </div>
                                 {errors.balances && <p className="text-red-500 text-sm font-semibold">{errors.balances}</p>}
-                                <div className="flex justify-start pt-4 border-t items-center space-x-4 pl-2">
-                                    <Label htmlFor="estimated_sales" className="whitespace-nowrap text-lg">Estimated Weekly Sales:</Label>
-                                    <div className="flex flex-col">
-                                        <div className="relative">
-                                            <Input
-                                                id="estimated_sales"
-                                                type="number" step="0.01"
-                                                value={estimatedSales}
-                                                onChange={e => setEstimatedSales(e.target.value)}
-                                                placeholder="0.00"
-                                                className="h-10 w-48 font-bold text-green-700 pr-12 text-lg"
-                                                required
-                                            />
-                                            <span className="absolute inset-y-0 right-0 flex items-center pr-3 font-semibold text-slate-500 pointer-events-none">
-                                                ETB
-                                            </span>
+                                <div className="flex justify-between pt-4 border-t items-start sm:items-center flex-col sm:flex-row gap-4 pl-2 pr-2">
+                                    <div className="flex items-center space-x-4">
+                                        <Label htmlFor="estimated_sales" className="whitespace-nowrap text-lg">Estimated Weekly Sales:</Label>
+                                        <div className="flex flex-col">
+                                            <div className="relative">
+                                                <Input
+                                                    id="estimated_sales"
+                                                    type="text"
+                                                    value={estimatedSales}
+                                                    onChange={e => setEstimatedSales(formatAsYouType(e.target.value))}
+                                                    onBlur={(e) => {
+                                                        const parsed = parseFloat(e.target.value.replace(/,/g, ''));
+                                                        setEstimatedSales(isNaN(parsed) ? '0.00' : parsed.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                                                    }}
+                                                    placeholder="0.00"
+                                                    className="h-10 w-48 font-bold text-green-700 pr-12 text-lg text-right"
+                                                    required
+                                                />
+                                                <span className="absolute inset-y-0 right-0 flex items-center pr-3 font-semibold text-slate-500 pointer-events-none">
+                                                    ETB
+                                                </span>
+                                            </div>
+                                            {errors.estimated_weekly_sales && <p className="text-red-500 text-sm mt-1">{errors.estimated_weekly_sales}</p>}
                                         </div>
-                                        {errors.estimated_weekly_sales && <p className="text-red-500 text-sm mt-1">{errors.estimated_weekly_sales}</p>}
+                                    </div>
+                                    <div className="flex items-center space-x-4">
+                                        <Label className="whitespace-nowrap text-lg">Total Bank Balance:</Label>
+                                        <div className="h-10 px-4 flex items-center justify-end bg-slate-100 dark:bg-slate-800 border rounded-md font-mono font-bold text-green-700 text-lg min-w-48">
+                                            {sumDifference.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB
+                                        </div>
                                     </div>
                                 </div>
                                 <DialogFooter>
