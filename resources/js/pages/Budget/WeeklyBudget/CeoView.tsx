@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
@@ -62,6 +63,7 @@ interface WeeklyBudgetList extends Pagination {
 
 type CeoProps = {
 	items: WeeklyBudgetList;
+	bankBalances: any[];
 	branches: BranchOption[];
 	departments: DepartmentOption[];
 	paymentCategories: PaymentCategoryOption[];
@@ -142,6 +144,29 @@ function getFiscalWeekNumber(monday: Date, fiscalYearStartDate: Date): number {
 	const diffMs = monday.getTime() - anchor.getTime();
 	const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 	return Math.floor(diffDays / 7) + 1;
+}
+
+function getWeekDates(fyStartDateStr: string, monthStartDateStr: string, monthEndDateStr: string, weekNumber: number): string {
+	if (!fyStartDateStr || !monthStartDateStr || !monthEndDateStr) return '';
+	const pureFy = fyStartDateStr.split('T')[0];
+	const fyStart = new Date(pureFy + 'T00:00:00');
+
+	const pureStart = monthStartDateStr.split('T')[0];
+	const pureEnd = monthEndDateStr.split('T')[0];
+	const monthStart = new Date(pureStart + 'T00:00:00');
+	const monthEnd = new Date(pureEnd + 'T00:00:00');
+	let currentMonday = getMondayOfWeek(monthStart);
+
+	while (currentMonday <= monthEnd) {
+		const sunday = new Date(currentMonday);
+		sunday.setDate(currentMonday.getDate() + 6);
+		if (getFiscalWeekNumber(currentMonday, fyStart) === weekNumber) {
+			return `(${toMonthDayLabel(currentMonday)} – ${toMonthDayLabel(sunday)})`;
+		}
+		currentMonday = new Date(currentMonday);
+		currentMonday.setDate(currentMonday.getDate() + 7);
+	}
+	return '';
 }
 
 function buildCurrentFiscalYearWeeks(fiscalYear: FiscalYearOption, todayStr: string): WeekOption[] {
@@ -232,7 +257,7 @@ export default function WeeklyBudgetCeoView({
 	request,
 	totalBudget,
 }: CeoProps) {
-	const { flash, errors } = usePage<any>().props;
+	const { flash, errors, bankBalances = [] } = usePage<any>().props;
 	const { triggerPopup, PopupComponent } = usePopup();
 	const { can } = usePermission();
 	const canManageCeo = can('manage ceo budgets');
@@ -302,6 +327,32 @@ export default function WeeklyBudgetCeoView({
 		}
 		return [];
 	}, [selectedFiscalYear, selectedFiscalMonth, fiscalYears, fiscalMonths, currentFiscalYearId, today]);
+
+	const groupedBalances = useMemo(() => {
+		const groups: Record<string, any> = {};
+		const activeWeekNumber = weekFilterOptions.find(w => w.startDate === selectedWeekStartDate)?.weekNumber;
+
+		bankBalances.forEach((b: any) => {
+			if (activeWeekNumber && b.week_number !== activeWeekNumber) return;
+
+			const key = `${b.fiscal_year_id}-${b.fiscal_month_id}-${b.week_number}`;
+			if (!groups[key]) {
+				groups[key] = {
+					id: b.id,
+					fiscal_year_id: b.fiscal_year_id,
+					fiscal_month_id: b.fiscal_month_id,
+					week_number: b.week_number,
+					fiscal_year: b.fiscal_year,
+					fiscal_month: b.fiscal_month,
+					estimated_weekly_sale: b.estimated_weekly_sale,
+					total_amount_base: 0
+				};
+			}
+			groups[key].total_amount_base += (parseFloat(b.amount) || 0) * (parseFloat(b.exchange_rate) || 1);
+		});
+
+		return Object.values(groups).sort((a: any, b: any) => b.id - a.id);
+	}, [bankBalances, selectedWeekStartDate, weekFilterOptions]);
 
 	useEffect(() => {
 		if (flash?.message) triggerPopup('Success', flash.message, 'success');
@@ -789,166 +840,232 @@ export default function WeeklyBudgetCeoView({
 						)}
 					</CardHeader>
 
-					<CardContent>
-						{totalBudget !== null && totalBudget !== undefined && (
-							<div className="mb-4 flex justify-end">
-								<div className="rounded-lg bg-blue-50 px-4 py-2 font-semibold text-blue-700 shadow-sm dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-									Total Budget: {formatCurrency(totalBudget)}
-								</div>
-							</div>
-						)}
-						<Table>
-							<TableHeader className="bg-slate-500 dark:bg-slate-700">
-								<TableRow>
-									{canManageCeo && (
-										<TableHead className="w-12 text-center text-white">
-											<Checkbox
-												checked={isAllSelected}
-												// @ts-ignore
-												indeterminate={isSomeSelected}
-												onCheckedChange={toggleSelectAll}
-												disabled={allSelectableIds.length === 0}
-												aria-label="Select all"
-												className="border-white data-[state=checked]:bg-white data-[state=checked]:text-slate-900"
-											/>
-										</TableHead>
-									)}
-									<TableHead className="font-bold text-white">Department</TableHead>
-									<TableHead className="font-bold text-white">Branch</TableHead>
-									<TableHead className="font-bold text-white">Request Type</TableHead>
-									<TableHead className="font-bold text-white">Status (CEO)</TableHead>
-									<TableHead className="font-bold text-white">Description</TableHead>
-									<TableHead className="font-bold text-white">Note</TableHead>
-									<TableHead className="font-bold text-white">Amount</TableHead>
-									{canManageCeo && <TableHead className="font-bold text-white">Actions</TableHead>}
-								</TableRow>
-							</TableHeader>
-							<TableBody>
-								{items.data.map((item) => {
-									const isEditing = editingRowId === item.id;
-									const isEditable = canManageCeo && item.status_finance !== 'paid';
-									const bothApproved = item.status_finance === 'approved' && item.status_department === 'approved';
+					<Tabs defaultValue="budgets" className="w-full">
+						<div className="px-6">
+							<TabsList className="mb-4 bg-slate-100">
+								<TabsTrigger value="budgets" className="text-sm py-1.5 px-6 font-semibold">Weekly Budgets</TabsTrigger>
+								<TabsTrigger value="bank-balances" className="text-sm py-1.5 px-6 font-semibold">Bank Balances</TabsTrigger>
+							</TabsList>
+						</div>
 
-									return (
-										<TableRow key={item.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
+						<TabsContent value="budgets" className="mt-0 outline-none">
+							<CardContent>
+								{totalBudget !== null && totalBudget !== undefined && (
+									<div className="mb-4 flex justify-end">
+										<div className="rounded-lg bg-blue-50 px-4 py-2 font-semibold text-blue-700 shadow-sm dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+											Total Budget: {formatCurrency(totalBudget)}
+										</div>
+									</div>
+								)}
+								<Table>
+									<TableHeader className="bg-slate-500 dark:bg-slate-700">
+										<TableRow>
 											{canManageCeo && (
-												<TableCell className="text-center">
+												<TableHead className="w-12 text-center text-white">
 													<Checkbox
-														checked={selectedIds.includes(item.id)}
-														onCheckedChange={() => toggleSelectRow(item.id)}
-														disabled={item.status_finance === 'paid'}
+														checked={isAllSelected}
+														// @ts-ignore
+														indeterminate={isSomeSelected}
+														onCheckedChange={toggleSelectAll}
+														disabled={allSelectableIds.length === 0}
+														aria-label="Select all"
+														className="border-white data-[state=checked]:bg-white data-[state=checked]:text-slate-900"
 													/>
-												</TableCell>
+												</TableHead>
 											)}
-											<TableCell>{item.department ?? '-'}</TableCell>
-											<TableCell>{item.branch ?? '-'}</TableCell>
-											<TableCell>{requestTypeBadge(item.request_type)}</TableCell>
-
-											{/* CEO Status */}
-											<TableCell>
-												{isEditing ? (
-													<Select
-														value={editForm.status_ceo}
-														onValueChange={(v) => setEditForm({ ...editForm, status_ceo: v })}
-													>
-														<SelectTrigger className="w-[120px]">
-															<SelectValue />
-														</SelectTrigger>
-														<SelectContent>
-															{statusCeos.map((s) => {
-																// Only allow Approved if both finance & department are approved
-																const disabled = s === 'approved' && !bothApproved;
-																return disabled ? null : (
-																	<SelectItem key={s} value={s}>
-																		{s.charAt(0).toUpperCase() + s.slice(1)}
-																	</SelectItem>
-																);
-															})}
-														</SelectContent>
-													</Select>
-												) : (
-													statusBadge(item.status_ceo, 'ceo')
-												)}
-											</TableCell>
-
-											<TableCell>
-												<div className="max-w-xs truncate text-sm text-slate-600">{item.description || '-'}</div>
-											</TableCell>
-
-											<TableCell>
-												<button
-													type="button"
-													className={cn(
-														'flex items-center justify-center rounded p-1 transition-colors',
-														item.note
-															? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-700'
-															: 'cursor-pointer text-slate-300 hover:text-slate-500',
-													)}
-													onClick={() => setViewNoteItem(item)}
-													aria-label="View note"
-												>
-													<MessageSquare className="size-4" />
-												</button>
-											</TableCell>
-
-											<TableCell className="whitespace-nowrap">{formatCurrency(item.amount)}</TableCell>
-
-											{/* Actions */}
-											{canManageCeo && (
-												<TableCell className="whitespace-nowrap">
-													{isEditing ? (
-														<div className="flex gap-1">
-															<Button size="sm" onClick={() => saveEditRow(item)} className="h-7 px-2 text-xs">
-																Save
-															</Button>
-															<Button
-																variant="outline"
-																size="sm"
-																onClick={() => setEditingRowId(null)}
-																className="h-7 px-2 text-xs"
-															>
-																Cancel
-															</Button>
-														</div>
-													) : isEditable ? (
-														<Button
-															variant="ghost"
-															size="sm"
-															onClick={() => startEditRow(item)}
-															className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700"
-														>
-															Edit
-														</Button>
-													) : null}
-												</TableCell>
-											)}
+											<TableHead className="font-bold text-white">Department</TableHead>
+											<TableHead className="font-bold text-white">Branch</TableHead>
+											<TableHead className="font-bold text-white">Request Type</TableHead>
+											<TableHead className="font-bold text-white">Status (CEO)</TableHead>
+											<TableHead className="font-bold text-white">Description</TableHead>
+											<TableHead className="font-bold text-white">Note</TableHead>
+											<TableHead className="font-bold text-white">Amount</TableHead>
+											{canManageCeo && <TableHead className="font-bold text-white">Actions</TableHead>}
 										</TableRow>
-									);
-								})}
-							</TableBody>
-						</Table>
-					</CardContent>
-					{items.data.length > 0 ? (
-						<TablePagination total={items.total} from={items.from} to={items.to} links={items.links} />
-					) : (
-						<div className="flex h-full items-center justify-center py-8">No Results Found!</div>
-					)}
+									</TableHeader>
+									<TableBody>
+										{items.data.map((item) => {
+											const isEditing = editingRowId === item.id;
+											const isEditable = canManageCeo && item.status_finance !== 'paid';
+											const bothApproved = item.status_finance === 'approved' && item.status_department === 'approved';
+
+											return (
+												<TableRow key={item.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
+													{canManageCeo && (
+														<TableCell className="text-center">
+															<Checkbox
+																checked={selectedIds.includes(item.id)}
+																onCheckedChange={() => toggleSelectRow(item.id)}
+																disabled={item.status_finance === 'paid'}
+															/>
+														</TableCell>
+													)}
+													<TableCell>{item.department ?? '-'}</TableCell>
+													<TableCell>{item.branch ?? '-'}</TableCell>
+													<TableCell>{requestTypeBadge(item.request_type)}</TableCell>
+
+													{/* CEO Status */}
+													<TableCell>
+														{isEditing ? (
+															<Select
+																value={editForm.status_ceo}
+																onValueChange={(v) => setEditForm({ ...editForm, status_ceo: v })}
+															>
+																<SelectTrigger className="w-[120px]">
+																	<SelectValue />
+																</SelectTrigger>
+																<SelectContent>
+																	{statusCeos.map((s) => {
+																		// Only allow Approved if both finance & department are approved
+																		const disabled = s === 'approved' && !bothApproved;
+																		return disabled ? null : (
+																			<SelectItem key={s} value={s}>
+																				{s.charAt(0).toUpperCase() + s.slice(1)}
+																			</SelectItem>
+																		);
+																	})}
+																</SelectContent>
+															</Select>
+														) : (
+															statusBadge(item.status_ceo, 'ceo')
+														)}
+													</TableCell>
+
+													<TableCell>
+														<div className="max-w-xs truncate text-sm text-slate-600">{item.description || '-'}</div>
+													</TableCell>
+
+													<TableCell>
+														<button
+															type="button"
+															className={cn(
+																'flex items-center justify-center rounded p-1 transition-colors',
+																item.note
+																	? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-700'
+																	: 'cursor-pointer text-slate-300 hover:text-slate-500',
+															)}
+															onClick={() => setViewNoteItem(item)}
+															aria-label="View note"
+														>
+															<MessageSquare className="size-4" />
+														</button>
+													</TableCell>
+
+													<TableCell className="whitespace-nowrap">{formatCurrency(item.amount)}</TableCell>
+
+													{/* Actions */}
+													{canManageCeo && (
+														<TableCell className="whitespace-nowrap">
+															{isEditing ? (
+																<div className="flex gap-1">
+																	<Button size="sm" onClick={() => saveEditRow(item)} className="h-7 px-2 text-xs">
+																		Save
+																	</Button>
+																	<Button
+																		variant="outline"
+																		size="sm"
+																		onClick={() => setEditingRowId(null)}
+																		className="h-7 px-2 text-xs"
+																	>
+																		Cancel
+																	</Button>
+																</div>
+															) : isEditable ? (
+																<Button
+																	variant="ghost"
+																	size="sm"
+																	onClick={() => startEditRow(item)}
+																	className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700"
+																>
+																	Edit
+																</Button>
+															) : null}
+														</TableCell>
+													)}
+												</TableRow>
+											);
+										})}
+									</TableBody>
+								</Table>
+
+								<div className="mt-4">
+									{items.data.length > 0 ? (
+										<TablePagination total={items.total} from={items.from} to={items.to} links={items.links} />
+									) : (
+										<div className="flex w-full items-center justify-center py-8 text-slate-500">No content found.</div>
+									)}
+								</div>
+							</CardContent>
+						</TabsContent>
+
+						<TabsContent value="bank-balances" className="mt-0 outline-none">
+							<CardContent>
+								<Table>
+									<TableHeader className="bg-slate-600 dark:bg-slate-700">
+										<TableRow>
+											<TableHead className="font-bold text-white w-16">#</TableHead>
+											<TableHead className="font-bold text-white">Period</TableHead>
+											<TableHead className="font-bold text-white">Week</TableHead>
+											<TableHead className="font-bold text-white text-right">Total Bank Balance (Base)</TableHead>
+											<TableHead className="font-bold text-white w-24">Actions</TableHead>
+										</TableRow>
+									</TableHeader>
+									<TableBody>
+										{groupedBalances.length === 0 ? (
+											<TableRow>
+												<TableCell colSpan={5} className="text-center py-8">No bank balances found for this period.</TableCell>
+											</TableRow>
+										) : (
+											groupedBalances.map((group, index) => {
+												const total = group.total_amount_base;
+												return (
+													<TableRow key={`${group.fiscal_year_id}-${group.fiscal_month_id}-${group.week_number}`}>
+														<TableCell>{index + 1}</TableCell>
+														<TableCell>{group.fiscal_year?.name} - {group.fiscal_month?.name}</TableCell>
+														<TableCell className="whitespace-nowrap">Week {group.week_number} <span className="text-xs text-slate-500">{getWeekDates(group.fiscal_year?.gregorian_start_date, group.fiscal_month?.gregorian_start_date, group.fiscal_month?.gregorian_end_date, group.week_number)}</span></TableCell>
+														<TableCell className="font-bold text-green-700 text-right">
+															{total.toLocaleString(undefined, { minimumFractionDigits: 2 })} ETB
+														</TableCell>
+														<TableCell>
+															<div className="flex gap-2">
+																<Button variant="secondary" size="sm" onClick={() => window.location.href = route('bank-balances.show', group.id) + '?from=ceo'}>
+																	View Detail
+																</Button>
+															</div>
+														</TableCell>
+													</TableRow>
+												)
+											})
+										)}
+									</TableBody>
+								</Table>
+							</CardContent>
+						</TabsContent>
+					</Tabs>
 				</Card>
 			</div>
 
 			{/* ── View Note Dialog ─────────────────────────────────────────── */}
-			<Dialog open={!!viewNoteItem} onOpenChange={(open) => !open && setViewNoteItem(null)}>
-				<DialogContent className="sm:max-w-md">
+			<Dialog open={!!viewNoteItem} onOpenChange={() => setViewNoteItem(null)}>
+				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>View Note</DialogTitle>
+						<DialogTitle>Details</DialogTitle>
 					</DialogHeader>
-					<div className="py-4 text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">
-						{viewNoteItem?.note || <span className="text-slate-400 italic">No note added.</span>}
+					<div className="space-y-4 pt-4">
+						<div className="rounded-lg bg-slate-50 p-3 italic text-slate-700 dark:bg-slate-900 border">
+							<div className="font-semibold text-slate-900 not-italic mb-1 border-b pb-1">Description</div>
+							{viewNoteItem?.description || 'N/A'}
+						</div>
+
+						{viewNoteItem?.note && (
+							<div className="rounded-lg bg-slate-50 p-3 italic text-slate-700 dark:bg-slate-900 border">
+								<div className="font-semibold text-slate-900 not-italic mb-1 border-b pb-1">Note</div>
+								{viewNoteItem?.note}
+							</div>
+						)}
 					</div>
 					<DialogFooter>
-						<Button variant="outline" onClick={() => setViewNoteItem(null)}>
-							Cancel
-						</Button>
+						<Button onClick={() => setViewNoteItem(null)}>Close</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>

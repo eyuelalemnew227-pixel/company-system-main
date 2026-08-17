@@ -37,6 +37,9 @@ import {
   LockKeyhole,
   MessageSquare,
   Package,
+  PiggyBank,
+  Landmark,
+  Network,
   Phone,
   Plus,
   Send,
@@ -76,6 +79,9 @@ const iconMap = {
   FileText,
   FolderKey,
   MessageSquare,
+  PiggyBank,
+  Landmark,
+  Network,
   Calendar,
   CalendarDays,
   CalendarCheck,
@@ -207,6 +213,15 @@ const baseSections: NavSection[] = [
     icon: Wallet,
     items: [],
     groups: [
+      {
+        label: 'Bank Balance',
+        icon: Landmark,
+        items: [
+          { title: 'Manage Bank Balance', href: '/budget/bank-balances', icon: PiggyBank, permission: 'manage bank balance' },
+          { title: 'Manage Banks', href: '/budget/banks', icon: Landmark, permission: 'manage banks|view bank balance' },
+          { title: 'Manage Bank Branches', href: '/budget/bank-branches', icon: Network, permission: 'manage bank branches|view bank balance' },
+        ],
+      },
       {
         label: 'Expense Budget',
         icon: FileText,

@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Controllers\BankBalanceController;
+use App\Http\Controllers\BankBranchController;
+use App\Http\Controllers\BankController;
 use App\Http\Controllers\ExpenseBudgetController;
 use App\Http\Controllers\SalesBudgetController;
 use Illuminate\Support\Facades\Route;
@@ -41,5 +44,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('budget/sales-budget/{salesBudget}/edit', [SalesBudgetController::class, 'edit'])->name('sales-budget.edit');
         Route::put('budget/sales-budget/{salesBudget}', [SalesBudgetController::class, 'update'])->name('sales-budget.update');
         Route::delete('budget/sales-budget/{salesBudget}', [SalesBudgetController::class, 'destroy'])->name('sales-budget.destroy');
+    });
+
+    Route::middleware('permission:manage banks|view bank balance|manage bank branches|manage bank balance')->group(function () {
+        Route::apiResource('budget/banks', BankController::class)
+            ->only(['index', 'store', 'update', 'destroy'])
+            ->names('banks');
+
+        Route::apiResource('budget/bank-branches', BankBranchController::class)
+            ->only(['index', 'store', 'update', 'destroy'])
+            ->names('bank-branches');
+
+        Route::apiResource('budget/bank-balances', BankBalanceController::class)
+            ->only(['index', 'store', 'update', 'destroy', 'show'])
+            ->names('bank-balances');
     });
 });

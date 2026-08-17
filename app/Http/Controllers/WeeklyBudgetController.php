@@ -1353,9 +1353,20 @@ class WeeklyBudgetController extends Controller
             $filters['fiscal_month_id'] = (string) $currentFiscalMonth->id;
         }
 
+        $bankBalancesQuery = \App\Models\BankBalance::with([
+            'fiscalYear',
+            'fiscalMonth',
+            'bank',
+            'bankBranch',
+            'estimatedWeeklySale',
+        ])
+            ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter));
+
         return Inertia::render('Budget/WeeklyBudget/CeoView', [
             'totalBudget' => $totalBudget,
             'items' => $items,
+            'bankBalances' => $bankBalancesQuery->get(),
             'branches' => Branch::query()->orderBy('name')->get(['id', 'name', 'branch_code']),
             'departments' => Department::query()
                 ->where('is_active', true)
