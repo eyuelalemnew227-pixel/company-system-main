@@ -853,11 +853,12 @@ export default function WeeklyBudgetIndex({
 				fiscal_year_id: currentFiscalYearId ? String(currentFiscalYearId) : 'all',
 				fiscal_month_id: currentFiscalMonthId ? String(currentFiscalMonthId) : 'all',
 			},
-			{ preserveState: true, replace: true },
+			{ preserveState: false, replace: true },
 		);
 	}
 
 	const hasActiveFilters =
+		Boolean(request?.budget_id) ||
 		selectedRequestType !== 'all' ||
 		selectedStatusFinance !== 'all' ||
 		selectedStatusDepartment !== 'all' ||
@@ -1092,6 +1093,22 @@ export default function WeeklyBudgetIndex({
 								</Button>
 							)}
 						</div>
+
+						{request?.budget_id && (
+							<div className="mt-4 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-blue-900 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
+								<span className="text-sm font-medium">
+									Showing filtered result for <strong>Weekly Budget #{request.budget_id}</strong>
+								</span>
+								<Button
+									size="sm"
+									variant="outline"
+									onClick={clearFilters}
+									className="h-8 border-blue-300 bg-white text-xs font-semibold text-blue-900 hover:bg-blue-100 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-100"
+								>
+									<X className="mr-1 size-3" /> Show All Budgets
+								</Button>
+							</div>
+						)}
 					</CardHeader>
 					<hr />
 					<CardContent>
