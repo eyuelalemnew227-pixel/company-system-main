@@ -311,7 +311,14 @@ export default function WeeklyBudgetFinance({
 	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(
 		request?.fiscal_month_id ?? (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all'),
 	);
-	const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(request?.week_start_date ?? 'all');
+	const currentWeekStartDate = useMemo(() => {
+		const monday = getMondayOfWeek(new Date(today + 'T00:00:00'));
+		return toDateString(monday);
+	}, [today]);
+
+	const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(
+		request?.week_start_date ?? currentWeekStartDate ?? 'all',
+	);
 	const [selectedPaymentCategory, setSelectedPaymentCategory] = useState<string>(request?.payment_category_id ?? 'all');
 	const [selectedPaymentType, setSelectedPaymentType] = useState<string>(request?.payment_type_id ?? 'all');
 
@@ -334,13 +341,17 @@ export default function WeeklyBudgetFinance({
 		() => (selectedBranch === 'all' ? null : (branches.find((b) => b.id.toString() === selectedBranch) ?? null)),
 		[selectedBranch, branches],
 	);
+	const selectedPaymentTypeOption = useMemo(
+		() => (selectedPaymentType === 'all' ? null : (paymentTypes.find((pt) => String(pt.id) === selectedPaymentType) ?? null)),
+		[selectedPaymentType, paymentTypes],
+	);
 
 	const filteredFiscalMonths = useMemo(() => {
 		if (selectedFiscalYear === 'all') return fiscalMonths;
-		return fiscalMonths.filter((m) => String(m.fiscal_year_id) === selectedFiscalYear);
+		return fiscalMonths.filter((m) => m.fiscal_year_id.toString() === selectedFiscalYear);
 	}, [fiscalMonths, selectedFiscalYear]);
 
-	const filteredPaymentTypesFilter = useMemo(() => {
+	const filteredPaymentTypes = useMemo(() => {
 		if (selectedPaymentCategory === 'all') return paymentTypes;
 		return paymentTypes.filter((pt) => String(pt.payment_category_id) === selectedPaymentCategory);
 	}, [paymentTypes, selectedPaymentCategory]);
@@ -398,15 +409,16 @@ export default function WeeklyBudgetFinance({
 	}
 
 	function buildFilterParams(): Record<string, string> {
-		const params: Record<string, string> = {};
+		const params: Record<string, string> = {
+			fiscal_year_id: selectedFiscalYear,
+			fiscal_month_id: selectedFiscalMonth,
+		};
 		if (selectedRequestType !== 'all') params.request_type = selectedRequestType;
 		if (selectedStatusFinance !== 'all') params.status_finance = selectedStatusFinance;
 		if (selectedStatusDepartment !== 'all') params.status_department = selectedStatusDepartment;
 		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
 		if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
 		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
-		params.fiscal_year_id = selectedFiscalYear;
-		params.fiscal_month_id = selectedFiscalMonth;
 		if (selectedWeekStartDate !== 'all') params.week_start_date = selectedWeekStartDate;
 		if (selectedPaymentCategory !== 'all') params.payment_category_id = selectedPaymentCategory;
 		if (selectedPaymentType !== 'all') params.payment_type_id = selectedPaymentType;
@@ -454,22 +466,25 @@ export default function WeeklyBudgetFinance({
 	}
 
 	function clearFilters() {
+		const fiscalYearId = currentFiscalYearId ? String(currentFiscalYearId) : 'all';
+		const fiscalMonthId = currentFiscalMonthId ? String(currentFiscalMonthId) : 'all';
 		setSelectedRequestType('all');
 		setSelectedStatusFinance('all');
 		setSelectedStatusDepartment('all');
 		setSelectedStatusCeo('all');
 		setSelectedDepartment('all');
 		setSelectedBranch('all');
-		setSelectedFiscalYear(currentFiscalYearId ? String(currentFiscalYearId) : 'all');
-		setSelectedFiscalMonth(currentFiscalMonthId ? String(currentFiscalMonthId) : 'all');
+		setSelectedFiscalYear(fiscalYearId);
+		setSelectedFiscalMonth(fiscalMonthId);
 		setSelectedWeekStartDate('all');
 		setSelectedPaymentCategory('all');
 		setSelectedPaymentType('all');
 		router.get(
 			'/budget/weekly-budget/finance',
 			{
-				fiscal_year_id: currentFiscalYearId ? String(currentFiscalYearId) : 'all',
-				fiscal_month_id: currentFiscalMonthId ? String(currentFiscalMonthId) : 'all',
+				fiscal_year_id: fiscalYearId,
+				fiscal_month_id: fiscalMonthId,
+				week_start_date: 'all',
 			},
 			{ preserveState: false, replace: true },
 		);
@@ -485,7 +500,7 @@ export default function WeeklyBudgetFinance({
 		selectedBranch !== 'all' ||
 		selectedFiscalYear !== (currentFiscalYearId ? String(currentFiscalYearId) : 'all') ||
 		selectedFiscalMonth !== (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all') ||
-		selectedWeekStartDate !== 'all' ||
+		selectedWeekStartDate !== (currentWeekStartDate ?? 'all') ||
 		selectedPaymentCategory !== 'all' ||
 		selectedPaymentType !== 'all';
 
@@ -889,7 +904,7 @@ export default function WeeklyBudgetFinance({
 									<Button variant="outline" role="combobox" className="w-[220px] justify-between font-normal">
 										{selectedPaymentType === 'all'
 											? 'All Payment Types'
-											: (filteredPaymentTypesFilter.find((pt) => String(pt.id) === selectedPaymentType)?.name ??
+											: (filteredPaymentTypes.find((pt) => String(pt.id) === selectedPaymentType)?.name ??
 												'All Payment Types')}
 										<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
 									</Button>
@@ -913,7 +928,7 @@ export default function WeeklyBudgetFinance({
 													/>
 													All Payment Types
 												</CommandItem>
-												{filteredPaymentTypesFilter.map((pt) => (
+												{filteredPaymentTypes.map((pt) => (
 													<CommandItem
 														key={pt.id}
 														value={pt.name}

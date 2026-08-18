@@ -485,7 +485,14 @@ export default function WeeklyBudgetIndex({
 	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(
 		request?.fiscal_month_id ?? (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all'),
 	);
-	const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(request?.week_start_date ?? 'all');
+	const currentWeekStartDate = useMemo(() => {
+		const monday = getMondayOfWeek(new Date(today + 'T00:00:00'));
+		return toDateString(monday);
+	}, [today]);
+
+	const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(
+		request?.week_start_date ?? currentWeekStartDate ?? 'all',
+	);
 
 	const [openBranchFilter, setOpenBranchFilter] = useState(false);
 	const [openDepartmentFilter, setOpenDepartmentFilter] = useState(false);
@@ -745,15 +752,16 @@ export default function WeeklyBudgetIndex({
 	}, [flash, triggerPopup]);
 
 	function buildFilterParams(): Record<string, string> {
-		const params: Record<string, string> = {};
+		const params: Record<string, string> = {
+			fiscal_year_id: selectedFiscalYear,
+			fiscal_month_id: selectedFiscalMonth,
+		};
 		if (selectedRequestType !== 'all') params.request_type = selectedRequestType;
 		if (selectedStatusFinance !== 'all') params.status_finance = selectedStatusFinance;
 		if (selectedStatusDepartment !== 'all') params.status_department = selectedStatusDepartment;
 		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
 		if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
 		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
-		params.fiscal_year_id = selectedFiscalYear;
-		params.fiscal_month_id = selectedFiscalMonth;
 		if (selectedWeekStartDate !== 'all') params.week_start_date = selectedWeekStartDate;
 		return params;
 	}
@@ -838,20 +846,23 @@ export default function WeeklyBudgetIndex({
 	}
 
 	function clearFilters() {
+		const fiscalYearId = currentFiscalYearId ? String(currentFiscalYearId) : 'all';
+		const fiscalMonthId = currentFiscalMonthId ? String(currentFiscalMonthId) : 'all';
 		setSelectedRequestType('all');
 		setSelectedStatusFinance('all');
 		setSelectedStatusDepartment('all');
 		setSelectedStatusCeo('all');
 		setSelectedDepartment('all');
 		setSelectedBranch('all');
-		setSelectedFiscalYear(currentFiscalYearId ? String(currentFiscalYearId) : 'all');
-		setSelectedFiscalMonth(currentFiscalMonthId ? String(currentFiscalMonthId) : 'all');
+		setSelectedFiscalYear(fiscalYearId);
+		setSelectedFiscalMonth(fiscalMonthId);
 		setSelectedWeekStartDate('all');
 		router.get(
 			'/budget/weekly-budget',
 			{
-				fiscal_year_id: currentFiscalYearId ? String(currentFiscalYearId) : 'all',
-				fiscal_month_id: currentFiscalMonthId ? String(currentFiscalMonthId) : 'all',
+				fiscal_year_id: fiscalYearId,
+				fiscal_month_id: fiscalMonthId,
+				week_start_date: 'all',
 			},
 			{ preserveState: false, replace: true },
 		);
@@ -867,7 +878,7 @@ export default function WeeklyBudgetIndex({
 		selectedBranch !== 'all' ||
 		selectedFiscalYear !== (currentFiscalYearId ? String(currentFiscalYearId) : 'all') ||
 		selectedFiscalMonth !== (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all') ||
-		selectedWeekStartDate !== 'all';
+		selectedWeekStartDate !== (currentWeekStartDate ?? 'all');
 
 	// Selected week option label for the filter trigger
 	const selectedWeekOption = useMemo(
