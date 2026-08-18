@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, FileText, Filter, MessageSquare, X } from 'lucide-react';
+import { Check, ChevronsUpDown, FileText, Filter, Loader2, MessageSquare, Send, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { usePopup } from '@/hooks/use-popup';
 
@@ -188,7 +188,7 @@ function toDateString(d: Date): string {
 }
 
 function toMonthDayLabel(d: Date): string {
-	const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+	const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 	return `${months[d.getMonth()]} ${d.getDate()}`;
 }
 
@@ -366,10 +366,36 @@ export default function WeeklyBudgetFinance({
 		return [];
 	}, [selectedFiscalYear, selectedFiscalMonth, fiscalYears, fiscalMonths, currentFiscalYearId, today]);
 
+	const [isSendingToCeo, setIsSendingToCeo] = useState(false);
+
 	useEffect(() => {
 		if (flash?.message) triggerPopup('Success', flash.message, 'success');
 		if (errors?.status_finance) triggerPopup('Error', errors.status_finance, 'error');
+		if (errors?.send_to_ceo) triggerPopup('Error', errors.send_to_ceo, 'error');
 	}, [flash?.message, errors, triggerPopup]);
+
+	function handleSendToCeo() {
+		setIsSendingToCeo(true);
+		router.post(
+			'/budget/weekly-budget/finance/send-to-ceo',
+			{},
+			{
+				preserveScroll: true,
+				onSuccess: () => {
+					setIsSendingToCeo(false);
+				},
+				onError: (err) => {
+					setIsSendingToCeo(false);
+					if (err?.send_to_ceo) {
+						triggerPopup('Error', err.send_to_ceo, 'error');
+					}
+				},
+				onFinish: () => {
+					setIsSendingToCeo(false);
+				},
+			},
+		);
+	}
 
 	function buildFilterParams(): Record<string, string> {
 		const params: Record<string, string> = {};
@@ -576,9 +602,26 @@ export default function WeeklyBudgetFinance({
 			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
 				<div className="flex items-center justify-between">
 					<h1 className="text-2xl font-bold">Weekly Budgets - Finance View</h1>
-					<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
-						📥 Export CSV
-					</Button>
+					<div className="flex items-center gap-2">
+						<Button
+							onClick={handleSendToCeo}
+							disabled={isSendingToCeo}
+							className="bg-blue-600 text-white hover:bg-blue-700"
+						>
+							{isSendingToCeo ? (
+								<>
+									<Loader2 className="mr-1.5 size-4 animate-spin" /> Sending...
+								</>
+							) : (
+								<>
+									<Send className="mr-1.5 size-4" /> Send to CEO
+								</>
+							)}
+						</Button>
+						<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
+							📥 Export CSV
+						</Button>
+					</div>
 				</div>
 
 				<Card>
@@ -722,7 +765,7 @@ export default function WeeklyBudgetFinance({
 									applyFilters({ week_start_date: v });
 								}}
 							>
-								<SelectTrigger className="w-[200px]">
+								<SelectTrigger className="w-[240px]">
 									<SelectValue placeholder="All Weeks" />
 								</SelectTrigger>
 								<SelectContent>

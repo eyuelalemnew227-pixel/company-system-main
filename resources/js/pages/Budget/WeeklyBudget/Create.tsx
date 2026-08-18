@@ -146,10 +146,7 @@ function toDateString(d: Date): string {
  * Format a Date as "Month DD" (e.g. "July 13").
  */
 function toMonthDayLabel(d: Date): string {
-	const months = [
-		'January', 'February', 'March', 'April', 'May', 'June',
-		'July', 'August', 'September', 'October', 'November', 'December',
-	];
+	const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 	return `${months[d.getMonth()]} ${d.getDate()}`;
 }
 

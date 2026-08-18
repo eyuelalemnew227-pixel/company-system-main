@@ -11,8 +11,11 @@ use App\Models\Department;
 use App\Models\FiscalMonth;
 use App\Models\FiscalYear;
 use App\Models\ExpenseItem;
+use App\Models\User;
 use App\Models\WeeklyBudget;
 use App\Models\WeeklyBudgetActivityLog;
+use App\Models\WeeklyBudgetNotification;
+use App\Services\TelegramBotService;
 use App\Services\WeeklyBudgetActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
@@ -758,6 +761,84 @@ class WeeklyBudgetController extends Controller
         );
     }
 
+    public function sendToCeo(Request $request): RedirectResponse
+    {
+        abort_unless(auth()->user()->canAny(['view finance budgets', 'manage finance budgets']), 403);
+
+        // Find user(s) holding the "ceo role"
+        $ceoUsers = User::role('ceo role')->get();
+        if ($ceoUsers->isEmpty()) {
+            $ceoUsers = User::whereHas('roles', function ($query) {
+                $query->whereIn('name', ['ceo role', 'CEO', 'ceo', 'Ceo', 'CEO Role', 'Ceo Role']);
+            })->get();
+        }
+
+        if ($ceoUsers->isEmpty()) {
+            $ceoUsers = User::permission('view ceo budgets')->get();
+        }
+
+        if ($ceoUsers->isEmpty()) {
+            return back()->withErrors(['send_to_ceo' => 'No user found with the CEO role.']);
+        }
+
+        $appUrl = config('app.url', 'http://localhost:8000');
+        try {
+            if ($request->header('x-forwarded-host')) {
+                $proto = $request->header('x-forwarded-proto', 'https');
+                $host = $request->header('x-forwarded-host');
+                $appUrl = "{$proto}://{$host}";
+            } elseif ($request->getSchemeAndHttpHost()) {
+                $appUrl = $request->getSchemeAndHttpHost();
+            }
+        } catch (\Throwable $e) {
+            $appUrl = config('app.url', 'http://localhost:8000');
+        }
+
+        $ceoViewUrl = rtrim($appUrl, '/') . '/budget/weekly-budget/ceo';
+
+        $messageText = "🔔 <b>Weekly Budgets Notification</b>\n\n" .
+            "Weekly Budgets are ready for your review.\n\n" .
+            "🔗 <a href=\"{$ceoViewUrl}\">Review Weekly Budgets (CEO View)</a>";
+
+        $replyMarkup = [
+            'inline_keyboard' => [
+                [
+                    [
+                        'text' => '👁️ View CEO Review Page',
+                        'url' => $ceoViewUrl,
+                    ],
+                ],
+            ],
+        ];
+
+        $botService = app(TelegramBotService::class);
+        $sentCount = 0;
+
+        foreach ($ceoUsers as $ceoUser) {
+            WeeklyBudgetNotification::create([
+                'user_id' => $ceoUser->id,
+                'weekly_budget_id' => null,
+                'type' => 'budget.ceo',
+                'title' => 'Weekly Budgets Ready for Review',
+                'body' => 'Weekly Budgets are ready for your review.',
+                'read_at' => null,
+            ]);
+
+            if (!empty($ceoUser->telegram_chat_id)) {
+                $sent = $botService->sendToUser($ceoUser, $messageText, $replyMarkup);
+                if ($sent) {
+                    $sentCount++;
+                }
+            }
+        }
+
+        if ($sentCount > 0) {
+            return back()->with('message', 'Weekly Budgets notification sent to CEO via Telegram.');
+        }
+
+        return back()->with('message', 'Notification recorded, but CEO user(s) have not linked their Telegram Chat ID.');
+    }
+
     public function updateFinance(Request $request, WeeklyBudget $weeklyBudget): RedirectResponse
     {
         abort_unless(auth()->user()->can('manage finance budgets'), 403);
@@ -1264,6 +1345,8 @@ class WeeklyBudgetController extends Controller
         abort_unless(auth()->user()->can('view ceo budgets'), 403);
 
         [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
+        $currentWeekStartDate = \Carbon\Carbon::parse($today)->startOfWeek(\Carbon\CarbonInterface::MONDAY)->toDateString();
+
         $hasFiscalYearFilter = request()->has('fiscal_year_id');
         $fiscalYearFilter = $hasFiscalYearFilter
             ? request('fiscal_year_id')
@@ -1271,6 +1354,11 @@ class WeeklyBudgetController extends Controller
         $fiscalMonthFilter = request()->has('fiscal_month_id')
             ? request('fiscal_month_id')
             : ($hasFiscalYearFilter ? null : $currentFiscalMonth?->id);
+
+        $hasWeekFilter = request()->has('week_start_date');
+        $weekFilter = $hasWeekFilter
+            ? (request('week_start_date') === 'all' ? null : request('week_start_date'))
+            : ($hasFiscalYearFilter || request()->has('fiscal_month_id') ? null : $currentWeekStartDate);
 
         $query = WeeklyBudget::query()->with([
             'branch',
@@ -1290,7 +1378,7 @@ class WeeklyBudgetController extends Controller
             ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
             ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
-            ->when(request('week_start_date'), fn($q, $v) => $q->where('week_start_date', $v))
+            ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->where('week_start_date', $weekFilter))
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
 
@@ -1352,6 +1440,9 @@ class WeeklyBudgetController extends Controller
         if (!request()->has('fiscal_month_id') && !$hasFiscalYearFilter && $currentFiscalMonth) {
             $filters['fiscal_month_id'] = (string) $currentFiscalMonth->id;
         }
+        if (!request()->has('week_start_date') && !$hasFiscalYearFilter && !request()->has('fiscal_month_id')) {
+            $filters['week_start_date'] = $currentWeekStartDate;
+        }
 
         $bankBalancesQuery = \App\Models\BankBalance::with([
             'fiscalYear',
@@ -1391,6 +1482,8 @@ class WeeklyBudgetController extends Controller
         abort_unless(auth()->user()->can('view ceo budgets'), 403);
 
         [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
+        $currentWeekStartDate = \Carbon\Carbon::parse($today)->startOfWeek(\Carbon\CarbonInterface::MONDAY)->toDateString();
+
         $hasFiscalYearFilter = request()->has('fiscal_year_id');
         $fiscalYearFilter = $hasFiscalYearFilter
             ? request('fiscal_year_id')
@@ -1398,6 +1491,11 @@ class WeeklyBudgetController extends Controller
         $fiscalMonthFilter = request()->has('fiscal_month_id')
             ? request('fiscal_month_id')
             : ($hasFiscalYearFilter ? null : $currentFiscalMonth?->id);
+
+        $hasWeekFilter = request()->has('week_start_date');
+        $weekFilter = $hasWeekFilter
+            ? (request('week_start_date') === 'all' ? null : request('week_start_date'))
+            : ($hasFiscalYearFilter || request()->has('fiscal_month_id') ? null : $currentWeekStartDate);
 
         $query = WeeklyBudget::query()->with([
             'branch',
@@ -1419,7 +1517,7 @@ class WeeklyBudgetController extends Controller
             ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
             ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
-            ->when(request('week_start_date'), fn($q, $v) => $q->where('week_start_date', $v))
+            ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->where('week_start_date', $weekFilter))
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
 
