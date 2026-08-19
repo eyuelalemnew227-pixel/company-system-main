@@ -78,7 +78,6 @@ export default function Show({ periodBalances, representative }: { periodBalance
     });
 
     let sumAmountETB = 0;
-    let sumForeignAmount = 0;
     let sumTotalETB = 0;
     let currentBalance = 0;
 
@@ -90,8 +89,6 @@ export default function Show({ periodBalances, representative }: { periodBalance
 
         if (currency === 'ETB') {
             sumAmountETB += amount;
-        } else {
-            sumForeignAmount += amount;
         }
 
         sumTotalETB += subtotal;
@@ -104,12 +101,12 @@ export default function Show({ periodBalances, representative }: { periodBalance
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="View Bank Balance Detail" />
-            <div className="flex h-full flex-1 flex-col gap-6 overflow-x-auto rounded-xl p-4 max-w-7xl mx-auto w-full">
+            <div className="h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] overflow-hidden flex flex-col justify-between p-3 lg:p-4 gap-2 max-w-7xl mx-auto w-full rounded-xl">
 
-                <div className="flex justify-between items-end pb-2 border-b">
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight">{rep.fiscal_year?.name} - {rep.fiscal_month?.name}</h1>
-                        <p className="text-xl text-slate-500 font-semibold mt-1">Week {rep.week_number} <span className="ml-2 text-slate-400 font-normal">{getWeekDates(rep.fiscal_year?.gregorian_start_date, rep.fiscal_month?.gregorian_start_date, rep.fiscal_month?.gregorian_end_date, rep.week_number)}</span></p>
+                <div className="flex justify-between items-end pb-2 border-b shrink-0">
+                    <div className="flex items-baseline gap-2">
+                        <h1 className="text-base font-bold leading-none">{rep.fiscal_year?.name} - {rep.fiscal_month?.name}</h1>
+                        <p className="text-xs font-medium text-slate-500">Week {rep.week_number} <span className="ml-1 text-slate-400 font-normal">{getWeekDates(rep.fiscal_year?.gregorian_start_date, rep.fiscal_month?.gregorian_start_date, rep.fiscal_month?.gregorian_end_date, rep.week_number)}</span></p>
                     </div>
                     {!isFromCeo && (
                         <Link href={route('bank-balances.index')}>
@@ -118,52 +115,43 @@ export default function Show({ periodBalances, representative }: { periodBalance
                     )}
                 </div>
 
-                <div className="grid gap-6 md:grid-cols-3">
-                    <Card className="bg-slate-50 border-none shadow-sm dark:bg-slate-900 border-l-4 border-l-orange-500">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Estimated Weekly Sales</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-bold text-slate-800 dark:text-slate-100">{estimatedValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xl font-medium text-slate-500 ml-1">ETB</span></div>
+                <div className="grid gap-3 md:grid-cols-3 shrink-0">
+                    <Card className="bg-slate-50 border-none shadow-sm dark:bg-slate-900 border-l-4 border-l-orange-500 rounded-lg">
+                        <CardContent className="px-3.5 py-1.5 flex items-center justify-between">
+                            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Estimated Weekly Sales</span>
+                            <div className="text-base font-extrabold text-gray-900 tracking-tight dark:text-slate-100">{estimatedValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] font-semibold text-slate-400 ml-1">ETB</span></div>
                         </CardContent>
                     </Card>
 
-                    <Card className="bg-slate-50 border-none shadow-sm dark:bg-slate-900 border-l-4 border-l-blue-600">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wider">Current Balance</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-bold text-slate-800 dark:text-slate-100">{currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xl font-medium text-slate-500 ml-1">ETB</span></div>
+                    <Card className="bg-slate-50 border-none shadow-sm dark:bg-slate-900 border-l-4 border-l-blue-600 rounded-lg">
+                        <CardContent className="px-3.5 py-1.5 flex items-center justify-between">
+                            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Current Balance</span>
+                            <div className="text-base font-extrabold text-gray-900 tracking-tight dark:text-slate-100">{currentBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] font-semibold text-slate-400 ml-1">ETB</span></div>
                         </CardContent>
                     </Card>
 
-                    <Card className="bg-slate-50 border-none shadow-sm dark:bg-slate-900 border-l-4 border-l-green-600">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wider">
-                                TOTAL BALANCE <span className="text-xs font-normal lowercase tracking-normal">(estimation + current balance)</span>
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-bold text-slate-800 dark:text-slate-100">{(estimatedValue + currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xl font-medium text-slate-500 ml-1">ETB</span></div>
+                    <Card className="bg-slate-50 border-none shadow-sm dark:bg-slate-900 border-l-4 border-l-green-600 rounded-lg">
+                        <CardContent className="px-3.5 py-1.5 flex items-center justify-between">
+                            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                                TOTAL BALANCE <span className="text-[9px] font-normal lowercase tracking-normal hidden lg:inline">(estimation + cur)</span>
+                            </span>
+                            <div className="text-base font-extrabold text-gray-900 tracking-tight dark:text-slate-100">{(estimatedValue + currentBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[10px] font-semibold text-slate-400 ml-1">ETB</span></div>
                         </CardContent>
                     </Card>
                 </div>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Cohort Breakdown</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader className="bg-slate-100 dark:bg-slate-800 sticky top-0 z-10 shadow-sm">
+                <Card className="overflow-hidden">
+                    <CardContent className="p-0">
+                        <Table className="text-[11px] leading-tight">
+                            <TableHeader className="bg-slate-100 dark:bg-slate-800">
                                 <TableRow>
-                                    <TableHead>Bank</TableHead>
-                                    <TableHead>Branch</TableHead>
-                                    <TableHead className="text-right">Amount ETB</TableHead>
-                                    <TableHead className="text-right">Foreign Amount</TableHead>
-                                    <TableHead>Currency</TableHead>
-                                    <TableHead>Exchange Rate</TableHead>
-                                    <TableHead className="text-right pr-6">Total ETB</TableHead>
+                                    <TableHead className="py-0.5 px-2.5">Bank</TableHead>
+                                    <TableHead className="py-0.5 px-2.5">Branch</TableHead>
+                                    <TableHead className="py-0.5 px-2.5 text-right">Amount ETB</TableHead>
+                                    <TableHead className="py-0.5 px-2.5 text-right">Foreign Amount</TableHead>
+                                    <TableHead className="py-0.5 px-2.5">Currency</TableHead>
+                                    <TableHead className="py-0.5 px-2.5">Exchange Rate</TableHead>
+                                    <TableHead className="py-0.5 px-2.5 text-right pr-6">Total ETB</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -175,19 +163,19 @@ export default function Show({ periodBalances, representative }: { periodBalance
                                     const isETB = currency === 'ETB';
                                     return (
                                         <TableRow key={balance.id} className="last:border-0 hover:bg-slate-50">
-                                            <TableCell className="font-semibold">{balance.bank?.name}</TableCell>
-                                            <TableCell className="text-slate-600">{balance.bank_branch?.name}</TableCell>
-                                            <TableCell className="font-mono text-sm text-right">
+                                            <TableCell className="py-0.5 px-2.5 font-semibold">{balance.bank?.name}</TableCell>
+                                            <TableCell className="py-0.5 px-2.5 text-slate-600">{balance.bank_branch?.name}</TableCell>
+                                            <TableCell className="py-0.5 px-2.5 font-mono text-[11px] text-right">
                                                 {isETB ? amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                                             </TableCell>
-                                            <TableCell className="font-mono text-sm text-right">
+                                            <TableCell className="py-0.5 px-2.5 font-mono text-[11px] text-right">
                                                 {!isETB ? amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0.00'}
                                             </TableCell>
-                                            <TableCell>
-                                                <span className="inline-flex px-2 py-1 text-xs font-bold rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 uppercase tracking-widest">{currency}</span>
+                                            <TableCell className="py-0.5 px-2.5">
+                                                <span className="inline-flex px-1.5 py-[2px] text-[9px] font-bold rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 uppercase tracking-widest">{currency}</span>
                                             </TableCell>
-                                            <TableCell className="font-mono text-xs">{rate.toFixed(4)}</TableCell>
-                                            <TableCell className="font-mono font-bold text-green-700 text-sm text-right pr-6">
+                                            <TableCell className="py-0.5 px-2.5 font-mono text-[11px]">{rate.toFixed(4)}</TableCell>
+                                            <TableCell className="py-0.5 px-2.5 font-mono font-bold text-green-700 text-[11px] text-right pr-6">
                                                 {subtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </TableCell>
                                         </TableRow>
@@ -196,11 +184,11 @@ export default function Show({ periodBalances, representative }: { periodBalance
                             </TableBody>
                             <TableFooter className="bg-slate-100 dark:bg-slate-800">
                                 <TableRow>
-                                    <TableCell colSpan={2} className="text-right font-bold">Totals</TableCell>
-                                    <TableCell className="font-mono font-bold text-sm text-right">{sumAmountETB.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                    <TableCell className="font-mono font-bold text-sm text-right">{sumForeignAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                                    <TableCell colSpan={2} className="text-right text-xs font-bold text-slate-500 uppercase">Grand Total:</TableCell>
-                                    <TableCell className="font-mono font-bold text-green-700 text-sm text-right pr-6">{sumTotalETB.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB</TableCell>
+                                    <TableCell colSpan={2} className="py-0.5 px-2.5 text-right font-bold">Totals</TableCell>
+                                    <TableCell className="py-0.5 px-2.5 font-mono font-bold text-[11px] text-right">{sumAmountETB.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                                    <TableCell className="py-0.5 px-2.5 font-mono font-bold text-[11px] text-right text-slate-400">—</TableCell>
+                                    <TableCell colSpan={2} className="py-0.5 px-2.5 text-right text-[10px] font-bold text-slate-500 uppercase">Grand Total:</TableCell>
+                                    <TableCell className="py-0.5 px-2.5 font-mono font-bold text-green-700 text-[11px] text-right pr-6">{sumTotalETB.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ETB</TableCell>
                                 </TableRow>
                             </TableFooter>
                         </Table>
