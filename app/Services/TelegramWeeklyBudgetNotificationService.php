@@ -36,9 +36,11 @@ class TelegramWeeklyBudgetNotificationService
     {
         $budget->loadMissing(['branch', 'department']);
 
-        $branch = e($budget->branch?->name ?? 'N/A');
+        $rawBranch = $budget->branch?->name;
+        $branch = e(($rawBranch && $rawBranch !== 'N/A' && trim($rawBranch) !== '') ? $rawBranch : 'Head Office');
         $department = e($budget->department?->name ?? 'N/A');
         $amount = number_format((float) $budget->amount, 2);
+        $description = e($budget->description ?? 'N/A');
         
         $rawRequestType = $budget->request_type;
         $requestTypeVal = is_object($rawRequestType) && isset($rawRequestType->value) ? $rawRequestType->value : (is_string($rawRequestType) ? $rawRequestType : 'N/A');
@@ -47,6 +49,7 @@ class TelegramWeeklyBudgetNotificationService
                "📍 <b>Branch:</b> {$branch}\n" .
                "🏢 <b>Department:</b> {$department}\n" .
                "📋 <b>Request Type:</b> " . e(ucfirst($requestTypeVal)) . "\n" .
+               "📝 <b>Description:</b> {$description}\n" .
                "💵 <b>Amount:</b> {$amount}";
     }
 
@@ -59,7 +62,7 @@ class TelegramWeeklyBudgetNotificationService
             default => '/budget/weekly-budget',
         };
 
-        $url = "{$this->getAppUrl()}{$path}";
+        $url = "{$this->getAppUrl()}{$path}?budget_id={$budget->id}";
         return [
             'inline_keyboard' => [
                 [
@@ -79,10 +82,18 @@ class TelegramWeeklyBudgetNotificationService
     {
         $header = $this->formatBudgetHeader($budget);
         $buttons = $this->buildBudgetInlineButton($budget, $module);
+        $path = match($module) {
+            'budget.finance' => '/budget/weekly-budget/finance',
+            'budget.ceo' => '/budget/weekly-budget/ceo',
+            'budget.department' => '/budget/weekly-budget/department',
+            default => '/budget/weekly-budget',
+        };
+        $url = "{$this->getAppUrl()}{$path}?budget_id={$budget->id}";
 
         $text = "🔔 <b>{$title}</b>\n\n" .
                 "{$header}\n\n" .
-                "<i>{$body}</i>";
+                "<i>{$body}</i>\n\n" .
+                "🔗 <a href=\"{$url}\">View Budget #{$budget->id}</a>";
 
         $this->botService->sendToUsers($userIds, $text, $buttons);
     }

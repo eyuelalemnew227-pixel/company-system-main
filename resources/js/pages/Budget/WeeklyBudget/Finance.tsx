@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, FileText, Filter, MessageSquare, X } from 'lucide-react';
+import { Check, ChevronsUpDown, FileText, Filter, Loader2, MessageSquare, Send, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { usePopup } from '@/hooks/use-popup';
 
@@ -188,7 +188,7 @@ function toDateString(d: Date): string {
 }
 
 function toMonthDayLabel(d: Date): string {
-	const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+	const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 	return `${months[d.getMonth()]} ${d.getDate()}`;
 }
 
@@ -311,7 +311,14 @@ export default function WeeklyBudgetFinance({
 	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(
 		request?.fiscal_month_id ?? (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all'),
 	);
-	const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(request?.week_start_date ?? 'all');
+	const currentWeekStartDate = useMemo(() => {
+		const monday = getMondayOfWeek(new Date(today + 'T00:00:00'));
+		return toDateString(monday);
+	}, [today]);
+
+	const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(
+		request?.week_start_date ?? currentWeekStartDate ?? 'all',
+	);
 	const [selectedPaymentCategory, setSelectedPaymentCategory] = useState<string>(request?.payment_category_id ?? 'all');
 	const [selectedPaymentType, setSelectedPaymentType] = useState<string>(request?.payment_type_id ?? 'all');
 
@@ -334,13 +341,17 @@ export default function WeeklyBudgetFinance({
 		() => (selectedBranch === 'all' ? null : (branches.find((b) => b.id.toString() === selectedBranch) ?? null)),
 		[selectedBranch, branches],
 	);
+	const selectedPaymentTypeOption = useMemo(
+		() => (selectedPaymentType === 'all' ? null : (paymentTypes.find((pt) => String(pt.id) === selectedPaymentType) ?? null)),
+		[selectedPaymentType, paymentTypes],
+	);
 
 	const filteredFiscalMonths = useMemo(() => {
 		if (selectedFiscalYear === 'all') return fiscalMonths;
-		return fiscalMonths.filter((m) => String(m.fiscal_year_id) === selectedFiscalYear);
+		return fiscalMonths.filter((m) => m.fiscal_year_id.toString() === selectedFiscalYear);
 	}, [fiscalMonths, selectedFiscalYear]);
 
-	const filteredPaymentTypesFilter = useMemo(() => {
+	const filteredPaymentTypes = useMemo(() => {
 		if (selectedPaymentCategory === 'all') return paymentTypes;
 		return paymentTypes.filter((pt) => String(pt.payment_category_id) === selectedPaymentCategory);
 	}, [paymentTypes, selectedPaymentCategory]);
@@ -366,21 +377,48 @@ export default function WeeklyBudgetFinance({
 		return [];
 	}, [selectedFiscalYear, selectedFiscalMonth, fiscalYears, fiscalMonths, currentFiscalYearId, today]);
 
+	const [isSendingToCeo, setIsSendingToCeo] = useState(false);
+
 	useEffect(() => {
 		if (flash?.message) triggerPopup('Success', flash.message, 'success');
 		if (errors?.status_finance) triggerPopup('Error', errors.status_finance, 'error');
+		if (errors?.send_to_ceo) triggerPopup('Error', errors.send_to_ceo, 'error');
 	}, [flash?.message, errors, triggerPopup]);
 
+	function handleSendToCeo() {
+		setIsSendingToCeo(true);
+		router.post(
+			'/budget/weekly-budget/finance/send-to-ceo',
+			{},
+			{
+				preserveScroll: true,
+				onSuccess: () => {
+					setIsSendingToCeo(false);
+				},
+				onError: (err) => {
+					setIsSendingToCeo(false);
+					if (err?.send_to_ceo) {
+						triggerPopup('Error', err.send_to_ceo, 'error');
+					}
+				},
+				onFinish: () => {
+					setIsSendingToCeo(false);
+				},
+			},
+		);
+	}
+
 	function buildFilterParams(): Record<string, string> {
-		const params: Record<string, string> = {};
+		const params: Record<string, string> = {
+			fiscal_year_id: selectedFiscalYear,
+			fiscal_month_id: selectedFiscalMonth,
+		};
 		if (selectedRequestType !== 'all') params.request_type = selectedRequestType;
 		if (selectedStatusFinance !== 'all') params.status_finance = selectedStatusFinance;
 		if (selectedStatusDepartment !== 'all') params.status_department = selectedStatusDepartment;
 		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
 		if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
 		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
-		params.fiscal_year_id = selectedFiscalYear;
-		params.fiscal_month_id = selectedFiscalMonth;
 		if (selectedWeekStartDate !== 'all') params.week_start_date = selectedWeekStartDate;
 		if (selectedPaymentCategory !== 'all') params.payment_category_id = selectedPaymentCategory;
 		if (selectedPaymentType !== 'all') params.payment_type_id = selectedPaymentType;
@@ -428,28 +466,32 @@ export default function WeeklyBudgetFinance({
 	}
 
 	function clearFilters() {
+		const fiscalYearId = currentFiscalYearId ? String(currentFiscalYearId) : 'all';
+		const fiscalMonthId = currentFiscalMonthId ? String(currentFiscalMonthId) : 'all';
 		setSelectedRequestType('all');
 		setSelectedStatusFinance('all');
 		setSelectedStatusDepartment('all');
 		setSelectedStatusCeo('all');
 		setSelectedDepartment('all');
 		setSelectedBranch('all');
-		setSelectedFiscalYear(currentFiscalYearId ? String(currentFiscalYearId) : 'all');
-		setSelectedFiscalMonth(currentFiscalMonthId ? String(currentFiscalMonthId) : 'all');
+		setSelectedFiscalYear(fiscalYearId);
+		setSelectedFiscalMonth(fiscalMonthId);
 		setSelectedWeekStartDate('all');
 		setSelectedPaymentCategory('all');
 		setSelectedPaymentType('all');
 		router.get(
 			'/budget/weekly-budget/finance',
 			{
-				fiscal_year_id: currentFiscalYearId ? String(currentFiscalYearId) : 'all',
-				fiscal_month_id: currentFiscalMonthId ? String(currentFiscalMonthId) : 'all',
+				fiscal_year_id: fiscalYearId,
+				fiscal_month_id: fiscalMonthId,
+				week_start_date: 'all',
 			},
-			{ preserveState: true, replace: true },
+			{ preserveState: false, replace: true },
 		);
 	}
 
 	const hasActiveFilters =
+		Boolean(request?.budget_id) ||
 		selectedRequestType !== 'all' ||
 		selectedStatusFinance !== 'all' ||
 		selectedStatusDepartment !== 'all' ||
@@ -458,7 +500,7 @@ export default function WeeklyBudgetFinance({
 		selectedBranch !== 'all' ||
 		selectedFiscalYear !== (currentFiscalYearId ? String(currentFiscalYearId) : 'all') ||
 		selectedFiscalMonth !== (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all') ||
-		selectedWeekStartDate !== 'all' ||
+		selectedWeekStartDate !== (currentWeekStartDate ?? 'all') ||
 		selectedPaymentCategory !== 'all' ||
 		selectedPaymentType !== 'all';
 
@@ -548,6 +590,10 @@ export default function WeeklyBudgetFinance({
 		return getFinanceEditMode(item, canManageFinance, canOverridePaid) === 'full';
 	}
 
+	function openNotePopup(item: WeeklyBudgetRow) {
+		setViewNoteItem(item);
+	}
+
 	function openDescriptionPopup(item: WeeklyBudgetRow) {
 		setDescriptionDialogItem(item);
 		setDescriptionDialogText(item.description ?? '');
@@ -576,9 +622,26 @@ export default function WeeklyBudgetFinance({
 			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
 				<div className="flex items-center justify-between">
 					<h1 className="text-2xl font-bold">Weekly Budgets - Finance View</h1>
-					<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
-						📥 Export CSV
-					</Button>
+					<div className="flex items-center gap-2">
+						<Button
+							onClick={handleSendToCeo}
+							disabled={isSendingToCeo}
+							className="bg-blue-600 text-white hover:bg-blue-700"
+						>
+							{isSendingToCeo ? (
+								<>
+									<Loader2 className="mr-1.5 size-4 animate-spin" /> Sending...
+								</>
+							) : (
+								<>
+									<Send className="mr-1.5 size-4" /> Send to CEO
+								</>
+							)}
+						</Button>
+						<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
+							📥 Export CSV
+						</Button>
+					</div>
 				</div>
 
 				<Card>
@@ -722,7 +785,7 @@ export default function WeeklyBudgetFinance({
 									applyFilters({ week_start_date: v });
 								}}
 							>
-								<SelectTrigger className="w-[200px]">
+								<SelectTrigger className="w-[240px]">
 									<SelectValue placeholder="All Weeks" />
 								</SelectTrigger>
 								<SelectContent>
@@ -730,6 +793,26 @@ export default function WeeklyBudgetFinance({
 									{weekFilterOptions.map((week) => (
 										<SelectItem key={week.startDate} value={week.startDate}>
 											{week.label}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+
+							<Select
+								value={selectedRequestType}
+								onValueChange={(v) => {
+									setSelectedRequestType(v);
+									applyFilters({ request_type: v });
+								}}
+							>
+								<SelectTrigger className="w-[180px]">
+									<SelectValue placeholder="Request Type" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All Request Types</SelectItem>
+									{requestTypes.map((requestType) => (
+										<SelectItem key={requestType} value={requestType}>
+											{requestType.charAt(0).toUpperCase() + requestType.slice(1)}
 										</SelectItem>
 									))}
 								</SelectContent>
@@ -821,7 +904,7 @@ export default function WeeklyBudgetFinance({
 									<Button variant="outline" role="combobox" className="w-[220px] justify-between font-normal">
 										{selectedPaymentType === 'all'
 											? 'All Payment Types'
-											: (filteredPaymentTypesFilter.find((pt) => String(pt.id) === selectedPaymentType)?.name ??
+											: (filteredPaymentTypes.find((pt) => String(pt.id) === selectedPaymentType)?.name ??
 												'All Payment Types')}
 										<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
 									</Button>
@@ -845,7 +928,7 @@ export default function WeeklyBudgetFinance({
 													/>
 													All Payment Types
 												</CommandItem>
-												{filteredPaymentTypesFilter.map((pt) => (
+												{filteredPaymentTypes.map((pt) => (
 													<CommandItem
 														key={pt.id}
 														value={pt.name}
@@ -876,6 +959,22 @@ export default function WeeklyBudgetFinance({
 								</Button>
 							)}
 						</div>
+
+						{request?.budget_id && (
+							<div className="mt-4 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-blue-900 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
+								<span className="text-sm font-medium">
+									Showing filtered result for <strong>Weekly Budget #{request.budget_id}</strong>
+								</span>
+								<Button
+									size="sm"
+									variant="outline"
+									onClick={clearFilters}
+									className="h-8 border-blue-300 bg-white text-xs font-semibold text-blue-900 hover:bg-blue-100 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-100"
+								>
+									<X className="mr-1 size-3" /> Show All Budgets
+								</Button>
+							</div>
+						)}
 
 						{canManageFinance && (
 							<div className="mt-6 flex items-center gap-3 rounded-lg border bg-slate-50 p-3 dark:bg-slate-900">

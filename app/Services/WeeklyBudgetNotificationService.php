@@ -15,7 +15,8 @@ class WeeklyBudgetNotificationService
     {
         $budget->loadMissing(['department', 'branch']);
         $deptName = $budget->department?->name ?? 'N/A';
-        $branchName = $budget->branch?->name ?? 'N/A';
+        $rawBranch = $budget->branch?->name;
+        $branchName = ($rawBranch && $rawBranch !== 'N/A' && trim($rawBranch) !== '') ? $rawBranch : 'Head Office';
         $amountStr = number_format((float) $budget->amount, 2);
 
         // Finance Alert: If department status changes to Approved
@@ -25,7 +26,7 @@ class WeeklyBudgetNotificationService
                 'view finance budgets', 
                 'budget.finance', 
                 "Budget Ready for Finance: #{$budget->id}",
-                "The budget for {$deptName} for {$amountStr} has been department-approved and requires your review."
+                "The Department: Approved"
             );
         }
 
@@ -41,8 +42,21 @@ class WeeklyBudgetNotificationService
                 $ceoIds,
                 'budget.ceo', 
                 "Budget Ready for CEO: #{$budget->id}",
-                "The budget for {$deptName} for {$amountStr} has been finance-approved and requires your final review.",
+                "The Finance: Approved",
                 false // Do not send Telegram for CEO
+            );
+        }
+
+        // Finance Alert: If CEO status changes
+        if ($budget->wasChanged('status_ceo')) {
+            $status = is_object($budget->status_ceo) ? $budget->status_ceo->value : $budget->status_ceo;
+            $statusStr = ucfirst((string) $status);
+            self::notifyUsersByPermission(
+                $budget,
+                'view finance budgets',
+                'budget.finance',
+                "CEO Status Updated: #{$budget->id}",
+                "The CEO: {$statusStr}"
             );
         }
 
@@ -51,15 +65,15 @@ class WeeklyBudgetNotificationService
             $changes = [];
             if ($budget->wasChanged('status_department')) {
                 $status = is_object($budget->status_department) ? $budget->status_department->value : $budget->status_department;
-                $changes[] = "Department: " . ucfirst((string) $status);
+                $changes[] = "The Department: " . ucfirst((string) $status);
             }
             if ($budget->wasChanged('status_finance')) {
                 $status = is_object($budget->status_finance) ? $budget->status_finance->value : $budget->status_finance;
-                $changes[] = "Finance: " . ucfirst((string) $status);
+                $changes[] = "The Finance: " . ucfirst((string) $status);
             }
             if ($budget->wasChanged('status_ceo')) {
                 $status = is_object($budget->status_ceo) ? $budget->status_ceo->value : $budget->status_ceo;
-                $changes[] = "CEO: " . ucfirst((string) $status);
+                $changes[] = "The CEO: " . ucfirst((string) $status);
             }
             
             $changesStr = implode(', ', $changes);
@@ -68,7 +82,7 @@ class WeeklyBudgetNotificationService
                 $budget,
                 'budget.department',
                 "Budget Status Updated: #{$budget->id}",
-                "The status of your department's budget for {$amountStr} has changed. Updates - {$changesStr}."
+                $changesStr
             );
         }
     }

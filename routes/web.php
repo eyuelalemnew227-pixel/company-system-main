@@ -220,6 +220,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:view finance budgets')->group(function () {
         Route::get('budget/weekly-budget/finance/export', [WeeklyBudgetController::class, 'exportFinance'])->name('weekly-budget.finance.export');
         Route::get('budget/weekly-budget/finance', [WeeklyBudgetController::class, 'financeView'])->name('weekly-budget.finance');
+        Route::post('budget/weekly-budget/finance/send-to-ceo', [WeeklyBudgetController::class, 'sendToCeo'])->name('weekly-budget.finance.send-to-ceo');
     });
 
     Route::middleware('permission:manage finance budgets')->group(function () {

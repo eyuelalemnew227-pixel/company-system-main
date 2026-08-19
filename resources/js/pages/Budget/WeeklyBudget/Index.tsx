@@ -289,7 +289,7 @@ function toDateString(d: Date): string {
 }
 
 function toMonthDayLabel(d: Date): string {
-	const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+	const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 	return `${months[d.getMonth()]} ${d.getDate()}`;
 }
 
@@ -485,7 +485,14 @@ export default function WeeklyBudgetIndex({
 	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState<string>(
 		request?.fiscal_month_id ?? (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all'),
 	);
-	const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(request?.week_start_date ?? 'all');
+	const currentWeekStartDate = useMemo(() => {
+		const monday = getMondayOfWeek(new Date(today + 'T00:00:00'));
+		return toDateString(monday);
+	}, [today]);
+
+	const [selectedWeekStartDate, setSelectedWeekStartDate] = useState<string>(
+		request?.week_start_date ?? currentWeekStartDate ?? 'all',
+	);
 
 	const [openBranchFilter, setOpenBranchFilter] = useState(false);
 	const [openDepartmentFilter, setOpenDepartmentFilter] = useState(false);
@@ -745,15 +752,16 @@ export default function WeeklyBudgetIndex({
 	}, [flash, triggerPopup]);
 
 	function buildFilterParams(): Record<string, string> {
-		const params: Record<string, string> = {};
+		const params: Record<string, string> = {
+			fiscal_year_id: selectedFiscalYear,
+			fiscal_month_id: selectedFiscalMonth,
+		};
 		if (selectedRequestType !== 'all') params.request_type = selectedRequestType;
 		if (selectedStatusFinance !== 'all') params.status_finance = selectedStatusFinance;
 		if (selectedStatusDepartment !== 'all') params.status_department = selectedStatusDepartment;
 		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
 		if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
 		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
-		params.fiscal_year_id = selectedFiscalYear;
-		params.fiscal_month_id = selectedFiscalMonth;
 		if (selectedWeekStartDate !== 'all') params.week_start_date = selectedWeekStartDate;
 		return params;
 	}
@@ -838,26 +846,30 @@ export default function WeeklyBudgetIndex({
 	}
 
 	function clearFilters() {
+		const fiscalYearId = currentFiscalYearId ? String(currentFiscalYearId) : 'all';
+		const fiscalMonthId = currentFiscalMonthId ? String(currentFiscalMonthId) : 'all';
 		setSelectedRequestType('all');
 		setSelectedStatusFinance('all');
 		setSelectedStatusDepartment('all');
 		setSelectedStatusCeo('all');
 		setSelectedDepartment('all');
 		setSelectedBranch('all');
-		setSelectedFiscalYear(currentFiscalYearId ? String(currentFiscalYearId) : 'all');
-		setSelectedFiscalMonth(currentFiscalMonthId ? String(currentFiscalMonthId) : 'all');
+		setSelectedFiscalYear(fiscalYearId);
+		setSelectedFiscalMonth(fiscalMonthId);
 		setSelectedWeekStartDate('all');
 		router.get(
 			'/budget/weekly-budget',
 			{
-				fiscal_year_id: currentFiscalYearId ? String(currentFiscalYearId) : 'all',
-				fiscal_month_id: currentFiscalMonthId ? String(currentFiscalMonthId) : 'all',
+				fiscal_year_id: fiscalYearId,
+				fiscal_month_id: fiscalMonthId,
+				week_start_date: 'all',
 			},
-			{ preserveState: true, replace: true },
+			{ preserveState: false, replace: true },
 		);
 	}
 
 	const hasActiveFilters =
+		Boolean(request?.budget_id) ||
 		selectedRequestType !== 'all' ||
 		selectedStatusFinance !== 'all' ||
 		selectedStatusDepartment !== 'all' ||
@@ -866,7 +878,7 @@ export default function WeeklyBudgetIndex({
 		selectedBranch !== 'all' ||
 		selectedFiscalYear !== (currentFiscalYearId ? String(currentFiscalYearId) : 'all') ||
 		selectedFiscalMonth !== (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all') ||
-		selectedWeekStartDate !== 'all';
+		selectedWeekStartDate !== (currentWeekStartDate ?? 'all');
 
 	// Selected week option label for the filter trigger
 	const selectedWeekOption = useMemo(
@@ -1092,6 +1104,22 @@ export default function WeeklyBudgetIndex({
 								</Button>
 							)}
 						</div>
+
+						{request?.budget_id && (
+							<div className="mt-4 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-2.5 text-blue-900 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200">
+								<span className="text-sm font-medium">
+									Showing filtered result for <strong>Weekly Budget #{request.budget_id}</strong>
+								</span>
+								<Button
+									size="sm"
+									variant="outline"
+									onClick={clearFilters}
+									className="h-8 border-blue-300 bg-white text-xs font-semibold text-blue-900 hover:bg-blue-100 dark:border-blue-700 dark:bg-slate-900 dark:text-blue-100"
+								>
+									<X className="mr-1 size-3" /> Show All Budgets
+								</Button>
+							</div>
+						)}
 					</CardHeader>
 					<hr />
 					<CardContent>
