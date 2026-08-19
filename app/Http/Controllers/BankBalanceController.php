@@ -124,7 +124,12 @@ class BankBalanceController extends Controller
 
     public function show($id)
     {
-        abort_unless(auth()->user()->can('manage bank balance'), 403);
+        abort_unless(
+            auth()->user()->can('manage bank balance')
+                || auth()->user()->can('view bank balance')
+                || auth()->user()->can('view ceo budgets'),
+            403
+        );
 
         $balance = BankBalance::findOrFail($id);
 

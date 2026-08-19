@@ -2,8 +2,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
+import { computeCurrentBalance } from '@/lib/bank-balance';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
+import { usePermission } from '@/hooks/user-permissions';
 
 function getMondayOfWeek(date: Date): Date {
     const d = new Date(date);
@@ -53,19 +55,20 @@ function getWeekDates(fyStartDateStr: string, monthStartDateStr: string, monthEn
 }
 
 export default function Show({ periodBalances, representative }: { periodBalances: any[], representative: any }) {
-    const isFromCeo = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('from') === 'ceo';
+    const { can } = usePermission();
+    const canManageBankBalance = can('manage bank balance');
+    const canViewCeo = can('view ceo budgets');
+    const bankBalanceSectionHref = canManageBankBalance
+        ? '/budget/bank-balances'
+        : canViewCeo
+            ? '/budget/weekly-budget/ceo'
+            : '/budget/bank-balances';
 
-    const breadcrumbs: BreadcrumbItem[] = isFromCeo
-        ? [
-            { title: 'Budget', href: '/budget/weekly-budget/ceo' },
-            { title: 'CEO Dashboard', href: '/budget/weekly-budget/ceo' },
-            { title: 'View Detail', href: '#' },
-        ]
-        : [
-            { title: 'Budget', href: '/budget/bank-balances' },
-            { title: 'Bank Balance', href: '/budget/bank-balances' },
-            { title: 'View Detail', href: '#' },
-        ];
+    const breadcrumbs: BreadcrumbItem[] = [
+        { title: 'Budget', href: bankBalanceSectionHref },
+        { title: 'Bank Balance', href: bankBalanceSectionHref },
+        { title: 'View Detail', href: '#' },
+    ];
 
     const estimatedValue = periodBalances.length > 0 && periodBalances[0].estimated_weekly_sale ? parseFloat(periodBalances[0].estimated_weekly_sale.amount) : 0;
 
@@ -79,7 +82,7 @@ export default function Show({ periodBalances, representative }: { periodBalance
 
     let sumAmountETB = 0;
     let sumTotalETB = 0;
-    let currentBalance = 0;
+    const currentBalance = computeCurrentBalance(sortedBalances);
 
     sortedBalances.forEach(balance => {
         const amount = parseFloat(balance.amount) || 0;
@@ -92,10 +95,6 @@ export default function Show({ periodBalances, representative }: { periodBalance
         }
 
         sumTotalETB += subtotal;
-
-        if (currency !== 'USD' && currency !== 'EUR') {
-            currentBalance += subtotal;
-        }
     });
 
     return (
@@ -108,7 +107,7 @@ export default function Show({ periodBalances, representative }: { periodBalance
                         <h1 className="text-base 2xl:text-lg font-bold leading-none">{rep.fiscal_year?.name} - {rep.fiscal_month?.name}</h1>
                         <p className="text-xs 2xl:text-sm font-medium text-slate-500">Week {rep.week_number} <span className="ml-1 text-slate-400 font-normal">{getWeekDates(rep.fiscal_year?.gregorian_start_date, rep.fiscal_month?.gregorian_start_date, rep.fiscal_month?.gregorian_end_date, rep.week_number)}</span></p>
                     </div>
-                    {!isFromCeo && (
+                    {canManageBankBalance && (
                         <Link href={route('bank-balances.index')}>
                             <Button variant="outline">Back to Manage</Button>
                         </Link>

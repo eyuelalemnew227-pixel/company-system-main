@@ -591,6 +591,33 @@ class WeeklyBudgetController extends Controller
         return str_contains($branch->name, 'Head Office');
     }
 
+    private function applyCeoDepartmentFilter($query): void
+    {
+        $departmentIds = request('department_ids');
+        if (is_array($departmentIds)) {
+            $departmentIds = implode(',', $departmentIds);
+        }
+        $departmentIds = is_string($departmentIds) ? trim($departmentIds) : '';
+
+        if ($departmentIds === 'none') {
+            $query->whereRaw('1 = 0');
+            return;
+        }
+
+        if ($departmentIds !== '' && $departmentIds !== 'all') {
+            $ids = array_values(array_filter(
+                explode(',', $departmentIds),
+                fn($id) => $id !== '' && $id !== 'none' && $id !== 'all'
+            ));
+            if (count($ids) > 0) {
+                $query->whereIn('department_id', $ids);
+                return;
+            }
+        }
+
+        $query->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v));
+    }
+
     public function financeView(): Response
     {
         abort_unless(auth()->user()->can('view finance budgets'), 403);
@@ -1450,14 +1477,55 @@ class WeeklyBudgetController extends Controller
             ->when(request('request_type'), fn($q, $v) => $q->where('request_type', $v))
             ->when(request('status_ceo'), fn($q, $v) => $q->where('status_ceo', $v))
             ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
-            ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
             ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->where('week_start_date', $weekFilter))
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
 
-        $totalBudget = request()->filled('department_id') ? (clone $query)->sum('amount') : null;
+        $this->applyCeoDepartmentFilter($query);
+
+        $visibleTotal = (float) (clone $query)->sum('amount');
+        $totalBudget = request()->filled('department_id') || (request()->filled('department_ids') && !in_array(request('department_ids'), ['all', ''], true))
+            ? $visibleTotal
+            : null;
+
+        $weekScopedQuery = WeeklyBudget::query()
+            ->where('status_finance', WeeklyBudgetStatusFinance::Approved->value)
+            ->where('status_department', WeeklyBudgetStatusDepartment::Approved->value)
+            ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->where('week_start_date', $weekFilter));
+
+        $departmentRows = (clone $weekScopedQuery)
+            ->leftJoin('departments', 'weekly_budgets.department_id', '=', 'departments.id')
+            ->select('weekly_budgets.department_id')
+            ->selectRaw('departments.name as department')
+            ->selectRaw('SUM(weekly_budgets.amount) as amount')
+            ->selectRaw(
+                'SUM(CASE WHEN weekly_budgets.request_type = ? THEN weekly_budgets.amount ELSE 0 END) as urgent_amount',
+                [WeeklyBudgetRequestType::Urgent->value]
+            )
+            ->selectRaw(
+                'SUM(CASE WHEN weekly_budgets.request_type = ? THEN weekly_budgets.amount ELSE 0 END) as normal_amount',
+                [WeeklyBudgetRequestType::Normal->value]
+            )
+            ->groupBy('weekly_budgets.department_id', 'departments.name')
+            ->orderByRaw('SUM(weekly_budgets.amount) DESC')
+            ->get();
+
+        $totalRequested = (float) $departmentRows->sum('amount');
+        $urgentRequested = (float) $departmentRows->sum('urgent_amount');
+        $normalRequested = (float) $departmentRows->sum('normal_amount');
+        $departmentRequested = $departmentRows
+            ->map(fn($row) => [
+                'department_id' => $row->department_id,
+                'department' => $row->department ?? 'Unassigned',
+                'amount' => (float) $row->amount,
+                'urgent_amount' => (float) $row->urgent_amount,
+                'normal_amount' => (float) $row->normal_amount,
+            ])
+            ->values();
 
         $items = $query
             ->latest()
@@ -1503,6 +1571,7 @@ class WeeklyBudgetController extends Controller
             'status_ceo',
             'branch_id',
             'department_id',
+            'department_ids',
             'fiscal_year_id',
             'fiscal_month_id',
             'week_start_date',
@@ -1532,6 +1601,11 @@ class WeeklyBudgetController extends Controller
 
         return Inertia::render('Budget/WeeklyBudget/CeoView', [
             'totalBudget' => $totalBudget,
+            'visibleTotal' => $visibleTotal,
+            'totalRequested' => $totalRequested,
+            'urgentRequested' => $urgentRequested,
+            'normalRequested' => $normalRequested,
+            'departmentRequested' => $departmentRequested,
             'items' => $items,
             'bankBalances' => $bankBalancesQuery->get(),
             'branches' => Branch::query()->orderBy('name')->get(['id', 'name', 'branch_code']),
@@ -1592,12 +1666,13 @@ class WeeklyBudgetController extends Controller
             ->when(request('status_department'), fn($q, $v) => $q->where('status_department', $v))
             ->when(request('status_ceo'), fn($q, $v) => $q->where('status_ceo', $v))
             ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
-            ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
             ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->where('week_start_date', $weekFilter))
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
+
+        $this->applyCeoDepartmentFilter($query);
 
         $items = $query->latest()->get();
         $expenseItems = ExpenseItem::query()->orderBy('expense_type')->get();

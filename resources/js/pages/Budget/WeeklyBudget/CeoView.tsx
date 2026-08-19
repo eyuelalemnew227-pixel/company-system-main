@@ -6,15 +6,15 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
+import { computeCurrentBalance } from '@/lib/bank-balance';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Filter, MessageSquare, X } from 'lucide-react';
+import { Check, ChevronsUpDown, FileText, Filter, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { usePopup } from '@/hooks/use-popup';
 
@@ -61,6 +61,14 @@ interface WeeklyBudgetList extends Pagination {
 	data: WeeklyBudgetRow[];
 }
 
+type DepartmentRequestedRow = {
+	department_id: number | null;
+	department: string;
+	amount: number;
+	urgent_amount: number;
+	normal_amount: number;
+};
+
 type CeoProps = {
 	items: WeeklyBudgetList;
 	bankBalances: any[];
@@ -76,7 +84,11 @@ type CeoProps = {
 	currentFiscalYearId?: number | null;
 	currentFiscalMonthId?: number | null;
 	request?: any;
-	totalBudget?: number | null;
+	visibleTotal?: number;
+	totalRequested?: number;
+	urgentRequested?: number;
+	normalRequested?: number;
+	departmentRequested?: DepartmentRequestedRow[];
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -84,6 +96,17 @@ type CeoProps = {
 function formatCurrency(value: string | number | null | undefined): string {
 	const amount = Number(value ?? 0);
 	return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number.isNaN(amount) ? 0 : amount);
+}
+
+function parseDepartmentIds(value: unknown): string[] {
+	if (Array.isArray(value)) return value.map(String).filter((id) => id !== '' && id !== 'all' && id !== 'none');
+	if (typeof value === 'string' && value !== '' && value !== 'all' && value !== 'none') {
+		return value
+			.split(',')
+			.map((id) => id.trim())
+			.filter((id) => id !== '');
+	}
+	return [];
 }
 
 function statusBadge(status: string, _variant: 'ceo') {
@@ -144,29 +167,6 @@ function getFiscalWeekNumber(monday: Date, fiscalYearStartDate: Date): number {
 	const diffMs = monday.getTime() - anchor.getTime();
 	const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
 	return Math.floor(diffDays / 7) + 1;
-}
-
-function getWeekDates(fyStartDateStr: string, monthStartDateStr: string, monthEndDateStr: string, weekNumber: number): string {
-	if (!fyStartDateStr || !monthStartDateStr || !monthEndDateStr) return '';
-	const pureFy = fyStartDateStr.split('T')[0];
-	const fyStart = new Date(pureFy + 'T00:00:00');
-
-	const pureStart = monthStartDateStr.split('T')[0];
-	const pureEnd = monthEndDateStr.split('T')[0];
-	const monthStart = new Date(pureStart + 'T00:00:00');
-	const monthEnd = new Date(pureEnd + 'T00:00:00');
-	let currentMonday = getMondayOfWeek(monthStart);
-
-	while (currentMonday <= monthEnd) {
-		const sunday = new Date(currentMonday);
-		sunday.setDate(currentMonday.getDate() + 6);
-		if (getFiscalWeekNumber(currentMonday, fyStart) === weekNumber) {
-			return `(${toMonthDayLabel(currentMonday)} – ${toMonthDayLabel(sunday)})`;
-		}
-		currentMonday = new Date(currentMonday);
-		currentMonday.setDate(currentMonday.getDate() + 7);
-	}
-	return '';
 }
 
 function buildCurrentFiscalYearWeeks(fiscalYear: FiscalYearOption, todayStr: string): WeekOption[] {
@@ -255,7 +255,11 @@ export default function WeeklyBudgetCeoView({
 	currentFiscalYearId,
 	currentFiscalMonthId,
 	request,
-	totalBudget,
+	visibleTotal = 0,
+	totalRequested = 0,
+	urgentRequested = 0,
+	normalRequested = 0,
+	departmentRequested = [],
 }: CeoProps) {
 	const { flash, errors, bankBalances = [] } = usePage<any>().props;
 	const { triggerPopup, PopupComponent } = usePopup();
@@ -286,6 +290,12 @@ export default function WeeklyBudgetCeoView({
 	const [openBranchFilter, setOpenBranchFilter] = useState(false);
 	const [openDepartmentFilter, setOpenDepartmentFilter] = useState(false);
 	const [openPaymentTypeFilter, setOpenPaymentTypeFilter] = useState(false);
+	const [checkedChartDepartments, setCheckedChartDepartments] = useState<Record<string, boolean>>({});
+	const [selectedDepartmentIds, setSelectedDepartmentIds] = useState<string>(() => {
+		if (request?.department_ids === 'none') return 'none';
+		const ids = parseDepartmentIds(request?.department_ids);
+		return ids.length > 0 ? ids.join(',') : 'all';
+	});
 
 	// ── Bulk action state ───────────────────────────────────────────────────
 	const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -295,8 +305,7 @@ export default function WeeklyBudgetCeoView({
 	const [editingRowId, setEditingRowId] = useState<number | null>(null);
 	const [editForm, setEditForm] = useState<any>({});
 
-	// ── View note dialog ────────────────────────────────────────────────────
-	const [viewNoteItem, setViewNoteItem] = useState<WeeklyBudgetRow | null>(null);
+	const [viewDescriptionItem, setViewDescriptionItem] = useState<WeeklyBudgetRow | null>(null);
 
 	const selectedDepartmentOption = useMemo(
 		() => (selectedDepartment === 'all' ? null : (departments.find((department) => String(department.id) === selectedDepartment) ?? null)),
@@ -335,31 +344,66 @@ export default function WeeklyBudgetCeoView({
 		return [];
 	}, [selectedFiscalYear, selectedFiscalMonth, fiscalYears, fiscalMonths, currentFiscalYearId, today]);
 
-	const groupedBalances = useMemo(() => {
-		const groups: Record<string, any> = {};
-		const activeWeekNumber = weekFilterOptions.find(w => w.startDate === selectedWeekStartDate)?.weekNumber;
-
-		bankBalances.forEach((b: any) => {
-			if (activeWeekNumber && b.week_number !== activeWeekNumber) return;
-
-			const key = `${b.fiscal_year_id}-${b.fiscal_month_id}-${b.week_number}`;
-			if (!groups[key]) {
-				groups[key] = {
-					id: b.id,
-					fiscal_year_id: b.fiscal_year_id,
-					fiscal_month_id: b.fiscal_month_id,
-					week_number: b.week_number,
-					fiscal_year: b.fiscal_year,
-					fiscal_month: b.fiscal_month,
-					estimated_weekly_sale: b.estimated_weekly_sale,
-					total_amount_base: 0
-				};
-			}
-			groups[key].total_amount_base += (parseFloat(b.amount) || 0) * (parseFloat(b.exchange_rate) || 1);
+	const balancesForSelectedWeek = useMemo(() => {
+		const activeWeekNumber = weekFilterOptions.find((week) => week.startDate === selectedWeekStartDate)?.weekNumber;
+		return bankBalances.filter((balance: any) => {
+			if (activeWeekNumber && balance.week_number !== activeWeekNumber) return false;
+			return true;
 		});
-
-		return Object.values(groups).sort((a: any, b: any) => b.id - a.id);
 	}, [bankBalances, selectedWeekStartDate, weekFilterOptions]);
+
+	const estimatedSales = useMemo(() => {
+		const seen = new Set<string>();
+		let total = 0;
+		balancesForSelectedWeek.forEach((balance: any) => {
+			const sale = balance.estimated_weekly_sale;
+			if (!sale) return;
+			const key = String(sale.id ?? `${balance.fiscal_year_id}-${balance.fiscal_month_id}-${balance.week_number}`);
+			if (seen.has(key)) return;
+			seen.add(key);
+			total += parseFloat(String(sale.amount ?? 0)) || 0;
+		});
+		return total;
+	}, [balancesForSelectedWeek]);
+
+	const bankBalance = useMemo(() => computeCurrentBalance(balancesForSelectedWeek), [balancesForSelectedWeek]);
+	const weeklyBalance = estimatedSales + bankBalance;
+
+	const weekBalanceDetailId = useMemo(() => {
+		return balancesForSelectedWeek[0]?.id ?? null;
+	}, [balancesForSelectedWeek]);
+
+	const departmentShareRows = useMemo(() => {
+		const total = Number(totalRequested ?? 0);
+		return departmentRequested
+			.map((row) => ({
+				...row,
+				urgent_amount: Number(row.urgent_amount ?? 0),
+				normal_amount: Number(row.normal_amount ?? 0),
+				percent: total > 0 ? (row.amount / total) * 100 : 0,
+				urgentPercentOfTotal: total > 0 ? (Number(row.urgent_amount ?? 0) / total) * 100 : 0,
+				normalPercentOfTotal: total > 0 ? (Number(row.normal_amount ?? 0) / total) * 100 : 0,
+			}))
+			.sort((a, b) => b.amount - a.amount);
+	}, [departmentRequested, totalRequested]);
+
+	useEffect(() => {
+		const requestedIds = parseDepartmentIds(request?.department_ids);
+		const noneSelected = request?.department_ids === 'none';
+		const singleId = request?.department_id && request.department_id !== 'all' ? String(request.department_id) : null;
+		const selectedIdsFromRequest = noneSelected ? [] : requestedIds.length > 0 ? requestedIds : singleId ? [singleId] : null;
+
+		setCheckedChartDepartments((previous) => {
+			const next = { ...previous };
+			departmentShareRows.forEach((row) => {
+				const key = String(row.department_id ?? 'none');
+				if (next[key] === undefined) {
+					next[key] = selectedIdsFromRequest ? selectedIdsFromRequest.includes(key) : true;
+				}
+			});
+			return next;
+		});
+	}, [departmentShareRows, request?.department_ids, request?.department_id]);
 
 	useEffect(() => {
 		if (flash?.message) triggerPopup('Success', flash.message, 'success');
@@ -373,7 +417,10 @@ export default function WeeklyBudgetCeoView({
 	const isAllSelected = allSelectableIds.length > 0 && allSelectableIds.every((id) => selectedIds.includes(id));
 	const isSomeSelected = selectedIds.length > 0 && !isAllSelected;
 
-	function applyFilters(overrides: Record<string, string> = {}) {
+	function applyFilters(
+		overrides: Record<string, string> = {},
+		visitOptions: { only?: string[]; preserveScroll?: boolean } = {},
+	) {
 		const params: Record<string, string> = {
 			fiscal_year_id: selectedFiscalYear,
 			fiscal_month_id: selectedFiscalMonth,
@@ -382,6 +429,7 @@ export default function WeeklyBudgetCeoView({
 		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
 		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
 		if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
+		if (selectedDepartmentIds !== 'all') params.department_ids = selectedDepartmentIds;
 		if (selectedWeekStartDate !== 'all') params.week_start_date = selectedWeekStartDate;
 		if (selectedPaymentCategory !== 'all') params.payment_category_id = selectedPaymentCategory;
 		if (selectedPaymentType !== 'all') params.payment_type_id = selectedPaymentType;
@@ -394,7 +442,12 @@ export default function WeeklyBudgetCeoView({
 			}
 		});
 
-		router.get('/budget/weekly-budget/ceo', params, { preserveState: true, replace: true });
+		router.get('/budget/weekly-budget/ceo', params, {
+			preserveState: true,
+			replace: true,
+			preserveScroll: visitOptions.preserveScroll ?? true,
+			...(visitOptions.only ? { only: visitOptions.only } : {}),
+		});
 	}
 
 	function clearFilters() {
@@ -404,6 +457,8 @@ export default function WeeklyBudgetCeoView({
 		setSelectedStatusCeo('all');
 		setSelectedBranch('all');
 		setSelectedDepartment('all');
+		setSelectedDepartmentIds('all');
+		setCheckedChartDepartments({});
 		setSelectedFiscalYear(fiscalYearId);
 		setSelectedFiscalMonth(fiscalMonthId);
 		setSelectedWeekStartDate('all');
@@ -429,6 +484,7 @@ export default function WeeklyBudgetCeoView({
 		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
 		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
 		if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
+		if (selectedDepartmentIds !== 'all') params.department_ids = selectedDepartmentIds;
 		if (selectedWeekStartDate !== 'all') params.week_start_date = selectedWeekStartDate;
 		if (selectedPaymentCategory !== 'all') params.payment_category_id = selectedPaymentCategory;
 		if (selectedPaymentType !== 'all') params.payment_type_id = selectedPaymentType;
@@ -449,6 +505,7 @@ export default function WeeklyBudgetCeoView({
 		selectedStatusCeo !== 'all' ||
 		selectedBranch !== 'all' ||
 		selectedDepartment !== 'all' ||
+		selectedDepartmentIds !== 'all' ||
 		selectedFiscalYear !== (currentFiscalYearId ? String(currentFiscalYearId) : 'all') ||
 		selectedFiscalMonth !== (currentFiscalMonthId ? String(currentFiscalMonthId) : 'all') ||
 		selectedWeekStartDate !== defaultWeekStartDate ||
@@ -509,6 +566,63 @@ export default function WeeklyBudgetCeoView({
 		);
 	}
 
+	function openWeekBalanceDetails() {
+		if (!weekBalanceDetailId) {
+			triggerPopup('Error', 'No bank balance details found for the selected week.', 'error');
+			return;
+		}
+		router.visit(route('bank-balances.show', weekBalanceDetailId));
+	}
+
+	function setChartDepartmentChecks(next: Record<string, boolean>) {
+		departmentShareRows.forEach((row) => {
+			const key = String(row.department_id ?? 'none');
+			if (next[key] === undefined) next[key] = true;
+		});
+		setCheckedChartDepartments(next);
+
+		const keys = departmentShareRows.map((row) => String(row.department_id ?? 'none'));
+		const selected = keys.filter((key) => next[key] !== false && key !== 'none');
+		const allChecked = keys.length > 0 && keys.every((key) => next[key] !== false);
+		const tableOnly = { preserveScroll: true, only: ['items', 'visibleTotal', 'request'] };
+
+		if (allChecked) {
+			setSelectedDepartment('all');
+			setSelectedDepartmentIds('all');
+			applyFilters({ department_id: 'all', department_ids: 'all' }, tableOnly);
+			return;
+		}
+
+		if (selected.length === 0) {
+			setSelectedDepartment('all');
+			setSelectedDepartmentIds('none');
+			applyFilters({ department_id: 'all', department_ids: 'none' }, tableOnly);
+			return;
+		}
+
+		if (selected.length === 1) {
+			setSelectedDepartment(selected[0]);
+			setSelectedDepartmentIds('all');
+			applyFilters({ department_id: selected[0], department_ids: 'all' }, tableOnly);
+			return;
+		}
+
+		setSelectedDepartment('all');
+		setSelectedDepartmentIds(selected.join(','));
+		applyFilters({ department_id: 'all', department_ids: selected.join(',') }, tableOnly);
+	}
+
+	function handleChartDepartmentToggle(key: string, checked: boolean) {
+		setChartDepartmentChecks({
+			...checkedChartDepartments,
+			[key]: checked,
+		});
+	}
+
+	const urgentShareOfRequested = totalRequested > 0 ? (urgentRequested / totalRequested) * 100 : 0;
+	const normalShareOfRequested = totalRequested > 0 ? (normalRequested / totalRequested) * 100 : 0;
+	const requestedShareOfBalance = weeklyBalance > 0 ? (totalRequested / weeklyBalance) * 100 : null;
+
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Weekly Budgets - CEO View" />
@@ -531,7 +645,10 @@ export default function WeeklyBudgetCeoView({
 								<Popover open={openDepartmentFilter} onOpenChange={setOpenDepartmentFilter}>
 									<PopoverTrigger asChild>
 										<Button variant="outline" role="combobox" className="w-[180px] justify-between font-normal">
-											{selectedDepartmentOption?.name ?? 'All Departments'}
+											{selectedDepartmentOption?.name
+												?? (selectedDepartmentIds !== 'all' && selectedDepartmentIds !== 'none'
+													? `${parseDepartmentIds(selectedDepartmentIds).length} Departments`
+													: 'All Departments')}
 											<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
 										</Button>
 									</PopoverTrigger>
@@ -545,10 +662,16 @@ export default function WeeklyBudgetCeoView({
 														value="All Departments"
 														onSelect={() => {
 															setSelectedDepartment('all');
+															setSelectedDepartmentIds('all');
+															setCheckedChartDepartments(
+																Object.fromEntries(
+																	departmentShareRows.map((row) => [String(row.department_id ?? 'none'), true]),
+																),
+															);
 															setSelectedBranch('all');
 															setSelectedWeekStartDate('all');
 															setOpenDepartmentFilter(false);
-															applyFilters({ department_id: 'all', branch_id: 'all', week_start_date: 'all' });
+															applyFilters({ department_id: 'all', department_ids: 'all', branch_id: 'all', week_start_date: 'all' });
 														}}
 													>
 														<Check
@@ -562,11 +685,21 @@ export default function WeeklyBudgetCeoView({
 															value={department.name}
 															onSelect={() => {
 																setSelectedDepartment(String(department.id));
+																setSelectedDepartmentIds('all');
+																setCheckedChartDepartments(
+																	Object.fromEntries(
+																		departmentShareRows.map((row) => [
+																			String(row.department_id ?? 'none'),
+																			String(row.department_id) === String(department.id),
+																		]),
+																	),
+																);
 																setSelectedBranch('all');
 																setSelectedWeekStartDate('all');
 																setOpenDepartmentFilter(false);
 																applyFilters({
 																	department_id: String(department.id),
+																	department_ids: 'all',
 																	branch_id: 'all',
 																	week_start_date: 'all',
 																});
@@ -849,45 +982,175 @@ export default function WeeklyBudgetCeoView({
 								</Button>
 							</div>
 						)}
-
-						{canManageCeo && (
-							<div className="mt-6 flex items-center gap-3 rounded-lg border bg-slate-50 p-3 dark:bg-slate-900">
-								<span className="text-sm font-medium">Bulk Action ({selectedIds.length} selected):</span>
-								<Select value={bulkStatus} onValueChange={setBulkStatus}>
-									<SelectTrigger className="w-[180px] bg-white dark:bg-slate-800">
-										<SelectValue placeholder="Select Status" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="pending">Pending</SelectItem>
-										<SelectItem value="approved">Approved</SelectItem>
-										<SelectItem value="rejected">Rejected</SelectItem>
-										<SelectItem value="on-hold">On Hold</SelectItem>
-									</SelectContent>
-								</Select>
-								<Button onClick={handleBulkUpdate} disabled={selectedIds.length === 0 || !bulkStatus}>
-									Apply Bulk Status
-								</Button>
-							</div>
-						)}
 					</CardHeader>
+				</Card>
 
-					<Tabs defaultValue="budgets" className="w-full">
-						<div className="px-6">
-							<TabsList className="mb-4 bg-slate-100">
-								<TabsTrigger value="budgets" className="text-sm py-1.5 px-6 font-semibold">Weekly Budgets</TabsTrigger>
-								<TabsTrigger value="bank-balances" className="text-sm py-1.5 px-6 font-semibold">Bank Balances</TabsTrigger>
-							</TabsList>
-						</div>
-
-						<TabsContent value="budgets" className="mt-0 outline-none">
-							<CardContent>
-								{totalBudget !== null && totalBudget !== undefined && (
-									<div className="mb-4 flex justify-end">
-										<div className="rounded-lg bg-blue-50 px-4 py-2 font-semibold text-blue-700 shadow-sm dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
-											Total Budget: {formatCurrency(totalBudget)}
+				<div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+					<div className="xl:col-span-1">
+						<Card className="h-full bg-slate-50 dark:bg-slate-900">
+							<CardContent className="space-y-4 pt-6">
+								<div className="rounded-lg border border-blue-100 bg-blue-50 p-4 dark:border-blue-900/60 dark:bg-blue-950/40">
+									<div className="text-base font-bold text-slate-900 dark:text-slate-100">Weekly Balance</div>
+									<div className="mt-1 flex items-center justify-between gap-3">
+										<div className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+											{formatCurrency(weeklyBalance)}{' '}
+											<span className="text-lg font-semibold text-slate-500">ETB</span>
+										</div>
+										<Button
+											type="button"
+											size="sm"
+											variant="secondary"
+											className="h-8 shrink-0 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-blue-100 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+											onClick={openWeekBalanceDetails}
+											disabled={!weekBalanceDetailId}
+										>
+											See Details
+										</Button>
+									</div>
+									<div className="mt-2 flex flex-col gap-1 text-sm font-semibold text-slate-800 dark:text-slate-200">
+										<div className="flex items-center gap-2">
+											<span>Estimated Sales:</span>
+											<span>{formatCurrency(estimatedSales)} ETB</span>
+										</div>
+										<div className="flex items-center gap-2">
+											<span>Bank Balance:</span>
+											<span>{formatCurrency(bankBalance)} ETB</span>
 										</div>
 									</div>
+								</div>
+
+								<div className="rounded-lg border border-blue-100 bg-blue-50 p-4 dark:border-blue-900/60 dark:bg-blue-950/40">
+									<div className="text-base font-bold text-slate-900 dark:text-slate-100">Requested Amount</div>
+									<div className="mt-1 flex items-center justify-between gap-3">
+										<div className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+											{formatCurrency(totalRequested)}{' '}
+											<span className="text-lg font-semibold text-slate-500">ETB</span>
+										</div>
+										{requestedShareOfBalance !== null && (
+											<span className="shrink-0 rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+												{Math.round(requestedShareOfBalance)}% of Balance
+											</span>
+										)}
+									</div>
+									<div className="mt-2 flex flex-col gap-1 text-sm font-semibold">
+										<div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+											<span>Urgent:</span>
+											<span>
+												{formatCurrency(urgentRequested)} ETB ({Math.round(urgentShareOfRequested)}%)
+											</span>
+										</div>
+										<div className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
+											<span>Normal:</span>
+											<span>
+												{formatCurrency(normalRequested)} ETB ({Math.round(normalShareOfRequested)}%)
+											</span>
+										</div>
+									</div>
+								</div>
+
+								<div className="border-t border-slate-200 dark:border-slate-700" />
+
+								<div>
+									<div className="mb-4 flex items-center justify-center gap-5 text-xs font-medium text-slate-600 dark:text-slate-300">
+										<span className="flex items-center gap-1.5">
+											<span className="size-3 rounded-sm bg-orange-500" /> Urgent
+										</span>
+										<span className="flex items-center gap-1.5">
+											<span className="size-3 rounded-sm bg-slate-800 dark:bg-slate-300" /> Normal
+										</span>
+									</div>
+
+									{departmentShareRows.length === 0 ? (
+										<div className="py-6 text-center text-sm text-slate-500">No requests for the selected week.</div>
+									) : (
+										<div className="space-y-1">
+											<div className="flex items-center gap-2 px-0.5 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+												<span className="w-4 shrink-0" />
+												<span className="w-[5.5rem] shrink-0" />
+												<span className="min-w-0 flex-1" />
+												<span className="w-[4.75rem] shrink-0 text-right">Amount</span>
+												<span className="w-12 shrink-0 text-right">% Share</span>
+											</div>
+											{departmentShareRows.map((row) => {
+												const key = String(row.department_id ?? 'none');
+												const isChecked = checkedChartDepartments[key] !== false;
+												const urgentWidth = Math.max(row.urgentPercentOfTotal, 0);
+												const normalWidth = Math.max(row.normalPercentOfTotal, 0);
+
+												return (
+													<div
+														key={`${key}-${row.department}`}
+														className={cn('flex items-center gap-2 py-1.5', !isChecked && 'opacity-45')}
+													>
+														<Checkbox
+															checked={isChecked}
+															onCheckedChange={(checked) => handleChartDepartmentToggle(key, checked === true)}
+															aria-label={`Filter table by ${row.department}`}
+															className="shrink-0"
+														/>
+														<span
+															className="w-[5.5rem] shrink-0 truncate text-sm font-medium text-slate-800 dark:text-slate-100"
+															title={row.department}
+														>
+															{row.department}
+														</span>
+														<div className="flex h-5 min-w-0 flex-1 overflow-hidden rounded-sm bg-slate-200 dark:bg-slate-800">
+															{urgentWidth > 0 && (
+																<div
+																	className="h-full shrink-0 bg-orange-500"
+																	style={{ width: `${urgentWidth}%` }}
+																	title={`Urgent ${formatCurrency(row.urgent_amount)}`}
+																/>
+															)}
+															{normalWidth > 0 && (
+																<div
+																	className="h-full shrink-0 bg-slate-800 dark:bg-slate-300"
+																	style={{ width: `${normalWidth}%` }}
+																	title={`Normal ${formatCurrency(row.normal_amount)}`}
+																/>
+															)}
+														</div>
+														<span className="w-[4.75rem] shrink-0 text-right text-xs font-bold tabular-nums text-slate-900 dark:text-slate-100">
+															{formatCurrency(row.amount)}
+														</span>
+														<span className="w-12 shrink-0 text-right text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+															{Math.round(row.percent)}%
+														</span>
+													</div>
+												);
+											})}
+										</div>
+									)}
+								</div>
+							</CardContent>
+						</Card>
+					</div>
+
+					<div className="min-w-0 xl:col-span-2">
+						<Card>
+							<CardHeader>
+								<CardTitle>Weekly Budgets</CardTitle>
+								{canManageCeo && (
+									<div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border bg-slate-50 p-3 dark:bg-slate-900">
+										<span className="text-sm font-medium">Bulk Action ({selectedIds.length} selected):</span>
+										<Select value={bulkStatus} onValueChange={setBulkStatus}>
+											<SelectTrigger className="w-[180px] bg-white dark:bg-slate-800">
+												<SelectValue placeholder="Select Status" />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="pending">Pending</SelectItem>
+												<SelectItem value="approved">Approved</SelectItem>
+												<SelectItem value="rejected">Rejected</SelectItem>
+												<SelectItem value="on-hold">On Hold</SelectItem>
+											</SelectContent>
+										</Select>
+										<Button onClick={handleBulkUpdate} disabled={selectedIds.length === 0 || !bulkStatus}>
+											Apply Bulk Status
+										</Button>
+									</div>
 								)}
+							</CardHeader>
+							<CardContent>
 								<Table>
 									<TableHeader className="bg-slate-500 dark:bg-slate-700">
 										<TableRow>
@@ -909,7 +1172,6 @@ export default function WeeklyBudgetCeoView({
 											<TableHead className="font-bold text-white">Request Type</TableHead>
 											<TableHead className="font-bold text-white">Status (CEO)</TableHead>
 											<TableHead className="font-bold text-white">Description</TableHead>
-											<TableHead className="font-bold text-white">Note</TableHead>
 											<TableHead className="font-bold text-white">Amount</TableHead>
 											{canManageCeo && <TableHead className="font-bold text-white">Actions</TableHead>}
 										</TableRow>
@@ -963,22 +1225,18 @@ export default function WeeklyBudgetCeoView({
 													</TableCell>
 
 													<TableCell>
-														<div className="max-w-xs truncate text-sm text-slate-600">{item.description || '-'}</div>
-													</TableCell>
-
-													<TableCell>
 														<button
 															type="button"
 															className={cn(
 																'flex items-center justify-center rounded p-1 transition-colors',
-																item.note
+																item.description
 																	? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-700'
 																	: 'cursor-pointer text-slate-300 hover:text-slate-500',
 															)}
-															onClick={() => setViewNoteItem(item)}
-															aria-label="View note"
+															onClick={() => setViewDescriptionItem(item)}
+															aria-label="View description"
 														>
-															<MessageSquare className="size-4" />
+															<FileText className="size-4" />
 														</button>
 													</TableCell>
 
@@ -1017,6 +1275,16 @@ export default function WeeklyBudgetCeoView({
 											);
 										})}
 									</TableBody>
+									<TableFooter>
+										<TableRow className="bg-slate-200 dark:bg-slate-700">
+											{canManageCeo && <TableCell />}
+											<TableCell colSpan={5} className="text-right font-bold">
+												Total
+											</TableCell>
+											<TableCell className="whitespace-nowrap font-bold">{formatCurrency(visibleTotal)}</TableCell>
+											{canManageCeo && <TableCell />}
+										</TableRow>
+									</TableFooter>
 								</Table>
 
 								<div className="mt-4">
@@ -1027,79 +1295,25 @@ export default function WeeklyBudgetCeoView({
 									)}
 								</div>
 							</CardContent>
-						</TabsContent>
-
-						<TabsContent value="bank-balances" className="mt-0 outline-none">
-							<CardContent>
-								<Table>
-									<TableHeader className="bg-slate-600 dark:bg-slate-700">
-										<TableRow>
-											<TableHead className="font-bold text-white w-16">#</TableHead>
-											<TableHead className="font-bold text-white">Period</TableHead>
-											<TableHead className="font-bold text-white">Week</TableHead>
-											<TableHead className="font-bold text-white text-right">Total Bank Balance (Base)</TableHead>
-											<TableHead className="font-bold text-white w-24">Actions</TableHead>
-										</TableRow>
-									</TableHeader>
-									<TableBody>
-										{groupedBalances.length === 0 ? (
-											<TableRow>
-												<TableCell colSpan={5} className="text-center py-8">No bank balances found for this period.</TableCell>
-											</TableRow>
-										) : (
-											groupedBalances.map((group, index) => {
-												const total = group.total_amount_base;
-												return (
-													<TableRow key={`${group.fiscal_year_id}-${group.fiscal_month_id}-${group.week_number}`}>
-														<TableCell>{index + 1}</TableCell>
-														<TableCell>{group.fiscal_year?.name} - {group.fiscal_month?.name}</TableCell>
-														<TableCell className="whitespace-nowrap">Week {group.week_number} <span className="text-xs text-slate-500">{getWeekDates(group.fiscal_year?.gregorian_start_date, group.fiscal_month?.gregorian_start_date, group.fiscal_month?.gregorian_end_date, group.week_number)}</span></TableCell>
-														<TableCell className="font-bold text-green-700 text-right">
-															{total.toLocaleString(undefined, { minimumFractionDigits: 2 })} ETB
-														</TableCell>
-														<TableCell>
-															<div className="flex gap-2">
-																<Button variant="secondary" size="sm" onClick={() => window.location.href = route('bank-balances.show', group.id) + '?from=ceo'}>
-																	View Detail
-																</Button>
-															</div>
-														</TableCell>
-													</TableRow>
-												)
-											})
-										)}
-									</TableBody>
-								</Table>
-							</CardContent>
-						</TabsContent>
-					</Tabs>
-				</Card>
+						</Card>
+					</div>
+				</div>
 			</div>
 
-			{/* ── View Note Dialog ─────────────────────────────────────────── */}
-			<Dialog open={!!viewNoteItem} onOpenChange={() => setViewNoteItem(null)}>
+			<Dialog open={!!viewDescriptionItem} onOpenChange={() => setViewDescriptionItem(null)}>
 				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>Details</DialogTitle>
+						<DialogTitle>Description</DialogTitle>
 					</DialogHeader>
-					<div className="space-y-4 pt-4">
-						<div className="rounded-lg bg-slate-50 p-3 italic text-slate-700 dark:bg-slate-900 border">
-							<div className="font-semibold text-slate-900 not-italic mb-1 border-b pb-1">Description</div>
-							{viewNoteItem?.description || 'N/A'}
-						</div>
-
-						{viewNoteItem?.note && (
-							<div className="rounded-lg bg-slate-50 p-3 italic text-slate-700 dark:bg-slate-900 border">
-								<div className="font-semibold text-slate-900 not-italic mb-1 border-b pb-1">Note</div>
-								{viewNoteItem?.note}
-							</div>
-						)}
+					<div className="rounded-lg border bg-slate-50 p-3 text-slate-700 italic dark:bg-slate-900">
+						{viewDescriptionItem?.description || 'N/A'}
 					</div>
 					<DialogFooter>
-						<Button onClick={() => setViewNoteItem(null)}>Close</Button>
+						<Button onClick={() => setViewDescriptionItem(null)}>Close</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+
 			<PopupComponent />
 		</AppLayout>
 	);

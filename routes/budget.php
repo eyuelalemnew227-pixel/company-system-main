@@ -56,7 +56,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->names('bank-branches');
 
         Route::apiResource('budget/bank-balances', BankBalanceController::class)
-            ->only(['index', 'store', 'update', 'destroy', 'show'])
+            ->only(['index', 'store', 'update', 'destroy'])
             ->names('bank-balances');
+    });
+
+    Route::middleware('permission:manage bank balance|view bank balance|view ceo budgets')->group(function () {
+        Route::get('budget/bank-balances/{bank_balance}', [BankBalanceController::class, 'show'])
+            ->name('bank-balances.show');
     });
 });
