@@ -15,10 +15,12 @@ import { type BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Check, ChevronsUpDown, FileText, Filter, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { usePopup } from '@/hooks/use-popup';
 
-const breadcrumbs: BreadcrumbItem[] = [{ title: 'Weekly Budgets CEO', href: '/budget/weekly-budget/ceo' }];
+const breadcrumbs: BreadcrumbItem[] = [
+	{ title: 'Weekly Budgets - CEO View', href: '/budget/weekly-budget/ceo', className: 'text-[1.3125rem] font-semibold' },
+];
 
 type BranchOption = { id: number; name: string; branch_code: string | null };
 type DepartmentOption = { id: number; name: string };
@@ -96,6 +98,83 @@ type CeoProps = {
 function formatCurrency(value: string | number | null | undefined): string {
 	const amount = Number(value ?? 0);
 	return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number.isNaN(amount) ? 0 : amount);
+}
+
+function formatSummaryAmount(value: string | number | null | undefined): string {
+	const amount = Number(value ?? 0);
+	const rounded = Number.isNaN(amount) ? 0 : Math.ceil(amount);
+	return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(rounded);
+}
+
+type SplitMetric = {
+	label: string;
+	amount: number;
+	percent: number | null;
+	tone: 'orange' | 'teal' | 'neutral';
+};
+
+function splitToneClasses(tone: 'orange' | 'teal' | 'neutral') {
+	if (tone === 'orange') {
+		return { dot: 'bg-orange-500', label: 'text-orange-500', value: 'text-orange-500' };
+	}
+	if (tone === 'teal') {
+		return { dot: 'bg-[#134e4a] dark:bg-teal-400', label: 'text-[#134e4a] dark:text-teal-400', value: 'text-[#134e4a] dark:text-teal-400' };
+	}
+	return {
+		dot: 'bg-slate-400',
+		label: 'text-slate-400',
+		value: 'text-slate-900 dark:text-slate-50',
+	};
+}
+
+function VolumeMetricBlock({
+	title,
+	amount,
+	action,
+	left,
+	right,
+}: {
+	title: string;
+	amount: number;
+	action?: ReactNode;
+	left: SplitMetric;
+	right: SplitMetric;
+}) {
+	const leftTone = splitToneClasses(left.tone);
+	const rightTone = splitToneClasses(right.tone);
+
+	return (
+		<div className="relative text-center">
+			{action ? <div className="absolute top-0 right-0">{action}</div> : null}
+			<div className="text-[13px] font-medium text-slate-400">{title}</div>
+			<div className="mt-1.5 text-[1.75rem] font-bold leading-none tracking-tight text-slate-900 dark:text-slate-50">
+				{formatSummaryAmount(amount)}
+				<span className="ml-1.5 text-sm font-semibold text-slate-400">ETB</span>
+			</div>
+			<div className="mt-3 grid grid-cols-2">
+				<div className="border-r border-slate-200 px-2 dark:border-slate-700">
+					<div className={cn('flex items-center justify-center gap-1.5 text-[13px] font-medium', leftTone.label)}>
+						<span className={cn('size-1.5 shrink-0 rounded-full', leftTone.dot)} />
+						{left.label}
+					</div>
+					<div className={cn('mt-0.5 text-[13px] font-bold tabular-nums', leftTone.value)}>
+						{formatSummaryAmount(left.amount)}
+						{left.percent !== null && <span className="ml-1">({Math.ceil(left.percent)}%)</span>}
+					</div>
+				</div>
+				<div className="px-2">
+					<div className={cn('flex items-center justify-center gap-1.5 text-[13px] font-medium', rightTone.label)}>
+						<span className={cn('size-1.5 shrink-0 rounded-full', rightTone.dot)} />
+						{right.label}
+					</div>
+					<div className={cn('mt-0.5 text-[13px] font-bold tabular-nums', rightTone.value)}>
+						{formatSummaryAmount(right.amount)}
+						{right.percent !== null && <span className="ml-1">({Math.ceil(right.percent)}%)</span>}
+					</div>
+				</div>
+			</div>
+		</div>
+	);
 }
 
 function parseDepartmentIds(value: unknown): string[] {
@@ -375,17 +454,18 @@ export default function WeeklyBudgetCeoView({
 
 	const departmentShareRows = useMemo(() => {
 		const total = Number(totalRequested ?? 0);
+		const balance = Number(bankBalance ?? 0);
 		return departmentRequested
 			.map((row) => ({
 				...row,
 				urgent_amount: Number(row.urgent_amount ?? 0),
 				normal_amount: Number(row.normal_amount ?? 0),
-				percent: total > 0 ? (row.amount / total) * 100 : 0,
+				percent: balance > 0 ? (row.amount / balance) * 100 : 0,
 				urgentPercentOfTotal: total > 0 ? (Number(row.urgent_amount ?? 0) / total) * 100 : 0,
 				normalPercentOfTotal: total > 0 ? (Number(row.normal_amount ?? 0) / total) * 100 : 0,
 			}))
 			.sort((a, b) => b.amount - a.amount);
-	}, [departmentRequested, totalRequested]);
+	}, [departmentRequested, totalRequested, bankBalance]);
 
 	useEffect(() => {
 		const requestedIds = parseDepartmentIds(request?.department_ids);
@@ -619,6 +699,8 @@ export default function WeeklyBudgetCeoView({
 		});
 	}
 
+	const estimatedShareOfBalance = weeklyBalance > 0 ? (estimatedSales / weeklyBalance) * 100 : 0;
+	const bankShareOfBalance = weeklyBalance > 0 ? (bankBalance / weeklyBalance) * 100 : 0;
 	const urgentShareOfRequested = totalRequested > 0 ? (urgentRequested / totalRequested) * 100 : 0;
 	const normalShareOfRequested = totalRequested > 0 ? (normalRequested / totalRequested) * 100 : 0;
 	const requestedShareOfBalance = weeklyBalance > 0 ? (totalRequested / weeklyBalance) * 100 : null;
@@ -627,13 +709,6 @@ export default function WeeklyBudgetCeoView({
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Weekly Budgets - CEO View" />
 			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-				<div className="flex items-center justify-between">
-					<h1 className="text-2xl font-bold">Weekly Budgets - CEO View</h1>
-					<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
-						📥 Export CSV
-					</Button>
-				</div>
-
 				<Card>
 					<CardHeader>
 						<CardTitle className="flex items-center gap-2">
@@ -987,138 +1062,137 @@ export default function WeeklyBudgetCeoView({
 
 				<div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
 					<div className="xl:col-span-1">
-						<Card className="h-full bg-slate-50 dark:bg-slate-900">
-							<CardContent className="space-y-4 pt-6">
-								<div className="rounded-lg border border-blue-100 bg-blue-50 p-4 dark:border-blue-900/60 dark:bg-blue-950/40">
-									<div className="text-base font-bold text-slate-900 dark:text-slate-100">Weekly Balance</div>
-									<div className="mt-1 flex items-center justify-between gap-3">
-										<div className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-											{formatCurrency(weeklyBalance)}{' '}
-											<span className="text-lg font-semibold text-slate-500">ETB</span>
-										</div>
+						<Card className="h-full gap-0 border-0 bg-white py-0 shadow-md dark:bg-slate-900">
+							<CardContent className="flex h-full flex-col px-6 py-5">
+								<VolumeMetricBlock
+									title="Weekly Balance"
+									amount={weeklyBalance}
+									action={
 										<Button
 											type="button"
 											size="sm"
-											variant="secondary"
-											className="h-8 shrink-0 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-blue-100 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700"
+											variant="outline"
+											className="h-7 rounded-md border-blue-100 bg-blue-50 px-2.5 text-xs font-medium text-blue-700 shadow-none hover:bg-blue-100 hover:text-blue-800 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200 dark:hover:bg-blue-900/60"
 											onClick={openWeekBalanceDetails}
 											disabled={!weekBalanceDetailId}
 										>
 											See Details
 										</Button>
-									</div>
-									<div className="mt-2 flex flex-col gap-1 text-sm font-semibold text-slate-800 dark:text-slate-200">
-										<div className="flex items-center gap-2">
-											<span>Estimated Sales:</span>
-											<span>{formatCurrency(estimatedSales)} ETB</span>
-										</div>
-										<div className="flex items-center gap-2">
-											<span>Bank Balance:</span>
-											<span>{formatCurrency(bankBalance)} ETB</span>
-										</div>
-									</div>
+									}
+									left={{
+										label: 'Estimated Sales',
+										amount: estimatedSales,
+										percent: weeklyBalance > 0 ? estimatedShareOfBalance : null,
+										tone: 'neutral',
+									}}
+									right={{
+										label: 'Bank Balance',
+										amount: bankBalance,
+										percent: weeklyBalance > 0 ? bankShareOfBalance : null,
+										tone: 'neutral',
+									}}
+								/>
+
+								<div className="mt-4">
+									<div className="mb-2.5 h-px w-full bg-slate-200 dark:bg-slate-700" />
+									<VolumeMetricBlock
+										title="Requested Amount"
+										amount={totalRequested}
+										action={
+											requestedShareOfBalance !== null ? (
+												<span className="text-xs font-medium text-slate-400">
+													{Math.ceil(requestedShareOfBalance)}% of Balance
+												</span>
+											) : undefined
+										}
+										left={{
+											label: 'Urgent',
+											amount: urgentRequested,
+											percent: totalRequested > 0 ? urgentShareOfRequested : null,
+											tone: 'orange',
+										}}
+										right={{
+											label: 'Normal',
+											amount: normalRequested,
+											percent: totalRequested > 0 ? normalShareOfRequested : null,
+											tone: 'teal',
+										}}
+									/>
 								</div>
 
-								<div className="rounded-lg border border-blue-100 bg-blue-50 p-4 dark:border-blue-900/60 dark:bg-blue-950/40">
-									<div className="text-base font-bold text-slate-900 dark:text-slate-100">Requested Amount</div>
-									<div className="mt-1 flex items-center justify-between gap-3">
-										<div className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-											{formatCurrency(totalRequested)}{' '}
-											<span className="text-lg font-semibold text-slate-500">ETB</span>
-										</div>
-										{requestedShareOfBalance !== null && (
-											<span className="shrink-0 rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-												{Math.round(requestedShareOfBalance)}% of Balance
-											</span>
-										)}
-									</div>
-									<div className="mt-2 flex flex-col gap-1 text-sm font-semibold">
-										<div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
-											<span>Urgent:</span>
-											<span>
-												{formatCurrency(urgentRequested)} ETB ({Math.round(urgentShareOfRequested)}%)
-											</span>
-										</div>
-										<div className="flex items-center gap-2 text-slate-800 dark:text-slate-200">
-											<span>Normal:</span>
-											<span>
-												{formatCurrency(normalRequested)} ETB ({Math.round(normalShareOfRequested)}%)
-											</span>
-										</div>
-									</div>
-								</div>
-
-								<div className="border-t border-slate-200 dark:border-slate-700" />
-
-								<div>
-									<div className="mb-4 flex items-center justify-center gap-5 text-xs font-medium text-slate-600 dark:text-slate-300">
-										<span className="flex items-center gap-1.5">
-											<span className="size-3 rounded-sm bg-orange-500" /> Urgent
-										</span>
-										<span className="flex items-center gap-1.5">
-											<span className="size-3 rounded-sm bg-slate-800 dark:bg-slate-300" /> Normal
-										</span>
-									</div>
-
+								<div className="mt-6">
 									{departmentShareRows.length === 0 ? (
-										<div className="py-6 text-center text-sm text-slate-500">No requests for the selected week.</div>
+										<div className="py-6 text-center text-sm text-slate-500">
+											No requests for the selected week.
+										</div>
 									) : (
-										<div className="space-y-1">
-											<div className="flex items-center gap-2 px-0.5 text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+										<div>
+											<div className="mb-2 flex items-center gap-1.5">
 												<span className="w-4 shrink-0" />
-												<span className="w-[5.5rem] shrink-0" />
-												<span className="min-w-0 flex-1" />
-												<span className="w-[4.75rem] shrink-0 text-right">Amount</span>
-												<span className="w-12 shrink-0 text-right">% Share</span>
+												<div className="flex min-w-0 flex-1 items-center gap-1.5">
+													<span className="min-w-0 flex-1" />
+													<span className="w-[6.25rem] shrink-0 text-right text-[11px] font-medium text-slate-400">
+														Amount
+													</span>
+													<span className="w-12 shrink-0 text-right text-[11px] font-medium whitespace-nowrap text-slate-400">
+														% Bal
+													</span>
+												</div>
 											</div>
-											{departmentShareRows.map((row) => {
-												const key = String(row.department_id ?? 'none');
-												const isChecked = checkedChartDepartments[key] !== false;
-												const urgentWidth = Math.max(row.urgentPercentOfTotal, 0);
-												const normalWidth = Math.max(row.normalPercentOfTotal, 0);
+											<div className="space-y-4">
+												{departmentShareRows.map((row) => {
+													const key = String(row.department_id ?? 'none');
+													const isChecked = checkedChartDepartments[key] !== false;
+													const urgentWidth = Math.max(row.urgentPercentOfTotal, 0);
+													const normalWidth = Math.max(row.normalPercentOfTotal, 0);
 
-												return (
-													<div
-														key={`${key}-${row.department}`}
-														className={cn('flex items-center gap-2 py-1.5', !isChecked && 'opacity-45')}
-													>
-														<Checkbox
-															checked={isChecked}
-															onCheckedChange={(checked) => handleChartDepartmentToggle(key, checked === true)}
-															aria-label={`Filter table by ${row.department}`}
-															className="shrink-0"
-														/>
-														<span
-															className="w-[5.5rem] shrink-0 truncate text-sm font-medium text-slate-800 dark:text-slate-100"
-															title={row.department}
+													return (
+														<div
+															key={`${key}-${row.department}`}
+															className={cn('flex items-start gap-1.5', !isChecked && 'opacity-45')}
 														>
-															{row.department}
-														</span>
-														<div className="flex h-5 min-w-0 flex-1 overflow-hidden rounded-sm bg-slate-200 dark:bg-slate-800">
-															{urgentWidth > 0 && (
+															<Checkbox
+																checked={isChecked}
+																onCheckedChange={(checked) => handleChartDepartmentToggle(key, checked === true)}
+																aria-label={`Filter table by ${row.department}`}
+																className="mt-[1.35rem] shrink-0"
+															/>
+															<div className="min-w-0 flex-1">
 																<div
-																	className="h-full shrink-0 bg-orange-500"
-																	style={{ width: `${urgentWidth}%` }}
-																	title={`Urgent ${formatCurrency(row.urgent_amount)}`}
-																/>
-															)}
-															{normalWidth > 0 && (
-																<div
-																	className="h-full shrink-0 bg-slate-800 dark:bg-slate-300"
-																	style={{ width: `${normalWidth}%` }}
-																	title={`Normal ${formatCurrency(row.normal_amount)}`}
-																/>
-															)}
+																	className="mb-1 truncate text-xs font-medium text-slate-500 dark:text-slate-400"
+																	title={row.department}
+																>
+																	{row.department}
+																</div>
+																<div className="flex items-center gap-1.5">
+																	<div className="flex h-5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+																		{urgentWidth > 0 && (
+																			<div
+																				className="h-full shrink-0 bg-orange-500"
+																				style={{ width: `${urgentWidth}%` }}
+																				title={`Urgent ${formatSummaryAmount(row.urgent_amount)}`}
+																			/>
+																		)}
+																		{normalWidth > 0 && (
+																			<div
+																				className="h-full shrink-0 bg-[#134e4a] dark:bg-teal-400"
+																				style={{ width: `${normalWidth}%` }}
+																				title={`Normal ${formatSummaryAmount(row.normal_amount)}`}
+																			/>
+																		)}
+																	</div>
+																	<span className="w-[6.25rem] shrink-0 text-right text-sm font-bold leading-5 tabular-nums text-slate-900 dark:text-slate-100">
+																		{formatSummaryAmount(row.amount)}
+																	</span>
+																	<span className="w-12 shrink-0 text-right text-sm leading-5 tabular-nums text-slate-400">
+																		{Math.ceil(row.percent)}%
+																	</span>
+																</div>
+															</div>
 														</div>
-														<span className="w-[4.75rem] shrink-0 text-right text-xs font-bold tabular-nums text-slate-900 dark:text-slate-100">
-															{formatCurrency(row.amount)}
-														</span>
-														<span className="w-12 shrink-0 text-right text-xs font-semibold tabular-nums text-slate-700 dark:text-slate-200">
-															{Math.round(row.percent)}%
-														</span>
-													</div>
-												);
-											})}
+													);
+												})}
+											</div>
 										</div>
 									)}
 								</div>
@@ -1129,7 +1203,12 @@ export default function WeeklyBudgetCeoView({
 					<div className="min-w-0 xl:col-span-2">
 						<Card>
 							<CardHeader>
-								<CardTitle>Weekly Budgets</CardTitle>
+								<div className="flex items-center justify-between gap-3">
+									<CardTitle>Weekly Budgets</CardTitle>
+									<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
+										📥 Export CSV
+									</Button>
+								</div>
 								{canManageCeo && (
 									<div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border bg-slate-50 p-3 dark:bg-slate-900">
 										<span className="text-sm font-medium">Bulk Action ({selectedIds.length} selected):</span>
