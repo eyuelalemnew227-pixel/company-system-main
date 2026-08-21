@@ -1010,9 +1010,7 @@ export default function WeeklyBudgetFinance({
 									{canManageFinance && (
 										<TableHead className="w-12 text-center text-white">
 											<Checkbox
-												checked={isAllSelected}
-												// @ts-ignore
-												indeterminate={isSomeSelected}
+												checked={isAllSelected ? true : isSomeSelected ? 'indeterminate' : false}
 												onCheckedChange={toggleSelectAll}
 												disabled={allSelectableIds.length === 0}
 												aria-label="Select all"

@@ -3,10 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useSidebar } from '@/components/ui/sidebar';
 import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { computeCurrentBalance } from '@/lib/bank-balance';
@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, FileText, Filter, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Filter, X } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { usePopup } from '@/hooks/use-popup';
 
@@ -106,6 +106,10 @@ function formatSummaryAmount(value: string | number | null | undefined): string 
 	return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(rounded);
 }
 
+function formatPercent2(value: number): string {
+	return value.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
 type SplitMetric = {
 	label: string;
 	amount: number;
@@ -131,12 +135,14 @@ function VolumeMetricBlock({
 	title,
 	amount,
 	action,
+	amountNote,
 	left,
 	right,
 }: {
 	title: string;
 	amount: number;
 	action?: ReactNode;
+	amountNote?: ReactNode;
 	left: SplitMetric;
 	right: SplitMetric;
 }) {
@@ -147,9 +153,12 @@ function VolumeMetricBlock({
 		<div className="relative text-center">
 			{action ? <div className="absolute top-0 right-0">{action}</div> : null}
 			<div className="text-[13px] font-medium text-slate-400">{title}</div>
-			<div className="mt-1.5 text-[1.75rem] font-bold leading-none tracking-tight text-slate-900 dark:text-slate-50">
-				{formatSummaryAmount(amount)}
-				<span className="ml-1.5 text-sm font-semibold text-slate-400">ETB</span>
+			<div className="mt-1.5 flex flex-wrap items-baseline justify-center gap-x-1.5 text-[1.75rem] font-bold leading-none tracking-tight text-slate-900 dark:text-slate-50">
+				<span>
+					{formatSummaryAmount(amount)}
+					<span className="ml-1.5 text-sm font-semibold text-slate-400">ETB</span>
+				</span>
+				{amountNote}
 			</div>
 			<div className="mt-3 grid grid-cols-2">
 				<div className="border-r border-slate-200 px-2 dark:border-slate-700">
@@ -159,7 +168,7 @@ function VolumeMetricBlock({
 					</div>
 					<div className={cn('mt-0.5 text-[13px] font-bold tabular-nums', leftTone.value)}>
 						{formatSummaryAmount(left.amount)}
-						{left.percent !== null && <span className="ml-1">({Math.ceil(left.percent)}%)</span>}
+						{left.percent !== null && <span className="ml-1">({formatPercent2(left.percent)}%)</span>}
 					</div>
 				</div>
 				<div className="px-2">
@@ -169,7 +178,7 @@ function VolumeMetricBlock({
 					</div>
 					<div className={cn('mt-0.5 text-[13px] font-bold tabular-nums', rightTone.value)}>
 						{formatSummaryAmount(right.amount)}
-						{right.percent !== null && <span className="ml-1">({Math.ceil(right.percent)}%)</span>}
+						{right.percent !== null && <span className="ml-1">({formatPercent2(right.percent)}%)</span>}
 					</div>
 				</div>
 			</div>
@@ -188,19 +197,46 @@ function parseDepartmentIds(value: unknown): string[] {
 	return [];
 }
 
+const STATUS_COLOR_CLASSES: Record<string, string> = {
+	pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+	approved: 'bg-green-50 text-green-700 border-green-200',
+	rejected: 'bg-red-50 text-red-700 border-red-200',
+	paid: 'bg-blue-50 text-blue-700 border-blue-200',
+	'on-hold': 'bg-orange-50 text-orange-700 border-orange-200',
+};
+
+function statusColorClass(status: string) {
+	return STATUS_COLOR_CLASSES[status] ?? 'border-slate-200 bg-slate-50 text-slate-700';
+}
+
+function CollapseSidebarOnMount() {
+	const { open, setOpen, isMobile, setOpenMobile } = useSidebar();
+
+	useEffect(() => {
+		if (isMobile) {
+			setOpenMobile(false);
+			return;
+		}
+
+		const wasOpen = open;
+		setOpen(false);
+
+		return () => setOpen(wasOpen);
+		// Collapse only when this page opens; restore the previous state when leaving.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	return null;
+}
+
+function statusLabel(status: string) {
+	return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
 function statusBadge(status: string, _variant: 'ceo') {
-	const colorMap: Record<string, string> = {
-		pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-		approved: 'bg-green-50 text-green-700 border-green-200',
-		rejected: 'bg-red-50 text-red-700 border-red-200',
-		paid: 'bg-blue-50 text-blue-700 border-blue-200',
-		'on-hold': 'bg-orange-50 text-orange-700 border-orange-200',
-	};
 	return (
-		<span
-			className={`rounded-full border px-2 py-0.5 text-[11px] font-bold shadow-sm ${colorMap[status] ?? 'border-slate-200 bg-slate-50 text-slate-700'}`}
-		>
-			{status.charAt(0).toUpperCase() + status.slice(1)}
+		<span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold shadow-sm ${statusColorClass(status)}`}>
+			{statusLabel(status)}
 		</span>
 	);
 }
@@ -379,12 +415,7 @@ export default function WeeklyBudgetCeoView({
 	// ── Bulk action state ───────────────────────────────────────────────────
 	const [selectedIds, setSelectedIds] = useState<number[]>([]);
 	const [bulkStatus, setBulkStatus] = useState<string>('');
-
-	// ── Edit state ──────────────────────────────────────────────────────────
-	const [editingRowId, setEditingRowId] = useState<number | null>(null);
-	const [editForm, setEditForm] = useState<any>({});
-
-	const [viewDescriptionItem, setViewDescriptionItem] = useState<WeeklyBudgetRow | null>(null);
+	const [savingStatusId, setSavingStatusId] = useState<number | null>(null);
 
 	const selectedDepartmentOption = useMemo(
 		() => (selectedDepartment === 'all' ? null : (departments.find((department) => String(department.id) === selectedDepartment) ?? null)),
@@ -453,19 +484,19 @@ export default function WeeklyBudgetCeoView({
 	}, [balancesForSelectedWeek]);
 
 	const departmentShareRows = useMemo(() => {
-		const total = Number(totalRequested ?? 0);
-		const balance = Number(bankBalance ?? 0);
+		const balance = Number(weeklyBalance ?? 0);
+		const maxAmount = Math.max(0, ...departmentRequested.map((row) => Number(row.amount ?? 0)));
 		return departmentRequested
 			.map((row) => ({
 				...row,
 				urgent_amount: Number(row.urgent_amount ?? 0),
 				normal_amount: Number(row.normal_amount ?? 0),
 				percent: balance > 0 ? (row.amount / balance) * 100 : 0,
-				urgentPercentOfTotal: total > 0 ? (Number(row.urgent_amount ?? 0) / total) * 100 : 0,
-				normalPercentOfTotal: total > 0 ? (Number(row.normal_amount ?? 0) / total) * 100 : 0,
+				urgentPercentOfTotal: maxAmount > 0 ? (Number(row.urgent_amount ?? 0) / maxAmount) * 100 : 0,
+				normalPercentOfTotal: maxAmount > 0 ? (Number(row.normal_amount ?? 0) / maxAmount) * 100 : 0,
 			}))
 			.sort((a, b) => b.amount - a.amount);
-	}, [departmentRequested, totalRequested, bankBalance]);
+	}, [departmentRequested, weeklyBalance]);
 
 	useEffect(() => {
 		const requestedIds = parseDepartmentIds(request?.department_ids);
@@ -624,24 +655,16 @@ export default function WeeklyBudgetCeoView({
 
 	// ── Edit helpers ─────────────────────────────────────────────────────────
 
-	function startEditRow(item: WeeklyBudgetRow) {
-		setEditingRowId(item.id);
-		setEditForm({
-			status_ceo: item.status_ceo,
-		});
-	}
+	function updateCeoStatus(item: WeeklyBudgetRow, status: string) {
+		if (status === item.status_ceo) return;
 
-	function saveEditRow(item: WeeklyBudgetRow) {
+		setSavingStatusId(item.id);
 		router.patch(
 			`/budget/weekly-budget/${item.id}/ceo-status`,
-			{
-				status_ceo: editForm.status_ceo,
-			},
+			{ status_ceo: status },
 			{
 				preserveScroll: true,
-				onSuccess: () => {
-					setEditingRowId(null);
-				},
+				onFinish: () => setSavingStatusId(null),
 			},
 		);
 	}
@@ -708,9 +731,10 @@ export default function WeeklyBudgetCeoView({
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Weekly Budgets - CEO View" />
-			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-				<Card>
-					<CardHeader>
+			<CollapseSidebarOnMount />
+			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl px-4 pt-0 pb-4">
+				<Card className="py-0">
+					<CardHeader className="px-6 pt-2 pb-3">
 						<CardTitle className="flex items-center gap-2">
 							<Filter className="size-4 text-muted-foreground" /> Filters
 						</CardTitle>
@@ -1098,10 +1122,10 @@ export default function WeeklyBudgetCeoView({
 									<VolumeMetricBlock
 										title="Requested Amount"
 										amount={totalRequested}
-										action={
+										amountNote={
 											requestedShareOfBalance !== null ? (
-												<span className="text-xs font-medium text-slate-400">
-													{Math.ceil(requestedShareOfBalance)}% of Balance
+												<span className="text-sm font-medium text-slate-400">
+													({formatPercent2(requestedShareOfBalance)}% of Balance)
 												</span>
 											) : undefined
 										}
@@ -1134,7 +1158,7 @@ export default function WeeklyBudgetCeoView({
 													<span className="w-[6.25rem] shrink-0 text-right text-[11px] font-medium text-slate-400">
 														Amount
 													</span>
-													<span className="w-12 shrink-0 text-right text-[11px] font-medium whitespace-nowrap text-slate-400">
+													<span className="w-[3.75rem] shrink-0 text-right text-[11px] font-medium whitespace-nowrap text-slate-400">
 														% Bal
 													</span>
 												</div>
@@ -1184,8 +1208,8 @@ export default function WeeklyBudgetCeoView({
 																	<span className="w-[6.25rem] shrink-0 text-right text-sm font-bold leading-5 tabular-nums text-slate-900 dark:text-slate-100">
 																		{formatSummaryAmount(row.amount)}
 																	</span>
-																	<span className="w-12 shrink-0 text-right text-sm leading-5 tabular-nums text-slate-400">
-																		{Math.ceil(row.percent)}%
+																	<span className="w-[3.75rem] shrink-0 text-right text-sm leading-5 tabular-nums text-slate-400">
+																		{formatPercent2(row.percent)}%
 																	</span>
 																</div>
 															</div>
@@ -1201,8 +1225,8 @@ export default function WeeklyBudgetCeoView({
 					</div>
 
 					<div className="min-w-0 xl:col-span-2">
-						<Card>
-							<CardHeader>
+						<Card className="gap-2 py-0">
+							<CardHeader className="px-6 py-3">
 								<div className="flex items-center justify-between gap-3">
 									<CardTitle>Weekly Budgets</CardTitle>
 									<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
@@ -1210,7 +1234,7 @@ export default function WeeklyBudgetCeoView({
 									</Button>
 								</div>
 								{canManageCeo && (
-									<div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border bg-slate-50 p-3 dark:bg-slate-900">
+									<div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border bg-slate-50 px-3 py-2 dark:bg-slate-900">
 										<span className="text-sm font-medium">Bulk Action ({selectedIds.length} selected):</span>
 										<Select value={bulkStatus} onValueChange={setBulkStatus}>
 											<SelectTrigger className="w-[180px] bg-white dark:bg-slate-800">
@@ -1229,16 +1253,14 @@ export default function WeeklyBudgetCeoView({
 									</div>
 								)}
 							</CardHeader>
-							<CardContent>
+							<CardContent className="px-6 pb-4">
 								<Table>
 									<TableHeader className="bg-slate-500 dark:bg-slate-700">
 										<TableRow>
 											{canManageCeo && (
 												<TableHead className="w-12 text-center text-white">
 													<Checkbox
-														checked={isAllSelected}
-														// @ts-ignore
-														indeterminate={isSomeSelected}
+														checked={isAllSelected ? true : isSomeSelected ? 'indeterminate' : false}
 														onCheckedChange={toggleSelectAll}
 														disabled={allSelectableIds.length === 0}
 														aria-label="Select all"
@@ -1249,17 +1271,16 @@ export default function WeeklyBudgetCeoView({
 											<TableHead className="font-bold text-white">Department</TableHead>
 											<TableHead className="font-bold text-white">Branch</TableHead>
 											<TableHead className="font-bold text-white">Request Type</TableHead>
-											<TableHead className="font-bold text-white">Status (CEO)</TableHead>
+											<TableHead className="w-0 whitespace-nowrap font-bold text-white">Status (CEO)</TableHead>
 											<TableHead className="font-bold text-white">Description</TableHead>
 											<TableHead className="font-bold text-white">Amount</TableHead>
-											{canManageCeo && <TableHead className="font-bold text-white">Actions</TableHead>}
 										</TableRow>
 									</TableHeader>
 									<TableBody>
 										{items.data.map((item) => {
-											const isEditing = editingRowId === item.id;
 											const isEditable = canManageCeo && item.status_finance !== 'paid';
 											const bothApproved = item.status_finance === 'approved' && item.status_department === 'approved';
+											const isSavingStatus = savingStatusId === item.id;
 
 											return (
 												<TableRow key={item.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
@@ -1276,23 +1297,36 @@ export default function WeeklyBudgetCeoView({
 													<TableCell>{item.branch ?? '-'}</TableCell>
 													<TableCell>{requestTypeBadge(item.request_type)}</TableCell>
 
-													{/* CEO Status */}
-													<TableCell>
-														{isEditing ? (
+													<TableCell className="w-0 whitespace-nowrap">
+														{canManageCeo ? (
 															<Select
-																value={editForm.status_ceo}
-																onValueChange={(v) => setEditForm({ ...editForm, status_ceo: v })}
+																value={item.status_ceo}
+																onValueChange={(status) => updateCeoStatus(item, status)}
+																disabled={!isEditable || isSavingStatus}
 															>
-																<SelectTrigger className="w-[120px]">
+																<SelectTrigger
+																	className={cn(
+																		'h-7 w-full min-w-0 rounded-full border px-2 text-[11px] font-bold shadow-sm',
+																		statusColorClass(item.status_ceo),
+																	)}
+																>
 																	<SelectValue />
 																</SelectTrigger>
 																<SelectContent>
-																	{statusCeos.map((s) => {
-																		// Only allow Approved if both finance & department are approved
-																		const disabled = s === 'approved' && !bothApproved;
-																		return disabled ? null : (
-																			<SelectItem key={s} value={s}>
-																				{s.charAt(0).toUpperCase() + s.slice(1)}
+																	{statusCeos.map((status) => {
+																		const cannotApprove = status === 'approved' && !bothApproved;
+																		return (
+																			<SelectItem
+																				key={status}
+																				value={status}
+																				disabled={cannotApprove}
+																				className={cn(
+																					'my-0.5 rounded-full text-[11px] font-bold',
+																					statusColorClass(status),
+																					'focus:bg-inherit focus:text-inherit',
+																				)}
+																			>
+																				{statusLabel(status)}
 																			</SelectItem>
 																		);
 																	})}
@@ -1303,53 +1337,13 @@ export default function WeeklyBudgetCeoView({
 														)}
 													</TableCell>
 
-													<TableCell>
-														<button
-															type="button"
-															className={cn(
-																'flex items-center justify-center rounded p-1 transition-colors',
-																item.description
-																	? 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:hover:bg-slate-700'
-																	: 'cursor-pointer text-slate-300 hover:text-slate-500',
-															)}
-															onClick={() => setViewDescriptionItem(item)}
-															aria-label="View description"
-														>
-															<FileText className="size-4" />
-														</button>
+													<TableCell className="whitespace-normal">
+														<div className="max-w-xs text-sm text-slate-600 dark:text-slate-300">
+															{item.description || '-'}
+														</div>
 													</TableCell>
 
 													<TableCell className="whitespace-nowrap">{formatCurrency(item.amount)}</TableCell>
-
-													{/* Actions */}
-													{canManageCeo && (
-														<TableCell className="whitespace-nowrap">
-															{isEditing ? (
-																<div className="flex gap-1">
-																	<Button size="sm" onClick={() => saveEditRow(item)} className="h-7 px-2 text-xs">
-																		Save
-																	</Button>
-																	<Button
-																		variant="outline"
-																		size="sm"
-																		onClick={() => setEditingRowId(null)}
-																		className="h-7 px-2 text-xs"
-																	>
-																		Cancel
-																	</Button>
-																</div>
-															) : isEditable ? (
-																<Button
-																	variant="ghost"
-																	size="sm"
-																	onClick={() => startEditRow(item)}
-																	className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700"
-																>
-																	Edit
-																</Button>
-															) : null}
-														</TableCell>
-													)}
 												</TableRow>
 											);
 										})}
@@ -1361,7 +1355,6 @@ export default function WeeklyBudgetCeoView({
 												Total
 											</TableCell>
 											<TableCell className="whitespace-nowrap font-bold">{formatCurrency(visibleTotal)}</TableCell>
-											{canManageCeo && <TableCell />}
 										</TableRow>
 									</TableFooter>
 								</Table>
@@ -1378,20 +1371,6 @@ export default function WeeklyBudgetCeoView({
 					</div>
 				</div>
 			</div>
-
-			<Dialog open={!!viewDescriptionItem} onOpenChange={() => setViewDescriptionItem(null)}>
-				<DialogContent>
-					<DialogHeader>
-						<DialogTitle>Description</DialogTitle>
-					</DialogHeader>
-					<div className="rounded-lg border bg-slate-50 p-3 text-slate-700 italic dark:bg-slate-900">
-						{viewDescriptionItem?.description || 'N/A'}
-					</div>
-					<DialogFooter>
-						<Button onClick={() => setViewDescriptionItem(null)}>Close</Button>
-					</DialogFooter>
-				</DialogContent>
-			</Dialog>
 
 			<PopupComponent />
 		</AppLayout>
