@@ -3,6 +3,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 
 const breadcrumbs: BreadcrumbItem[] = [
 	{ title: 'Sales Budgets', href: '/budget/sales-budget' },
@@ -60,8 +61,15 @@ interface Props {
 		action?: string;
 		branch_id?: string;
 		fiscal_year_id?: string;
-		ethiopian_month?: string;
+		fiscal_month_id?: string;
 	};
+}
+
+interface FiscalMonth {
+	id: number;
+	fiscal_year_id: number;
+	name: string;
+	efy_month_number: number;
 }
 
 interface FiscalYear {
@@ -75,45 +83,75 @@ const actionColors: Record<string, string> = {
 	deleted: 'bg-red-100 text-red-700 border border-red-200',
 };
 
-export default function SalesBudgetLogs({ logs, branches, fiscalYears, request }: Props) {
+export default function SalesBudgetLogs({ logs, branches, fiscalYears, fiscalMonths, request }: Props & { fiscalMonths: FiscalMonth[] }) {
 	const [selectedAction, setSelectedAction] = useState(request?.action ?? '');
-	const [selectedBranch, setSelectedBranch] = useState(request?.branch_id ?? '');
-	const [selectedFiscalYear, setSelectedFiscalYear] = useState(request?.fiscal_year_id ?? '');
-	const [selectedMonth, setSelectedMonth] = useState(request?.ethiopian_month ?? '');
+	const [selectedBranch, setSelectedBranch] = useState(request?.branch_id ? String(request.branch_id) : '');
+	const [selectedFiscalYear, setSelectedFiscalYear] = useState(request?.fiscal_year_id ? String(request.fiscal_year_id) : '');
+	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState(request?.fiscal_month_id ? String(request.fiscal_month_id) : '');
 
 	useEffect(() => {
 		setSelectedAction(request?.action ?? '');
-		setSelectedBranch(request?.branch_id ?? '');
-		setSelectedFiscalYear(request?.fiscal_year_id ?? '');
-		setSelectedMonth(request?.ethiopian_month ?? '');
-	}, [request?.action, request?.branch_id, request?.fiscal_year_id, request?.ethiopian_month]);
+		setSelectedBranch(request?.branch_id ? String(request.branch_id) : '');
+		setSelectedFiscalYear(request?.fiscal_year_id ? String(request.fiscal_year_id) : '');
+		setSelectedFiscalMonth(request?.fiscal_month_id ? String(request.fiscal_month_id) : '');
+	}, [request?.action, request?.branch_id, request?.fiscal_year_id, request?.fiscal_month_id]);
 
-	function handleFilterSubmit(e: React.FormEvent<HTMLFormElement>) {
-		e.preventDefault();
-		const params: Record<string, string> = {};
+	useEffect(() => {
+		if (!request?.fiscal_year_id && request?.fiscal_month_id) {
+			const matchedMonth = fiscalMonths.find((month) => month.id.toString() === String(request.fiscal_month_id));
+			if (matchedMonth) {
+				setSelectedFiscalYear(matchedMonth.fiscal_year_id.toString());
+			}
+		}
+	}, [fiscalMonths, request?.fiscal_month_id, request?.fiscal_year_id]);
 
-		if (selectedAction) params.action = selectedAction;
-		if (selectedBranch) params.branch_id = selectedBranch;
-		if (selectedFiscalYear) params.fiscal_year_id = selectedFiscalYear;
-		if (selectedFiscalYear && selectedMonth) params.ethiopian_month = selectedMonth;
-
+	function triggerFilter(paramsOverride = {}) {
+		const params: Record<string, string> = {
+			...(selectedAction ? { action: selectedAction } : {}),
+			...(selectedBranch ? { branch_id: selectedBranch } : {}),
+			...(selectedFiscalYear ? { fiscal_year_id: selectedFiscalYear } : {}),
+			...(selectedFiscalMonth ? { fiscal_month_id: selectedFiscalMonth } : {}),
+			...paramsOverride,
+		};
 		router.get('/budget/sales-budget/logs', params, { preserveState: true, replace: true });
+	}
+
+	function handleActionChange(value: string) {
+		setSelectedAction(value);
+		triggerFilter({ action: value });
+	}
+
+	function handleBranchChange(value: string) {
+		setSelectedBranch(value);
+		triggerFilter({ branch_id: value });
+	}
+
+	function handleFiscalYearChange(value: string) {
+		setSelectedFiscalYear(value);
+		if (!value) {
+			setSelectedFiscalMonth('');
+			triggerFilter({ fiscal_year_id: value, fiscal_month_id: '' });
+		} else {
+			triggerFilter({ fiscal_year_id: value });
+		}
+	}
+
+	function handleMonthChange(value: string) {
+		setSelectedFiscalMonth(value);
+		triggerFilter({ fiscal_month_id: value });
 	}
 
 	function handleResetFilters() {
 		setSelectedAction('');
 		setSelectedBranch('');
 		setSelectedFiscalYear('');
-		setSelectedMonth('');
+		setSelectedFiscalMonth('');
 		router.get('/budget/sales-budget/logs', {}, { preserveState: true, replace: true });
 	}
 
-	function handleFiscalYearChange(value: string) {
-		setSelectedFiscalYear(value);
-		if (!value) {
-			setSelectedMonth('');
-		}
-	}
+	const filteredFiscalMonths = selectedFiscalYear ? fiscalMonths.filter((month) => month.fiscal_year_id.toString() === selectedFiscalYear) : [];
+
+	const hasActiveFilters = !!selectedAction || !!selectedBranch || !!selectedFiscalYear || !!selectedFiscalMonth;
 
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
@@ -130,10 +168,10 @@ export default function SalesBudgetLogs({ logs, branches, fiscalYears, request }
 				</div>
 
 				{/* Filters */}
-				<form onSubmit={handleFilterSubmit} className="mb-6 flex flex-wrap gap-3">
+				<div className="mb-6 flex flex-wrap items-center gap-3">
 					<select
 						value={selectedAction}
-						onChange={(e) => setSelectedAction(e.target.value)}
+						onChange={(e) => handleActionChange(e.target.value)}
 						className="w-40 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					>
 						<option value="">All Actions</option>
@@ -144,7 +182,7 @@ export default function SalesBudgetLogs({ logs, branches, fiscalYears, request }
 
 					<select
 						value={selectedBranch}
-						onChange={(e) => setSelectedBranch(e.target.value)}
+						onChange={(e) => handleBranchChange(e.target.value)}
 						className="w-52 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
 					>
 						<option value="">All Branches</option>
@@ -169,33 +207,30 @@ export default function SalesBudgetLogs({ logs, branches, fiscalYears, request }
 					</select>
 
 					<select
-						value={selectedMonth}
-						onChange={(e) => setSelectedMonth(e.target.value)}
+						value={selectedFiscalMonth}
+						onChange={(e) => handleMonthChange(e.target.value)}
 						disabled={!selectedFiscalYear}
 						className="w-48 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
 					>
 						<option value="">All Months</option>
-						{Object.entries(MONTH_NAMES).map(([num, name]) => (
-							<option key={num} value={num}>
-								{num} — {name}
+						{filteredFiscalMonths.map((month) => (
+							<option key={month.id} value={month.id}>
+								{month.name}
 							</option>
 						))}
 					</select>
 
-					<button
-						type="submit"
-						className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700"
-					>
-						Filter
-					</button>
-					<button
-						type="button"
-						onClick={handleResetFilters}
-						className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
-					>
-						Reset
-					</button>
-				</form>
+					{hasActiveFilters && (
+						<button
+							type="button"
+							onClick={handleResetFilters}
+							className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-900"
+						>
+							<X className="h-4 w-4" />
+							Clear Filters
+						</button>
+					)}
+				</div>
 
 				{/* Table */}
 				<div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">

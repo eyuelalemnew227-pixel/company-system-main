@@ -6,7 +6,7 @@ import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { usePopup } from '@/hooks/use-popup';
 
@@ -93,10 +93,10 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 		year: number;
 	}>({ open: false, id: null, branchName: '', month: '', year: 0 });
 
-	const [selectedBranch, setSelectedBranch] = useState(request?.branch_id ?? '');
+	const [selectedBranch, setSelectedBranch] = useState(request?.branch_id ? String(request.branch_id) : '');
 	const [openBranch, setOpenBranch] = useState(false);
-	const [selectedFiscalYear, setSelectedFiscalYear] = useState(request?.fiscal_year_id ?? '');
-	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState(request?.fiscal_month_id ?? '');
+	const [selectedFiscalYear, setSelectedFiscalYear] = useState(request?.fiscal_year_id ? String(request.fiscal_year_id) : '');
+	const [selectedFiscalMonth, setSelectedFiscalMonth] = useState(request?.fiscal_month_id ? String(request.fiscal_month_id) : '');
 	const [showUnbudgeted, setShowUnbudgeted] = useState(
 		request?.show_unbudgeted === true || request?.show_unbudgeted === '1' || request?.show_unbudgeted === 'true',
 	);
@@ -108,29 +108,29 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 	}, [flash, triggerPopup]);
 
 	useEffect(() => {
-		setSelectedBranch(request?.branch_id ?? '');
-		setSelectedFiscalYear(request?.fiscal_year_id ?? '');
-		setSelectedFiscalMonth(request?.fiscal_month_id ?? '');
+		setSelectedBranch(request?.branch_id ? String(request.branch_id) : '');
+		setSelectedFiscalYear(request?.fiscal_year_id ? String(request.fiscal_year_id) : '');
+		setSelectedFiscalMonth(request?.fiscal_month_id ? String(request.fiscal_month_id) : '');
 		setShowUnbudgeted(request?.show_unbudgeted === true || request?.show_unbudgeted === '1' || request?.show_unbudgeted === 'true');
 	}, [request?.branch_id, request?.fiscal_year_id, request?.fiscal_month_id, request?.show_unbudgeted]);
 
 	useEffect(() => {
 		if (!request?.fiscal_year_id && request?.fiscal_month_id) {
-			const matchedMonth = fiscalMonths.find((month) => month.id.toString() === request.fiscal_month_id);
+			const matchedMonth = fiscalMonths.find((month) => month.id.toString() === String(request.fiscal_month_id));
 			if (matchedMonth) {
 				setSelectedFiscalYear(matchedMonth.fiscal_year_id.toString());
 			}
 		}
 	}, [fiscalMonths, request?.fiscal_month_id, request?.fiscal_year_id]);
 
-	function handleFilterSubmit(e: React.FormEvent<HTMLFormElement>) {
-		e.preventDefault();
-		const params: Record<string, string> = {};
-
-		if (selectedBranch) params.branch_id = selectedBranch;
-		if (selectedFiscalYear) params.fiscal_year_id = selectedFiscalYear;
-		if (selectedFiscalMonth) params.fiscal_month_id = selectedFiscalMonth;
-		if (showUnbudgeted) params.show_unbudgeted = 'true';
+	function triggerFilter(paramsOverride?: Record<string, string>) {
+		const params: Record<string, string> = {
+			...(selectedBranch ? { branch_id: selectedBranch } : {}),
+			...(selectedFiscalYear ? { fiscal_year_id: selectedFiscalYear } : {}),
+			...(selectedFiscalMonth ? { fiscal_month_id: selectedFiscalMonth } : {}),
+			...(showUnbudgeted ? { show_unbudgeted: 'true' } : {}),
+			...paramsOverride,
+		};
 
 		router.get('/budget/sales-budget', params, { preserveState: true, replace: true });
 	}
@@ -146,11 +146,18 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 	function handleFiscalYearChange(value: string) {
 		setSelectedFiscalYear(value);
 		setSelectedFiscalMonth('');
+		triggerFilter({ fiscal_year_id: value, fiscal_month_id: '' });
 	}
 
 	function handleBranchSelect(value: string) {
 		setSelectedBranch(value);
 		setOpenBranch(false);
+		triggerFilter({ branch_id: value });
+	}
+
+	function handleFiscalMonthChange(value: string) {
+		setSelectedFiscalMonth(value);
+		triggerFilter({ fiscal_month_id: value });
 	}
 
 	const selectedBranchOption = branches.find((branch) => String(branch.id) === selectedBranch);
@@ -201,6 +208,8 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 		window.location.href = `/budget/sales-budget/export?${queryString}`;
 	}
 
+	const hasActiveFilters = Boolean(selectedBranch || selectedFiscalYear || selectedFiscalMonth || showUnbudgeted);
+
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Sales Budgets" />
@@ -239,7 +248,7 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 				</div>
 
 				{/* Filter */}
-				<form onSubmit={handleFilterSubmit} className="mb-6 flex flex-col gap-3">
+				<div className="mb-6 flex flex-col gap-3">
 					<div className="flex flex-wrap items-center gap-3">
 						<Popover open={openBranch} onOpenChange={setOpenBranch}>
 							<PopoverTrigger asChild>
@@ -289,7 +298,7 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 
 						<select
 							value={selectedFiscalMonth}
-							onChange={(e) => setSelectedFiscalMonth(e.target.value)}
+							onChange={(e) => handleFiscalMonthChange(e.target.value)}
 							disabled={!selectedFiscalYear}
 							className="h-10 w-52 appearance-none rounded-lg border border-gray-200 px-3 py-2 text-sm leading-none focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400"
 						>
@@ -301,22 +310,14 @@ export default function SalesBudgetIndex({ budgets, branches, fiscalYears, fisca
 							))}
 						</select>
 
-						<button
-							type="submit"
-							className="rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-700"
-						>
-							Filter
-						</button>
-						<button
-							type="button"
-							onClick={handleResetFilters}
-							className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
-						>
-							Reset
-						</button>
+						{hasActiveFilters && (
+							<Button type="button" variant="secondary" className="h-10 text-sm px-4 whitespace-nowrap" onClick={handleResetFilters}>
+								<X className="mr-2 size-4" /> Clear Filters
+							</Button>
+						)}
 					</div>
 
-				</form>
+				</div>
 
 				{/* Table */}
 				<div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">

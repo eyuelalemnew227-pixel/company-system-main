@@ -59,29 +59,23 @@ interface Props {
 	fiscalYears: FiscalYear[];
 	fiscalMonths: FiscalMonth[];
 	monthNames?: Record<number, string>;
+	currentFiscalYearId?: number;
+	currentFiscalMonthId?: number;
 }
 
-export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths, monthNames }: Props) {
+export default function SalesBudgetCreate({ branches, fiscalYears, fiscalMonths, monthNames, currentFiscalYearId, currentFiscalMonthId }: Props) {
 	const { flash } = usePage<{ flash: { message?: string; error?: string } }>().props;
 	const { triggerPopup, PopupComponent } = usePopup();
 
-	// Find current fiscal year based on today's date
-	function getCurrentFiscalYear() {
-		const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-		const current = fiscalYears.find((fy) => {
-			// We need gregorian_start_date and gregorian_end_date
-			// These come from the controller
-			return (fy as any).gregorian_start_date <= today && (fy as any).gregorian_end_date >= today;
-		});
-		// Fallback to first fiscal year if none found
-		return current ?? fiscalYears[0];
-	}
-
-	const currentYear = getCurrentFiscalYear();
-	const [selectedFiscalYearId, setSelectedFiscalYearId] = useState(currentYear ? currentYear.id.toString() : '');
-	const [selectedFiscalMonthId, setSelectedFiscalMonthId] = useState('');
+	const [selectedFiscalYearId, setSelectedFiscalYearId] = useState(currentFiscalYearId ? String(currentFiscalYearId) : (fiscalYears[0]?.id.toString() ?? ''));
+	const [selectedFiscalMonthId, setSelectedFiscalMonthId] = useState(currentFiscalMonthId ? String(currentFiscalMonthId) : '');
+	
+	const currentYear = fiscalYears.find((fy) => fy.id.toString() === selectedFiscalYearId);
 	const [ethiopianYear, setEthiopianYear] = useState(currentYear ? currentYear.name.replace('EFY ', '') : '');
-	const [ethiopianMonth, setEthiopianMonth] = useState('');
+	
+	const currentMonth = fiscalMonths.find((fm) => fm.id.toString() === selectedFiscalMonthId);
+	const [ethiopianMonth, setEthiopianMonth] = useState(currentMonth ? String(currentMonth.efy_month_number) : '');
+	
 	const [editingBudgetCount, setEditingBudgetCount] = useState(0);
 	const [rows, setRows] = useState<BudgetRow[]>([]);
 	const [processing, setProcessing] = useState(false);

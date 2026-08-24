@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -125,8 +126,8 @@ function splitToneClasses(tone: 'orange' | 'teal' | 'neutral') {
 		return { dot: 'bg-[#134e4a] dark:bg-teal-400', label: 'text-[#134e4a] dark:text-teal-400', value: 'text-[#134e4a] dark:text-teal-400' };
 	}
 	return {
-		dot: 'bg-slate-400',
-		label: 'text-slate-400',
+		dot: 'bg-slate-900 dark:bg-slate-50',
+		label: 'text-slate-900 dark:text-slate-50 font-bold',
 		value: 'text-slate-900 dark:text-slate-50',
 	};
 }
@@ -152,11 +153,11 @@ function VolumeMetricBlock({
 	return (
 		<div className="relative text-center">
 			{action ? <div className="absolute top-0 right-0">{action}</div> : null}
-			<div className="text-[13px] font-medium text-slate-400">{title}</div>
+			<div className="text-[13px] font-bold text-slate-900 dark:text-slate-50">{title}</div>
 			<div className="mt-1.5 flex flex-wrap items-baseline justify-center gap-x-1.5 text-[1.75rem] font-bold leading-none tracking-tight text-slate-900 dark:text-slate-50">
 				<span>
 					{formatSummaryAmount(amount)}
-					<span className="ml-1.5 text-sm font-semibold text-slate-400">ETB</span>
+					<span className="ml-1.5 text-sm font-bold text-slate-900 dark:text-slate-50">ETB</span>
 				</span>
 				{amountNote}
 			</div>
@@ -355,6 +356,130 @@ function buildFiscalMonthWeeks(fiscalYear: FiscalYearOption, fiscalMonth: Fiscal
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
+
+function WeekBalanceDialogContent({ balances, estimatedSales, bankBalance, weeklyBalance }: { balances: any[], estimatedSales: number, bankBalance: number, weeklyBalance: number }) {
+	const sortedBalances = useMemo(() => {
+		return [...balances].sort((a, b) => {
+			const nameA = a.bank?.name?.toLowerCase() || '';
+			const nameB = b.bank?.name?.toLowerCase() || '';
+			return nameA.localeCompare(nameB);
+		});
+	}, [balances]);
+
+	let sumAmountETB = 0;
+	let sumTotalETB = 0;
+
+	sortedBalances.forEach((balance) => {
+		const amount = parseFloat(balance.amount) || 0;
+		const rate = parseFloat(balance.exchange_rate) || 1;
+		const currency = balance.bank?.currency || 'ETB';
+		const subtotal = amount * rate;
+
+		if (currency === 'ETB') {
+			sumAmountETB += amount;
+		}
+
+		sumTotalETB += subtotal;
+	});
+
+	return (
+		<div className="flex flex-col gap-4 mt-2">
+			<div className="grid gap-3 md:grid-cols-3 shrink-0">
+				<Card className="bg-slate-50 border-none shadow-sm dark:bg-slate-900 border-l-4 border-l-orange-500 rounded-lg py-0">
+					<CardContent className="px-3 py-2 flex items-center justify-between">
+						<span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Estimated Weekly Sales</span>
+						<div className="text-sm font-bold text-gray-900 tracking-tight dark:text-slate-100">
+							{formatCurrency(estimatedSales)} <span className="text-[10px] font-semibold text-slate-400 ml-1">ETB</span>
+						</div>
+					</CardContent>
+				</Card>
+
+				<Card className="bg-slate-50 border-none shadow-sm dark:bg-slate-900 border-l-4 border-l-blue-600 rounded-lg py-0">
+					<CardContent className="px-3 py-2 flex items-center justify-between">
+						<span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Current Balance</span>
+						<div className="text-sm font-bold text-gray-900 tracking-tight dark:text-slate-100">
+							{formatCurrency(bankBalance)} <span className="text-[10px] font-semibold text-slate-400 ml-1">ETB</span>
+						</div>
+					</CardContent>
+				</Card>
+
+				<Card className="bg-slate-50 border-none shadow-sm dark:bg-slate-900 border-l-4 border-l-green-600 rounded-lg py-0">
+					<CardContent className="px-3 py-2 flex items-center justify-between">
+						<span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">TOTAL BALANCE</span>
+						<div className="text-sm font-bold text-gray-900 tracking-tight dark:text-slate-100">
+							{formatCurrency(weeklyBalance)} <span className="text-[10px] font-semibold text-slate-400 ml-1">ETB</span>
+						</div>
+					</CardContent>
+				</Card>
+			</div>
+
+			<div className="overflow-x-auto border rounded-md">
+				<Table className="min-w-[720px] text-xs">
+					<TableHeader className="bg-slate-100 dark:bg-slate-800">
+						<TableRow>
+							<TableHead className="h-auto px-3 py-2">Bank</TableHead>
+							<TableHead className="h-auto px-3 py-2">Branch</TableHead>
+							<TableHead className="h-auto px-3 py-2 text-right">Amount ETB</TableHead>
+							<TableHead className="h-auto px-3 py-2 text-right">Foreign Amount</TableHead>
+							<TableHead className="h-auto px-3 py-2">Currency</TableHead>
+							<TableHead className="h-auto px-3 py-2">Exchange Rate</TableHead>
+							<TableHead className="h-auto px-3 py-2 pr-6 text-right">Total ETB</TableHead>
+						</TableRow>
+					</TableHeader>
+					<TableBody>
+						{sortedBalances.map((balance) => {
+							const amount = parseFloat(balance.amount) || 0;
+							const rate = parseFloat(balance.exchange_rate) || 1;
+							const subtotal = amount * rate;
+							const currency = balance.bank?.currency || 'ETB';
+							const isETB = currency === 'ETB';
+							return (
+								<TableRow key={balance.id} className="last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+									<TableCell className="px-3 py-2 font-semibold">{balance.bank?.name}</TableCell>
+									<TableCell className="px-3 py-2 text-slate-600 dark:text-slate-400">{balance.bank_branch?.name}</TableCell>
+									<TableCell className="px-3 py-2 text-right font-mono tabular-nums">
+										{isETB ? formatCurrency(amount) : '0.00'}
+									</TableCell>
+									<TableCell className="px-3 py-2 text-right font-mono tabular-nums">
+										{!isETB ? formatCurrency(amount) : '0.00'}
+									</TableCell>
+									<TableCell className="px-3 py-2">
+										<span className="inline-flex rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold tracking-widest text-slate-700 uppercase dark:bg-slate-700 dark:text-slate-300">
+											{currency}
+										</span>
+									</TableCell>
+									<TableCell className="px-3 py-2 font-mono tabular-nums">{rate.toFixed(4)}</TableCell>
+									<TableCell className="px-3 py-2 pr-6 text-right font-mono font-bold text-green-700 dark:text-green-500 tabular-nums">
+										{formatCurrency(subtotal)}
+									</TableCell>
+								</TableRow>
+							);
+						})}
+					</TableBody>
+					<TableFooter className="bg-slate-100 dark:bg-slate-800">
+						<TableRow>
+							<TableCell colSpan={2} className="px-3 py-2 text-right font-bold">
+								Totals
+							</TableCell>
+							<TableCell className="px-3 py-2 text-right font-mono font-bold tabular-nums">
+								{formatCurrency(sumAmountETB)}
+							</TableCell>
+							<TableCell className="px-3 py-2 text-right font-mono font-bold text-slate-400">
+								—
+							</TableCell>
+							<TableCell colSpan={2} className="px-3 py-2 text-right text-xs font-bold tracking-wide text-slate-500 uppercase">
+								Grand Total:
+							</TableCell>
+							<TableCell className="px-3 py-2 pr-6 text-right font-mono font-bold text-green-700 dark:text-green-500 tabular-nums">
+								{formatCurrency(sumTotalETB)} ETB
+							</TableCell>
+						</TableRow>
+					</TableFooter>
+				</Table>
+			</div>
+		</div>
+	);
+}
 
 export default function WeeklyBudgetCeoView({
 	items,
@@ -669,12 +794,15 @@ export default function WeeklyBudgetCeoView({
 		);
 	}
 
+
+	const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
 	function openWeekBalanceDetails() {
 		if (!weekBalanceDetailId) {
 			triggerPopup('Error', 'No bank balance details found for the selected week.', 'error');
 			return;
 		}
-		router.visit(route('bank-balances.show', weekBalanceDetailId));
+		setIsDetailsOpen(true);
 	}
 
 	function setChartDepartmentChecks(next: Record<string, boolean>) {
@@ -715,6 +843,20 @@ export default function WeeklyBudgetCeoView({
 		applyFilters({ department_id: 'all', department_ids: selected.join(',') }, tableOnly);
 	}
 
+	const isAllChartDepartmentsSelected = useMemo(() => {
+		const keys = departmentShareRows.map((row) => String(row.department_id ?? 'none'));
+		return keys.length > 0 && keys.every((id) => checkedChartDepartments[id] !== false);
+	}, [departmentShareRows, checkedChartDepartments]);
+
+	function handleToggleAllChartDepartments(checked: boolean) {
+		const keys = departmentShareRows.map((row) => String(row.department_id ?? 'none'));
+		const next: Record<string, boolean> = { ...checkedChartDepartments };
+		keys.forEach((key) => {
+			next[key] = checked;
+		});
+		setChartDepartmentChecks(next);
+	}
+
 	function handleChartDepartmentToggle(key: string, checked: boolean) {
 		setChartDepartmentChecks({
 			...checkedChartDepartments,
@@ -738,16 +880,18 @@ export default function WeeklyBudgetCeoView({
 						<CardTitle className="flex items-center gap-2">
 							<Filter className="size-4 text-muted-foreground" /> Filters
 						</CardTitle>
-						<div className="flex flex-col gap-3 pt-2">
-							{/* First Row: 5 filters (Department, Branch, Fiscal Year, Fiscal Month, Week) */}
-							<div className="flex flex-wrap items-end gap-3">
+						<div className="pt-2">
+							{/* Single Row: All 9 filters */}
+							<div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
 								<Popover open={openDepartmentFilter} onOpenChange={setOpenDepartmentFilter}>
 									<PopoverTrigger asChild>
-										<Button variant="outline" role="combobox" className="w-[180px] justify-between font-normal">
-											{selectedDepartmentOption?.name
-												?? (selectedDepartmentIds !== 'all' && selectedDepartmentIds !== 'none'
-													? `${parseDepartmentIds(selectedDepartmentIds).length} Departments`
-													: 'All Departments')}
+										<Button variant="outline" role="combobox" className="w-[130px] h-8 text-xs px-2 justify-between font-normal">
+											<span className="truncate text-left">
+												{selectedDepartmentOption?.name
+													?? (selectedDepartmentIds !== 'all' && selectedDepartmentIds !== 'none'
+														? `${parseDepartmentIds(selectedDepartmentIds).length} Departments`
+														: 'All Departments')}
+											</span>
 											<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
 										</Button>
 									</PopoverTrigger>
@@ -825,10 +969,10 @@ export default function WeeklyBudgetCeoView({
 											<Button
 												variant="outline"
 												role="combobox"
-												className="w-[180px] justify-between font-normal"
+												className="w-[120px] h-8 text-xs px-2 justify-between font-normal"
 												disabled={!canFilterByBranch}
 											>
-												{selectedBranchOption?.name ?? 'All Branches'}
+												<span className="truncate text-left">{selectedBranchOption?.name ?? 'All Branches'}</span>
 												<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
 											</Button>
 										</PopoverTrigger>
@@ -886,7 +1030,7 @@ export default function WeeklyBudgetCeoView({
 										applyFilters({ fiscal_year_id: value, fiscal_month_id: 'all', week_start_date: 'all' });
 									}}
 								>
-									<SelectTrigger className="w-[150px]">
+									<SelectTrigger className="w-[110px] h-8 text-xs px-2">
 										<SelectValue placeholder="Fiscal Year" />
 									</SelectTrigger>
 									<SelectContent>
@@ -907,7 +1051,7 @@ export default function WeeklyBudgetCeoView({
 										applyFilters({ fiscal_month_id: value, week_start_date: 'all' });
 									}}
 								>
-									<SelectTrigger className="w-[150px]">
+									<SelectTrigger className="w-[110px] h-8 text-xs px-2">
 										<SelectValue placeholder="Fiscal Month" />
 									</SelectTrigger>
 									<SelectContent>
@@ -927,11 +1071,10 @@ export default function WeeklyBudgetCeoView({
 										applyFilters({ week_start_date: value });
 									}}
 								>
-									<SelectTrigger className="w-[240px]">
-										<SelectValue placeholder="All Weeks" />
+									<SelectTrigger className="w-[130px] h-8 text-xs px-2">
+										<SelectValue placeholder="Select Week" />
 									</SelectTrigger>
 									<SelectContent>
-										<SelectItem value="all">All Weeks</SelectItem>
 										{weekFilterOptions.map((week) => (
 											<SelectItem key={week.startDate} value={week.startDate}>
 												{week.label}
@@ -939,10 +1082,8 @@ export default function WeeklyBudgetCeoView({
 										))}
 									</SelectContent>
 								</Select>
-							</div>
 
-							{/* Second Row: Rest of the filters (Request Type, CEO Status, Payment Category, Payment Type, Clear Filters) */}
-							<div className="flex flex-wrap items-end gap-3">
+								{/* Rest of the filters (Request Type, CEO Status, Payment Category, Payment Type, Clear Filters) */}
 								<Select
 									value={selectedRequestType}
 									onValueChange={(value) => {
@@ -950,7 +1091,7 @@ export default function WeeklyBudgetCeoView({
 										applyFilters({ request_type: value });
 									}}
 								>
-									<SelectTrigger className="w-[180px]">
+									<SelectTrigger className="w-[130px] h-8 text-xs px-2">
 										<SelectValue placeholder="Request Type" />
 									</SelectTrigger>
 									<SelectContent>
@@ -970,7 +1111,7 @@ export default function WeeklyBudgetCeoView({
 										applyFilters({ status_ceo: value });
 									}}
 								>
-									<SelectTrigger className="w-[150px]">
+									<SelectTrigger className="w-[110px] h-8 text-xs px-2">
 										<SelectValue placeholder="CEO Status" />
 									</SelectTrigger>
 									<SelectContent>
@@ -982,7 +1123,6 @@ export default function WeeklyBudgetCeoView({
 										))}
 									</SelectContent>
 								</Select>
-
 								<Select
 									value={selectedPaymentCategory}
 									onValueChange={(value) => {
@@ -991,7 +1131,7 @@ export default function WeeklyBudgetCeoView({
 										applyFilters({ payment_category_id: value, payment_type_id: 'all' });
 									}}
 								>
-									<SelectTrigger className="w-[180px]">
+									<SelectTrigger className="w-[130px] h-8 text-xs px-2">
 										<SelectValue placeholder="Payment Category" />
 									</SelectTrigger>
 									<SelectContent>
@@ -1003,14 +1143,19 @@ export default function WeeklyBudgetCeoView({
 										))}
 									</SelectContent>
 								</Select>
+							</div>
 
+							{/* Second Row: Payment Type and Clear Button */}
+							<div className="flex items-center gap-2 overflow-x-auto pb-1 mt-1 scrollbar-thin">
 								<Popover open={openPaymentTypeFilter} onOpenChange={setOpenPaymentTypeFilter}>
 									<PopoverTrigger asChild>
-										<Button variant="outline" role="combobox" className="w-[220px] justify-between font-normal">
-											{selectedPaymentType === 'all'
-												? 'All Payment Types'
-												: (filteredPaymentTypes.find((paymentType) => String(paymentType.id) === selectedPaymentType)?.name ??
-													'All Payment Types')}
+										<Button variant="outline" role="combobox" className="w-[130px] h-8 text-xs px-2 justify-between font-normal">
+											<span className="truncate text-left">
+												{selectedPaymentType === 'all'
+													? 'All Payment Types'
+													: (filteredPaymentTypes.find((paymentType) => String(paymentType.id) === selectedPaymentType)?.name ??
+														'All Payment Types')}
+											</span>
 											<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
 										</Button>
 									</PopoverTrigger>
@@ -1059,8 +1204,8 @@ export default function WeeklyBudgetCeoView({
 								</Popover>
 
 								{hasActiveFilters && (
-									<Button type="button" variant="secondary" onClick={clearFilters}>
-										<X className="mr-1 size-4" /> Clear Filters
+									<Button type="button" variant="secondary" className="h-8 text-xs px-2 whitespace-nowrap" onClick={clearFilters}>
+										<X className="mr-1 size-3" /> Clear Filters
 									</Button>
 								)}
 							</div>
@@ -1086,22 +1231,46 @@ export default function WeeklyBudgetCeoView({
 
 				<div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
 					<div className="xl:col-span-1">
-						<Card className="h-full gap-0 border-0 bg-white py-0 shadow-md dark:bg-slate-900">
+						<Card className="h-full gap-0 bg-white py-0 shadow-md dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600">
 							<CardContent className="flex h-full flex-col px-6 py-5">
 								<VolumeMetricBlock
 									title="Weekly Balance"
 									amount={weeklyBalance}
 									action={
-										<Button
-											type="button"
-											size="sm"
-											variant="outline"
-											className="h-7 rounded-md border-blue-100 bg-blue-50 px-2.5 text-xs font-medium text-blue-700 shadow-none hover:bg-blue-100 hover:text-blue-800 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200 dark:hover:bg-blue-900/60"
-											onClick={openWeekBalanceDetails}
-											disabled={!weekBalanceDetailId}
-										>
-											See Details
-										</Button>
+										<>
+											<Button
+												type="button"
+												size="sm"
+												variant="outline"
+												disabled={weeklyBalance === 0}
+												className="h-7 rounded-md border-blue-100 bg-blue-50 px-2.5 text-xs font-medium text-blue-700 shadow-none hover:bg-blue-100 hover:text-blue-800 disabled:opacity-50 disabled:pointer-events-none dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200 dark:hover:bg-blue-900/60"
+												onClick={openWeekBalanceDetails}
+											>
+												See Details
+											</Button>
+											<Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+												<DialogContent className="!max-w-[95vw] !w-[90vw] xl:!w-[1200px] max-h-[90vh] overflow-hidden flex flex-col p-6">
+													<DialogHeader className="shrink-0">
+														<div className="flex items-center justify-between">
+															<DialogTitle>Bank Balance Details</DialogTitle>
+														</div>
+													</DialogHeader>
+													<div className="flex-1 overflow-y-auto min-h-0 pr-2">
+														<WeekBalanceDialogContent 
+															balances={balancesForSelectedWeek} 
+															estimatedSales={estimatedSales}
+															bankBalance={bankBalance}
+															weeklyBalance={weeklyBalance}
+														/>
+													</div>
+													<div className="flex justify-end shrink-0 mt-4">
+														<DialogClose asChild>
+															<Button variant="outline">Close</Button>
+														</DialogClose>
+													</div>
+												</DialogContent>
+											</Dialog>
+										</>
 									}
 									left={{
 										label: 'Estimated Sales',
@@ -1124,7 +1293,7 @@ export default function WeeklyBudgetCeoView({
 										amount={totalRequested}
 										amountNote={
 											requestedShareOfBalance !== null ? (
-												<span className="text-sm font-medium text-slate-400">
+												<span className="text-sm font-bold text-slate-900 dark:text-slate-50">
 													({formatPercent2(requestedShareOfBalance)}% of Balance)
 												</span>
 											) : undefined
@@ -1151,14 +1320,21 @@ export default function WeeklyBudgetCeoView({
 										</div>
 									) : (
 										<div>
-											<div className="mb-2 flex items-center gap-1.5">
-												<span className="w-4 shrink-0" />
+											<div className="mb-2 flex items-end gap-1.5">
+												<Checkbox
+													checked={isAllChartDepartmentsSelected}
+													onCheckedChange={handleToggleAllChartDepartments}
+													aria-label="Select all departments"
+													className="shrink-0 mb-[1px] border-2 border-slate-400 dark:border-slate-500"
+												/>
 												<div className="flex min-w-0 flex-1 items-center gap-1.5">
-													<span className="min-w-0 flex-1" />
-													<span className="w-[6.25rem] shrink-0 text-right text-[11px] font-medium text-slate-400">
+													<span className="min-w-0 flex-1 text-xs font-bold text-slate-700 dark:text-slate-300">
+														Select All
+													</span>
+													<span className="w-[6.25rem] shrink-0 text-right text-[11px] font-bold text-slate-900 dark:text-slate-50">
 														Amount
 													</span>
-													<span className="w-[3.75rem] shrink-0 text-right text-[11px] font-medium whitespace-nowrap text-slate-400">
+													<span className="w-[3.75rem] shrink-0 text-right text-[11px] font-bold whitespace-nowrap text-slate-900 dark:text-slate-50">
 														% Bal
 													</span>
 												</div>
@@ -1179,7 +1355,7 @@ export default function WeeklyBudgetCeoView({
 																checked={isChecked}
 																onCheckedChange={(checked) => handleChartDepartmentToggle(key, checked === true)}
 																aria-label={`Filter table by ${row.department}`}
-																className="mt-[1.35rem] shrink-0"
+																className="mt-[1.35rem] shrink-0 border-2 border-slate-400 dark:border-slate-500"
 															/>
 															<div className="min-w-0 flex-1">
 																<div
@@ -1208,7 +1384,7 @@ export default function WeeklyBudgetCeoView({
 																	<span className="w-[6.25rem] shrink-0 text-right text-sm font-bold leading-5 tabular-nums text-slate-900 dark:text-slate-100">
 																		{formatSummaryAmount(row.amount)}
 																	</span>
-																	<span className="w-[3.75rem] shrink-0 text-right text-sm leading-5 tabular-nums text-slate-400">
+																	<span className="w-[3.75rem] shrink-0 text-right text-sm font-bold leading-5 tabular-nums text-slate-900 dark:text-slate-50">
 																		{formatPercent2(row.percent)}%
 																	</span>
 																</div>
@@ -1225,7 +1401,7 @@ export default function WeeklyBudgetCeoView({
 					</div>
 
 					<div className="min-w-0 xl:col-span-2">
-						<Card className="gap-2 py-0">
+						<Card className="gap-2 py-0 border-2 border-slate-300 dark:border-slate-600">
 							<CardHeader className="px-6 py-3">
 								<div className="flex items-center justify-between gap-3">
 									<CardTitle>Weekly Budgets</CardTitle>
@@ -1233,8 +1409,26 @@ export default function WeeklyBudgetCeoView({
 										📥 Export CSV
 									</Button>
 								</div>
+								<div className="mt-3 flex items-center gap-4">
+									<span className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter Status:</span>
+									<div className="flex items-center gap-6">
+										{['all', 'pending', 'approved', 'rejected'].map((status) => (
+											<label key={status} className="flex items-center gap-2 cursor-pointer">
+												<Checkbox
+													checked={selectedStatusCeo === status}
+													onCheckedChange={(checked) => {
+														const newStatus = checked ? status : 'all';
+														setSelectedStatusCeo(newStatus);
+														applyFilters({ status_ceo: newStatus });
+													}}
+												/>
+												<span className="text-sm capitalize text-slate-700 dark:text-slate-300">{status}</span>
+											</label>
+										))}
+									</div>
+								</div>
 								{canManageCeo && (
-									<div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border bg-slate-50 px-3 py-2 dark:bg-slate-900">
+									<div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border bg-slate-50 px-3 py-2 dark:bg-slate-900">
 										<span className="text-sm font-medium">Bulk Action ({selectedIds.length} selected):</span>
 										<Select value={bulkStatus} onValueChange={setBulkStatus}>
 											<SelectTrigger className="w-[180px] bg-white dark:bg-slate-800">

@@ -30,7 +30,7 @@ export default function TargetKpiCard({ data, holidayName }: Props) {
     if (!data || data.length === 0) return null;
 
     return (
-        <Card className="border shadow-sm">
+        <Card className="border-2 border-slate-300 dark:border-slate-600 shadow-sm bg-white dark:bg-slate-900">
             <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                     <Target className="h-5 w-5 text-blue-600" />

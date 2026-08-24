@@ -43,12 +43,27 @@ class SalesBudgetController extends Controller
             ->first();
     }
 
+    private function getCurrentPeriodIds(): array
+    {
+        $today = Carbon::today();
+        $currentMonth = FiscalMonth::where('gregorian_start_date', '<=', $today)
+            ->where('gregorian_end_date', '>=', $today)
+            ->first();
+            
+        return [
+            'fiscal_year_id' => $currentMonth?->fiscal_year_id,
+            'fiscal_month_id' => $currentMonth?->id,
+        ];
+    }
+
     // GET /budget/sales-budget → show list
     public function index(Request $request)
     {
+        $currentPeriod = $this->getCurrentPeriodIds();
+
         $branchId = $request->input('branch_id');
-        $fiscalYearId = $request->input('fiscal_year_id');
-        $fiscalMonthId = $request->input('fiscal_month_id');
+        $fiscalYearId = $request->has('fiscal_year_id') ? $request->input('fiscal_year_id') : $currentPeriod['fiscal_year_id'];
+        $fiscalMonthId = $request->has('fiscal_month_id') ? $request->input('fiscal_month_id') : $currentPeriod['fiscal_month_id'];
         $ethiopianYear = $request->input('ethiopian_year');
         $ethiopianMonth = $request->input('ethiopian_month');
         $showUnbudgeted = filter_var($request->input('show_unbudgeted', false), FILTER_VALIDATE_BOOLEAN);
@@ -181,9 +196,11 @@ class SalesBudgetController extends Controller
 
     public function export(Request $request, CsvExportService $csvExportService)
     {
+        $currentPeriod = $this->getCurrentPeriodIds();
+
         $branchId = $request->input('branch_id');
-        $fiscalYearId = $request->input('fiscal_year_id');
-        $fiscalMonthId = $request->input('fiscal_month_id');
+        $fiscalYearId = $request->has('fiscal_year_id') ? $request->input('fiscal_year_id') : $currentPeriod['fiscal_year_id'];
+        $fiscalMonthId = $request->has('fiscal_month_id') ? $request->input('fiscal_month_id') : $currentPeriod['fiscal_month_id'];
         $ethiopianYear = $request->input('ethiopian_year');
         $showUnbudgeted = filter_var($request->input('show_unbudgeted', false), FILTER_VALIDATE_BOOLEAN);
 
@@ -319,12 +336,15 @@ class SalesBudgetController extends Controller
             ->orderBy('efy_month_number')
             ->get();
         $monthNames = SalesBudget::$monthNames;
+        $currentPeriod = $this->getCurrentPeriodIds();
 
         return inertia('Budget/SalesBudget/Create', [
             'branches' => $branches,
             'fiscalYears' => $fiscalYears,
             'fiscalMonths' => $fiscalMonths,
             'monthNames' => $monthNames,
+            'currentFiscalYearId' => $currentPeriod['fiscal_year_id'],
+            'currentFiscalMonthId' => $currentPeriod['fiscal_month_id'],
         ]);
     }
 
@@ -673,13 +693,20 @@ class SalesBudgetController extends Controller
     } // GET /budget/sales-budget/logs → view logs
     public function logs(Request $request)
     {
+        $currentPeriod = $this->getCurrentPeriodIds();
+
         $action = $request->input('action');
         $branchId = $request->input('branch_id');
-        $fiscalYearId = $request->input('fiscal_year_id');
-        $ethiopianMonth = $request->input('ethiopian_month');
+        $fiscalYearId = $request->has('fiscal_year_id') ? $request->input('fiscal_year_id') : $currentPeriod['fiscal_year_id'];
+        $fiscalMonthId = $request->has('fiscal_month_id') ? $request->input('fiscal_month_id') : $currentPeriod['fiscal_month_id'];
 
         $branches = Branch::orderBy('name')->get();
         $fiscalYears = FiscalYear::orderByDesc('id')->get();
+        $fiscalMonths = FiscalMonth::query()
+            ->select('id', 'fiscal_year_id', 'name', 'efy_month_number')
+            ->orderBy('fiscal_year_id')
+            ->orderBy('efy_month_number')
+            ->get();
 
         $logsQuery = SalesBudgetLog::query()
             ->with([
@@ -699,6 +726,11 @@ class SalesBudgetController extends Controller
                     $budgetQuery->where('fiscal_year_id', $fiscalYearId);
                 });
             })
+            ->when($request->filled('fiscal_month_id'), function ($query) use ($fiscalMonthId) {
+                $query->whereHas('salesBudget', function ($budgetQuery) use ($fiscalMonthId) {
+                    $budgetQuery->where('fiscal_month_id', $fiscalMonthId);
+                });
+            })
             ->orderBy('created_at', 'desc');
 
         $logs = $logsQuery->paginate(10)->appends($request->query());
@@ -707,11 +739,12 @@ class SalesBudgetController extends Controller
             'logs' => $logs,
             'branches' => $branches,
             'fiscalYears' => $fiscalYears,
+            'fiscalMonths' => $fiscalMonths,
             'request' => [
                 'action' => $action,
                 'branch_id' => $branchId,
                 'fiscal_year_id' => $fiscalYearId,
-                'ethiopian_month' => $ethiopianMonth,
+                'fiscal_month_id' => $fiscalMonthId,
             ],
         ]);
     }

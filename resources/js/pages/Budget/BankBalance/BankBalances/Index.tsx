@@ -78,6 +78,7 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
     const [search, setSearch] = useState('');
     const [isOpen, setIsOpen] = useState(false);
     const [step, setStep] = useState(1);
+    const [submitAttempted, setSubmitAttempted] = useState(false);
     const [formBalances, setFormBalances] = useState<Record<string, { bank_id: number, bank_branch_id: number, amount: string, exchange_rate: string, currency: string }>>({});
 
     const [estimatedSales, setEstimatedSales] = useState('');
@@ -113,8 +114,8 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                 bank_id: b.bank_id,
                 bank_branch_id: b.bank_branch_id,
                 amount: parseFloat(b.amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
-                exchange_rate: parseFloat(b.exchange_rate).toFixed(4),
-                currency: b.currency
+                exchange_rate: (b.bank?.currency || 'ETB') === 'ETB' ? '' : parseFloat(b.exchange_rate).toFixed(4),
+                currency: b.bank?.currency || 'ETB'
             };
         });
         setFormBalances(initialForm);
@@ -133,12 +134,19 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
 
     const sumDifference = useMemo(() => {
         return sortedBranches.reduce((acc, branch) => {
-            const val = formBalances[branch.id] || { amount: '', exchange_rate: '1.0000' };
+            const bank = banks.find(b => b.id === branch.bank_id);
+            const bankCurrency = bank?.currency || 'ETB';
+            const val = formBalances[branch.id] || { amount: '', exchange_rate: '' };
             const amt = parseFloat(String(val.amount).replace(/,/g, '')) || 0;
-            const rate = parseFloat(String(val.exchange_rate).replace(/,/g, '')) || 1;
+            let rate = parseFloat(String(val.exchange_rate).replace(/,/g, '')) || (bankCurrency === 'ETB' ? 1 : 0);
+            
+            if (bankCurrency !== 'ETB' && rate > 0 && rate < 100) {
+                rate = 0;
+            }
+
             return acc + (amt * rate);
         }, 0);
-    }, [sortedBranches, formBalances]);
+    }, [sortedBranches, formBalances, banks]);
 
     const groupedBalances = useMemo(() => {
         const groups: Record<string, any> = {};
@@ -166,7 +174,11 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                     total_amount_base: 0
                 };
             }
-            groups[key].total_amount_base += (parseFloat(b.amount) || 0) * (parseFloat(b.exchange_rate) || 1);
+            let bRate = parseFloat(b.exchange_rate) || 1;
+            if (b.currency && b.currency !== 'ETB' && bRate > 0 && bRate < 100) {
+                bRate = 0;
+            }
+            groups[key].total_amount_base += (parseFloat(b.amount) || 0) * bRate;
         });
 
         return Object.values(groups).sort((a, b) => b.id - a.id);
@@ -227,7 +239,7 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
         setFormBalances(prev => ({
             ...prev,
             [branchId]: {
-                ...(prev[branchId] || { bank_id: bankId, bank_branch_id: branchId, exchange_rate: '1.0000', currency: bankCurrency }),
+                ...(prev[branchId] || { bank_id: bankId, bank_branch_id: branchId, exchange_rate: '', currency: bankCurrency }),
                 amount: formatAsYouType(val)
             }
         }));
@@ -247,7 +259,7 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
         setFormBalances(prev => ({
             ...prev,
             [branchId]: {
-                ...(prev[branchId] || { bank_id: bankId, bank_branch_id: branchId, amount: '', exchange_rate: '1.0000' }),
+                ...(prev[branchId] || { bank_id: bankId, bank_branch_id: branchId, amount: '', exchange_rate: '' }),
                 currency: val
             }
         }));
@@ -255,6 +267,7 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
 
     function handleOpenModal(balance: any = null) {
         clearErrors();
+        setSubmitAttempted(false);
         if (balance) {
             setData({
                 fiscal_year_id: balance.fiscal_year_id.toString(),
@@ -305,15 +318,34 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
+        setSubmitAttempted(true);
+
+        const hasInvalidExchangeRate = Object.values(formBalances).some(b => {
+            const cleanAmount = parseFloat(String(b.amount).replace(/,/g, '')) || 0;
+            if (b.currency !== 'ETB' && cleanAmount > 0) {
+                const rate = parseFloat(String(b.exchange_rate).replace(/,/g, '')) || 0;
+                if (rate < 100) {
+                    return true;
+                }
+            }
+            return false;
+        });
+
+        if (hasInvalidExchangeRate) {
+            toast.error('Exchange Rate of the amount must be greaterthan 100');
+            return;
+        }
+
+
+
         transform((data) => ({
             ...data,
             estimated_weekly_sales: estimatedSales.replace(/,/g, ''),
             balances: Object.values(formBalances)
-                .filter(b => b.amount !== '' && parseFloat(String(b.amount).replace(/,/g, '')) > 0)
                 .map(({ currency, ...rest }) => ({
                     ...rest,
                     amount: String(rest.amount).replace(/,/g, ''),
-                    exchange_rate: String(rest.exchange_rate).replace(/,/g, '')
+                    exchange_rate: currency === 'ETB' ? '1' : String(rest.exchange_rate).replace(/,/g, '')
                 }))
         }));
         post(route('bank-balances.store'), {
@@ -412,7 +444,7 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                     </CardContent>
                 </Card>
 
-                <Dialog open={isOpen} onOpenChange={(val) => { setIsOpen(val); if (!val) { setStep(1); setFormBalances({}); reset(); } }}>
+                <Dialog open={isOpen} onOpenChange={(val) => { setIsOpen(val); if (!val) { setStep(1); setFormBalances({}); reset(); setSubmitAttempted(false); } }}>
                     <DialogContent className={`overflow-x-hidden rounded-2xl border border-gray-100 backdrop-blur-sm transition-none ${step === 1 ? 'max-w-xl' : 'max-w-[95vw] sm:max-w-4xl md:max-w-5xl'}`}>
                         <DialogHeader>
                             <DialogTitle>{step === 1 ? 'Record Bank Balances - Step 1: Period' : 'Record Bank Balances - Step 2: Amounts'}</DialogTitle>
@@ -500,9 +532,10 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                                             {sortedBranches.map(branch => {
                                                 const bank = banks.find(b => b.id === branch.bank_id);
                                                 const bankCurrency = bank?.currency || 'ETB';
-                                                const val = formBalances[branch.id] || { amount: '', exchange_rate: '1.0000', currency: bankCurrency };
+                                                const val = formBalances[branch.id] || { amount: '', exchange_rate: '', currency: bankCurrency };
                                                 const cleanAmount = parseFloat(String(val.amount).replace(/,/g, '')) || 0;
-                                                const cleanRate = parseFloat(String(val.exchange_rate).replace(/,/g, '')) || 1;
+                                                const cleanRate = parseFloat(String(val.exchange_rate).replace(/,/g, '')) || (bankCurrency === 'ETB' ? 1 : 0);
+                                                const effectiveRate = (bankCurrency !== 'ETB' && cleanRate > 0 && cleanRate < 100) ? 0 : cleanRate;
                                                 return (
                                                     <TableRow key={branch.id}>
                                                         <TableCell className="font-medium text-xs">{bank?.name}</TableCell>
@@ -511,6 +544,7 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                                                         <TableCell>
                                                             <Input
                                                                 type="text" value={val.amount}
+                                                                required
                                                                 onChange={(e) => handleAmountChange(branch.id, branch.bank_id, bankCurrency, e.target.value)}
                                                                 onBlur={(e) => {
                                                                     const parsed = parseFloat(e.target.value.replace(/,/g, ''));
@@ -520,20 +554,28 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                                                                 className="h-8 text-sm min-w-32 w-full text-right"
                                                             />
                                                         </TableCell>
-                                                        <TableCell>
-                                                            <Input
-                                                                type="text" value={val.exchange_rate}
-                                                                onChange={(e) => handleRateChange(branch.id, branch.bank_id, bankCurrency, e.target.value)}
-                                                                onBlur={(e) => {
-                                                                    const parsed = parseFloat(e.target.value.replace(/,/g, ''));
-                                                                    handleRateChange(branch.id, branch.bank_id, bankCurrency, isNaN(parsed) ? '1.0000' : parsed.toFixed(4));
-                                                                }}
-                                                                className="h-8 text-sm min-w-28 w-full text-right disabled:opacity-100 disabled:bg-slate-50 disabled:text-slate-500"
-                                                                disabled={bankCurrency === 'ETB'}
-                                                            />
+                                                        <TableCell className="align-top pt-2">
+                                                            <div className="flex flex-col items-end">
+                                                                <Input
+                                                                    type="text"
+                                                                    required={bankCurrency !== 'ETB'}
+                                                                    value={val.exchange_rate}
+                                                                    onChange={(e) => handleRateChange(branch.id, branch.bank_id, bankCurrency, e.target.value)}
+                                                                    onBlur={(e) => {
+                                                                        if (bankCurrency === 'ETB') return;
+                                                                        const parsed = parseFloat(e.target.value.replace(/,/g, ''));
+                                                                        if (e.target.value !== '' && !isNaN(parsed)) {
+                                                                            handleRateChange(branch.id, branch.bank_id, bankCurrency, parsed.toLocaleString('en-US', {minimumFractionDigits: 4, maximumFractionDigits: 4}));
+                                                                        }
+                                                                    }}
+                                                                    placeholder="0.00"
+                                                                    className="h-8 text-sm min-w-28 w-full text-right disabled:opacity-100 disabled:bg-slate-50 disabled:text-slate-500"
+                                                                    disabled={bankCurrency === 'ETB'}
+                                                                />
+                                                            </div>
                                                         </TableCell>
                                                         <TableCell className="font-bold text-sm text-green-700 min-w-32 text-right pr-6">
-                                                            {(cleanAmount * cleanRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                            {(cleanAmount * effectiveRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                         </TableCell>
                                                     </TableRow>
                                                 )

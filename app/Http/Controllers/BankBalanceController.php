@@ -65,7 +65,7 @@ class BankBalanceController extends Controller
         $validated = $request->validate([
             'fiscal_year_id' => 'required|exists:fiscal_years,id',
             'fiscal_month_id' => 'required|exists:fiscal_months,id',
-            'week_number' => 'required|integer|min:1|max:6',
+            'week_number' => 'required|integer|min:1|max:10',
             'estimated_weekly_sales' => 'required|numeric|min:0',
             'balances' => 'required|array',
             'balances.*.bank_id' => 'required|exists:banks,id',
@@ -119,7 +119,7 @@ class BankBalanceController extends Controller
             }
         }
 
-        return redirect()->back()->with('message', 'Bank balances recorded successfully.');
+        return redirect()->back()->with('message', 'Successfully recorded balance');
     }
 
     public function show($id)
@@ -160,7 +160,7 @@ class BankBalanceController extends Controller
         $validated = $request->validate([
             'fiscal_year_id' => 'required|exists:fiscal_years,id',
             'fiscal_month_id' => 'required|exists:fiscal_months,id',
-            'week_number' => 'required|integer|min:1|max:5',
+            'week_number' => 'required|integer|min:1|max:10',
             'bank_id' => 'required|exists:banks,id',
             'bank_branch_id' => 'required|exists:bank_branches,id',
             'amount' => 'required|numeric|min:0',
@@ -172,7 +172,7 @@ class BankBalanceController extends Controller
 
         $bankBalance->update($validated);
 
-        return redirect()->back()->with('message', 'Bank balance updated successfully.');
+        return redirect()->back()->with('message', 'Successfully recorded balance');
     }
 
     public function destroy($id)
