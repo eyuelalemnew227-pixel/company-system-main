@@ -565,7 +565,7 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                                                                         if (bankCurrency === 'ETB') return;
                                                                         const parsed = parseFloat(e.target.value.replace(/,/g, ''));
                                                                         if (e.target.value !== '' && !isNaN(parsed)) {
-                                                                            handleRateChange(branch.id, branch.bank_id, bankCurrency, parsed.toLocaleString('en-US', {minimumFractionDigits: 4, maximumFractionDigits: 4}));
+                                                                            handleRateChange(branch.id, branch.bank_id, bankCurrency, parsed.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
                                                                         }
                                                                     }}
                                                                     placeholder="0.00"
