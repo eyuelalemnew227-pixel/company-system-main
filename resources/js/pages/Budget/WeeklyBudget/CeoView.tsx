@@ -881,332 +881,346 @@ export default function WeeklyBudgetCeoView({
 							<Filter className="size-4 text-muted-foreground" /> Filters
 						</CardTitle>
 						<div className="pt-2">
-							{/* Single Row: All 9 filters */}
-							<div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
-								<Popover open={openDepartmentFilter} onOpenChange={setOpenDepartmentFilter}>
-									<PopoverTrigger asChild>
-										<Button variant="outline" role="combobox" className="w-[130px] h-8 text-xs px-2 justify-between font-normal">
-											<span className="truncate text-left">
-												{selectedDepartmentOption?.name
-													?? (selectedDepartmentIds !== 'all' && selectedDepartmentIds !== 'none'
-														? `${parseDepartmentIds(selectedDepartmentIds).length} Departments`
-														: 'All Departments')}
-											</span>
-											<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-										</Button>
-									</PopoverTrigger>
-									<PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-										<Command>
-											<CommandInput placeholder="Search departments..." />
-											<CommandList className="max-h-60">
-												<CommandEmpty>No departments found.</CommandEmpty>
-												<CommandGroup>
-													<CommandItem
-														value="All Departments"
-														onSelect={() => {
-															setSelectedDepartment('all');
-															setSelectedDepartmentIds('all');
-															setCheckedChartDepartments(
-																Object.fromEntries(
-																	departmentShareRows.map((row) => [String(row.department_id ?? 'none'), true]),
-																),
-															);
-															setSelectedBranch('all');
-															setSelectedWeekStartDate('all');
-															setOpenDepartmentFilter(false);
-															applyFilters({ department_id: 'all', department_ids: 'all', branch_id: 'all', week_start_date: 'all' });
-														}}
-													>
-														<Check
-															className={cn('mr-2 size-4', selectedDepartment === 'all' ? 'opacity-100' : 'opacity-0')}
-														/>
-														All Departments
-													</CommandItem>
-													{departments.map((department) => (
+							<div className="flex flex-wrap items-center gap-2 w-full px-4 py-3">
+								<div className="w-auto">
+									<Popover open={openDepartmentFilter} onOpenChange={setOpenDepartmentFilter}>
+										<PopoverTrigger asChild>
+											<Button variant="outline" role="combobox" className="w-auto h-7 text-xs py-1 pl-2 pr-1 gap-0.5 justify-between font-normal">
+												<span className="text-left">
+													{selectedDepartmentOption?.name
+														?? (selectedDepartmentIds !== 'all' && selectedDepartmentIds !== 'none'
+															? `${parseDepartmentIds(selectedDepartmentIds).length} Departments`
+															: 'All Departments')}
+												</span>
+												<ChevronsUpDown className="ml-0.5 w-3 h-3 shrink-0 opacity-50" />
+											</Button>
+										</PopoverTrigger>
+										<PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+											<Command>
+												<CommandInput placeholder="Search departments..." />
+												<CommandList className="max-h-60">
+													<CommandEmpty>No departments found.</CommandEmpty>
+													<CommandGroup>
 														<CommandItem
-															key={department.id}
-															value={department.name}
+															value="All Departments"
 															onSelect={() => {
-																setSelectedDepartment(String(department.id));
+																setSelectedDepartment('all');
 																setSelectedDepartmentIds('all');
 																setCheckedChartDepartments(
 																	Object.fromEntries(
-																		departmentShareRows.map((row) => [
-																			String(row.department_id ?? 'none'),
-																			String(row.department_id) === String(department.id),
-																		]),
+																		departmentShareRows.map((row) => [String(row.department_id ?? 'none'), true]),
 																	),
 																);
 																setSelectedBranch('all');
 																setSelectedWeekStartDate('all');
 																setOpenDepartmentFilter(false);
-																applyFilters({
-																	department_id: String(department.id),
-																	department_ids: 'all',
-																	branch_id: 'all',
-																	week_start_date: 'all',
-																});
+																applyFilters({ department_id: 'all', department_ids: 'all', branch_id: 'all', week_start_date: 'all' });
 															}}
 														>
 															<Check
-																className={cn(
-																	'mr-2 size-4',
-																	selectedDepartment === String(department.id) ? 'opacity-100' : 'opacity-0',
-																)}
+																className={cn('mr-2 size-4', selectedDepartment === 'all' ? 'opacity-100' : 'opacity-0')}
 															/>
-															{department.name}
+															All Departments
 														</CommandItem>
-													))}
-												</CommandGroup>
-											</CommandList>
-										</Command>
-									</PopoverContent>
-								</Popover>
+														{departments.map((department) => (
+															<CommandItem
+																key={department.id}
+																value={department.name}
+																onSelect={() => {
+																	setSelectedDepartment(String(department.id));
+																	setSelectedDepartmentIds('all');
+																	setCheckedChartDepartments(
+																		Object.fromEntries(
+																			departmentShareRows.map((row) => [
+																				String(row.department_id ?? 'none'),
+																				String(row.department_id) === String(department.id),
+																			]),
+																		),
+																	);
+																	setSelectedBranch('all');
+																	setSelectedWeekStartDate('all');
+																	setOpenDepartmentFilter(false);
+																	applyFilters({
+																		department_id: String(department.id),
+																		department_ids: 'all',
+																		branch_id: 'all',
+																		week_start_date: 'all',
+																	});
+																}}
+															>
+																<Check
+																	className={cn(
+																		'mr-2 size-4',
+																		selectedDepartment === String(department.id) ? 'opacity-100' : 'opacity-0',
+																	)}
+																/>
+																{department.name}
+															</CommandItem>
+														))}
+													</CommandGroup>
+												</CommandList>
+											</Command>
+										</PopoverContent>
+									</Popover>
+								</div>
 
-								<Popover open={openBranchFilter} onOpenChange={setOpenBranchFilter}>
-									<div className={cn(!canFilterByBranch && 'cursor-not-allowed')}>
+								<div className={cn("w-auto", !canFilterByBranch && 'cursor-not-allowed')}>
+									<Popover open={openBranchFilter} onOpenChange={setOpenBranchFilter}>
 										<PopoverTrigger asChild>
 											<Button
 												variant="outline"
 												role="combobox"
-												className="w-[120px] h-8 text-xs px-2 justify-between font-normal"
+												className="w-auto h-7 text-xs py-1 pl-2 pr-1 gap-0.5 justify-between font-normal"
 												disabled={!canFilterByBranch}
 											>
-												<span className="truncate text-left">{selectedBranchOption?.name ?? 'All Branches'}</span>
-												<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+												<span className="text-left">{selectedBranchOption?.name ?? 'All Branches'}</span>
+												<ChevronsUpDown className="ml-0.5 w-3 h-3 shrink-0 opacity-50" />
 											</Button>
 										</PopoverTrigger>
-									</div>
-									<PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-										<Command>
-											<CommandInput placeholder="Search branches..." />
-											<CommandList className="max-h-60">
-												<CommandEmpty>No branches found.</CommandEmpty>
-												<CommandGroup>
-													<CommandItem
-														value="All Branches"
-														onSelect={() => {
-															setSelectedBranch('all');
-															setSelectedWeekStartDate('all');
-															setOpenBranchFilter(false);
-															applyFilters({ branch_id: 'all', week_start_date: 'all' });
-														}}
-													>
-														<Check className={cn('mr-2 size-4', selectedBranch === 'all' ? 'opacity-100' : 'opacity-0')} />
-														All Branches
-													</CommandItem>
-													{branches.map((branch) => (
+										<PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+											<Command>
+												<CommandInput placeholder="Search branches..." />
+												<CommandList className="max-h-60">
+													<CommandEmpty>No branches found.</CommandEmpty>
+													<CommandGroup>
 														<CommandItem
-															key={branch.id}
-															value={branch.name}
+															value="All Branches"
 															onSelect={() => {
-																setSelectedBranch(String(branch.id));
+																setSelectedBranch('all');
 																setSelectedWeekStartDate('all');
 																setOpenBranchFilter(false);
-																applyFilters({ branch_id: String(branch.id), week_start_date: 'all' });
+																applyFilters({ branch_id: 'all', week_start_date: 'all' });
 															}}
 														>
-															<Check
-																className={cn(
-																	'mr-2 size-4',
-																	selectedBranch === String(branch.id) ? 'opacity-100' : 'opacity-0',
-																)}
-															/>
-															{branch.name}
+															<Check className={cn('mr-2 size-4', selectedBranch === 'all' ? 'opacity-100' : 'opacity-0')} />
+															All Branches
 														</CommandItem>
-													))}
-												</CommandGroup>
-											</CommandList>
-										</Command>
-									</PopoverContent>
-								</Popover>
+														{branches.map((branch) => (
+															<CommandItem
+																key={branch.id}
+																value={branch.name}
+																onSelect={() => {
+																	setSelectedBranch(String(branch.id));
+																	setSelectedWeekStartDate('all');
+																	setOpenBranchFilter(false);
+																	applyFilters({ branch_id: String(branch.id), week_start_date: 'all' });
+																}}
+															>
+																<Check
+																	className={cn(
+																		'mr-2 size-4',
+																		selectedBranch === String(branch.id) ? 'opacity-100' : 'opacity-0',
+																	)}
+																/>
+																{branch.name}
+															</CommandItem>
+														))}
+													</CommandGroup>
+												</CommandList>
+											</Command>
+										</PopoverContent>
+									</Popover>
+								</div>
 
-								<Select
-									value={selectedFiscalYear}
-									onValueChange={(value) => {
-										setSelectedFiscalYear(value);
-										setSelectedFiscalMonth('all');
-										setSelectedWeekStartDate('all');
-										applyFilters({ fiscal_year_id: value, fiscal_month_id: 'all', week_start_date: 'all' });
-									}}
-								>
-									<SelectTrigger className="w-[110px] h-8 text-xs px-2">
-										<SelectValue placeholder="Fiscal Year" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="all">All Years</SelectItem>
-										{fiscalYears.map((year) => (
-											<SelectItem key={year.id} value={String(year.id)}>
-												{year.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+								<div className="w-auto">
+									<Select
+										value={selectedFiscalYear}
+										onValueChange={(value) => {
+											setSelectedFiscalYear(value);
+											setSelectedFiscalMonth('all');
+											setSelectedWeekStartDate('all');
+											applyFilters({ fiscal_year_id: value, fiscal_month_id: 'all', week_start_date: 'all' });
+										}}
+									>
+										<SelectTrigger className="w-auto h-7 text-xs py-1 pl-2 pr-1 gap-0.5 [&>svg]:w-3 [&>svg]:h-3 [&>svg]:shrink-0">
+											<SelectValue placeholder="Fiscal Year" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">All Years</SelectItem>
+											{fiscalYears.map((year) => (
+												<SelectItem key={year.id} value={String(year.id)}>
+													{year.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
 
-								<Select
-									value={selectedFiscalMonth}
-									onValueChange={(value) => {
-										setSelectedFiscalMonth(value);
-										setSelectedWeekStartDate('all');
-										applyFilters({ fiscal_month_id: value, week_start_date: 'all' });
-									}}
-								>
-									<SelectTrigger className="w-[110px] h-8 text-xs px-2">
-										<SelectValue placeholder="Fiscal Month" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="all">All Months</SelectItem>
-										{filteredFiscalMonths.map((month) => (
-											<SelectItem key={month.id} value={String(month.id)}>
-												{month.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+								<div className="w-auto">
+									<Select
+										value={selectedFiscalMonth}
+										onValueChange={(value) => {
+											setSelectedFiscalMonth(value);
+											setSelectedWeekStartDate('all');
+											applyFilters({ fiscal_month_id: value, week_start_date: 'all' });
+										}}
+									>
+										<SelectTrigger className="w-auto h-7 text-xs py-1 pl-2 pr-1 gap-0.5 [&>svg]:w-3 [&>svg]:h-3 [&>svg]:shrink-0">
+											<SelectValue placeholder="Fiscal Month" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">All Months</SelectItem>
+											{filteredFiscalMonths.map((month) => (
+												<SelectItem key={month.id} value={String(month.id)}>
+													{month.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
 
-								<Select
-									value={selectedWeekStartDate}
-									onValueChange={(value) => {
-										setSelectedWeekStartDate(value);
-										applyFilters({ week_start_date: value });
-									}}
-								>
-									<SelectTrigger className="w-[130px] h-8 text-xs px-2">
-										<SelectValue placeholder="Select Week" />
-									</SelectTrigger>
-									<SelectContent>
-										{weekFilterOptions.map((week) => (
-											<SelectItem key={week.startDate} value={week.startDate}>
-												{week.label}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+								<div className="w-auto">
+									<Select
+										value={selectedWeekStartDate}
+										onValueChange={(value) => {
+											setSelectedWeekStartDate(value);
+											applyFilters({ week_start_date: value });
+										}}
+									>
+										<SelectTrigger className="w-auto h-7 text-xs py-1 pl-2 pr-1 gap-0.5 [&>svg]:w-3 [&>svg]:h-3 [&>svg]:shrink-0">
+											<SelectValue placeholder="Select Week" />
+										</SelectTrigger>
+										<SelectContent>
+											{weekFilterOptions.map((week) => (
+												<SelectItem key={week.startDate} value={week.startDate}>
+													{week.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
 
-								{/* Rest of the filters (Request Type, CEO Status, Payment Category, Payment Type, Clear Filters) */}
-								<Select
-									value={selectedRequestType}
-									onValueChange={(value) => {
-										setSelectedRequestType(value);
-										applyFilters({ request_type: value });
-									}}
-								>
-									<SelectTrigger className="w-[130px] h-8 text-xs px-2">
-										<SelectValue placeholder="Request Type" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="all">All Request Types</SelectItem>
-										{requestTypes.map((requestType) => (
-											<SelectItem key={requestType} value={requestType}>
-												{requestType.charAt(0).toUpperCase() + requestType.slice(1)}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
+								<div className="w-auto">
+									<Select
+										value={selectedRequestType}
+										onValueChange={(value) => {
+											setSelectedRequestType(value);
+											applyFilters({ request_type: value });
+										}}
+									>
+										<SelectTrigger className="w-auto h-7 text-xs py-1 pl-2 pr-1 gap-0.5 [&>svg]:w-3 [&>svg]:h-3 [&>svg]:shrink-0">
+											<SelectValue placeholder="Request Type" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">All Request Types</SelectItem>
+											{requestTypes.map((requestType) => (
+												<SelectItem key={requestType} value={requestType}>
+													{requestType.charAt(0).toUpperCase() + requestType.slice(1)}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
 
-								<Select
-									value={selectedStatusCeo}
-									onValueChange={(value) => {
-										setSelectedStatusCeo(value);
-										applyFilters({ status_ceo: value });
-									}}
-								>
-									<SelectTrigger className="w-[110px] h-8 text-xs px-2">
-										<SelectValue placeholder="CEO Status" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="all">All Statuses</SelectItem>
-										{statusCeos.map((s) => (
-											<SelectItem key={s} value={s}>
-												{s.charAt(0).toUpperCase() + s.slice(1)}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								<Select
-									value={selectedPaymentCategory}
-									onValueChange={(value) => {
-										setSelectedPaymentCategory(value);
-										setSelectedPaymentType('all');
-										applyFilters({ payment_category_id: value, payment_type_id: 'all' });
-									}}
-								>
-									<SelectTrigger className="w-[130px] h-8 text-xs px-2">
-										<SelectValue placeholder="Payment Category" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="all">All Categories</SelectItem>
-										{paymentCategories.map((category) => (
-											<SelectItem key={category.id} value={String(category.id)}>
-												{category.name}
-											</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-							</div>
+								<div className="w-auto">
+									<Select
+										value={selectedStatusCeo}
+										onValueChange={(value) => {
+											setSelectedStatusCeo(value);
+											applyFilters({ status_ceo: value });
+										}}
+									>
+										<SelectTrigger className="w-auto h-7 text-xs py-1 pl-2 pr-1 gap-0.5 [&>svg]:w-3 [&>svg]:h-3 [&>svg]:shrink-0">
+											<SelectValue placeholder="CEO Status" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">All Statuses</SelectItem>
+											{statusCeos.map((s) => (
+												<SelectItem key={s} value={s}>
+													{s.charAt(0).toUpperCase() + s.slice(1)}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
 
-							{/* Second Row: Payment Type and Clear Button */}
-							<div className="flex items-center gap-2 overflow-x-auto pb-1 mt-1 scrollbar-thin">
-								<Popover open={openPaymentTypeFilter} onOpenChange={setOpenPaymentTypeFilter}>
-									<PopoverTrigger asChild>
-										<Button variant="outline" role="combobox" className="w-[130px] h-8 text-xs px-2 justify-between font-normal">
-											<span className="truncate text-left">
-												{selectedPaymentType === 'all'
-													? 'All Payment Types'
-													: (filteredPaymentTypes.find((paymentType) => String(paymentType.id) === selectedPaymentType)?.name ??
-														'All Payment Types')}
-											</span>
-											<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-										</Button>
-									</PopoverTrigger>
-									<PopoverContent className="w-[260px] p-0" align="start">
-										<Command>
-											<CommandInput placeholder="Search payment types..." />
-											<CommandList className="max-h-60">
-												<CommandEmpty>No types found.</CommandEmpty>
-												<CommandGroup>
-													<CommandItem
-														value="All Payment Types"
-														onSelect={() => {
-															setSelectedPaymentType('all');
-															setOpenPaymentTypeFilter(false);
-															applyFilters({ payment_type_id: 'all' });
-														}}
-													>
-														<Check
-															className={cn('mr-2 size-4', selectedPaymentType === 'all' ? 'opacity-100' : 'opacity-0')}
-														/>
-														All Payment Types
-													</CommandItem>
-													{filteredPaymentTypes.map((paymentType) => (
+								<div className="w-auto">
+									<Select
+										value={selectedPaymentCategory}
+										onValueChange={(value) => {
+											setSelectedPaymentCategory(value);
+											setSelectedPaymentType('all');
+											applyFilters({ payment_category_id: value, payment_type_id: 'all' });
+										}}
+									>
+										<SelectTrigger className="w-auto h-7 text-xs py-1 pl-2 pr-1 gap-0.5 [&>svg]:w-3 [&>svg]:h-3 [&>svg]:shrink-0">
+											<SelectValue placeholder="Payment Category" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">All Categories</SelectItem>
+											{paymentCategories.map((category) => (
+												<SelectItem key={category.id} value={String(category.id)}>
+													{category.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
+
+								<div className="w-auto">
+									<Popover open={openPaymentTypeFilter} onOpenChange={setOpenPaymentTypeFilter}>
+										<PopoverTrigger asChild>
+											<Button variant="outline" role="combobox" className="w-auto h-7 text-xs py-1 pl-2 pr-1 gap-0.5 justify-between font-normal">
+												<span className="text-left">
+													{selectedPaymentType === 'all'
+														? 'All Payment Types'
+														: (filteredPaymentTypes.find((paymentType) => String(paymentType.id) === selectedPaymentType)?.name ??
+															'All Payment Types')}
+												</span>
+												<ChevronsUpDown className="ml-0.5 w-3 h-3 shrink-0 opacity-50" />
+											</Button>
+										</PopoverTrigger>
+										<PopoverContent className="w-[260px] p-0" align="start">
+											<Command>
+												<CommandInput placeholder="Search payment types..." />
+												<CommandList className="max-h-60">
+													<CommandEmpty>No types found.</CommandEmpty>
+													<CommandGroup>
 														<CommandItem
-															key={paymentType.id}
-															value={paymentType.name}
+															value="All Payment Types"
 															onSelect={() => {
-																setSelectedPaymentType(String(paymentType.id));
+																setSelectedPaymentType('all');
 																setOpenPaymentTypeFilter(false);
-																applyFilters({ payment_type_id: String(paymentType.id) });
+																applyFilters({ payment_type_id: 'all' });
 															}}
 														>
 															<Check
-																className={cn(
-																	'mr-2 size-4',
-																	selectedPaymentType === String(paymentType.id) ? 'opacity-100' : 'opacity-0',
-																)}
+																className={cn('mr-2 size-4', selectedPaymentType === 'all' ? 'opacity-100' : 'opacity-0')}
 															/>
-															{paymentType.name}
+															All Payment Types
 														</CommandItem>
-													))}
-												</CommandGroup>
-											</CommandList>
-										</Command>
-									</PopoverContent>
-								</Popover>
+														{filteredPaymentTypes.map((paymentType) => (
+															<CommandItem
+																key={paymentType.id}
+																value={paymentType.name}
+																onSelect={() => {
+																	setSelectedPaymentType(String(paymentType.id));
+																	setOpenPaymentTypeFilter(false);
+																	applyFilters({ payment_type_id: String(paymentType.id) });
+																}}
+															>
+																<Check
+																	className={cn(
+																		'mr-2 size-4',
+																		selectedPaymentType === String(paymentType.id) ? 'opacity-100' : 'opacity-0',
+																	)}
+																/>
+																{paymentType.name}
+															</CommandItem>
+														))}
+													</CommandGroup>
+												</CommandList>
+											</Command>
+										</PopoverContent>
+									</Popover>
+								</div>
 
 								{hasActiveFilters && (
-									<Button type="button" variant="secondary" className="h-8 text-xs px-2 whitespace-nowrap" onClick={clearFilters}>
-										<X className="mr-1 size-3" /> Clear Filters
-									</Button>
+									<div className="w-auto">
+										<Button type="button" variant="secondary" className="w-auto h-7 text-xs py-1 px-2 whitespace-nowrap gap-0.5" onClick={clearFilters}>
+											<X className="mr-0.5 w-3 h-3 shrink-0" /> Clear Filters
+										</Button>
+									</div>
 								)}
 							</div>
 						</div>
