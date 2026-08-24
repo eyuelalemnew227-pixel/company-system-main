@@ -96,10 +96,10 @@ class SalesBudgetController extends Controller
             ->when($request->filled('branch_id'), function ($query) use ($branchId) {
                 $query->where('sales_budgets.branch_id', $branchId);
             })
-            ->when($request->filled('fiscal_year_id'), function ($query) use ($fiscalYearId) {
+            ->when($fiscalYearId, function ($query) use ($fiscalYearId) {
                 $query->where('sales_budgets.fiscal_year_id', $fiscalYearId);
             })
-            ->when($request->filled('fiscal_month_id'), function ($query) use ($fiscalMonthId) {
+            ->when($fiscalMonthId, function ($query) use ($fiscalMonthId) {
                 $query->where('sales_budgets.fiscal_month_id', $fiscalMonthId);
             })
             ->orderByDesc('fiscal_years.gregorian_start_date')
@@ -107,7 +107,7 @@ class SalesBudgetController extends Controller
             ->orderBy('sales_budgets.branch_id')
             ->select('sales_budgets.*');
 
-        if ($showUnbudgeted && $request->filled('fiscal_year_id') && $request->filled('fiscal_month_id')) {
+        if ($showUnbudgeted && $fiscalYearId && $fiscalMonthId) {
             $selectedFiscalMonthModel = $fiscalMonths->firstWhere('id', (int) $fiscalMonthId);
             $selectedEthiopianMonth = $selectedFiscalMonthModel?->efy_month_number;
 
@@ -233,10 +233,10 @@ class SalesBudgetController extends Controller
             ->when($request->filled('branch_id'), function ($query) use ($branchId) {
                 $query->where('sales_budgets.branch_id', $branchId);
             })
-            ->when($request->filled('fiscal_year_id'), function ($query) use ($fiscalYearId) {
+            ->when($fiscalYearId, function ($query) use ($fiscalYearId) {
                 $query->where('sales_budgets.fiscal_year_id', $fiscalYearId);
             })
-            ->when($request->filled('fiscal_month_id'), function ($query) use ($fiscalMonthId) {
+            ->when($fiscalMonthId, function ($query) use ($fiscalMonthId) {
                 $query->where('sales_budgets.fiscal_month_id', $fiscalMonthId);
             })
             ->orderByDesc('fiscal_years.gregorian_start_date')
@@ -244,7 +244,7 @@ class SalesBudgetController extends Controller
             ->orderBy('sales_budgets.branch_id')
             ->select('sales_budgets.*');
 
-        if ($showUnbudgeted && $request->filled('fiscal_year_id') && $request->filled('fiscal_month_id')) {
+        if ($showUnbudgeted && $fiscalYearId && $fiscalMonthId) {
             $selectedFiscalMonthModel = $fiscalMonths->firstWhere('id', (int) $fiscalMonthId);
             $selectedEthiopianMonth = $selectedFiscalMonthModel?->efy_month_number;
 
@@ -721,12 +721,12 @@ class SalesBudgetController extends Controller
                     $branchQuery->where('id', $branchId);
                 });
             })
-            ->when($request->filled('fiscal_year_id'), function ($query) use ($fiscalYearId) {
+            ->when($fiscalYearId, function ($query) use ($fiscalYearId) {
                 $query->whereHas('salesBudget', function ($budgetQuery) use ($fiscalYearId) {
                     $budgetQuery->where('fiscal_year_id', $fiscalYearId);
                 });
             })
-            ->when($request->filled('fiscal_month_id'), function ($query) use ($fiscalMonthId) {
+            ->when($fiscalMonthId, function ($query) use ($fiscalMonthId) {
                 $query->whereHas('salesBudget', function ($budgetQuery) use ($fiscalMonthId) {
                     $budgetQuery->where('fiscal_month_id', $fiscalMonthId);
                 });
