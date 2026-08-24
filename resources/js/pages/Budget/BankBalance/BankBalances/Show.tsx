@@ -179,7 +179,7 @@ export default function Show({ periodBalances, representative }: { periodBalance
                                                         {currency}
                                                     </span>
                                                 </TableCell>
-                                                <TableCell className="px-3 py-2 font-mono tabular-nums sm:px-4">{rate.toFixed(4)}</TableCell>
+                                                <TableCell className="px-3 py-2 font-mono tabular-nums sm:px-4">{rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                                                 <TableCell className="px-3 py-2 pr-6 text-right font-mono font-bold text-green-700 tabular-nums sm:px-4">
                                                     {formatMoney(subtotal)}
                                                 </TableCell>

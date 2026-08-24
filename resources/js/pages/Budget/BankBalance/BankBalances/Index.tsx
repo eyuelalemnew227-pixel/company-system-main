@@ -114,7 +114,7 @@ export default function BankBalances({ bankBalances, fiscalYears, fiscalMonths, 
                 bank_id: b.bank_id,
                 bank_branch_id: b.bank_branch_id,
                 amount: parseFloat(b.amount).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
-                exchange_rate: (b.bank?.currency || 'ETB') === 'ETB' ? '' : parseFloat(b.exchange_rate).toFixed(4),
+                exchange_rate: (b.bank?.currency || 'ETB') === 'ETB' ? '' : parseFloat(b.exchange_rate).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}),
                 currency: b.bank?.currency || 'ETB'
             };
         });

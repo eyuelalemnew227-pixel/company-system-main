@@ -448,7 +448,9 @@ function WeekBalanceDialogContent({ balances, estimatedSales, bankBalance, weekl
 											{currency}
 										</span>
 									</TableCell>
-									<TableCell className="px-3 py-2 font-mono tabular-nums">{rate.toFixed(4)}</TableCell>
+									<TableCell className="px-3 py-2 font-mono tabular-nums">
+										{rate.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+									</TableCell>
 									<TableCell className="px-3 py-2 pr-6 text-right font-mono font-bold text-green-700 dark:text-green-500 tabular-nums">
 										{formatCurrency(subtotal)}
 									</TableCell>
