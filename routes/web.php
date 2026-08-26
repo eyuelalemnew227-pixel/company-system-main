@@ -43,6 +43,8 @@ use App\Http\Controllers\{
     TelecomPhoneNumberController,
     TelecomBroadbandController,
     TelecomProviderController,
+    FormController
+
 };
 
 Route::get('/', fn() => Inertia::render('welcome'))->name('home');
@@ -158,6 +160,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:view inventory periods')->group(function () {
         Route::resource('inventory-periods', \App\Http\Controllers\InventoryPeriodController::class)->except(['show']);
     });
+
+    // Forms Builder
+    Route::get('available-forms', [FormController::class, 'available'])->name('forms.available');
+    Route::post('forms/import', [FormController::class, 'import'])->name('forms.import');
+    Route::post('forms/{form}/import', [FormController::class, 'importVersion'])->name('forms.import.version');
+    Route::get('/forms/{form}/versions', [FormController::class, 'versions'])->name('forms.versions');
+    Route::get('/forms/{form}/export', [FormController::class, 'export'])->name('forms.export');
+    Route::delete('/forms/{form}', [FormController::class, 'destroy'])->name('forms.destroy');
+    Route::get('fill-forms/{form}', [\App\Http\Controllers\FillFormController::class, 'show'])->name('forms.fill');
+    Route::post('fill-forms/{form}', [\App\Http\Controllers\FillFormController::class, 'store'])->name('forms.fill.store');
+
+    // Global Submissions Viewer
+    Route::get('submissions', [\App\Http\Controllers\FormSubmissionAdminController::class, 'all_index'])->name('forms.submissions.index');
+    Route::get('submissions/form/{form}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'form_submissions'])->name('forms.submissions.by_form');
+    Route::get('submissions/form/{form}/export', [\App\Http\Controllers\FormSubmissionAdminController::class, 'export_csv'])->name('forms.submissions.export');
+    Route::get('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'show'])->name('forms.submissions.show');
+    Route::get('submissions/{submission}/edit', [\App\Http\Controllers\FormSubmissionAdminController::class, 'edit'])->name('forms.submissions.edit');
+    Route::put('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update'])->name('forms.submissions.update');
+    Route::patch('submissions/{submission}/status', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update_status'])->name('forms.submissions.update_status');
+    Route::delete('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'destroy'])->name('forms.submissions.destroy');
+
+    Route::resource('forms', FormController::class);
 
     // Expense Budget Periods
     Route::resource('expense-budget-periods', \App\Http\Controllers\ExpenseBudgetPeriodController::class)->except(['show']);

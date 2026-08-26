@@ -192,7 +192,15 @@ const baseSections: NavSection[] = [
       { title: 'Memo Settings', href: '/memo-settings', icon: Settings, permission: 'role:Super Admin|memo.settings' },
     ],
   },
-
+  {
+    label: 'Form Builder',
+    icon: ClipboardList,
+    items: [
+      { title: 'Fill Forms', href: '/available-forms', icon: ClipboardCheck },
+      { title: 'All Forms', href: '/forms', icon: ListChecks },
+      { title: 'All Submissions', href: '/submissions', icon: ClipboardList },
+    ],
+  },
   {
     label: 'Ticketing',
     icon: Ticket,
