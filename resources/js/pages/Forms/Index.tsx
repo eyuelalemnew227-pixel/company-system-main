@@ -9,8 +9,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import React, { useRef } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Dashboard', href: '/dashboard' },
     { title: 'Form Builder', href: '/forms' },
+    { title: 'All Forms', href: '/forms' },
 ];
 
 export default function Index({ forms }: { forms: any[] }) {

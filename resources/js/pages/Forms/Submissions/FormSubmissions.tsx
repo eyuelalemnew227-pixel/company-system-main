@@ -3,15 +3,15 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Eye, Pencil, Trash2, ArrowLeft, Download, FilterX, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, Pencil, Trash2, ArrowLeft, Download, FilterX, ChevronLeft, ChevronRight, BarChart3 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import React, { useState, useMemo, useEffect } from 'react';
 
 export default function FormSubmissions({ form, submissions, branches = {}, departments = {}, employees = {} }: { form: any, submissions: any[], branches?: Record<string, string>, departments?: Record<string, string>, employees?: Record<string, string> }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Dashboard', href: '/dashboard' },
-        { title: 'Submissions Directory', href: '/submissions' },
+        { title: 'Form Builder', href: '/forms' },
+        { title: 'All Submissions', href: '/submissions' },
         { title: `${form.title} Records`, href: `/submissions/form/${form.id}` },
     ];
 
@@ -125,7 +125,7 @@ export default function FormSubmissions({ form, submissions, branches = {}, depa
                     </div>
                     {submissions.length > 0 && (
                         <div className="flex space-x-3">
-                            <Button asChild variant="outline" className="text-blue-700 border-blue-200 hover:bg-blue-50">
+                            <Button asChild variant="outline" className="text-blue-700 border-blue-200 hover:bg-blue-50 shadow-sm">
                                 <a href={`/submissions/form/${form.id}/export`} target="_blank" rel="noreferrer">
                                     <Download className="mr-2 w-4 h-4" /> Export CSV
                                 </a>
@@ -251,9 +251,9 @@ export default function FormSubmissions({ form, submissions, branches = {}, depa
                                         {hasEmployee && <TableCell className="font-semibold text-blue-900">{getLookupValue(sub, 'employee_lookup', employees)}</TableCell>}
                                         <TableCell>
                                             <span className={`px-2 py-1 flex w-fit items-center justify-center text-xs font-semibold rounded-full ${sub.status === 'approved' ? 'bg-green-100 text-green-800 border border-green-200' :
-                                                    sub.status === 'rejected' ? 'bg-red-100 text-red-800 border border-red-200' :
-                                                        sub.status === 'pending' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
-                                                            'bg-gray-100 text-gray-800 border border-gray-200'
+                                                sub.status === 'rejected' ? 'bg-red-100 text-red-800 border border-red-200' :
+                                                    sub.status === 'pending' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                                                        'bg-gray-100 text-gray-800 border border-gray-200'
                                                 }`}>
                                                 {(sub.status || 'pending').toUpperCase()}
                                             </span>

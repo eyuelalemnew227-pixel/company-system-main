@@ -8,8 +8,8 @@ import React from 'react';
 
 export default function Index({ forms }: { forms: any[] }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Dashboard', href: '/dashboard' },
-        { title: 'Submissions Directory', href: '/submissions' },
+        { title: 'Form Builder', href: '/forms' },
+        { title: 'All Submissions', href: '/submissions' },
     ];
 
     return (
@@ -68,10 +68,15 @@ export default function Index({ forms }: { forms: any[] }) {
                                     </div>
                                 </CardContent>
 
-                                <CardFooter className="pt-2 border-t mt-auto">
-                                    <Button asChild className="w-full justify-between" variant="ghost">
+                                <CardFooter className="flex flex-col gap-2 pt-4 border-t mt-auto">
+                                    <Button asChild className="w-full justify-between" variant="outline">
                                         <Link href={`/submissions/form/${form.id}`}>
                                             View Data <ChevronRight className="w-4 h-4" />
+                                        </Link>
+                                    </Button>
+                                    <Button asChild className="w-full justify-between text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200" variant="outline">
+                                        <Link href={`/submissions/form/${form.id}/analytics`}>
+                                            View Analytics <BarChart2 className="w-4 h-4" />
                                         </Link>
                                     </Button>
                                 </CardFooter>

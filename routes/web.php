@@ -175,6 +175,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('submissions', [\App\Http\Controllers\FormSubmissionAdminController::class, 'all_index'])->name('forms.submissions.index');
     Route::get('submissions/form/{form}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'form_submissions'])->name('forms.submissions.by_form');
     Route::get('submissions/form/{form}/export', [\App\Http\Controllers\FormSubmissionAdminController::class, 'export_csv'])->name('forms.submissions.export');
+    Route::get('submissions/form/{form}/analytics', [\App\Http\Controllers\FormSubmissionAdminController::class, 'analytics'])->name('forms.submissions.analytics');
     Route::get('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'show'])->name('forms.submissions.show');
     Route::get('submissions/{submission}/edit', [\App\Http\Controllers\FormSubmissionAdminController::class, 'edit'])->name('forms.submissions.edit');
     Route::put('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update'])->name('forms.submissions.update');

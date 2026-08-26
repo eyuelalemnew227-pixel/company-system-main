@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ClipboardCheck, FileText } from 'lucide-react';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Dashboard', href: '/dashboard' },
-    { title: 'Available Forms', href: '/available-forms' },
+    { title: 'Form Builder', href: '/forms' },
+    { title: 'Fill Forms', href: '/forms/available' },
 ];
 
 export default function Available({ forms }: { forms: any[] }) {

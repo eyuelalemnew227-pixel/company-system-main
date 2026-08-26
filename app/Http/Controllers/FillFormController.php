@@ -55,7 +55,7 @@ class FillFormController extends Controller
             $submission = \App\Models\FormSubmission::create([
                 'form_version_id' => $version->id,
                 'user_id' => auth()->id(),
-                'status' => 'submitted',
+                'status' => 'pending',
             ]);
 
             foreach ($validated['answers'] as $questionId => $answerValue) {

@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, Plus, GripVertical, Settings, Waypoints } from 'lucide-react';
+import { Trash2, Plus, GripVertical, Settings, Waypoints, Star, SlidersHorizontal, Calendar, Clock, Hash, FileSignature, MapPin } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import React from 'react';
@@ -17,9 +17,9 @@ import React from 'react';
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Dashboard', href: '/dashboard' },
     { title: 'Form Builder', href: '/forms' },
-    { title: 'Create Form', href: '/forms/create' },
+    { title: 'All Forms', href: '/forms' },
+    { title: 'Create Template', href: '/forms/create' },
 ];
 
 export default function Create({ inputTypes, branches, departments }: { inputTypes: any[], branches: any[], departments: any[] }) {
@@ -32,6 +32,19 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
         description: '',
         sections: [{ _id: generateId(), title: 'Section 1', questions: [] }]
     });
+
+    const getIconForType = (typeIdentifier: string) => {
+        switch (typeIdentifier) {
+            case 'date': return <Calendar className="h-4 w-4 text-blue-500" strokeWidth={2} />;
+            case 'time': return <Clock className="h-4 w-4 text-amber-500" strokeWidth={2} />;
+            case 'number': return <Hash className="h-4 w-4 text-gray-500" strokeWidth={2} />;
+            case 'signature': return <FileSignature className="h-4 w-4 text-purple-600" strokeWidth={2} />;
+            case 'rating_stars': return <Star className="h-4 w-4 text-yellow-500" strokeWidth={2} />;
+            case 'rating_slider': return <SlidersHorizontal className="h-4 w-4 text-indigo-500" strokeWidth={2} />;
+            case 'branch_lookup': return <MapPin className="h-4 w-4 text-amber-700" strokeWidth={2} />;
+            default: return null;
+        }
+    };
 
     const getAvailableLogicTargets = (currentSIndex: number, currentQIndex: number) => {
         const targets: any[] = [];

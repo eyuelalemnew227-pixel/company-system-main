@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, Plus, GripVertical, Settings, Waypoints } from 'lucide-react';
+import { Trash2, Plus, GripVertical, Settings, Waypoints, Star, SlidersHorizontal } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import React from 'react';
@@ -19,8 +19,8 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 
 export default function Edit({ form, formVersion, inputTypes, branches, departments }: { form: any, formVersion: any, inputTypes: any[], branches: any[], departments: any[] }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Dashboard', href: '/dashboard' },
         { title: 'Form Builder', href: '/forms' },
+        { title: 'All Forms', href: '/forms' },
         { title: `Edit: ${form.title}`, href: `/forms/${form.id}/edit` },
     ];
 
@@ -192,6 +192,14 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
         };
 
         put(route('forms.update', form.id));
+    };
+
+    const getIconForType = (identifier: string) => {
+        switch (identifier) {
+            case 'rating_stars': return <Star className="h-4 w-4" />;
+            case 'rating_slider': return <SlidersHorizontal className="h-4 w-4" />;
+            default: return null;
+        }
     };
 
     return (

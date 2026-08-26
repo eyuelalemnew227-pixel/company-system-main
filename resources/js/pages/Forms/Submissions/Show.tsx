@@ -3,14 +3,15 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, User, Clock, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, User, Clock, ShieldCheck, Star } from 'lucide-react';
 import React from 'react';
 
 export default function Show({ form, submission, branches, departments, employees }: { form: any, submission: any, branches?: any[], departments?: any[], employees?: any[] }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Dashboard', href: '/dashboard' },
+        { title: 'Form Builder', href: '/forms' },
         { title: 'All Submissions', href: '/submissions' },
-        { title: `Record #${submission.id}`, href: `/submissions/${submission.id}` },
+        { title: `${form.title} Records`, href: `/submissions/form/${form.id}` },
+        { title: `Submission #${submission.id}`, href: `/submissions/${submission.id}` },
     ];
 
     // Helper to safely get the mapped answer 
@@ -47,6 +48,29 @@ export default function Show({ form, submission, branches, departments, employee
             return (
                 <div className="border border-gray-200 rounded-md inline-block bg-gray-50 overflow-hidden shadow-sm mt-2">
                     <img src={val} alt="Signature Response" className="h-28 object-contain" />
+                </div>
+            );
+        }
+
+        if (qType === 'rating_stars') {
+            const currentStar = parseInt(val) || 0;
+            return (
+                <div className="flex space-x-1">
+                    {[1, 2, 3, 4, 5].map((starIdx) => (
+                        <Star
+                            key={starIdx}
+                            className={`h-6 w-6 ${currentStar >= starIdx ? 'text-amber-500 fill-amber-500' : 'text-gray-200'}`}
+                        />
+                    ))}
+                </div>
+            );
+        }
+
+        if (qType === 'rating_slider') {
+            const sliderVal = parseInt(val) || 0;
+            return (
+                <div className="flex bg-indigo-50 border border-indigo-100 px-4 py-1.5 rounded-md items-center justify-center">
+                    <span className="text-indigo-700 font-bold tracking-wide">{sliderVal} / 10</span>
                 </div>
             );
         }

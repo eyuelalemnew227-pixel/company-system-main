@@ -9,9 +9,9 @@ import React from 'react';
 
 export default function Index({ form, allVersions, currentVersionId }: { form: any, allVersions: any[], currentVersionId: number }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Dashboard', href: '/dashboard' },
         { title: 'Form Builder', href: '/forms' },
-        { title: `Versions: ${form.title}`, href: `/forms/${form.id}/versions` },
+        { title: 'All Forms', href: '/forms' },
+        { title: `Version History`, href: '#' },
     ];
 
     return (

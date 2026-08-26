@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import SignatureCanvas from 'react-signature-canvas';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Star } from 'lucide-react';
 import React from 'react';
 
 const SignaturePad = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
@@ -80,9 +81,9 @@ const SignaturePad = ({ value, onChange }: { value: string, onChange: (val: stri
 
 export default function Fill({ form, formVersion, submission, parsedAnswers, branches, departments, employees }: { form: any, formVersion: any, submission?: any, parsedAnswers?: any, branches?: any[], departments?: any[], employees?: any[] }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Dashboard', href: '/dashboard' },
-        { title: 'Available Forms', href: '/available-forms' },
-        { title: form.title, href: `/fill-forms/${form.id}` },
+        { title: 'Form Builder', href: '/forms' },
+        { title: 'Fill Forms', href: '/forms/available' },
+        { title: form.title, href: `/forms/${form.id}/fill` },
     ];
 
     const allQuestionsMap = React.useMemo(() => {
@@ -295,9 +296,43 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     return <p className="text-sm text-red-500 italic">No options defined for this question.</p>;
                 }
             case 'number':
-                return <Input type="number" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} className="max-w-xl bg-white" />;
+                return <Input type="number" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} disabled={!!question.default_value} className="max-w-xl bg-white" />;
             case 'date':
-                return <Input type="date" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} className="max-w-xl bg-white" />;
+                return <Input type="date" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} disabled={!!question.default_value} className="max-w-xl bg-white" />;
+            case 'rating_stars':
+                const currentStar = parseInt(answer) || 0;
+                return (
+                    <div className="flex space-x-1">
+                        {[1, 2, 3, 4, 5].map((starIdx) => (
+                            <Star
+                                key={starIdx}
+                                className={`h-8 w-8 transition-colors ${!!question.default_value ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${currentStar >= starIdx ? 'text-amber-500 fill-amber-500' : 'text-gray-200 hover:text-amber-200'}`}
+                                onClick={() => !question.default_value && handleAnswerChange(question.id, starIdx.toString())}
+                            />
+                        ))}
+                    </div>
+                );
+            case 'rating_slider':
+                const sliderVal = parseInt(answer) || 5;
+                return (
+                    <div className="flex flex-col space-y-2 max-w-xl bg-white p-3 border rounded-md">
+                        <input
+                            type="range"
+                            min="1"
+                            max="10"
+                            step="1"
+                            disabled={!!question.default_value}
+                            value={sliderVal}
+                            onChange={(e) => handleAnswerChange(question.id, e.target.value)}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 disabled:opacity-50"
+                        />
+                        <div className="flex justify-between text-xs text-gray-500 font-medium px-1">
+                            <span>1</span>
+                            <span className="text-indigo-600 font-bold text-sm">Value: {sliderVal}</span>
+                            <span>10</span>
+                        </div>
+                    </div>
+                );
             case 'time':
                 return <Input type="time" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} className="w-fit bg-white" />;
             case 'signature':

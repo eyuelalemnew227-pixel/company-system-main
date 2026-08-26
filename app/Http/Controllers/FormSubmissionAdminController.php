@@ -50,6 +50,137 @@ class FormSubmissionAdminController extends Controller
         ]);
     }
 
+    public function analytics(Form $form)
+    {
+        $submissions = FormSubmission::whereHas('formVersion', function ($q) use ($form) {
+            $q->where('form_id', $form->id);
+        })
+            ->with(['answers.question.inputType'])
+            ->get();
+
+        $branches = \App\Models\Branch::pluck('name', 'id')->toArray();
+        $employees = \App\Models\Employee::with('branch')->get()->mapWithKeys(function ($e) {
+            $name = trim($e->first_name . ' ' . $e->last_name) ?: $e->employee_code;
+            return [
+                $e->id => [
+                    'name' => $name,
+                    'branch' => $e->branch ? $e->branch->name : 'Unknown Branch'
+                ]
+            ];
+        })->toArray();
+
+        $totalSubmissions = $submissions->count();
+        $branchScores = [];
+        $employeeScores = [];
+        $evaluatedEmpIds = [];
+        $evaluatedBranchIds = [];
+
+        foreach ($submissions as $sub) {
+            $branchId = null;
+            $employeeId = null;
+            $yesAnswers = 0;
+            $totalBoolQuestions = 0;
+
+            foreach ($sub->answers as $ans) {
+                $qType = $ans->question->inputType->type_identifier ?? 'text';
+                if ($qType === 'branch_lookup') {
+                    $branchId = $ans->value_text;
+                } elseif ($qType === 'employee_lookup') {
+                    $employeeId = $ans->value_text;
+                } elseif ($qType === 'select_one' && ($ans->value_text === '0' || $ans->value_text === '1')) {
+                    $totalBoolQuestions++;
+                    if ($ans->value_text === '1') {
+                        $yesAnswers++;
+                    }
+                }
+            }
+
+            if ($branchId && isset($branches[$branchId])) {
+                $evaluatedBranchIds[] = $branchId;
+                $bName = $branches[$branchId];
+                if (!isset($branchScores[$bName]))
+                    $branchScores[$bName] = ['total_yes' => 0, 'total_questions' => 0];
+                $branchScores[$bName]['total_yes'] += $yesAnswers;
+                $branchScores[$bName]['total_questions'] += $totalBoolQuestions;
+            }
+
+            if ($employeeId && isset($employees[$employeeId])) {
+                $evaluatedEmpIds[] = $employeeId;
+                $eName = $employees[$employeeId]['name'];
+                $eBranch = $employees[$employeeId]['branch'];
+                if (!isset($employeeScores[$eName]))
+                    $employeeScores[$eName] = ['total_yes' => 0, 'total_questions' => 0, 'branch' => $eBranch];
+                $employeeScores[$eName]['total_yes'] += $yesAnswers;
+                $employeeScores[$eName]['total_questions'] += $totalBoolQuestions;
+            }
+        }
+
+        $finalBranchScores = [];
+        foreach ($branchScores as $name => $data) {
+            $score = $data['total_questions'] > 0 ? ($data['total_yes'] / $data['total_questions']) * 100 : 0;
+            $finalBranchScores[] = ['name' => $name, 'score' => round($score, 1), 'total_questions' => $data['total_questions']];
+        }
+        usort($finalBranchScores, fn($a, $b) => $b['score'] <=> $a['score']);
+
+        $finalEmployeeScores = [];
+        foreach ($employeeScores as $name => $data) {
+            $score = $data['total_questions'] > 0 ? ($data['total_yes'] / $data['total_questions']) * 100 : 0;
+            $finalEmployeeScores[] = ['name' => $name, 'branch' => $data['branch'], 'score' => round($score, 1), 'total_questions' => $data['total_questions']];
+        }
+        usort($finalEmployeeScores, fn($a, $b) => $b['score'] <=> $a['score']);
+
+        $totalCompanyBranches = \App\Models\Branch::where('is_sales_generating', 1)->count();
+        $distinctEmpIds = array_unique($evaluatedEmpIds);
+
+        $totalPossibleEmployees = 0;
+        if (count($distinctEmpIds) > 0) {
+            $involvedDepartments = \App\Models\Employee::whereIn('id', $distinctEmpIds)
+                ->pluck('department_id')
+                ->unique()
+                ->filter()
+                ->toArray();
+
+            if (count($involvedDepartments) > 0) {
+                $totalPossibleEmployees = \App\Models\Employee::whereIn('department_id', $involvedDepartments)->where('status', 'active')->count();
+            }
+        }
+
+        $distinctBranchIds = array_unique($evaluatedBranchIds);
+        $unvisitedBranches = \App\Models\Branch::where('is_sales_generating', 1)
+            ->whereNotIn('id', $distinctBranchIds)
+            ->pluck('name')
+            ->toArray();
+
+        $unevaluatedEmployeesByBranch = [];
+        if (isset($involvedDepartments) && count($involvedDepartments) > 0) {
+            $missedEmps = \App\Models\Employee::with('branch')
+                ->where('status', 'active')
+                ->whereIn('department_id', $involvedDepartments)
+                ->whereNotIn('id', $distinctEmpIds)
+                ->get();
+
+            foreach ($missedEmps as $emp) {
+                $bName = $emp->branch ? $emp->branch->name : 'No Branch Assigned';
+                $eName = trim($emp->first_name . ' ' . $emp->last_name) ?: $emp->employee_code;
+                if (!isset($unevaluatedEmployeesByBranch[$bName])) {
+                    $unevaluatedEmployeesByBranch[$bName] = [];
+                }
+                $unevaluatedEmployeesByBranch[$bName][] = $eName;
+            }
+        }
+
+        return Inertia::render('Forms/Submissions/Analytics', [
+            'form' => $form->only('id', 'title'),
+            'totalSubmissions' => $totalSubmissions,
+            'branchScores' => $finalBranchScores,
+            'employeeScores' => $finalEmployeeScores,
+            'totalCompanyBranches' => $totalCompanyBranches,
+            'totalPossibleEmployees' => $totalPossibleEmployees,
+            'unvisitedBranches' => $unvisitedBranches,
+            'unevaluatedEmployeesByBranch' => $unevaluatedEmployeesByBranch,
+        ]);
+    }
+
     /**
      * Show a detailed view of a singular submission's answers.
      */
