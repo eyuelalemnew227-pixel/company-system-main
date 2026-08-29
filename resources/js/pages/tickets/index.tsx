@@ -463,6 +463,7 @@ export default function TicketIndex() {
                     <TableHead className="font-bold text-slate-700">Department</TableHead>
                     <TableHead className="font-bold text-slate-700">Sub Category</TableHead>
                     <TableHead className="font-bold text-slate-700">Status</TableHead>
+                    <TableHead className="font-bold text-slate-700">Assigned Tech</TableHead>
                     <TableHead className="font-bold text-slate-700">Priority</TableHead>
                     <TableHead className="font-bold text-slate-700 text-right">Created</TableHead>
                     <TableHead className="font-bold text-slate-700 text-right w-48">Actions</TableHead>
@@ -471,7 +472,7 @@ export default function TicketIndex() {
                 <TableBody>
                   {tickets.data.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="h-40 text-center text-slate-400 italic">
+                      <TableCell colSpan={9} className="h-40 text-center text-slate-400 italic">
                         No tickets matching your filters.
                       </TableCell>
                     </TableRow>
@@ -493,6 +494,9 @@ export default function TicketIndex() {
                         </TableCell>
                         <TableCell>
                           <StatusBadge status={t.status} />
+                        </TableCell>
+                        <TableCell className="text-sm font-medium text-slate-700">
+                          {t.assignments?.find((a) => a.is_current)?.assignee?.name ?? '—'}
                         </TableCell>
                         <TableCell>
                           <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border shadow-sm ${t.priority === 'urgent' ? 'bg-red-50 text-red-700 border-red-200' :

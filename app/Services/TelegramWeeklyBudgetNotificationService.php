@@ -76,7 +76,7 @@ class TelegramWeeklyBudgetNotificationService
     }
 
     /**
-     * Send notification to a specific list of users.
+     * Send notification to a specific list of users using Budget System Bot.
      */
     public function notifyUsers(WeeklyBudget $budget, array $userIds, string $title, string $body, string $module): void
     {
@@ -95,6 +95,39 @@ class TelegramWeeklyBudgetNotificationService
                 "<i>{$body}</i>\n\n" .
                 "🔗 <a href=\"{$url}\">View Budget #{$budget->id}</a>";
 
-        $this->botService->sendToUsers($userIds, $text, $buttons);
+        $settings = \App\Models\TelegramSettings::getInstance();
+        $token = $this->botService->getBudgetBotToken();
+
+        if (!$settings->is_active || empty($token)) {
+            Log::warning("TelegramWeeklyBudgetNotificationService: Budget Bot token is not configured.");
+            return;
+        }
+
+        $sentChatIds = [];
+        foreach ($userIds as $item) {
+            $user = is_numeric($item) ? User::find($item) : $item;
+            if ($user instanceof User && !empty($user->telegram_chat_id)) {
+                $chatId = (string) $user->telegram_chat_id;
+                if (!in_array($chatId, $sentChatIds, true)) {
+                    try {
+                        $payload = [
+                            'chat_id' => $chatId,
+                            'text' => $text,
+                            'parse_mode' => $settings->parse_mode ?? 'HTML',
+                            'disable_web_page_preview' => false,
+                            'reply_markup' => json_encode($buttons),
+                        ];
+
+                        \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->post(
+                            "https://api.telegram.org/bot{$token}/sendMessage",
+                            $payload
+                        );
+                        $sentChatIds[] = $chatId;
+                    } catch (\Throwable $e) {
+                        Log::error("Telegram budget bot notification error: " . $e->getMessage());
+                    }
+                }
+            }
+        }
     }
 }

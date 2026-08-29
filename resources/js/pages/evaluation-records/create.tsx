@@ -16,10 +16,9 @@ import {
 import InputError from '@/components/input-error';
 import { ArrowLeft, Loader2, Plus, Trash2 } from 'lucide-react';
 import type { EvaluationPeriod } from '@/types/evaluation-period';
-import type { EvaluationType } from '@/types/evaluation-type';
+import type { EvaluationType } from '@/types/evaluation-types.d';
 import type { Question } from '@/types/question';
-import type { User } from '@/types/users';
-import type { PageProps } from '@/types';
+import type { User, PageProps } from '@/types';
 
 type Props = PageProps & {
     evaluationPeriods: EvaluationPeriod[];
@@ -29,8 +28,18 @@ type Props = PageProps & {
 };
 
 interface QuestionResponse {
+    [key: string]: string;
     question_id: string;
     score: string;
+}
+
+interface EvaluationRecordForm {
+    evaluator_id: string;
+    evaluate_id: string;
+    evaluation_period_id: string;
+    evaluation_type_id: string;
+    comment: string;
+    question_responses: QuestionResponse[];
 }
 
 export default function Create({ evaluationPeriods, evaluationTypes, users, questions }: Props) {

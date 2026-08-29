@@ -8,6 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        Schema::dropIfExists('expense_budget_activity_logs');
+        Schema::dropIfExists('expense_budget_items');
+        Schema::dropIfExists('expense_budgets');
 
         Schema::create('expense_budgets', function (Blueprint $table) {
             $table->id();

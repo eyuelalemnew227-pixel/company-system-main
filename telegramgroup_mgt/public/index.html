@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kaldi's Telegram Bot Admin Dashboard</title>
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">☕</div>
+      <div>
+        <div class="brand-title">KALDI'S</div>
+        <div class="brand-subtitle">Bot Management Console</div>
+      </div>
+    </div>
+
+    <ul class="nav-menu">
+      <li><a href="#" class="nav-link active" data-tab="overview">📊 Overview</a></li>
+      <li><a href="#" class="nav-link" data-tab="communications">📨 Communications</a></li>
+      <li><a href="#" class="nav-link" data-tab="users">👥 User Roster</a></li>
+      <li><a href="#" class="nav-link" data-tab="bindings">📌 Topic Bindings</a></li>
+      <li><a href="#" class="nav-link" data-tab="config">⚙️ Bot Settings</a></li>
+    </ul>
+
+    <div class="sidebar-footer">
+      Kaldi's Coffee &copy; 2026<br>
+      IT Department MVP v1.0
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+
+    <!-- Top Header -->
+    <header class="top-bar">
+      <h1 class="page-title" id="page-title">📊 Overview</h1>
+      <div class="top-actions">
+        <button class="btn btn-secondary btn-sm" onclick="location.reload()">🔄 Refresh</button>
+      </div>
+    </header>
+
+    <!-- Tab 1: Overview -->
+    <section id="tab-overview" class="tab-content active">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-info">
+            <h4>Total Messages</h4>
+            <div class="stat-value" id="stat-total-comms">0</div>
+          </div>
+          <div class="stat-icon total">💬</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-info">
+            <h4>Recorded</h4>
+            <div class="stat-value" id="stat-recorded-comms">0</div>
+          </div>
+          <div class="stat-icon recorded">📝</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-info">
+            <h4>Forwarded HO</h4>
+            <div class="stat-value" id="stat-forwarded-comms">0</div>
+          </div>
+          <div class="stat-icon forwarded">➡️</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-info">
+            <h4>Responded</h4>
+            <div class="stat-value" id="stat-responded-comms">0</div>
+          </div>
+          <div class="stat-icon responded">✅</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-info">
+            <h4>Active Users</h4>
+            <div class="stat-value" id="stat-total-users">0</div>
+          </div>
+          <div class="stat-icon total">👤</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-info">
+            <h4>Bound Topics</h4>
+            <div class="stat-value" id="stat-total-bindings">0</div>
+          </div>
+          <div class="stat-icon recorded">🏷️</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Recent Communications Activity</h3>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Reference No</th>
+                <th>Region</th>
+                <th>Branch</th>
+                <th>Topic & Dept</th>
+                <th>Status</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="recent-comms-tbody">
+              <tr><td colspan="6">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2: Communications -->
+    <section id="tab-communications" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">All Communication Logs</h3>
+          <form id="comms-filter-form" class="filter-bar">
+            <input type="text" id="comm-search" placeholder="Search ref, branch, topic..." style="width: 220px;">
+            <select id="comm-status-filter">
+              <option value="">All Statuses</option>
+              <option value="recorded">Recorded</option>
+              <option value="forwarded">Forwarded</option>
+              <option value="responded">Responded</option>
+            </select>
+            <select id="comm-region-filter">
+              <option value="">All Regions</option>
+              <option value="Region 1">Region 1</option>
+              <option value="Region 2">Region 2</option>
+            </select>
+            <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+          </form>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Reference No</th>
+                <th>Region</th>
+                <th>Branch</th>
+                <th>Topic / Department</th>
+                <th>Sender</th>
+                <th>Status</th>
+                <th>Created At</th>
+              </tr>
+            </thead>
+            <tbody id="comms-tbody">
+              <tr><td colspan="7">Loading communication records...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: Users -->
+    <section id="tab-users" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Registered Staff Roster</h3>
+          <button class="btn btn-primary btn-sm" onclick="openModal('modal-user')">➕ Register User</button>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Display Name & ID</th>
+                <th>Role</th>
+                <th>Region</th>
+                <th>Branch / Dept</th>
+                <th>Can Forward</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="6">Loading users...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 4: Topic Bindings -->
+    <section id="tab-bindings" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Topic Thread to Department Mappings</h3>
+          <button class="btn btn-primary btn-sm" onclick="openModal('modal-binding')">➕ Bind Topic</button>
+        </div>
+
+        <div id="bindings-container" class="bindings-grid">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 5: Config -->
+    <section id="tab-config" class="tab-content">
+      <div class="card" style="max-width: 680px;">
+        <div class="card-header">
+          <h3 class="card-title">Bot Runtime Configuration</h3>
+        </div>
+
+        <form id="config-form">
+          <div class="form-group">
+            <label for="cfg-bot-token">Telegram Bot Token</label>
+            <input type="text" id="cfg-bot-token" placeholder="Leave blank to keep existing token">
+          </div>
+
+          <div class="form-group">
+            <label for="cfg-db-path">SQLite Database File Path</label>
+            <input type="text" id="cfg-db-path" required>
+          </div>
+
+          <div class="form-group">
+            <label for="cfg-director-id">Operations Director Telegram User ID</label>
+            <input type="number" id="cfg-director-id" placeholder="e.g. 123456789">
+          </div>
+
+          <div class="form-group">
+            <label for="cfg-ho-chat-id">Head Office Group Chat ID</label>
+            <input type="number" id="cfg-ho-chat-id" placeholder="e.g. -1003333333333">
+          </div>
+
+          <div class="form-group">
+            <label for="cfg-r1-chat-id">Region 1 Group Chat ID</label>
+            <input type="number" id="cfg-r1-chat-id" placeholder="e.g. -1001111111111">
+          </div>
+
+          <div class="form-group">
+            <label for="cfg-r2-chat-id">Region 2 Group Chat ID</label>
+            <input type="number" id="cfg-r2-chat-id" placeholder="e.g. -1002222222222">
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Configuration</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal: User Form -->
+  <div id="modal-user" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Register / Edit Staff User</h3>
+        <button class="close-btn" onclick="closeModal('modal-user')">&times;</button>
+      </div>
+      <form id="user-form">
+        <div class="form-group">
+          <label for="user-id">Telegram User ID *</label>
+          <input type="number" id="user-id" required placeholder="e.g. 987654321">
+        </div>
+        <div class="form-group">
+          <label for="user-name">Display Name *</label>
+          <input type="text" id="user-name" required placeholder="Full Name or Handle">
+        </div>
+        <div class="form-group">
+          <label for="user-role">Role *</label>
+          <select id="user-role" required>
+            <option value="branch_manager">Branch Manager</option>
+            <option value="regional_manager">Regional Manager</option>
+            <option value="department_head">Department Head</option>
+            <option value="operations_director">Operations Director</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="user-region">Region (Optional)</label>
+          <input type="text" id="user-region" placeholder="e.g. Region 1">
+        </div>
+        <div class="form-group">
+          <label for="user-branch">Branch Name (Optional)</label>
+          <input type="text" id="user-branch" placeholder="e.g. Kaldis Bole">
+        </div>
+        <div class="form-group">
+          <label for="user-dept">Department (Optional)</label>
+          <input type="text" id="user-dept" placeholder="e.g. HR">
+        </div>
+        <div class="form-group" style="flex-direction:row; align-items:center; gap:0.5rem;">
+          <input type="checkbox" id="user-can-forward" style="width: auto;">
+          <label for="user-can-forward" style="margin:0; cursor:pointer;">Can Forward to Head Office</label>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-user')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Binding Form -->
+  <div id="modal-binding" class="modal-overlay">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Bind Topic Thread to Department</h3>
+        <button class="close-btn" onclick="closeModal('modal-binding')">&times;</button>
+      </div>
+      <form id="binding-form">
+        <div class="form-group">
+          <label for="bind-group-key">Group Key *</label>
+          <select id="bind-group-key" required>
+            <option value="region:Region 1">region:Region 1</option>
+            <option value="region:Region 2">region:Region 2</option>
+            <option value="ho:head_office">ho:head_office</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="bind-thread-id">Telegram Thread ID *</label>
+          <input type="number" id="bind-thread-id" required placeholder="e.g. 101">
+        </div>
+        <div class="form-group">
+          <label for="bind-topic-name">Topic Name *</label>
+          <input type="text" id="bind-topic-name" required placeholder="e.g. HR">
+        </div>
+        <div class="form-group">
+          <label for="bind-dept">Department *</label>
+          <input type="text" id="bind-dept" required placeholder="e.g. HR">
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-binding')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Topic Binding</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="js/admin.js"></script>
+</body>
+</html>

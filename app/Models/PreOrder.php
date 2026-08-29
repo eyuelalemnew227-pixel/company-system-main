@@ -27,6 +27,7 @@ class PreOrder extends Model
         'voucher_code',
         'transaction_reference',
         'registering_branch_id',
+        'chat_id',
         'created_by',
         'updated_by',
         'collected_at',
@@ -34,15 +35,33 @@ class PreOrder extends Model
         'late_payment',
         'payment_method',
         'payment_slip',
+        'source',
     ];
 
-    protected $appends = ['client_name'];
+    protected $appends = ['client_name', 'payment_slip_url', 'source_label'];
 
     protected $casts = [
         'total_amount' => 'decimal:2',
         'holiday_id' => 'integer',
         'late_payment' => 'boolean',
     ];
+
+    /**
+     * Get human-readable order source label.
+     */
+    public function getSourceLabelAttribute(): string
+    {
+        if (!empty($this->chat_id) || (isset($this->attributes['source']) && strtolower($this->attributes['source']) === 'telegram bot') || str_starts_with($this->order_number ?? '', 'ORD-')) {
+            return 'Telegram Bot';
+        }
+        if (!empty($this->voucher_code) || ($this->relationLoaded('orderType') && $this->orderType?->name === 'Walkin Customer')) {
+            return 'Walkin Customer';
+        }
+        if (!empty($this->attributes['source'])) {
+            return $this->attributes['source'];
+        }
+        return 'Web System';
+    }
 
     /**
      * Virtual accessor for backward-compatibility.
@@ -55,6 +74,20 @@ class PreOrder extends Model
             $this->father_name,
             $this->surname,
         ])));
+    }
+
+    /**
+     * Accessor for full public web URL of payment slip attachment.
+     */
+    public function getPaymentSlipUrlAttribute(): ?string
+    {
+        if (empty($this->payment_slip)) {
+            return null;
+        }
+        if (str_starts_with($this->payment_slip, 'http://') || str_starts_with($this->payment_slip, 'https://')) {
+            return $this->payment_slip;
+        }
+        return asset(ltrim($this->payment_slip, '/'));
     }
 
     /**

@@ -6,7 +6,8 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import AppLayout from '@/layouts/app-layout';
-import { type BreadcrumbItem, type Branch, type Department, type EmployeeOption, type Manager } from '@/types';
+import { type BreadcrumbItem, type Branch, type Department, type EmployeeOption } from '@/types';
+import { type Manager } from '@/types/managers';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import React, { useState, useEffect } from 'react';

@@ -19,8 +19,8 @@ return new class extends Migration
         // Sync existing data from collection_days to pre_orders
         DB::statement("
             UPDATE pre_orders 
-            JOIN collection_days ON pre_orders.collection_day_id = collection_days.id
-            SET pre_orders.holiday_id = collection_days.holiday_id
+            SET holiday_id = (SELECT holiday_id FROM collection_days WHERE collection_days.id = pre_orders.collection_day_id)
+            WHERE collection_day_id IS NOT NULL
         ");
     }
 

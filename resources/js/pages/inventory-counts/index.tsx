@@ -10,7 +10,8 @@ import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/user-permissions';
-import type { InventoryCount, Branch, ChildCategory, Product, InventoryPeriod } from '@/types/inventory-count';
+import type { InventoryCount, Branch, ChildCategory, Product } from '@/types/inventory-count';
+import type { InventoryPeriod } from '@/types/inventory-period';
 import { CheckCircle, XCircle } from 'lucide-react';
 
 type Paginated<T> = {
@@ -58,7 +59,7 @@ export default function InventoryCountsIndex({
 	const { can } = usePermission();
 	
 	// Check if the selected period is inactive
-	const isPeriodInactive = selectedPeriodStatus && selectedPeriodStatus !== 'active';
+	const isPeriodInactive = Boolean(selectedPeriodStatus && selectedPeriodStatus !== 'active');
 
 	const [search, setSearch] = useState(filters.search ?? '');
 	const [branchFilter, setBranchFilter] = useState<string>(filters.branch_id ?? 'all');

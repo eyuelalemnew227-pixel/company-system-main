@@ -2,7 +2,7 @@ import { Pagination } from '@/types/pagination';
 import { Link } from '@inertiajs/react';
 import { Button } from './ui/button';
 
-export default function TablePagination({ links, total, to, from }: Pagination) {
+export default function TablePagination({ links = [], total, to, from }: Partial<Pagination>) {
 	return (
 		<div className="flex flex-col items-center justify-between gap-4 border-t bg-white px-8 pt-5 sm:flex-row dark:bg-gray-800">
 			<div className="flex items-center justify-between">

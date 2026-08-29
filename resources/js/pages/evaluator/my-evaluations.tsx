@@ -70,8 +70,8 @@ export default function MyEvaluations({ evaluations }: Props) {
                 ) : (
                     <div className="grid gap-6">
                         {evaluations.map((evaluation) => {
-                            const hasResponse = evaluation.evaluation_responses && evaluation.evaluation_responses.length > 0;
-                            const response = hasResponse ? evaluation.evaluation_responses[0] : null;
+                            const hasResponse = Boolean(evaluation.evaluation_responses && evaluation.evaluation_responses.length > 0);
+                            const response = evaluation.evaluation_responses?.[0] ?? null;
                             
                             return (
                                 <Card key={evaluation.id} className={`p-6 ${getStatusColor(evaluation)}`}>

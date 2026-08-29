@@ -70,6 +70,8 @@ type Ticket = {
   id: number;
   title: string;
   description: string;
+  image_path?: string | null;
+  image_url?: string | null;
   status: string;
   severity: string;
   ticket_main_category_id: number;
@@ -794,6 +796,34 @@ export default function TicketShow() {
                   <p className="whitespace-pre-wrap text-base font-bold leading-relaxed text-emerald-700 dark:text-emerald-400">
                     {ticket.description}
                   </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {(ticket.image_url || ticket.image_path) && (
+              <Card className="overflow-hidden border-none shadow-md">
+                <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Tag className="h-5 w-5 text-primary" />
+                      <CardTitle className="text-lg">Attached Photo</CardTitle>
+                    </div>
+                    <a
+                      href={ticket.image_url || `/storage/${ticket.image_path}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                    >
+                      View Full Image ↗
+                    </a>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4 flex justify-center bg-slate-900/5 p-4 rounded-b-lg">
+                  <img
+                    src={ticket.image_url || `/storage/${ticket.image_path}`}
+                    alt="Ticket Attachment"
+                    className="max-h-96 w-auto rounded-lg object-contain border border-slate-200 shadow-sm"
+                  />
                 </CardContent>
               </Card>
             )}

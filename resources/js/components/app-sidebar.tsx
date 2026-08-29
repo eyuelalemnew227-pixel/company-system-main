@@ -25,7 +25,9 @@ import {
   Calendar as CalendarIcon,
   ClipboardCheck,
   ClipboardList,
+  CreditCard,
   ExternalLink,
+  FileCheck,
   FileQuestion,
   FileText,
   FolderKey,
@@ -56,7 +58,12 @@ import {
   Users,
   Wallet,
   Warehouse,
+  Wifi,
   XCircle,
+  GraduationCap,
+  BookOpen,
+  Trophy,
+  HelpCircle,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -175,11 +182,23 @@ const baseSections: NavSection[] = [
     ],
   },
   {
+    label: 'Internal Memorandum',
+    icon: FileText,
+    items: [
+      { title: 'All Memos', href: '/memos', icon: FileText, permission: 'memo.view' },
+      { title: 'New Memorandum', href: '/memos/create', icon: Plus, permission: 'memo.create' },
+      { title: 'Memo Templates', href: '/memo-templates', icon: FileQuestion, permission: 'memo.create' },
+      { title: 'Memo Settings', href: '/memo-settings', icon: Settings, permission: 'memo.settings' },
+    ],
+  },
+
+  {
     label: 'Ticketing',
     icon: Ticket,
     items: [
       { title: 'Tickets', href: '/tickets', icon: Ticket, permission: 'ticket.view.own|ticket.view.department|ticket.view.all' },
       { title: 'Ticketing Report', href: '/tickets/reports', icon: BarChart3, permission: 'ticket.report.view' },
+      { title: 'Broadcast Announcement', href: '/broadcast-announcements', icon: Send, permission: 'view telegram config|send telegram broadcast|ticket.view.department|ticket.view.all' },
       { title: 'Ticket Settings', href: '/ticket-settings', icon: Settings, permission: 'ticket.manage.taxonomy|ticket.view.all' },
     ],
   },
@@ -190,6 +209,9 @@ const baseSections: NavSection[] = [
       { title: 'New Pre-Order', href: '/pre-orders/create', icon: ClipboardList, permission: 'create pre-orders' },
       { title: 'All Pre-Orders', href: '/pre-orders', icon: ShoppingCart, permission: 'view pre-orders' },
       { title: 'My Branch Orders', href: '/my-branch-orders', icon: Package, permission: 'view my branch orders' },
+      { title: 'Customer Feedback', href: '/pre-orders/feedback', icon: MessageSquare, permission: 'view pre-orders' },
+      { title: 'Pre-Order Customers', href: '/pre-orders/customers', icon: Users, permission: 'view pre-orders' },
+      { title: 'Telegram Broadcasts', href: '/pre-orders/broadcasts', icon: Send, permission: 'view telegram config' },
       { title: 'Pre-Order Products', href: '/settings/pre-order-products', icon: Package, permission: 'view pre-order products' },
       { title: 'Order Types', href: '/settings/order-types', icon: ListChecks, permission: 'view order types' },
       { title: 'Collection Days', href: '/settings/collection-days', icon: CalendarDays, permission: 'view collection days' },
@@ -206,6 +228,52 @@ const baseSections: NavSection[] = [
     items: [
       { title: 'Categories', href: '/spare-part-categories', icon: FolderKey, permission: 'view spare part categories' },
       { title: 'Spare Parts', href: '/spare-parts', icon: Package, permission: 'view spare parts' },
+    ],
+  },
+  {
+    label: 'Telecom Management',
+    icon: Phone,
+    items: [
+      { title: 'Overview', href: '/telecom/dashboard', icon: BarChart3, permission: 'view telecom management' },
+      { title: 'Phone Numbers', href: '/telecom/phone-numbers', icon: Phone, permission: 'view telecom management' },
+      { title: 'Broadband & WTTx', href: '/telecom/broadbands', icon: Wifi, permission: 'view telecom management' },
+      { title: 'Service Providers', href: '/telecom/providers', icon: Building2, permission: 'view telecom management' },
+    ],
+  },
+  {
+    label: 'Learning Management',
+    icon: GraduationCap,
+    items: [],
+    groups: [
+      {
+        label: 'Branch Manager Training',
+        icon: CalendarCheck,
+        items: [
+          { title: 'Department Agendas', href: '/training/agendas', icon: FileText, permission: 'training.view' },
+          { title: 'Submit New Agenda', href: '/training/agendas/create', icon: Plus, permission: 'training.view' },
+          { title: 'Master Schedule Timetables', href: '/training/schedules', icon: CalendarDays, permission: 'training.view' },
+          { title: 'Build Master Schedule', href: '/training/schedules/create', icon: Calendar, permission: 'training.view' },
+          { title: 'Trainer Evaluations', href: '/training/evaluations', icon: Award, permission: 'training.view' },
+          { title: 'Training Settings', href: '/training/settings', icon: Settings, permission: 'training.view' },
+        ],
+      },
+      {
+        label: 'Online Training',
+        icon: BookOpen,
+        items: [
+          { title: 'LMS Dashboard', href: '/training/dashboard', icon: LayoutDashboard, permission: 'training.view' },
+          { title: 'Course Catalog', href: '/training/courses', icon: BookOpen, permission: 'training.view' },
+          { title: 'My Learning Hub', href: '/training/my-learning', icon: Award, permission: 'training.view' },
+          { title: 'Quizzes & Tests', href: '/training/quizzes', icon: FileQuestion, permission: 'training.view' },
+          { title: 'Question Bank', href: '/training/question-banks', icon: HelpCircle, permission: 'training.quizzes.manage' },
+          { title: 'AI Quiz Generator', href: '/training/ai-quiz', icon: Sparkles, permission: 'training.quizzes.manage' },
+          { title: 'SOP Compliance', href: '/training/sop', icon: FileCheck, permission: 'training.view' },
+          { title: 'Certificates', href: '/training/certificates', icon: Award, permission: 'training.view' },
+          { title: 'Leaderboard & Badges', href: '/training/leaderboard', icon: Trophy, permission: 'training.view' },
+          { title: 'Forums & Q&A', href: '/training/forums', icon: MessageSquare, permission: 'training.view' },
+          { title: 'LMS Reports', href: '/training/reports', icon: BarChart3, permission: 'training.reports.view' },
+        ],
+      },
     ],
   },
   {

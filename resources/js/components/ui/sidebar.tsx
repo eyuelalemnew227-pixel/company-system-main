@@ -465,8 +465,7 @@ const SidebarContent = React.forwardRef<
   return (
     <div
       ref={(node) => {
-        // @ts-expect-error - internal ref assignment
-        internalRef.current = node
+        if (internalRef) internalRef.current = node
         if (typeof ref === "function") {
           ref(node)
         } else if (ref) {

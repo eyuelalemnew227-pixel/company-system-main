@@ -37,8 +37,8 @@ export default function WeeklyBudgetPeriodSettings({ setting }: PageProps) {
     return (
         <AppLayout
             breadcrumbs={[
-                { title: 'Period Management', url: '#' },
-                { title: 'Weekly Budget Periods', url: route('weekly-budget-periods.index') },
+                { title: 'Period Management', href: '#' },
+                { title: 'Weekly Budget Periods', href: route('weekly-budget-periods.index') },
             ]}
         >
             <Head title="Weekly Budget Settings" />

@@ -45,7 +45,15 @@ class Ticket extends Model
         'parent_ticket_id',
         'fiscal_year_id',
         'fiscal_month_id',
+        'image_path',
     ];
+
+    protected $appends = ['image_url'];
+
+    public function getImageUrlAttribute(): ?string
+    {
+        return $this->image_path ? \Illuminate\Support\Facades\Storage::url($this->image_path) : null;
+    }
 
     protected $casts = [
         'preferred_deadline' => 'date',

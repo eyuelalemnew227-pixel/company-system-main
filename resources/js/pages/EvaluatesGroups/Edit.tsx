@@ -174,8 +174,9 @@ export default function EditEvaluatesGroup({
                                 <Label htmlFor="evaluable_type">What to Evaluate?</Label>
                                 <Select
                                     value={data.evaluable_type}
-                                    onValueChange={(value) => {
-                                        setData({ ...data, evaluable_type: value, entity_ids: [] });
+                                    onValueChange={(value: 'employee' | 'department' | 'branch' | 'other') => {
+                                        setData('evaluable_type', value);
+                                        setData('entity_ids', []);
                                         setSearchQuery('');
                                         setFilterBranch('all');
                                         setFilterDepartment('all');

@@ -31,6 +31,7 @@ export default function EditBranch({ branch, departments }: { branch: Branch; de
         contact_phone: branch.contact_phone || '',
         description: branch.description || '',
         is_sales_generating: branch.is_sales_generating || false,
+        is_pre_order_branch: (branch as any).is_pre_order_branch ?? true,
         departments: departmentList,
     });
 
@@ -134,6 +135,21 @@ export default function EditBranch({ branch, departments }: { branch: Branch; de
                                     onCheckedChange={(checked) => setData('is_sales_generating', checked === true)}
                                 />
                                 <Label htmlFor="is_sales_generating">Is Sales Generating</Label>
+                            </div>
+                            <div className="mb-6 flex items-center gap-3 rounded-lg border p-4 bg-slate-50 dark:bg-slate-900/50">
+                                <Checkbox
+                                    id="is_pre_order_branch"
+                                    checked={data.is_pre_order_branch}
+                                    onCheckedChange={(checked) => setData('is_pre_order_branch', checked === true)}
+                                />
+                                <div>
+                                    <Label htmlFor="is_pre_order_branch" className="font-semibold cursor-pointer">
+                                        Pre-Order Branch
+                                    </Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Tick this box if this branch handles pre-order pickups and collection.
+                                    </p>
+                                </div>
                             </div>
                             <Label>Select Departments</Label>
                             <div className="my-4">

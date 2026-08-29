@@ -12,8 +12,14 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Create Category', href: '/evaluation-categories/create' },
 ];
 
+type CategoryForm = {
+    name: string;
+    weight: number;
+    is_active: boolean;
+};
+
 export default function Create() {
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors } = useForm<CategoryForm>({
         name: '',
         weight: 0,
         is_active: true,

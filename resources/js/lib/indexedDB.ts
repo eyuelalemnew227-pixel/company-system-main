@@ -16,7 +16,7 @@ export const STORES = {
 export interface SyncQueueItem {
     id?: number;
     type: 'create' | 'update' | 'delete';
-    entity: keyof typeof STORES;
+    entity: string;
     data: any;
     timestamp: number;
     status: 'pending' | 'syncing' | 'failed' | 'completed';
@@ -150,7 +150,7 @@ class IndexedDBWrapper {
     async getAllByIndex<T>(
         storeName: string,
         indexName: string,
-        query?: IDBValidKey | IDBKeyRange,
+        query?: IDBValidKey | IDBKeyRange | boolean | any,
     ): Promise<T[]> {
         const db = await this.init();
         return new Promise((resolve, reject) => {

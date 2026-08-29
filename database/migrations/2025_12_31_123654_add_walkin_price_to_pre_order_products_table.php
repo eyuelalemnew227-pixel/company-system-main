@@ -12,15 +12,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('pre_order_products', function (Blueprint $table) {
-            if (!Schema::hasColumn('pre_order_products', 'walkin_price')) {
+        if (!Schema::hasColumn('pre_order_products', 'walkin_price')) {
+            Schema::table('pre_order_products', function (Blueprint $table) {
                 $table->decimal('walkin_price', 10, 2)->after('unit_price')->default(0);
-                // Set walkin_price to match unit_price for existing products
-                DB::table('pre_order_products')->update([
-                    'walkin_price' => DB::raw('unit_price')
-                ]);
-            }
-        });
+            });
+
+            DB::table('pre_order_products')->update([
+                'walkin_price' => DB::raw('unit_price')
+            ]);
+        }
     }
 
     /**

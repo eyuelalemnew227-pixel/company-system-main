@@ -267,7 +267,7 @@ export default function EvaluatorCompletionIndex({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {periodData.evaluators.map((evaluator, index) => (
+                    {periodData.evaluators.map((evaluator: EvaluatorStats, index: number) => (
                       <TableRow key={evaluator.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
                         <TableCell>
                           <div className="font-medium">{evaluator.name}</div>

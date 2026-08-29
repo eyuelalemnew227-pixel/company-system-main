@@ -10,6 +10,17 @@ class TelegramSettings extends Model
     protected $fillable = [
         'bot_token',
         'bot_username',
+        'helpdesk_bot_token',
+        'helpdesk_bot_username',
+        'budget_bot_token',
+        'budget_bot_username',
+        'memo_bot_token',
+        'memo_bot_username',
+        'pre_order_bot_token',
+        'pre_order_bot_username',
+        'training_bot_token',
+        'training_bot_username',
+        'pre_order_admin_group_chat_id',
         'webhook_url',
         'is_active',
         'parse_mode',
@@ -38,6 +49,9 @@ class TelegramSettings extends Model
             ['id' => 1],
             [
                 'bot_token' => config('services.telegram.bot_token') ?? env('TELEGRAM_BOT_TOKEN'),
+                'helpdesk_bot_token' => env('TELEGRAM_HELPDESK_BOT_TOKEN', env('TELEGRAM_BOT_TOKEN')),
+                'budget_bot_token' => env('TELEGRAM_BUDGET_BOT_TOKEN'),
+                'memo_bot_token' => env('TELEGRAM_MEMO_BOT_TOKEN'),
                 'bot_username' => null,
                 'webhook_url' => null,
                 'is_active' => true,
@@ -52,7 +66,7 @@ class TelegramSettings extends Model
      */
     public static function isActive(): bool
     {
-        $settings = self::getInstance();
-        return $settings->is_active && !empty($settings->bot_token);
+        $instance = self::getInstance();
+        return $instance->is_active && (!empty($instance->bot_token) || !empty($instance->helpdesk_bot_token) || !empty($instance->memo_bot_token));
     }
 }

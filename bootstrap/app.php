@@ -22,6 +22,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        $middleware->validateCsrfTokens(except: [
+            'api/telegram/*',
+            'api/telegram/webhook*',
+            'api/pre-orders/miniapp/*',
+        ]);
+
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
@@ -34,6 +40,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => RoleMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'expense_budget.manage_window' => \App\Http\Middleware\EnsureExpenseBudgetManageWindow::class,
+            'it_department' => \App\Http\Middleware\EnsureItDepartment::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

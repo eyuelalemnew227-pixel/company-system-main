@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\PermissionCategoryHelper;
 use App\Models\User;
 use App\Models\Employee;
 use App\Models\Branch;
@@ -97,8 +98,19 @@ class UserController extends Controller {
             'name' => "{$employee->first_name} {$employee->last_name}",
         ]);
 
+        $rolesWithPermissions = Role::with('permissions')->get()->mapWithKeys(function ($role) {
+            $perms = $role->permissions->pluck('name')->toArray();
+            return [
+                $role->name => [
+                    'permissions' => $perms,
+                    'grouped' => PermissionCategoryHelper::groupPermissions($perms),
+                ]
+            ];
+        });
+
         return Inertia::render('users/create', [
             'roles' => Role::all()->pluck('name'),
+            'rolesWithPermissions' => $rolesWithPermissions,
             'employees' => $employees,
         ]);
     }
@@ -134,6 +146,16 @@ class UserController extends Controller {
             'name' => "{$employee->first_name} {$employee->last_name}",
         ]);
 
+        $rolesWithPermissions = Role::with('permissions')->get()->mapWithKeys(function ($role) {
+            $perms = $role->permissions->pluck('name')->toArray();
+            return [
+                $role->name => [
+                    'permissions' => $perms,
+                    'grouped' => PermissionCategoryHelper::groupPermissions($perms),
+                ]
+            ];
+        });
+
         return Inertia::render('users/edit', [
             'user' => [
                 'id' => $user->id,
@@ -148,6 +170,7 @@ class UserController extends Controller {
                 ] : null,
             ],
             'roles' => Role::all()->pluck('name'),
+            'rolesWithPermissions' => $rolesWithPermissions,
             'employees' => $employees,
         ]);
     }

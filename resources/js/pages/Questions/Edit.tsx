@@ -22,6 +22,12 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
+interface QuestionEditForm {
+    question_text: string;
+    evaluation_type_id: string;
+    status: 'active' | 'inactive';
+}
+
 export default function EditQuestion({
     question,
     evaluationTypes,
@@ -32,7 +38,7 @@ export default function EditQuestion({
     const { data, setData, put, errors, processing } = useForm({
         question_text: question.question_text || '',
         evaluation_type_id: question.evaluation_type_id?.toString() || '',
-        status: question.status || 'active',
+        status: (question.status as 'active' | 'inactive') || 'active',
     });
 
     function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -89,7 +95,7 @@ export default function EditQuestion({
                             </div>
                             <div className="mb-4">
                                 <Label htmlFor="status">Status</Label>
-                                <Select value={data.status} onValueChange={(value) => setData('status', value)}>
+                                <Select value={data.status} onValueChange={(value) => setData('status', value as 'active' | 'inactive')}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select status" />
                                     </SelectTrigger>

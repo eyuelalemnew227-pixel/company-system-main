@@ -63,6 +63,7 @@ class TicketStoreRequest extends FormRequest
                 request('ticket_main_category_id') == 26 ? 'required' : 'nullable',
                 'exists:fiscal_months,id'
             ],
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'],
         ];
     }
 }

@@ -17,8 +17,7 @@ return new class extends Migration
             $table->string('contact_email', 150)->nullable();
             $table->string('contact_phone', 20)->nullable();
             $table->text('description')->nullable();
-            $table->timestamp('created_at')->default(DB::raw('CURRENT_TIMESTAMP'));
-            $table->timestamp('updated_at')->default(DB::raw('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'));
+            $table->timestamps();
         });
     }
 

@@ -4,7 +4,8 @@ interface Links {
 	active: boolean;
 }
 
-export interface Pagination {
+export interface Pagination<T = any> {
+	data: T[];
 	links: Links[];
 	from: number;
 	to: number;

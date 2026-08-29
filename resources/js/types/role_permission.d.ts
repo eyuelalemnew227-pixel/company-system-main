@@ -1,16 +1,18 @@
 import { Pagination } from './pagination';
 
-interface SinglePermission {
+export interface SinglePermission {
 	id: number;
 	name: string;
+	category?: string;
 	created_at: string;
 }
 
-interface SingleRole {
+export interface SingleRole {
 	id: number;
 	name: string;
 	created_at: string;
 	permissions: string[];
+	grouped_permissions?: Record<string, string[]>;
 }
 
 export interface RolePermission {
@@ -27,3 +29,12 @@ export interface Permission extends Pagination {
 export interface Role extends Pagination {
 	data: SingleRole[];
 }
+
+export type GroupedPermissions = Record<string, string[]>;
+
+export interface RoleWithPermissionMeta {
+	permissions: string[];
+	grouped: GroupedPermissions;
+}
+
+export type RolesWithPermissionsMap = Record<string, RoleWithPermissionMeta>;

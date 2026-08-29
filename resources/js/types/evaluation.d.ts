@@ -29,6 +29,7 @@ export type Evaluation = {
     updated_at: string;
     evaluator_group?: EvaluatorGroup;
     evaluates_group?: EvaluatesGroup;
+    evaluation_responses?: any[];
 };
 
 export type EvaluationPagination = {

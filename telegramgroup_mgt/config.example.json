@@ -1,0 +1,17 @@
+{
+  "bot_token": "PUT_YOUR_TELEGRAM_BOT_TOKEN_HERE",
+  "database_path": "kaldis.db",
+  "poll_timeout": 25,
+  "poll_interval_seconds": 1,
+  "operations_director_user_id": 0,
+  "region_groups": {
+    "Region 1": -1001111111111,
+    "Region 2": -1002222222222
+  },
+  "region_codes": {
+    "Region 1": "R1",
+    "Region 2": "R2"
+  },
+  "ho_group_chat_id": -1003333333333
+}
+

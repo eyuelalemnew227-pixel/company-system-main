@@ -21,6 +21,11 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
+interface EvaluationTypeForm {
+    name: string;
+    evaluation_type: 'person' | 'department' | 'branch' | 'other';
+}
+
 export default function EditEvaluationType({ evaluationType }: { evaluationType: EvaluationType }) {
     const { data, setData, put, errors, processing } = useForm({
         name: evaluationType.name,
@@ -64,7 +69,7 @@ export default function EditEvaluationType({ evaluationType }: { evaluationType:
                                 <Label htmlFor="evaluation_type">Type</Label>
                                 <Select
                                     value={data.evaluation_type}
-                                    onValueChange={(value) => setData('evaluation_type', value)}
+                                    onValueChange={(value: 'person' | 'department' | 'branch' | 'other') => setData('evaluation_type', value)}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select type" />

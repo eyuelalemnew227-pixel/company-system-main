@@ -15,6 +15,7 @@ use App\Notifications\PreOrderCancelledGeezSMSNotification;
 use App\Notifications\PreOrderPaidGeezSMSNotification;
 use App\Rules\EthiopianPhoneNumber;
 use App\Services\GeezSMSService;
+use App\Services\TelegramBotService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -151,7 +152,7 @@ class PreOrderController extends Controller
             ->paginate($perPage)
             ->withQueryString();
 
-        $branches = Branch::orderBy('name', 'asc')->get(['id', 'name']);
+        $branches = Branch::where('is_pre_order_branch', true)->orderBy('name', 'asc')->get(['id', 'name']);
         $collectionDays = CollectionDay::where('status', 'Active')->orderBy('display_order')->get(['id', 'name']);
         $canViewAllHolidays = auth()->user()->can('view all holidays');
         $holidays = $canViewAllHolidays
@@ -234,7 +235,7 @@ class PreOrderController extends Controller
             abort(403, 'You do not have permission to create pre-orders.');
         }
 
-        $branches = Branch::orderBy('name', 'asc')->get(['id', 'name']);
+        $branches = Branch::where('is_pre_order_branch', true)->orderBy('name', 'asc')->get(['id', 'name']);
         $collectionDays = CollectionDay::where('status', 'Active')->orderBy('display_order')->get(['id', 'name']);
         $orderTypes = OrderType::where('status', 'Active')->get(['id', 'name']);
         $products = PreOrderProduct::where('status', 'Active')->orderBy('product_name')->get(['id', 'product_name', 'unit_price', 'walkin_price']);
@@ -288,6 +289,7 @@ class PreOrderController extends Controller
             'items.*.product_id' => ['required', 'integer', 'exists:pre_order_products,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'late_payment' => ['nullable', 'boolean'],
+            'chat_id' => ['nullable', 'string'],
             'payment_method' => [
                 Rule::requiredIf($isPaid),
                 'nullable',
@@ -295,8 +297,7 @@ class PreOrderController extends Controller
                 Rule::in($validMethods),
             ],
             'transaction_reference' => [
-                Rule::requiredIf($isPaid),
-                'nullable',
+                $isPaid && !$request->input('voucher_code') ? 'required' : 'nullable',
                 'string',
                 'max:255',
                 'unique:pre_orders,transaction_reference',
@@ -305,7 +306,7 @@ class PreOrderController extends Controller
                         return; // Only validate format if value is provided
                     $method = $request->input('payment_method');
                     $setting = $paymentSettings->get($method);
-                    if ($setting && $setting->validation_pattern) {
+                    if ($setting && !empty($setting->validation_pattern)) {
                         if (!preg_match('/' . $setting->validation_pattern . '/i', $value)) {
                             $example = $setting->example ? " Example: {$setting->example}" : "";
                             $fail("The transaction reference format is invalid for {$method}.{$example}");
@@ -315,8 +316,14 @@ class PreOrderController extends Controller
             ],
         ]);
 
-        // Prepend +251 to phone number (remove any non-digits first)
+        // Prepend +251 to phone number (remove any non-digits first and strip leading 251 or 0)
         $cleanedPhone = preg_replace('/[^0-9]/', '', $validated['phone_number']);
+        if (str_starts_with($cleanedPhone, '251')) {
+            $cleanedPhone = substr($cleanedPhone, 3);
+        }
+        if (str_starts_with($cleanedPhone, '0')) {
+            $cleanedPhone = substr($cleanedPhone, 1);
+        }
         $validated['phone_number'] = '+251' . $cleanedPhone;
 
         DB::beginTransaction();
@@ -367,6 +374,7 @@ class PreOrderController extends Controller
                 'payment_method' => $validated['payment_method'] ?? null,
                 'total_amount' => $totalAmount,
                 'registering_branch_id' => auth()->user()?->employee?->branch_id,
+                'chat_id' => $validated['chat_id'] ?? null,
                 'created_by' => auth()->id(),
                 'updated_by' => auth()->id(),
             ]);
@@ -385,6 +393,9 @@ class PreOrderController extends Controller
             }
 
             DB::commit();
+
+            // Send Telegram Bot notification for pre-order
+            $this->sendTelegramStatusNotification($preOrder, $status);
 
             // If it's a Walkin Customer (status is Paid), send confirmation SMS
             if ($status === 'Paid' && SmsSettings::isActive()) {
@@ -482,7 +493,7 @@ class PreOrderController extends Controller
 
         $preOrder->load('items');
 
-        $branches = Branch::orderBy('name', 'asc')->get(['id', 'name']);
+        $branches = Branch::where('is_pre_order_branch', true)->orderBy('name', 'asc')->get(['id', 'name']);
         $collectionDays = CollectionDay::where('status', 'Active')->orderBy('display_order')->get(['id', 'name']);
         $orderTypes = OrderType::where('status', 'Active')->get(['id', 'name']);
         $products = PreOrderProduct::where('status', 'Active')->orderBy('product_name')->get(['id', 'product_name', 'unit_price', 'walkin_price']);
@@ -545,6 +556,8 @@ class PreOrderController extends Controller
             abort(403, 'You do not have permission to edit this order.');
         }
 
+        $oldStatus = $preOrder->status;
+
         $paymentSettings = PreOrderPaymentSetting::where('is_active', true)->get()->keyBy('payment_method');
         $validMethods = $paymentSettings->keys()->toArray();
         $isPaid = in_array($request->input('status'), ['Paid', 'Collected']);
@@ -570,8 +583,7 @@ class PreOrderController extends Controller
                 Rule::in($validMethods),
             ],
             'transaction_reference' => [
-                Rule::requiredIf($isPaid),
-                'nullable',
+                $isPaid && !$request->input('voucher_code') ? 'required' : 'nullable',
                 'string',
                 'max:255',
                 'unique:pre_orders,transaction_reference,' . $preOrder->id,
@@ -580,7 +592,7 @@ class PreOrderController extends Controller
                         return;
                     $method = $request->input('payment_method');
                     $setting = $paymentSettings->get($method);
-                    if ($setting && $setting->validation_pattern) {
+                    if ($setting && !empty($setting->validation_pattern)) {
                         if (!preg_match('/' . $setting->validation_pattern . '/i', $value)) {
                             $example = $setting->example ? " Example: {$setting->example}" : "";
                             $fail("The transaction reference format is invalid for {$method}.{$example}");
@@ -590,8 +602,14 @@ class PreOrderController extends Controller
             ],
         ]);
 
-        // Prepend +251 to phone number (remove any non-digits first)
+        // Prepend +251 to phone number (remove any non-digits first and strip leading 251 or 0)
         $cleanedPhone = preg_replace('/[^0-9]/', '', $validated['phone_number']);
+        if (str_starts_with($cleanedPhone, '251')) {
+            $cleanedPhone = substr($cleanedPhone, 3);
+        }
+        if (str_starts_with($cleanedPhone, '0')) {
+            $cleanedPhone = substr($cleanedPhone, 1);
+        }
         $validated['phone_number'] = '+251' . $cleanedPhone;
 
         DB::beginTransaction();
@@ -743,6 +761,11 @@ class PreOrderController extends Controller
                         ]);
                     }
                 }
+            }
+
+            // Send Telegram Bot notification on status update
+            if ($oldStatus !== $validated['status']) {
+                $this->sendTelegramStatusNotification($preOrder, $validated['status'], $request->input('cancel_reason'));
             }
 
             // If status changed to "Cancelled", send SMS notification
@@ -923,6 +946,9 @@ class PreOrderController extends Controller
                 $successCount++;
                 $cancelMsg = "✅ Order #{$order->order_number} cancelled.";
 
+                // Send Telegram notification
+                $this->sendTelegramStatusNotification($order, 'Cancelled', 'Bulk cancellation');
+
                 // Send SMS if enabled
                 if ($smsEnabled) {
                     try {
@@ -1016,10 +1042,16 @@ class PreOrderController extends Controller
             }
         }
 
+        $oldStatus = $preOrder->status;
+
         $preOrder->update([
             'status' => $validated['status'],
             'updated_by' => auth()->id(),
         ]);
+
+        if ($oldStatus !== $validated['status']) {
+            $this->sendTelegramStatusNotification($preOrder, $validated['status'], $request->input('cancel_reason'));
+        }
 
         // Generate Telegram message if status is changed to "Paid"
         $telegramMessage = null;
@@ -1081,6 +1113,91 @@ class PreOrderController extends Controller
             ->with('success', 'Order status updated successfully.')
             ->with('telegram_message', $telegramMessage)
             ->with('sms_status', $smsStatus);
+    }
+
+    private function sendTelegramStatusNotification(PreOrder $preOrder, string $newStatus, ?string $cancelReason = null): bool
+    {
+        $chatId = $preOrder->chat_id;
+        if (empty($chatId) && !empty($preOrder->phone_number)) {
+            $cleanDigits = preg_replace('/[^0-9]/', '', $preOrder->phone_number);
+            $chatId = DB::table('telegram_customers')
+                ->where(function ($q) use ($preOrder, $cleanDigits) {
+                    $q->where('phone_number', $preOrder->phone_number)
+                      ->orWhere('phone_number', 'like', "%{$cleanDigits}%");
+                })
+                ->value('chat_id');
+
+            if (!$chatId) {
+                $chatId = DB::table('telegram_users')
+                    ->where(function ($q) use ($preOrder, $cleanDigits) {
+                        $q->where('phone_number', $preOrder->phone_number)
+                          ->orWhere('phone_number', 'like', "%{$cleanDigits}%");
+                    })
+                    ->value('chat_id');
+            }
+
+            if (!$chatId) {
+                $chatId = PreOrder::where('phone_number', $preOrder->phone_number)
+                    ->whereNotNull('chat_id')
+                    ->value('chat_id');
+            }
+
+            if ($chatId) {
+                $preOrder->chat_id = $chatId;
+                $preOrder->saveQuietly();
+            }
+        }
+
+        if (empty($chatId)) {
+            Log::warning("sendTelegramStatusNotification: No chat_id found for Order #{$preOrder->order_number} (Phone: {$preOrder->phone_number})");
+            return false;
+        }
+
+        try {
+            $botService = app(TelegramBotService::class);
+            $name = trim(($preOrder->first_name ?? '') . ' ' . ($preOrder->father_name ?? '')) ?: 'Customer';
+            $orderNum = $preOrder->order_number;
+
+            $preOrder->loadMissing(['collectionBranch', 'collectionDay']);
+            $branchName = $preOrder->collectionBranch?->name ?? 'N/A';
+            $branchLoc = $preOrder->collectionBranch?->location ?? '';
+            $branchPhone = $preOrder->collectionBranch?->contact_phone ?? '';
+            $collDay = $preOrder->collectionDay;
+            $collDateStr = $collDay ? ($collDay->name . ($collDay->date ? ' (' . date('M d, Y', strtotime($collDay->date)) . ')' : '')) : '';
+
+            $mapLine = '';
+            if (!empty($branchLoc)) {
+                if (str_starts_with($branchLoc, 'http://') || str_starts_with($branchLoc, 'https://')) {
+                    $mapLine = "🗺️ <b>Map Location:</b> <a href=\"{$branchLoc}\">Open Google Maps</a>";
+                } else {
+                    $mapLine = "🗺️ <b>Location:</b> {$branchLoc}";
+                }
+            }
+
+            $paidMsg = "✅ <b>Order Confirmed!</b>\n\n" .
+                       "Dear {$name},\n\n" .
+                       "Your order <b>#{$orderNum}</b> has been confirmed! 🎉\n\n" .
+                       "📍 <b>Collection Branch:</b> <b>{$branchName}</b>\n" .
+                       (!empty($collDateStr) ? "📅 <b>Collection Date:</b> {$collDateStr}\n" : "") .
+                       (!empty($mapLine) ? "{$mapLine}\n" : "") .
+                       (!empty($branchPhone) ? "📞 <b>Branch Phone:</b> <code>{$branchPhone}</code>\n" : "") . "\n" .
+                       "Thank you for choosing Kaldi's Coffee! 🙏";
+
+            $msg = match (strtolower($newStatus)) {
+                'paid' => $paidMsg,
+                'cancelled' => "❌ <b>Order Cancelled</b>\n\nDear {$name},\n\nYour order <b>#{$orderNum}</b> has been cancelled." . (!empty($cancelReason) ? "\n\n<b>Reason:</b> " . e($cancelReason) : "") . "\n\n📞 0930332185",
+                'collected' => "🎉 <b>Order Collected!</b>\n\nDear {$name},\n\nYour order <b>#{$orderNum}</b> has been collected!\n\nThank you for choosing Kaldi's Coffee! 👋",
+                'pending' => "🔄 <b>Order Updated</b>\n\nDear {$name},\n\nYour order <b>#{$orderNum}</b> is back to Pending.\n\nThank you for choosing Kaldi's Coffee!",
+                default => "<b>☕ Kaldi's Coffee Pre-Order Update</b>\n\nDear {$name},\nYour order <b>#{$orderNum}</b> status is now <b>{$newStatus}</b>.\n\nThank you for choosing Kaldi's Coffee!"
+            };
+
+            $botService->sendPreOrderMessage($chatId, $msg);
+            Log::info("sendTelegramStatusNotification: Sent Telegram status update '{$newStatus}' for Order #{$orderNum} to chat_id {$chatId}");
+            return true;
+        } catch (\Throwable $e) {
+            Log::error("Failed to send Telegram status update for Order #{$preOrder->order_number}: " . $e->getMessage());
+            return false;
+        }
     }
 
     private function generateTelegramMessage(PreOrder $preOrder): string

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\PermissionCategoryHelper;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -20,11 +21,13 @@ class RoleController extends Controller {
         }
 
         $roles = $query->paginate(10)->withQueryString()->through(function ($role) {
+            $permissionNames = $role->permissions->pluck('name')->toArray();
             return [
                 'id' => $role->id,
                 'name' => $role->name,
                 'created_at' => $role->created_at->format('d-m-Y'),
-                'permissions' => $role->permissions->pluck('name')
+                'permissions' => $permissionNames,
+                'grouped_permissions' => PermissionCategoryHelper::groupPermissions($permissionNames),
             ];
         });
 
@@ -38,8 +41,10 @@ class RoleController extends Controller {
 	 * Show the form for creating a new resource.
 	 */
 	public function create() {
+		$allPermissions = Permission::all()->pluck('name')->toArray();
 		return Inertia::render('roles/create', [
-			'permissions' => Permission::all()->pluck('name'),
+			'permissions' => $allPermissions,
+			'groupedPermissions' => PermissionCategoryHelper::groupPermissions($allPermissions),
 		]);
 	}
 
@@ -75,9 +80,11 @@ class RoleController extends Controller {
 	 * Show the form for editing the specified resource.
 	 */
 	public function edit(Role $role) {
+		$allPermissions = Permission::all()->pluck('name')->toArray();
 		return Inertia::render('roles/edit', [
 			'role' => $role->load('permissions'),
-			'permissions' => Permission::all()->pluck('name')
+			'permissions' => $allPermissions,
+			'groupedPermissions' => PermissionCategoryHelper::groupPermissions($allPermissions),
 		]);
 	}
 
@@ -112,5 +119,49 @@ class RoleController extends Controller {
 	public function destroy(Role $role) {
 		$role->delete();
 		return to_route('roles.index')->with('message', 'Role Deleted Successfully!');
+	}
+
+	/**
+	 * Display the Role-Permission Comparison Matrix.
+	 */
+	public function matrix() {
+		$roles = Role::with('permissions')->get()->map(function ($role) {
+			return [
+				'id' => $role->id,
+				'name' => $role->name,
+				'permissions' => $role->permissions->pluck('name')->toArray(),
+			];
+		});
+
+		$allPermissions = Permission::all()->pluck('name')->toArray();
+		$groupedPermissions = PermissionCategoryHelper::groupPermissions($allPermissions);
+
+		return Inertia::render('roles/matrix', [
+			'roles' => $roles,
+			'allPermissions' => $allPermissions,
+			'groupedPermissions' => $groupedPermissions,
+		]);
+	}
+
+	/**
+	 * Toggle a permission for a role directly in the matrix.
+	 */
+	public function toggleMatrixPermission(Request $request) {
+		$request->validate([
+			'role_id' => 'required|exists:roles,id',
+			'permission' => 'required|string|exists:permissions,name',
+			'grant' => 'required|boolean',
+		]);
+
+		$role = Role::findOrFail($request->role_id);
+		if ($request->grant) {
+			$role->givePermissionTo($request->permission);
+			$msg = "Granted permission '{$request->permission}' to '{$role->name}'";
+		} else {
+			$role->revokePermissionTo($request->permission);
+			$msg = "Revoked permission '{$request->permission}' from '{$role->name}'";
+		}
+
+		return back()->with('message', $msg);
 	}
 }

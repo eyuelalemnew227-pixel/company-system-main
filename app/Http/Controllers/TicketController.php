@@ -47,7 +47,8 @@ class TicketController extends Controller
             // Full global access
         } else {
             $managedIds = $user->managedDepartmentIds();
-            $query->where(function ($q) use ($user, $managedIds) {
+            $userBranchId = $user->employee?->branch_id;
+            $query->where(function ($q) use ($user, $managedIds, $userBranchId) {
                 // Own requested tickets
                 $q->where('user_id', $user->id)
                     // Tickets where user is currently or was assigned
@@ -56,6 +57,10 @@ class TicketController extends Controller
                     })
                     // All tickets in departments they manage
                     ->orWhereIn('department_id', $managedIds);
+
+                if ($userBranchId) {
+                    $q->orWhere('requestor_branch_id', $userBranchId);
+                }
             });
         }
 
@@ -307,8 +312,27 @@ class TicketController extends Controller
 
         $spareParts = \App\Models\SparePart::with('category:id,name')->orderBy('name')->get(['id', 'name', 'article_code', 'description', 'spare_part_category_id']);
 
+        $user = auth()->user();
+        $userDeptIds = array_filter([
+            $user->department_id,
+            $user->employee?->department_id,
+        ]);
+        $managedDeptIds = $user->managedDepartmentIds() ?? [];
+        $excludedDeptIds = array_unique(array_merge($userDeptIds, $managedDeptIds));
+
+        $departmentsQuery = Department::where('is_active_on_ticketing', true);
+        $isTechOrManager = $user->hasAnyRole(['Ticket Technician', 'Technician', 'Ticket Manager', 'Department Manager', 'IT Technician', 'Support Technician'])
+            || !empty($managedDeptIds)
+            || $user->can('ticket.assign')
+            || $user->can('ticket.status.update')
+            || $user->can('ticket.view.department');
+
+        if ($isTechOrManager && !empty($excludedDeptIds)) {
+            $departmentsQuery->whereNotIn('id', $excludedDeptIds);
+        }
+
         return Inertia::render('tickets/create', [
-            'departments' => Department::where('is_active_on_ticketing', true)->orderBy('name')->get(),
+            'departments' => $departmentsQuery->orderBy('name')->get(),
             'mainCategories' => TicketMainCategory::where('is_active', true)
                 ->with(['subCategories' => fn($q) => $q->where('is_active', true)])
                 ->orderBy('name')->get(),
@@ -332,13 +356,32 @@ class TicketController extends Controller
         ]);
     }
 
-
     public function store(TicketStoreRequest $request)
     {
         $user = $request->user();
         $employee = $user->employee;
 
         $validated = $request->validated();
+
+        // Enforce that Technicians and Department Managers cannot submit tickets to their own department
+        $userDeptIds = array_filter([
+            $user->department_id,
+            $user->employee?->department_id,
+        ]);
+        $managedDeptIds = $user->managedDepartmentIds() ?? [];
+        $excludedDeptIds = array_unique(array_merge($userDeptIds, $managedDeptIds));
+
+        $isTechOrManager = $user->hasAnyRole(['Ticket Technician', 'Technician', 'Ticket Manager', 'Department Manager', 'IT Technician', 'Support Technician'])
+            || !empty($managedDeptIds)
+            || $user->can('ticket.assign')
+            || $user->can('ticket.status.update')
+            || $user->can('ticket.view.department');
+
+        if ($isTechOrManager && in_array((int) $validated['department_id'], array_map('intval', $excludedDeptIds), true)) {
+            return redirect()->back()->withErrors([
+                'department_id' => 'Technicians and Department Managers cannot submit support tickets to their own department.'
+            ]);
+        }
 
         // Ensure cascading consistency
         $this->assertTaxonomyConsistency(
@@ -367,9 +410,13 @@ class TicketController extends Controller
             }
         }
 
+        if ($request->hasFile('image')) {
+            $validated['image_path'] = $request->file('image')->store('tickets/images', 'public');
+        }
+
         return DB::transaction(function () use ($validated, $user, $employee, $title, $request) {
             $ticket = Ticket::create([
-                ...collect($validated)->except(['products', 'is_spare_part_request'])->toArray(),
+                ...collect($validated)->except(['products', 'is_spare_part_request', 'image'])->toArray(),
                 'user_id' => $user->id,
                 'title' => $title,
                 'status' => TicketStatus::PendingApproval,
@@ -488,44 +535,78 @@ class TicketController extends Controller
             || $user->hasRole('Super Admin')
             || $user->can('ticket.view.all');
 
-        $allowedTransitions = $this->statusService->getAllowedTransitions($ticket->status);
-        $allowedTransitions = array_values(array_unique(array_merge([$ticket->status->value], $allowedTransitions)));
+        $statusVal = is_object($ticket->status) ? $ticket->status->value : (string) $ticket->status;
 
-        if ($isManager) {
-            return $allowedTransitions;
+        if (in_array($statusVal, ['closed', 'rejected'], true)) {
+            return [];
         }
 
         $isRequestor = (int) $ticket->user_id === (int) $user->id
             || ($ticket->requestor_branch_id && $user->employee?->branch_id && (int) $ticket->requestor_branch_id === (int) $user->employee->branch_id);
 
-        if ($isRequestor) {
-            if ($ticket->status->value === 'done') {
-                return array_values(array_intersect([TicketStatus::TicketApproved->value, TicketStatus::InProgress->value, TicketStatus::Rejected->value], $allowedTransitions));
+        if ($isRequestor && !$isManager) {
+            if ($statusVal === 'done') {
+                return [TicketStatus::TicketApproved->value, TicketStatus::InProgress->value];
             }
-            if (!in_array($ticket->status, [TicketStatus::Closed, TicketStatus::Rejected], true)) {
-                return array_values(array_unique(array_merge([$ticket->status->value], array_intersect([TicketStatus::Rejected->value], $allowedTransitions))));
-            }
+            return [];
         }
 
         $isAssignee = $ticket->assignments()->where('is_current', true)->where('assigned_to', $user->id)->exists();
-        $canUpdateStaffStatus = $isAssignee || $user->can('ticket.status.update') || $user->can('ticket.view.department');
+        $isStaff = $isAssignee || $user->can('ticket.status.update') || $user->can('ticket.view.department');
 
-        if ($canUpdateStaffStatus) {
-            $staffAllowed = [
-                TicketStatus::NotStarted->value,
-                TicketStatus::InProgress->value,
-                TicketStatus::Hold->value,
-                TicketStatus::Escalated->value,
-                TicketStatus::Done->value,
-            ];
-            $filtered = array_intersect($allowedTransitions, $staffAllowed);
-            if (!empty($filtered)) {
-                return array_values($filtered);
+        if ($isStaff && !$isManager) {
+            switch ($statusVal) {
+                case 'approved':
+                case 'not_started':
+                    return [TicketStatus::InProgress->value, TicketStatus::Hold->value];
+
+                case 'in_progress':
+                    return [TicketStatus::Hold->value, TicketStatus::Escalated->value, TicketStatus::Done->value];
+
+                case 'hold':
+                    return [TicketStatus::InProgress->value, TicketStatus::Escalated->value, TicketStatus::Done->value];
+
+                case 'escalated':
+                    return [TicketStatus::InProgress->value, TicketStatus::Done->value];
+
+                case 'done':
+                    return [];
+
+                default:
+                    return [];
             }
         }
 
-        // Non-managers must not be allowed to close tickets directly
-        return array_values(array_diff($allowedTransitions, [TicketStatus::Closed->value]));
+        if ($isManager) {
+            switch ($statusVal) {
+                case 'pending_approval':
+                    return [TicketStatus::Approved->value, TicketStatus::Rejected->value];
+
+                case 'approved':
+                case 'not_started':
+                    return [TicketStatus::InProgress->value, TicketStatus::Hold->value];
+
+                case 'in_progress':
+                    return [TicketStatus::Hold->value, TicketStatus::Escalated->value, TicketStatus::Done->value];
+
+                case 'hold':
+                    return [TicketStatus::InProgress->value, TicketStatus::Escalated->value, TicketStatus::Done->value];
+
+                case 'escalated':
+                    return [TicketStatus::InProgress->value, TicketStatus::Done->value];
+
+                case 'done':
+                    return [];
+
+                case 'ticket_approved':
+                    return [TicketStatus::Closed->value];
+
+                default:
+                    return [];
+            }
+        }
+
+        return [];
     }
 
     public function canUserAssignTicket(User $user, Ticket $ticket): bool

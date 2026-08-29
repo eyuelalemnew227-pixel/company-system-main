@@ -107,6 +107,7 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
     ticket_sub_category_id: '',
     ticket_asset_id: 'none',
     description: '',
+    image: null as File | null,
     severity: severities[0] ?? '',
     preferred_deadline: '',
     products: [] as { product_id: string; quantity: string; uom: string; product_name?: string; product_code?: string; sub_category_id: string; sub_category_name: string }[],
@@ -561,13 +562,25 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
               )}
 
               {!isAnyPurchaseMode && (
-                <Field label="Description" error={errors.description}>
-                  <Textarea
-                    rows={4}
-                    value={data.description}
-                    onChange={(e) => setData('description', e.target.value)}
-                  />
-                </Field>
+                <>
+                  <Field label="Description" error={errors.description}>
+                    <Textarea
+                      rows={4}
+                      value={data.description}
+                      onChange={(e) => setData('description', e.target.value)}
+                    />
+                  </Field>
+                  <Field label="Attach Photo (Optional)" error={(errors as any).image}>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setData('image', e.target.files?.[0] || null)}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Attach an image/photo (JPEG, PNG, WEBP, up to 5MB) to help managers and technicians understand the case.
+                    </p>
+                  </Field>
+                </>
               )}
 
               <div className="grid gap-4 md:grid-cols-2">

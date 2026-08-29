@@ -18,7 +18,15 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function EvaluationTypes({ evaluationTypes }: { evaluationTypes: EvaluationType }) {
+type PaginatedEvaluationTypes = {
+    data: EvaluationType[];
+    total: number;
+    from: number;
+    to: number;
+    links: any[];
+};
+
+export default function EvaluationTypes({ evaluationTypes }: { evaluationTypes: PaginatedEvaluationTypes }) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
     const initialSearch = (usePage().props as any)?.request?.search ?? '';
     const [search, setSearch] = useState<string>(initialSearch);

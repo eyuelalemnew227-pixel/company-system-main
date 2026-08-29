@@ -31,6 +31,8 @@ class User extends Authenticatable
 		'country_code',
 		'is_paid_user',
 		'sms_notifications_enabled',
+		'signature_type',
+		'signature_data',
 	];
 
 	/**

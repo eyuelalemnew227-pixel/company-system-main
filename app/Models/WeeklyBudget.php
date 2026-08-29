@@ -18,6 +18,10 @@ class WeeklyBudget extends Model
 
     protected static function booted(): void
     {
+        static::created(function (WeeklyBudget $budget) {
+            \App\Services\WeeklyBudgetNotificationService::handleCreated($budget);
+        });
+
         static::updated(function (WeeklyBudget $budget) {
             \App\Services\WeeklyBudgetNotificationService::handleStatusChanges($budget);
         });

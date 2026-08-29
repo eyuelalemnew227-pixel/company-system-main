@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\PermissionCategoryHelper;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Permission;
@@ -21,6 +22,7 @@ class PermissionController extends Controller {
 			return [
 				'id' => $permission->id,
 				'name' => $permission->name,
+				'category' => PermissionCategoryHelper::getCategory($permission->name),
 				'created_at' => $permission->created_at->format('d-m-Y')
 			];
 		});

@@ -161,11 +161,15 @@ export default function Users({ users, branches, departments, roles, request }: 
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Departments</SelectItem>
-                                        {filteredDepartments.map((dept) => (
-                                            <SelectItem key={dept.id} value={dept.id.toString()}>
-                                                {dept.name}
-                                            </SelectItem>
-                                        ))}
+                                        {filteredDepartments.map((dept: any) => {
+                                            const id = typeof dept === 'object' && dept !== null ? dept.id : dept;
+                                            const name = typeof dept === 'object' && dept !== null ? dept.name : dept;
+                                            return (
+                                                <SelectItem key={id} value={String(id)}>
+                                                    {name}
+                                                </SelectItem>
+                                            );
+                                        })}
                                     </SelectContent>
                                 </Select>
                                 <Select value={selectedRole} onValueChange={handleRoleChange}>

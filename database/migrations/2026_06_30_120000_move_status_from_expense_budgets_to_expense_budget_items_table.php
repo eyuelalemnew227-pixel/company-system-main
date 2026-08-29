@@ -17,9 +17,9 @@ return new class extends Migration
 
         if (Schema::hasColumn('expense_budgets', 'status')) {
             DB::statement('
-                UPDATE expense_budget_items ebi
-                INNER JOIN expense_budgets eb ON ebi.expense_budget_id = eb.id
-                SET ebi.status = eb.status
+                UPDATE expense_budget_items
+                SET status = (SELECT status FROM expense_budgets WHERE expense_budgets.id = expense_budget_items.expense_budget_id)
+                WHERE expense_budget_id IS NOT NULL
             ');
 
             Schema::table('expense_budgets', function (Blueprint $table) {

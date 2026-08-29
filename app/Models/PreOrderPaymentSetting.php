@@ -8,6 +8,9 @@ class PreOrderPaymentSetting extends Model
 {
     protected $fillable = [
         'payment_method',
+        'account_name',
+        'account_number',
+        'instructions',
         'validation_pattern',
         'example',
         'is_active',

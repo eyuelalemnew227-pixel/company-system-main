@@ -25,6 +25,8 @@ type LinkFormPayload = {
     href: string;
     icon: string;
     permission: string;
+    target?: string;
+    rel?: string;
     is_external: boolean;
     is_active: boolean;
     sort: number;
@@ -42,7 +44,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'External Links', href: '/external-links' },
 ];
 
-const iconLookup = Icons as Record<string, LucideIcon | undefined>;
+const iconLookup = Icons as unknown as Record<string, LucideIcon | undefined>;
 const getIcon = (name?: string | null): LucideIcon => {
     if (!name) return Link2;
     return iconLookup[name] ?? Link2;

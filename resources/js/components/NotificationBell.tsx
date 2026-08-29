@@ -48,8 +48,8 @@ export default function NotificationBell({ initialUnread = 0 }: Props) {
         })
       ]);
 
-      let ticketJson = { data: [], unread: 0 };
-      let budgetJson = { data: [], unread: 0 };
+      let ticketJson: { data: any[]; unread: number } = { data: [], unread: 0 };
+      let budgetJson: { data: any[]; unread: number } = { data: [], unread: 0 };
 
       if (ticketRes.ok) {
         ticketJson = await ticketRes.json();

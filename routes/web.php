@@ -36,12 +36,22 @@ use App\Http\Controllers\{
     SparePartController,
     PreOrderTargetController,
     WeeklyBudgetController,
+    MemoController,
+    MemoTemplateController,
+    MemoSettingController,
+    TelecomDashboardController,
+    TelecomPhoneNumberController,
+    TelecomBroadbandController,
+    TelecomProviderController,
 };
 
 Route::get('/', fn() => Inertia::render('welcome'))->name('home');
 
 // Offline fallback page for PWA
 Route::get('/offline', fn() => Inertia::render('offline'))->name('offline');
+
+// Public Telegram MiniApp Route
+Route::get('/pre-orders/miniapp', fn() => view('miniapp'))->name('pre-orders.miniapp');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', fn() => Inertia::render('dashboard'))->name('dashboard');
@@ -59,6 +69,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'can:update permissions',
             'can:delete permissions'
         ]);
+
+    // Roles Matrix - Must be placed before resource route to avoid route parameter collision
+    Route::get('roles/matrix', [RoleController::class, 'matrix'])->name('roles.matrix');
+    Route::post('roles/matrix/toggle', [RoleController::class, 'toggleMatrixPermission'])->name('roles.matrix.toggle');
 
     // Roles
     Route::resource('roles', RoleController::class)->except(['show']);
@@ -196,6 +210,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Evaluator Completion Tracking
     Route::get('evaluator-completion', [EvaluatorCompletionController::class, 'index'])->name('evaluator-completion.index');
+
+    // Internal Memorandum
+    Route::post('memos/{memo}/sign-cc', [MemoController::class, 'signCc'])->name('memos.sign-cc');
+    Route::post('memos/{memo}/send-telegram', [MemoController::class, 'sendTelegram'])->name('memos.send-telegram');
+    Route::resource('memos', MemoController::class);
+    Route::resource('memo-templates', MemoTemplateController::class)->only(['index', 'store', 'destroy']);
+    Route::get('memo-settings', [MemoSettingController::class, 'index'])->name('memo-settings.index');
+    Route::post('memo-settings', [MemoSettingController::class, 'update'])->name('memo-settings.update');
+    Route::post('user/signature', [MemoController::class, 'updateUserSignature'])->name('user.signature.update');
+
+
 
     // Evaluation summary report (permission-gated)
     Route::middleware('permission:view evaluation summary')->group(function () {
@@ -343,6 +368,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Pre-order Dashboard
         Route::get('/pre-orders/dashboard', [PreOrderDashboardController::class, 'index'])->name('pre-orders.dashboard');
 
+        // Customer Feedback
+        Route::get('pre-orders/feedback', [\App\Http\Controllers\PreOrderFeedbackController::class, 'index'])->name('pre-orders.feedback.index');
+        Route::get('pre-orders/feedback/export', [\App\Http\Controllers\PreOrderFeedbackController::class, 'export'])->name('pre-orders.feedback.export');
+        Route::delete('pre-orders/feedback/{feedback}', [\App\Http\Controllers\PreOrderFeedbackController::class, 'destroy'])->name('pre-orders.feedback.destroy');
+
+        // Pre-Order Customers
+        Route::get('pre-orders/customers', [\App\Http\Controllers\PreOrderCustomerController::class, 'index'])->name('pre-orders.customers.index');
+        Route::get('pre-orders/customers/export', [\App\Http\Controllers\PreOrderCustomerController::class, 'export'])->name('pre-orders.customers.export');
+
+        // Broadcast Announcements
+        Route::get('pre-orders/broadcasts', [\App\Http\Controllers\PreOrderBroadcastController::class, 'index'])->name('pre-orders.broadcasts.index');
+        Route::post('pre-orders/broadcasts', [\App\Http\Controllers\PreOrderBroadcastController::class, 'store'])->name('pre-orders.broadcasts.store');
+
         Route::get('pre-orders/export', [\App\Http\Controllers\PreOrderController::class, 'export'])->name('pre-orders.export')->middleware('permission:view all pre-orders');
         Route::post('pre-orders/{preOrder}/update-status', [\App\Http\Controllers\PreOrderController::class, 'updateStatus'])->name('pre-orders.update-status')->middleware('permission:update pre-order status|update all pre-order status|mark pre-order as paid|cancel pre-orders');
         Route::post('pre-orders/send-bulk-sms-reminders', [\App\Http\Controllers\PreOrderController::class, 'sendBulkSmsReminders'])->name('pre-orders.send-bulk-sms-reminders')->middleware('permission:send bulk sms reminders');
@@ -351,6 +389,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('pre-orders/sms-templates/{smsTemplate}', [\App\Http\Controllers\SmsTemplateController::class, 'update'])->name('pre-orders.sms-templates.update');
 
         Route::middleware('permission:manage pre-order payment settings')->group(function () {
+            Route::post('pre-order-payment-settings/admin-chat-id', [\App\Http\Controllers\PreOrderPaymentSettingController::class, 'updateAdminChatId'])->name('pre-order-payment-settings.admin-chat-id');
             Route::resource('pre-order-payment-settings', \App\Http\Controllers\PreOrderPaymentSettingController::class)->only(['index', 'update']);
         });
 
@@ -476,17 +515,145 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('spare-part-categories', SparePartCategoryController::class)->except(['show']);
     Route::resource('spare-parts', SparePartController::class)->except(['show']);
 
+    // Broadcast Announcements
+    Route::get('broadcast-announcements', [\App\Http\Controllers\TelegramConfigController::class, 'broadcastPage'])->name('broadcast-announcements.index');
+    Route::post('broadcast-announcements', [\App\Http\Controllers\TelegramConfigController::class, 'broadcastAnnouncement'])->name('broadcast-announcements.send');
+
     // Telegram Configuration Management
-    Route::middleware('permission:view telegram config')->group(function () {
-        Route::get('telegram-config', [\App\Http\Controllers\TelegramConfigController::class, 'index'])->name('telegram-config.index');
+    Route::get('telegram-config', [\App\Http\Controllers\TelegramConfigController::class, 'index'])->name('telegram-config.index');
+    Route::post('telegram-config/settings', [\App\Http\Controllers\TelegramConfigController::class, 'updateSettings'])->name('telegram-config.update-settings');
+    Route::post('telegram-config/set-webhook', [\App\Http\Controllers\TelegramConfigController::class, 'setWebhook'])->name('telegram-config.set-webhook');
+    Route::post('telegram-config/remove-webhook', [\App\Http\Controllers\TelegramConfigController::class, 'removeWebhook'])->name('telegram-config.remove-webhook');
+    Route::post('telegram-config/test-message', [\App\Http\Controllers\TelegramConfigController::class, 'sendTestMessage'])->name('telegram-config.test-message');
+    Route::put('telegram-config/users/{user}', [\App\Http\Controllers\TelegramConfigController::class, 'updateUserChatId'])->name('telegram-config.update-user');
+    Route::put('telegram-config/branches/{branch}', [\App\Http\Controllers\TelegramConfigController::class, 'updateBranchChatId'])->name('telegram-config.update-branch');
+    Route::post('telegram-config/broadcast', [\App\Http\Controllers\TelegramConfigController::class, 'broadcastAnnouncement'])->name('telegram-config.broadcast');
+
+    // Dynamic Bot Credentials Management
+    Route::post('telegram-config/bots', [\App\Http\Controllers\TelegramConfigController::class, 'storeBot'])->name('telegram-config.bots.store');
+    Route::put('telegram-config/bots/{bot}', [\App\Http\Controllers\TelegramConfigController::class, 'updateBot'])->name('telegram-config.bots.update');
+    Route::delete('telegram-config/bots/{bot}', [\App\Http\Controllers\TelegramConfigController::class, 'destroyBot'])->name('telegram-config.bots.destroy');
+    Route::post('telegram-config/bots/{bot}/set-webhook', [\App\Http\Controllers\TelegramConfigController::class, 'setBotWebhook'])->name('telegram-config.bots.set-webhook');
+    Route::post('telegram-config/bots/{bot}/remove-webhook', [\App\Http\Controllers\TelegramConfigController::class, 'removeBotWebhook'])->name('telegram-config.bots.remove-webhook');
+
+    // Telecom Management
+    Route::middleware(['permission:view telecom management', 'it_department'])->prefix('telecom')->group(function () {
+        Route::get('dashboard', [TelecomDashboardController::class, 'index'])->name('telecom.dashboard');
+
+        Route::get('phone-numbers/export', [TelecomPhoneNumberController::class, 'export'])->name('telecom.phone-numbers.export');
+        Route::resource('phone-numbers', TelecomPhoneNumberController::class)->names([
+            'index' => 'telecom.phone-numbers.index',
+            'create' => 'telecom.phone-numbers.create',
+            'store' => 'telecom.phone-numbers.store',
+            'edit' => 'telecom.phone-numbers.edit',
+            'update' => 'telecom.phone-numbers.update',
+            'destroy' => 'telecom.phone-numbers.destroy',
+        ]);
+
+        Route::get('broadbands/export', [TelecomBroadbandController::class, 'export'])->name('telecom.broadbands.export');
+        Route::resource('broadbands', TelecomBroadbandController::class)->names([
+            'index' => 'telecom.broadbands.index',
+            'create' => 'telecom.broadbands.create',
+            'store' => 'telecom.broadbands.store',
+            'edit' => 'telecom.broadbands.edit',
+            'update' => 'telecom.broadbands.update',
+            'destroy' => 'telecom.broadbands.destroy',
+        ]);
+
+        Route::resource('providers', TelecomProviderController::class)->only(['index', 'store', 'update', 'destroy'])->names([
+            'index' => 'telecom.providers.index',
+            'store' => 'telecom.providers.store',
+            'update' => 'telecom.providers.update',
+            'destroy' => 'telecom.providers.destroy',
+        ]);
     });
-    Route::middleware('permission:manage telegram config')->group(function () {
-        Route::post('telegram-config/settings', [\App\Http\Controllers\TelegramConfigController::class, 'updateSettings'])->name('telegram-config.update-settings');
-        Route::post('telegram-config/set-webhook', [\App\Http\Controllers\TelegramConfigController::class, 'setWebhook'])->name('telegram-config.set-webhook');
-        Route::post('telegram-config/remove-webhook', [\App\Http\Controllers\TelegramConfigController::class, 'removeWebhook'])->name('telegram-config.remove-webhook');
-        Route::post('telegram-config/test-message', [\App\Http\Controllers\TelegramConfigController::class, 'sendTestMessage'])->name('telegram-config.test-message');
-        Route::put('telegram-config/users/{user}', [\App\Http\Controllers\TelegramConfigController::class, 'updateUserChatId'])->name('telegram-config.update-user');
-        Route::put('telegram-config/branches/{branch}', [\App\Http\Controllers\TelegramConfigController::class, 'updateBranchChatId'])->name('telegram-config.update-branch');
+
+    // Training Management System
+    Route::prefix('training')->name('training.')->middleware(['permission:training.view'])->group(function () {
+        Route::get('/dashboard', [\App\Http\Controllers\Training\TrainingDashboardController::class, 'index'])->name('dashboard');
+
+        // Courses & Lessons
+        Route::get('/courses', [\App\Http\Controllers\Training\CourseController::class, 'index'])->name('courses.index');
+        Route::get('/courses/create', [\App\Http\Controllers\Training\CourseController::class, 'create'])->name('courses.create');
+        Route::post('/courses', [\App\Http\Controllers\Training\CourseController::class, 'store'])->name('courses.store');
+        Route::get('/courses/{course}', [\App\Http\Controllers\Training\CourseController::class, 'show'])->name('courses.show');
+        Route::get('/courses/{course}/edit', [\App\Http\Controllers\Training\CourseController::class, 'edit'])->name('courses.edit');
+        Route::put('/courses/{course}', [\App\Http\Controllers\Training\CourseController::class, 'update'])->name('courses.update');
+        Route::delete('/courses/{course}', [\App\Http\Controllers\Training\CourseController::class, 'destroy'])->name('courses.destroy');
+        Route::post('/courses/{course}/enroll', [\App\Http\Controllers\Training\CourseController::class, 'enroll'])->name('courses.enroll');
+        Route::post('/courses/{course}/lessons', [\App\Http\Controllers\Training\LessonController::class, 'store'])->name('courses.lessons.store');
+
+        Route::get('/lessons/{lesson}', [\App\Http\Controllers\Training\LessonController::class, 'show'])->name('lessons.show');
+        Route::post('/lessons/{lesson}/complete', [\App\Http\Controllers\Training\LessonController::class, 'complete'])->name('lessons.complete');
+
+        // My Learning Hub
+        Route::get('/my-learning', [\App\Http\Controllers\Training\MyLearningController::class, 'index'])->name('my-learning.index');
+
+        // Question Bank & Quizzes
+        Route::get('/question-banks', [\App\Http\Controllers\Training\QuestionBankController::class, 'index'])->name('question-banks.index');
+        Route::post('/question-banks', [\App\Http\Controllers\Training\QuestionBankController::class, 'store'])->name('question-banks.store');
+        Route::put('/question-banks/{questionBank}', [\App\Http\Controllers\Training\QuestionBankController::class, 'update'])->name('question-banks.update');
+        Route::delete('/question-banks/{questionBank}', [\App\Http\Controllers\Training\QuestionBankController::class, 'destroy'])->name('question-banks.destroy');
+
+        Route::get('/quizzes', [\App\Http\Controllers\Training\QuizController::class, 'index'])->name('quizzes.index');
+        Route::post('/quizzes', [\App\Http\Controllers\Training\QuizController::class, 'store'])->name('quizzes.store');
+        Route::get('/quizzes/{quiz}/take', [\App\Http\Controllers\Training\QuizController::class, 'take'])->name('quizzes.take');
+        Route::post('/quizzes/{quiz}/submit', [\App\Http\Controllers\Training\QuizController::class, 'submit'])->name('quizzes.submit');
+
+        Route::get('/ai-quiz', [\App\Http\Controllers\Training\AiQuizController::class, 'index'])->name('ai-quiz.index');
+        Route::post('/ai-quiz/generate', [\App\Http\Controllers\Training\AiQuizController::class, 'generate'])->name('ai-quiz.generate');
+
+        // Certificates & Verification
+        Route::get('/certificates', [\App\Http\Controllers\Training\CertificateController::class, 'index'])->name('certificates.index');
+        Route::post('/certificates/{certificate}/revoke', [\App\Http\Controllers\Training\CertificateController::class, 'revoke'])->name('certificates.revoke');
+        Route::get('/certificates/verify', [\App\Http\Controllers\Training\CertificateController::class, 'verifyPage'])->name('certificates.verify');
+
+        // Leaderboard & Gamification
+        Route::get('/leaderboard', [\App\Http\Controllers\Training\GamificationController::class, 'leaderboard'])->name('leaderboard.index');
+        Route::get('/badges', [\App\Http\Controllers\Training\GamificationController::class, 'badges'])->name('badges.index');
+        Route::post('/badges', [\App\Http\Controllers\Training\GamificationController::class, 'storeBadge'])->name('badges.store');
+
+        // Compliance & SOP Documents
+        Route::get('/sop', [\App\Http\Controllers\Training\SopController::class, 'index'])->name('sop.index');
+        Route::post('/sop', [\App\Http\Controllers\Training\SopController::class, 'store'])->name('sop.store');
+        Route::get('/sop/{sop}', [\App\Http\Controllers\Training\SopController::class, 'show'])->name('sop.show');
+        Route::post('/sop/{sop}/acknowledge', [\App\Http\Controllers\Training\SopController::class, 'acknowledge'])->name('sop.acknowledge');
+        Route::delete('/sop/{sop}', [\App\Http\Controllers\Training\SopController::class, 'destroy'])->name('sop.destroy');
+
+        // Agendas & Structured Training Proposals (Image 1 Format)
+        Route::get('/agendas', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'agendasIndex'])->name('agendas.index');
+        Route::get('/agendas/create', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'createAgenda'])->name('agendas.create');
+        Route::post('/agendas', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'storeAgenda'])->name('agendas.store');
+        Route::get('/agendas/{agenda}', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'showAgenda'])->name('agendas.show');
+
+        // Master Schedules & Timetable (Image 2 Format)
+        Route::get('/schedules', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'schedulesIndex'])->name('schedules.index');
+        Route::get('/schedules/create', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'createSchedule'])->name('schedules.create');
+        Route::post('/schedules', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'storeSchedule'])->name('schedules.store');
+        Route::post('/schedules/{schedule}/publish', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'publishSchedule'])->name('schedules.publish');
+        Route::post('/schedules/items/{item}/approve', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'approveScheduleItem'])->name('schedules.items.approve');
+
+        // Trainer Department Evaluation
+        Route::get('/evaluations', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'evaluationsIndex'])->name('evaluations.index');
+        Route::get('/evaluations/create/{item?}', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'createEvaluation'])->name('evaluations.create');
+        Route::post('/evaluations', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'storeEvaluation'])->name('evaluations.store');
+
+        // Training Settings & Questionnaire Customization
+        Route::get('/settings', [\App\Http\Controllers\Training\TrainingSettingsController::class, 'index'])->name('settings.index');
+        Route::post('/settings', [\App\Http\Controllers\Training\TrainingSettingsController::class, 'update'])->name('settings.update');
+
+        Route::post('/agendas/{event}/check-in', [\App\Http\Controllers\Training\AgendaController::class, 'checkIn'])->name('agendas.check-in');
+
+        // Forums & Community
+        Route::get('/forums', [\App\Http\Controllers\Training\ForumController::class, 'index'])->name('forums.index');
+        Route::post('/forums', [\App\Http\Controllers\Training\ForumController::class, 'storeForum'])->name('forums.store');
+        Route::get('/forums/thread/{thread}', [\App\Http\Controllers\Training\ForumController::class, 'showThread'])->name('forums.thread');
+        Route::post('/forums/{forum}/threads', [\App\Http\Controllers\Training\ForumController::class, 'storeThread'])->name('forums.threads.store');
+        Route::post('/forums/thread/{thread}/reply', [\App\Http\Controllers\Training\ForumController::class, 'reply'])->name('forums.reply');
+        Route::post('/forums/thread/{thread}/posts/{post}/solution', [\App\Http\Controllers\Training\ForumController::class, 'markSolution'])->name('forums.mark-solution');
+
+        // Reports
+        Route::get('/reports', [\App\Http\Controllers\Training\ReportController::class, 'index'])->name('reports.index');
     });
 });
 

@@ -17,12 +17,14 @@ class Branch extends Model
             Cache::forget('branches_all_sorted');
             Cache::forget('branches_inventory_tracking');
             Cache::forget('sales_budget_active_branches');
+            Cache::forget('miniapp_init_data');
         });
         static::deleted(function () {
             Cache::forget('branches_all');
             Cache::forget('branches_all_sorted');
             Cache::forget('branches_inventory_tracking');
             Cache::forget('sales_budget_active_branches');
+            Cache::forget('miniapp_init_data');
         });
     }
 
@@ -35,10 +37,12 @@ class Branch extends Model
         'telegram_chat_id',
         'description',
         'is_sales_generating',
+        'is_pre_order_branch',
     ];
 
     protected $casts = [
         'is_sales_generating' => 'boolean',
+        'is_pre_order_branch' => 'boolean',
     ];
 
     public function departments()

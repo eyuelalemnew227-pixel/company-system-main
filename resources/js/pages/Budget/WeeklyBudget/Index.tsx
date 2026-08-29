@@ -52,6 +52,7 @@ type WeekOption = {
 	startDate: string;
 	endDate: string;
 	label: string;
+	disabled?: boolean;
 };
 
 type WeeklyBudgetRow = {
@@ -99,8 +100,14 @@ type ActivityLogResponse = {
 		branch: string | null;
 		fiscal_year: string | null;
 		fiscal_month: string | null;
-		week_number: number;
+		week_number: number | null;
+		request_type: string | null;
 		amount: string | number | null;
+		payment_category: string | null;
+		payment_type: string | null;
+		status_finance: string | null;
+		status_department: string | null;
+		status_ceo: string | null;
 	};
 	logs: ActivityLogEntry[];
 };
@@ -119,14 +126,11 @@ type EditFormState = {
 	note: string;
 };
 
-interface WeeklyBudgetList extends Pagination {
-	data: WeeklyBudgetRow[];
-}
+type WeeklyBudgetList = Pagination<WeeklyBudgetRow>;
 
 type Setting = {
-	id: number;
-	submission_deadline_day: string;
-	is_urgent_enabled: boolean;
+	submission_deadline_day: string | number;
+	submission_deadline_time: string;
 };
 
 type IndexProps = {
@@ -144,6 +148,7 @@ type IndexProps = {
 	currentFiscalYearId?: number | null;
 	currentFiscalMonthId?: number | null;
 	request?: {
+		budget_id?: string;
 		request_type?: string;
 		status_finance?: string;
 		status_department?: string;

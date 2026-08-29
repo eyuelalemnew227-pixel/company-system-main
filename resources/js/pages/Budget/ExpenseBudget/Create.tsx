@@ -71,7 +71,7 @@ type ExpenseItemOption = {
 };
 
 type BudgetItemRow = {
-    expense_item_id: number | '';
+    expense_item_id: number | string;
     planned_budget: string;
 };
 
@@ -230,7 +230,7 @@ export default function CreateExpenseBudget({
         fiscal_month_id: defaultFiscalMonthId ? String(defaultFiscalMonthId) : '',
         branch_id: '',
         department_id: '',
-        items: [{ expense_item_id: '', planned_budget: '' }],
+        items: [{ expense_item_id: '', planned_budget: '' }] as BudgetItemRow[],
     });
 
     const [openBranch, setOpenBranch] = useState(false);
@@ -460,8 +460,8 @@ export default function CreateExpenseBudget({
         const selectedIds = new Set(
             data.items
                 .filter((_, index) => index !== currentRowIndex)
-                .map((item) => item.expense_item_id)
-                .filter((id): id is number => typeof id === 'number'),
+                .map((item) => Number(item.expense_item_id))
+                .filter((id) => Boolean(id) && !isNaN(id)),
         );
 
         return allExpenseItems.filter(
@@ -747,7 +747,7 @@ export default function CreateExpenseBudget({
                                                                                         <Check
                                                                                             className={cn(
                                                                                                 'mr-2 size-4',
-                                                                                                row.expense_item_id === item.id ? 'opacity-100' : 'opacity-0',
+                                                                                                Number(row.expense_item_id) === item.id ? 'opacity-100' : 'opacity-0',
                                                                                             )}
                                                                                         />
                                                                                         {item.name}

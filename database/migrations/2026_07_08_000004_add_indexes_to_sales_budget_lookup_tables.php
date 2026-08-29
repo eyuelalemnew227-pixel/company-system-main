@@ -8,9 +8,11 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('branches', function (Blueprint $table) {
-            $table->index(['status', 'name'], 'branches_status_name_index');
-        });
+        if (Schema::hasColumn('branches', 'status')) {
+            Schema::table('branches', function (Blueprint $table) {
+                $table->index(['status', 'name'], 'branches_status_name_index');
+            });
+        }
 
         Schema::table('sales_budgets', function (Blueprint $table) {
             $table->index(['fiscal_month_id', 'branch_id'], 'sales_budgets_fiscal_month_branch_index');
@@ -25,8 +27,10 @@ return new class extends Migration
             $table->dropIndex('sales_budgets_fiscal_period_branch_index');
         });
 
-        Schema::table('branches', function (Blueprint $table) {
-            $table->dropIndex('branches_status_name_index');
-        });
+        if (Schema::hasColumn('branches', 'status')) {
+            Schema::table('branches', function (Blueprint $table) {
+                $table->dropIndex('branches_status_name_index');
+            });
+        }
     }
 };

@@ -50,6 +50,7 @@
         @routes
         @viteReactRefresh
         @vite(['resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
         @inertiaHead
     </head>
     <body class="font-sans antialiased">

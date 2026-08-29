@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::table('ticket_main_categories', function (Blueprint $table) {
             if (Schema::hasColumn('ticket_main_categories', 'slug')) {
+                try { $table->dropUnique('ticket_main_categories_slug_unique'); } catch (\Throwable $e) {}
                 $table->dropColumn('slug');
             }
             if (Schema::hasColumn('ticket_main_categories', 'display_order')) {
@@ -19,6 +20,7 @@ return new class extends Migration
 
         Schema::table('ticket_sub_categories', function (Blueprint $table) {
             if (Schema::hasColumn('ticket_sub_categories', 'slug')) {
+                try { $table->dropUnique('ticket_sub_categories_slug_unique'); } catch (\Throwable $e) {}
                 $table->dropColumn('slug');
             }
             if (Schema::hasColumn('ticket_sub_categories', 'display_order')) {

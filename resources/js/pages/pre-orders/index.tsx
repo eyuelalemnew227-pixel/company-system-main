@@ -824,7 +824,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                         <SortIcon field="phone_number" />
                                     </div>
                                 </TableHead>
-                                <TableHead>Order Type</TableHead>
+                                 <TableHead>Order Type</TableHead>
                                 <TableHead>Payment Method</TableHead>
                                 <TableHead>Voucher Code</TableHead>
                                 <TableHead>Transaction Reference</TableHead>
@@ -907,10 +907,10 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                         <TableCell>{order.transaction_reference || '-'}</TableCell>
                                         <TableCell>
                                             {(() => {
-                                                const filename = order.payment_slip || order.transaction_reference?.match(/slip_[\w.-]+\.(?:jpg|jpeg|png)/i)?.[0];
-                                                return filename ? (
+                                                const slipUrl = (order as any).payment_slip_url || (order.payment_slip ? (order.payment_slip.startsWith('http') ? order.payment_slip : `/${order.payment_slip.replace(/^\/+/, '')}`) : null);
+                                                return slipUrl ? (
                                                     <a
-                                                        href={`https://preorder.kaldisbunnaet.com//uploads/${filename}`}
+                                                        href={slipUrl}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="flex items-center gap-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
@@ -943,16 +943,10 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                         </TableCell>
                                         <TableCell>
                                             <span
-                                                className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${statusColors[order.status as keyof typeof statusColors]
-                                                    }`}
+                                                className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${statusColors[order.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}
                                             >
                                                 {order.status}
                                             </span>
-                                            {order.status === 'Pending' && canViewAllOrders && (
-                                                <span className="ml-2 text-xs text-blue-600" title="Can receive SMS reminder">
-                                                    SMS
-                                                </span>
-                                            )}
                                         </TableCell>
                                         <TableCell>ETB {order.total_amount}</TableCell>
                                         {canViewAuditTrail && (

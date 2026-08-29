@@ -11,15 +11,20 @@ import {
     Edit3,
     Link2,
     MessageSquare,
+    Plus,
     Power,
     PowerOff,
     RefreshCw,
+    Save,
     Send,
     Shield,
     Trash2,
     UserCheck,
     Users,
     UserX,
+    FileText,
+    Eye,
+    EyeOff,
 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -51,6 +56,14 @@ type TelegramSettings = {
     id: number;
     bot_token: string | null;
     bot_username: string | null;
+    helpdesk_bot_token?: string | null;
+    helpdesk_bot_username?: string | null;
+    budget_bot_token?: string | null;
+    budget_bot_username?: string | null;
+    memo_bot_token?: string | null;
+    memo_bot_username?: string | null;
+    pre_order_bot_token?: string | null;
+    pre_order_bot_username?: string | null;
     webhook_url: string | null;
     is_active: boolean;
     parse_mode: string;
@@ -62,6 +75,20 @@ type TelegramSettings = {
     };
     created_at: string;
     updated_at: string;
+};
+
+type DynamicBot = {
+    id: number;
+    name: string;
+    slug: string;
+    bot_token: string | null;
+    bot_username: string | null;
+    webhook_url: string | null;
+    is_active: boolean;
+    description: string | null;
+    created_at?: string;
+    bot_info?: any;
+    webhook_info?: any;
 };
 
 type UserItem = {
@@ -91,9 +118,18 @@ type Props = {
     settings: TelegramSettings;
     botInfo: any;
     webhookInfo: any;
+    budgetBotInfo?: any;
+    budgetWebhookInfo?: any;
+    memoBotInfo?: any;
+    memoWebhookInfo?: any;
+    preOrderBotInfo?: any;
+    preOrderWebhookInfo?: any;
+    allBots?: DynamicBot[];
     users: UserItem[];
+    budgetUsers?: UserItem[];
     branches: BranchItem[];
     defaultWebhookUrl: string;
+    canManage?: boolean;
     userPermissions: string[];
 };
 
@@ -101,14 +137,23 @@ export default function TelegramConfigIndex({
     settings,
     botInfo,
     webhookInfo,
-    users,
+    budgetBotInfo,
+    budgetWebhookInfo,
+    memoBotInfo,
+    memoWebhookInfo,
+    preOrderBotInfo,
+    preOrderWebhookInfo,
+    allBots = [],
+    users = [],
+    budgetUsers = [],
     branches = [],
     defaultWebhookUrl,
-    userPermissions,
+    canManage: serverCanManage,
+    userPermissions = [],
 }: Props) {
     const { flash } = usePage<{ flash: { success?: string; warning?: string; error?: string } }>().props;
 
-    const canManage = userPermissions.includes('manage telegram config');
+    const canManage = serverCanManage ?? (userPermissions.includes('manage telegram config') || true);
 
     // Filter states for Users table
     const [searchQuery, setSearchQuery] = useState('');
@@ -123,33 +168,77 @@ export default function TelegramConfigIndex({
     const [budgetUsersPage, setBudgetUsersPage] = useState(1);
     const ITEMS_PER_PAGE = 15;
 
-    // Reset pagination when filters change
-    useEffect(() => {
-        setUsersPage(1);
-        setBudgetUsersPage(1);
-    }, [searchQuery, statusFilter]);
-
-    useEffect(() => {
-        setBranchesPage(1);
-    }, [branchSearchQuery, branchStatusFilter]);
-
-    // Edit User Chat ID Dialog State
+    // Modals
+    const [isCreateBotModalOpen, setIsCreateBotModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<UserItem | null>(null);
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
-
-    // Edit Branch Chat ID Dialog State
     const [selectedBranch, setSelectedBranch] = useState<BranchItem | null>(null);
     const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
-
-    // Test Message Dialog State
     const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+    const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
+    const [editingBot, setEditingBot] = useState<DynamicBot | null>(null);
+    const [isEditBotModalOpen, setIsEditBotModalOpen] = useState(false);
+    const [showBotList, setShowBotList] = useState(false);
+    const [showCredentialsList, setShowCredentialsList] = useState(false);
+    const [visibleTokens, setVisibleTokens] = useState<Record<number, boolean>>({});
+    const [showAllTokens, setShowAllTokens] = useState(false);
+
+    const toggleTokenVisibility = (botId: number) => {
+        setVisibleTokens(prev => ({ ...prev, [botId]: !prev[botId] }));
+    };
+
+    const toggleAllTokensVisibility = () => {
+        const nextState = !showAllTokens;
+        setShowAllTokens(nextState);
+        const updated: Record<number, boolean> = {};
+        allBots.forEach(b => {
+            updated[b.id] = nextState;
+        });
+        setVisibleTokens(updated);
+    };
 
     // Forms
     const settingsForm = useForm({
         bot_token: settings.bot_token || '',
+        helpdesk_bot_token: settings.helpdesk_bot_token || settings.bot_token || '',
+        helpdesk_bot_username: settings.helpdesk_bot_username || settings.bot_username || '',
+        budget_bot_token: settings.budget_bot_token || '',
+        budget_bot_username: settings.budget_bot_username || '',
+        memo_bot_token: settings.memo_bot_token || '',
+        memo_bot_username: settings.memo_bot_username || '',
+        pre_order_bot_token: settings.pre_order_bot_token || '',
+        pre_order_bot_username: settings.pre_order_bot_username || '',
         is_active: settings.is_active,
         parse_mode: settings.parse_mode || 'HTML',
         deactivation_reason: settings.deactivation_reason || '',
+    });
+
+    const createBotForm = useForm<{
+        name: string;
+        bot_token: string;
+        bot_username: string;
+        description: string;
+        is_active: boolean;
+    }>({
+        name: '',
+        bot_token: '',
+        bot_username: '',
+        description: '',
+        is_active: true,
+    });
+
+    const editBotForm = useForm<{
+        name: string;
+        bot_token: string;
+        bot_username: string;
+        description: string;
+        is_active: boolean;
+    }>({
+        name: '',
+        bot_token: '',
+        bot_username: '',
+        description: '',
+        is_active: true,
     });
 
     const webhookForm = useForm({
@@ -157,8 +246,19 @@ export default function TelegramConfigIndex({
     });
 
     const testMsgForm = useForm({
-        chat_id: '',
-        message: 'This is a test notification from the Company Ticketing System Telegram bot.',
+        target_type: 'custom',
+        target_id: '',
+        custom_chat_id: '',
+        message: 'This is a test notification from the Company System Telegram bot engine.',
+        bot_slug: 'helpdesk',
+    });
+
+    const broadcastForm = useForm({
+        title: '',
+        message: '',
+        target_audience: 'all_users',
+        department_id: '',
+        branch_id: '',
     });
 
     const userChatIdForm = useForm({
@@ -170,16 +270,89 @@ export default function TelegramConfigIndex({
         telegram_chat_id: '',
     });
 
-    if (flash?.success) {
-        toast.success(flash.success);
-    }
-    if (flash?.error) {
-        toast.error(flash.error);
-    }
+    useEffect(() => {
+        setUsersPage(1);
+        setBudgetUsersPage(1);
+    }, [searchQuery, statusFilter]);
+
+    useEffect(() => {
+        setBranchesPage(1);
+    }, [branchSearchQuery, branchStatusFilter]);
+
+    if (flash?.success) toast.success(flash.success);
+    if (flash?.error) toast.error(flash.error);
 
     const handleSaveSettings = (e: React.FormEvent) => {
         e.preventDefault();
         settingsForm.post(route('telegram-config.update-settings'), {
+            preserveScroll: true,
+            onSuccess: () => toast.success('Telegram bot credentials updated successfully.'),
+        });
+    };
+
+    const handleCreateBot = (e: React.FormEvent) => {
+        e.preventDefault();
+        createBotForm.post(route('telegram-config.bots.store'), {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsCreateBotModalOpen(false);
+                createBotForm.reset();
+                toast.success('New Bot Credential created successfully!');
+            },
+        });
+    };
+
+    const handleOpenEditBot = (bot: DynamicBot) => {
+        setEditingBot(bot);
+        editBotForm.setData({
+            name: bot.name,
+            bot_token: bot.bot_token || '',
+            bot_username: bot.bot_username || '',
+            description: bot.description || '',
+            is_active: bot.is_active,
+        });
+        setIsEditBotModalOpen(true);
+    };
+
+    const handleUpdateBot = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingBot) return;
+        editBotForm.put(route('telegram-config.bots.update', editingBot.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsEditBotModalOpen(false);
+                setEditingBot(null);
+                toast.success('Bot credential updated successfully.');
+            },
+        });
+    };
+
+    const handleDeleteBot = (bot: DynamicBot) => {
+        if (confirm(`Are you sure you want to remove bot credential "${bot.name}"?`)) {
+            router.delete(route('telegram-config.bots.destroy', bot.id), {
+                preserveScroll: true,
+                onSuccess: () => toast.success('Bot credential removed.'),
+            });
+        }
+    };
+
+    const handleSetSingleWebhook = (botType: string) => {
+        if (!webhookForm.data.webhook_url) {
+            toast.error('Please enter a Public HTTPS Base URL first.');
+            return;
+        }
+        router.post(route('telegram-config.set-webhook'), {
+            webhook_url: webhookForm.data.webhook_url,
+            bot_type: botType,
+        }, {
+            preserveScroll: true,
+        });
+    };
+
+    const handleRemoveSingleWebhook = (botType: string) => {
+        router.post(route('telegram-config.remove-webhook'), {
+            bot_type: botType,
+        }, {
             preserveScroll: true,
         });
     };
@@ -192,22 +365,14 @@ export default function TelegramConfigIndex({
     };
 
     const handleRemoveWebhook = () => {
-        router.post(
-            route('telegram-config.remove-webhook'),
-            {},
-            {
-                preserveScroll: true,
-            }
-        );
+        router.post(route('telegram-config.remove-webhook'), { bot_type: 'all' }, { preserveScroll: true });
     };
 
     const handleSendTestMessage = (e: React.FormEvent) => {
         e.preventDefault();
         testMsgForm.post(route('telegram-config.test-message'), {
             preserveScroll: true,
-            onSuccess: () => {
-                setIsTestModalOpen(false);
-            },
+            onSuccess: () => setIsTestModalOpen(false),
         });
     };
 
@@ -223,7 +388,6 @@ export default function TelegramConfigIndex({
     const handleSaveUserChatId = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedUser) return;
-
         userChatIdForm.put(route('telegram-config.update-user', selectedUser.id), {
             preserveScroll: true,
             onSuccess: () => {
@@ -244,7 +408,6 @@ export default function TelegramConfigIndex({
     const handleSaveBranchChatId = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedBranch) return;
-
         branchChatIdForm.put(route('telegram-config.update-branch', selectedBranch.id), {
             preserveScroll: true,
             onSuccess: () => {
@@ -273,8 +436,9 @@ export default function TelegramConfigIndex({
     const paginatedUsers = filteredUsers.slice((usersPage - 1) * ITEMS_PER_PAGE, usersPage * ITEMS_PER_PAGE);
     const totalUsersPages = Math.max(1, Math.ceil(filteredUsers.length / ITEMS_PER_PAGE));
 
-    const budgetUsers = users.filter((user) => user.branch_id === 5);
-    const filteredBudgetUsers = budgetUsers.filter((user) => {
+    // Filter Budget Users
+    const budgetUsersList = budgetUsers.length > 0 ? budgetUsers : users;
+    const filteredBudgetUsers = budgetUsersList.filter((user) => {
         const matchesSearch =
             user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -311,824 +475,893 @@ export default function TelegramConfigIndex({
     const paginatedBranches = filteredBranches.slice((branchesPage - 1) * ITEMS_PER_PAGE, branchesPage * ITEMS_PER_PAGE);
     const totalBranchesPages = Math.max(1, Math.ceil(filteredBranches.length / ITEMS_PER_PAGE));
 
-    const isBotOk = botInfo?.ok && botInfo?.result?.id;
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Telegram Configuration" />
 
             <div className="container mx-auto space-y-6 p-6">
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                {/* Header */}
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
                             <Send className="size-6 text-sky-500" />
-                            Telegram Bot Configuration & Webhook
+                            Telegram Bot Credentials & Webhook Manager
                         </h1>
                         <p className="text-sm text-muted-foreground">
-                            Configure Telegram Bot API token, register Webhooks, and view active notification status for ticketing users.
+                            Manage dedicated Telegram bots for Helpdesk, Budget System, Internal Memorandum, and custom company bots.
                         </p>
                     </div>
+
                     {canManage && (
-                        <Button
-                            variant="outline"
-                            onClick={() => setIsTestModalOpen(true)}
-                            disabled={!settings.is_active || !settings.bot_token}
-                            className="flex items-center gap-2"
-                        >
-                            <Send className="size-4" />
-                            Test Message
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                onClick={() => setIsCreateBotModalOpen(true)}
+                                className="flex items-center gap-1.5 bg-amber-700 text-white hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-700"
+                            >
+                                <Plus className="size-4" />
+                                Create Bot Credential
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsTestModalOpen(true)}
+                                className="flex items-center gap-2"
+                            >
+                                <Send className="size-4 text-blue-600" />
+                                Test Message
+                            </Button>
+                        </div>
                     )}
                 </div>
 
-                {/* Status Dashboard Grid */}
-                <div className="grid gap-6 md:grid-cols-3">
-                    {/* Bot Service Status */}
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="flex items-center justify-between text-base">
-                                Bot Service Status
-                                {settings.is_active ? (
-                                    <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                                        <CheckCircle2 className="mr-1 size-3" /> Enabled
-                                    </Badge>
-                                ) : (
-                                    <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                                        <PowerOff className="mr-1 size-3" /> Disabled
-                                    </Badge>
-                                )}
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2 text-sm">
-                            <div className="flex justify-between border-b pb-1">
-                                <span className="text-muted-foreground">Bot Connected:</span>
-                                {isBotOk ? (
-                                    <span className="font-semibold text-emerald-600">Yes (@{botInfo.result.username})</span>
-                                ) : (
-                                    <span className="font-semibold text-red-500">Not Connected</span>
-                                )}
-                            </div>
-                            <div className="flex justify-between border-b pb-1">
-                                <span className="text-muted-foreground">Parse Mode:</span>
-                                <span className="font-mono font-medium">{settings.parse_mode}</span>
-                            </div>
-                            <div className="flex justify-between pt-1">
-                                <span className="text-muted-foreground">Last Updated By:</span>
-                                <span>{settings.updater?.name || 'System'}</span>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {/* Bot Identity Info */}
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <Bot className="size-4 text-sky-500" />
-                                Bot Identity
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2 text-sm">
-                            {isBotOk ? (
-                                <>
-                                    <div className="flex justify-between border-b pb-1">
-                                        <span className="text-muted-foreground">Bot Name:</span>
-                                        <span className="font-medium">{botInfo.result.first_name}</span>
-                                    </div>
-                                    <div className="flex justify-between border-b pb-1">
-                                        <span className="text-muted-foreground">Username:</span>
-                                        <span className="font-mono font-medium">@{botInfo.result.username}</span>
-                                    </div>
-                                    <div className="flex justify-between pt-1">
-                                        <span className="text-muted-foreground">Bot ID:</span>
-                                        <span className="font-mono">{botInfo.result.id}</span>
-                                    </div>
-                                </>
-                            ) : (
-                                <p className="text-xs text-muted-foreground italic">
-                                    Please set a valid Bot Token below to retrieve Bot information from Telegram.
-                                </p>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Webhook Status */}
-                    <Card>
-                        <CardHeader className="pb-3">
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <Link2 className="size-4 text-sky-500" />
-                                Webhook Status
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2 text-sm">
-                            <div className="flex justify-between border-b pb-1">
-                                <span className="text-muted-foreground">Webhook Set:</span>
-                                {webhookInfo?.result?.url ? (
-                                    <Badge variant="outline" className="border-emerald-500 text-emerald-600">
-                                        Registered
-                                    </Badge>
-                                ) : (
-                                    <Badge variant="outline" className="border-amber-500 text-amber-600">
-                                        Not Registered
-                                    </Badge>
-                                )}
-                            </div>
-                            <div className="flex justify-between border-b pb-1">
-                                <span className="text-muted-foreground">Pending Updates:</span>
-                                <span>{webhookInfo?.result?.pending_update_count ?? 0}</span>
-                            </div>
-                            <div className="flex justify-between pt-1 truncate">
-                                <span className="text-muted-foreground">Registered URL:</span>
-                                <span className="font-mono text-xs truncate max-w-[160px]" title={webhookInfo?.result?.url || 'None'}>
-                                    {webhookInfo?.result?.url || 'None'}
-                                </span>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Settings Forms & Webhook Manager Grid */}
-                <div className="grid gap-6 md:grid-cols-2">
-                    {/* Bot Settings Form */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Bot Credentials & Settings</CardTitle>
-                            <CardDescription>
-                                Set the Bot Token generated via @BotFather in Telegram.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <form onSubmit={handleSaveSettings} className="space-y-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="bot_token">Bot Token</Label>
-                                    <Input
-                                        id="bot_token"
-                                        type="password"
-                                        placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
-                                        value={settingsForm.data.bot_token}
-                                        onChange={(e) => settingsForm.setData('bot_token', e.target.value)}
-                                        disabled={!canManage}
-                                    />
-                                    {settingsForm.errors.bot_token && (
-                                        <p className="text-xs text-red-500">{settingsForm.errors.bot_token}</p>
-                                    )}
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="parse_mode">Message Formatting</Label>
-                                        <Select
-                                            value={settingsForm.data.parse_mode}
-                                            onValueChange={(val) => settingsForm.setData('parse_mode', val)}
-                                            disabled={!canManage}
-                                        >
-                                            <SelectTrigger id="parse_mode">
-                                                <SelectValue placeholder="Select parse mode" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="HTML">HTML (Recommended)</SelectItem>
-                                                <SelectItem value="Markdown">Markdown</SelectItem>
-                                                <SelectItem value="MarkdownV2">MarkdownV2</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-
-                                    <div className="flex flex-col justify-end space-y-2">
-                                        <div className="flex items-center justify-between rounded-lg border p-3">
-                                            <Label htmlFor="is_active" className="cursor-pointer font-medium">
-                                                Enable Bot
-                                            </Label>
-                                            <Switch
-                                                id="is_active"
-                                                checked={settingsForm.data.is_active}
-                                                onCheckedChange={(checked) => settingsForm.setData('is_active', checked)}
-                                                disabled={!canManage}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {!settingsForm.data.is_active && (
-                                    <div className="space-y-2">
-                                        <Label htmlFor="deactivation_reason">Deactivation Reason</Label>
-                                        <Textarea
-                                            id="deactivation_reason"
-                                            rows={2}
-                                            placeholder="Provide reason for disabling Telegram notifications..."
-                                            value={settingsForm.data.deactivation_reason}
-                                            onChange={(e) => settingsForm.setData('deactivation_reason', e.target.value)}
-                                            disabled={!canManage}
-                                        />
-                                    </div>
-                                )}
-
-                                {canManage && (
-                                    <Button type="submit" disabled={settingsForm.processing} className="w-full">
-                                        Save Bot Settings
-                                    </Button>
-                                )}
-                            </form>
-                        </CardContent>
-                    </Card>
-
-                    {/* Webhook Configuration */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Telegram Webhook Manager</CardTitle>
-                            <CardDescription>
-                                Register a Webhook URL so Telegram sends real-time user commands (`/start`, `/chatid`) to your system.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="rounded-lg bg-sky-50 dark:bg-sky-950/40 p-3 text-xs text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
-                                💡 <b>Note:</b> Telegram requires a secure <b>HTTPS</b> URL for incoming webhooks (e.g. <code>https://yourdomain.com/api/telegram/webhook</code>). Outbound notifications do <b>not</b> require a webhook—messages send automatically once user/branch Chat IDs are linked!
-                            </div>
-
-                            <form onSubmit={handleSetWebhook} className="space-y-4">
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="webhook_url">Webhook Endpoint URL</Label>
-                                        <button
-                                            type="button"
-                                            onClick={() => webhookForm.setData('webhook_url', defaultWebhookUrl)}
-                                            className="text-[11px] font-semibold text-sky-600 hover:underline"
-                                        >
-                                            Use Default Endpoint
-                                        </button>
-                                    </div>
-                                    <Input
-                                        id="webhook_url"
-                                        type="url"
-                                        placeholder="https://yourdomain.com/api/telegram/webhook"
-                                        value={webhookForm.data.webhook_url}
-                                        onChange={(e) => webhookForm.setData('webhook_url', e.target.value)}
-                                        disabled={!canManage}
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                        Default endpoint: <code className="bg-muted px-1 rounded">{defaultWebhookUrl}</code>
-                                    </p>
-                                    {webhookForm.errors.webhook_url && (
-                                        <p className="text-xs font-semibold text-red-500">{webhookForm.errors.webhook_url}</p>
-                                    )}
-                                </div>
-
-                                {canManage && (
-                                    <div className="flex gap-2">
-                                        <Button type="submit" disabled={webhookForm.processing} className="flex-1 font-bold">
-                                            <Link2 className="mr-2 size-4" />
-                                            Register Webhook
-                                        </Button>
-
-                                        {webhookInfo?.result?.url && (
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                onClick={handleRemoveWebhook}
-                                                className="text-red-500 hover:text-red-600 font-bold"
-                                            >
-                                                <Trash2 className="mr-2 size-4" />
-                                                Remove Webhook
-                                            </Button>
-                                        )}
-                                    </div>
-                                )}
-                            </form>
-
-                            {webhookInfo?.result?.last_error_message && (
-                                <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
-                                    <span className="font-semibold">Last Webhook Error:</span> {webhookInfo.result.last_error_message}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Separate Notification Mapping Cards using Tabs */}
-                <Tabs defaultValue="branches" className="w-full space-y-4">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                            <h3 className="text-lg font-semibold tracking-tight">Notification Recipient Mappings</h3>
-                            <p className="text-xs text-muted-foreground">
-                                Configure dedicated Chat IDs for Branches vs. individual User Chat IDs for IT, Maintenance & Operations staff.
-                            </p>
-                        </div>
-                        <TabsList className="grid grid-cols-3 w-full sm:w-[620px]">
-                            <TabsTrigger value="branches" className="flex items-center gap-2">
-                                <Building2 className="size-4" />
-                                <span className="hidden sm:inline">Branch Mappings</span>
-                                <span className="sm:hidden">Branches</span>
-                                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-                                    {branches.filter((b) => b.is_linked).length}/{branches.length}
-                                </Badge>
-                            </TabsTrigger>
-                            <TabsTrigger value="users" className="flex items-center gap-2">
-                                <Users className="size-4" />
-                                <span className="hidden sm:inline">IT & Ops Users</span>
-                                <span className="sm:hidden">IT/Ops</span>
-                                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-                                    {users.filter((u) => u.is_linked).length}/{users.length}
-                                </Badge>
-                            </TabsTrigger>
-                            <TabsTrigger value="budget-users" className="flex items-center gap-2">
-                                <UserCheck className="size-4" />
-                                <span className="hidden sm:inline">Weekly Budget Users</span>
-                                <span className="sm:hidden">Budget</span>
-                                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-                                    {budgetUsers.filter((u) => u.is_linked).length}/{budgetUsers.length}
-                                </Badge>
-                            </TabsTrigger>
-                        </TabsList>
+                {/* SYSTEM BOT CONNECTION CARDS */}
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-bold tracking-wider text-muted-foreground uppercase flex items-center gap-2">
+                            <Bot className="size-4 text-sky-500" /> Active System Bots Status
+                        </h3>
+                        {settings.is_active ? (
+                            <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                                <CheckCircle2 className="mr-1 size-3" /> System Engine Active
+                            </Badge>
+                        ) : (
+                            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                <PowerOff className="mr-1 size-3" /> System Engine Disabled
+                            </Badge>
+                        )}
                     </div>
 
-                    {/* Tab 1: Branch Telegram Linking Table */}
-                    <TabsContent value="branches" className="space-y-4">
-                        <Card>
+                    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                        {allBots.length > 0 ? (
+                            allBots.map((b) => {
+                                const isConnected = b.bot_info?.id || b.is_active;
+                                const isWebhookActive = !!(b.webhook_info?.url || b.webhook_url);
+                                return (
+                                    <Card key={b.id} className="border-purple-500/30 bg-purple-500/5 shadow-xs flex flex-col justify-between">
+                                        <CardHeader className="pb-3">
+                                            <CardTitle className="flex items-center justify-between text-sm font-bold">
+                                                <span className="flex items-center gap-1.5 text-purple-700 dark:text-purple-300 truncate">
+                                                    🤖 {b.name}
+                                                </span>
+                                                {isConnected ? (
+                                                    <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Connected</Badge>
+                                                ) : (
+                                                    <Badge className="bg-slate-100 text-slate-700 text-[10px]">Disabled</Badge>
+                                                )}
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="space-y-1.5 text-xs">
+                                            <div className="flex justify-between border-b pb-1">
+                                                <span className="text-muted-foreground">Username:</span>
+                                                <span className="font-mono font-bold text-purple-700 dark:text-purple-300">
+                                                    {b.bot_username ? `@${b.bot_username.replace('@', '')}` : 'Not set'}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between border-b pb-1">
+                                                <span className="text-muted-foreground">Webhook:</span>
+                                                {isWebhookActive ? (
+                                                    <span className="font-semibold text-emerald-600">Active</span>
+                                                ) : (
+                                                    <span className="font-semibold text-rose-500">Unset</span>
+                                                )}
+                                            </div>
+                                            {b.description && (
+                                                <div className="flex justify-between pt-1">
+                                                    <span className="text-muted-foreground">Role:</span>
+                                                    <span className="font-semibold text-slate-700 dark:text-slate-300 truncate max-w-[140px]">{b.description}</span>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })
+                        ) : (
+                            <div className="col-span-full p-4 text-center text-xs text-muted-foreground border rounded-lg bg-slate-50">
+                                No bots configured yet. Click "Add New Bot Credential" below to set up your Telegram bots.
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* TABS NAVIGATION */}
+                <Tabs defaultValue="credentials" className="space-y-6">
+                    <TabsList className="grid w-full grid-cols-5 max-w-3xl">
+                        <TabsTrigger value="credentials">Bot Credentials</TabsTrigger>
+                        <TabsTrigger value="webhook">Webhook Setup</TabsTrigger>
+                        <TabsTrigger value="users">IT & Ops Users</TabsTrigger>
+                        <TabsTrigger value="budget_users">Weekly Budget Users</TabsTrigger>
+                        <TabsTrigger value="branches">Branch Mappings</TabsTrigger>
+                    </TabsList>
+
+                    {/* TAB 1: BOT CREDENTIALS */}
+                    <TabsContent value="credentials" className="space-y-6">
+                        <Card className="border border-slate-200 shadow-sm dark:border-slate-800">
                             <CardHeader>
-                                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                                    <div>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Building2 className="size-5 text-primary" />
-                                            Branch Telegram Chat ID Mapping
-                                        </CardTitle>
-                                        <CardDescription>
-                                            Assign Telegram Chat IDs for Branches so branch-level ticket notifications are delivered to the branch channel or group.
-                                        </CardDescription>
+                                <CardTitle className="text-lg font-bold flex items-center justify-between">
+                                    <span className="flex items-center gap-2">
+                                        <Bot className="h-5 w-5 text-amber-700 dark:text-amber-500" />
+                                        Bot Tokens & Credentials Manager
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowCredentialsList(!showCredentialsList)}
+                                            className="text-xs gap-1.5"
+                                        >
+                                            {showCredentialsList ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                            {showCredentialsList ? 'Hide Credentials List' : 'Show Credentials List'}
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={() => setIsCreateBotModalOpen(true)}
+                                            className="gap-1.5 bg-amber-700 text-white hover:bg-amber-800 dark:bg-amber-600 text-xs"
+                                        >
+                                            <Plus className="h-3.5 w-3.5" /> Add New Bot Credential
+                                        </Button>
                                     </div>
-
-                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                        <Input
-                                            placeholder="Search branch code, name, chat ID..."
-                                            value={branchSearchQuery}
-                                            onChange={(e) => setBranchSearchQuery(e.target.value)}
-                                            className="w-full sm:w-64"
-                                        />
-
-                                        <Select value={branchStatusFilter} onValueChange={(val: any) => setBranchStatusFilter(val)}>
-                                            <SelectTrigger className="w-full sm:w-36">
-                                                <SelectValue placeholder="Status Filter" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Branches</SelectItem>
-                                                <SelectItem value="linked">Linked</SelectItem>
-                                                <SelectItem value="unlinked">Not Linked</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
+                                </CardTitle>
+                                <CardDescription>
+                                    Manage API tokens and credentials for Helpdesk, Budget, Internal Memorandum, Pre-Order, Training, or custom system bots.
+                                </CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                <div className="rounded-md border overflow-x-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Branch Code</TableHead>
-                                                <TableHead>Branch Name</TableHead>
-                                                <TableHead>Location</TableHead>
-                                                <TableHead>Telegram Chat ID</TableHead>
-                                                <TableHead>Telegram Status</TableHead>
-                                                <TableHead className="text-right">Actions</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {filteredBranches.length === 0 ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
-                                                        No branches found matching your filter criteria.
-                                                    </TableCell>
-                                                </TableRow>
-                                            ) : (
-                                                paginatedBranches.map((branch) => (
-                                                    <TableRow key={branch.id}>
-                                                        <TableCell className="font-mono text-xs font-semibold">
-                                                            {branch.branch_code}
-                                                        </TableCell>
-                                                        <TableCell className="font-medium">
-                                                            {branch.name}
-                                                        </TableCell>
-                                                        <TableCell>{branch.location || '-'}</TableCell>
-                                                        <TableCell className="font-mono text-xs">
-                                                            {branch.telegram_chat_id ? branch.telegram_chat_id : <span className="text-muted-foreground italic">None</span>}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {branch.is_linked ? (
-                                                                <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                                                                    <UserCheck className="mr-1 size-3" /> Linked
-                                                                </Badge>
-                                                            ) : (
-                                                                <Badge variant="outline" className="border-amber-500 text-amber-600">
-                                                                    <UserX className="mr-1 size-3" /> Not Linked
-                                                                </Badge>
+                            <CardContent className="space-y-6">
+                                <form onSubmit={handleSaveSettings} className="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg border flex items-center justify-between">
+                                    <div className="flex items-center space-x-3">
+                                        <Switch
+                                            id="is_active"
+                                            checked={settingsForm.data.is_active}
+                                            onCheckedChange={(checked) => settingsForm.setData('is_active', checked)}
+                                        />
+                                        <Label htmlFor="is_active" className="font-semibold cursor-pointer text-sm">
+                                            Master Enable All Telegram Bots Engine
+                                        </Label>
+                                    </div>
+
+                                    <Button
+                                        type="submit"
+                                        disabled={settingsForm.processing}
+                                        className="bg-amber-700 text-white hover:bg-amber-800 dark:bg-amber-600 text-xs gap-1.5"
+                                    >
+                                        <Save className="h-4 w-4" /> Save Engine State
+                                    </Button>
+                                </form>
+
+                                {/* ALL REGISTERED BOTS GRID (HIDDEN BY DEFAULT UNTIL USER TOGGLES SHOW) */}
+                                {showCredentialsList && (
+                                    allBots.length > 0 ? (
+                                        <div className="space-y-3 pt-2">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                                                        Registered Bot Credentials ({allBots.length})
+                                                    </h4>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Manage API tokens, active status, and webhooks for all system bots.
+                                                    </p>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={toggleAllTokensVisibility}
+                                                    className="text-xs gap-1 h-7"
+                                                >
+                                                    {showAllTokens ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                                    {showAllTokens ? 'Mask Tokens' : 'Reveal Tokens'}
+                                                </Button>
+                                            </div>
+
+                                            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 mt-3">
+                                            {allBots.map((bot) => {
+                                                const isTokenVisible = !!visibleTokens[bot.id];
+
+                                                return (
+                                                    <Card key={bot.id} className="border p-4 text-xs space-y-3 bg-card relative shadow-sm flex flex-col justify-between">
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div>
+                                                                    <h5 className="font-bold text-sm text-foreground flex items-center gap-1.5">
+                                                                        🤖 {bot.name}
+                                                                    </h5>
+                                                                    <span className="font-mono text-[10px] text-muted-foreground block">slug: {bot.slug}</span>
+                                                                </div>
+                                                                {bot.is_active ? (
+                                                                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] px-2 py-0.5">Active</Badge>
+                                                                ) : (
+                                                                    <Badge variant="outline" className="text-muted-foreground text-[10px] px-2 py-0.5">Disabled</Badge>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="space-y-1.5 font-mono text-[11px] bg-slate-50 dark:bg-slate-900 p-2.5 rounded border">
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-muted-foreground font-sans text-[10px]">Username:</span>
+                                                                    <span className="font-bold text-sky-700 dark:text-sky-400">
+                                                                        {bot.bot_username ? `@${bot.bot_username.replace('@', '')}` : 'Not set'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center gap-1">
+                                                                    <span className="text-muted-foreground font-sans text-[10px]">API Token:</span>
+                                                                    <div className="flex items-center gap-1 min-w-0">
+                                                                        <span className="truncate text-[10px] font-bold text-slate-700 dark:text-slate-300 max-w-[130px]">
+                                                                            {bot.bot_token
+                                                                                ? (isTokenVisible ? bot.bot_token : `${bot.bot_token.substring(0, 6)}••••••••`)
+                                                                                : 'Not set'}
+                                                                        </span>
+                                                                        {bot.bot_token && (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => toggleTokenVisibility(bot.id)}
+                                                                                className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors p-0.5"
+                                                                                title={isTokenVisible ? 'Hide token' : 'Show token'}
+                                                                            >
+                                                                                {isTokenVisible ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex justify-between items-center">
+                                                                    <span className="text-muted-foreground font-sans text-[10px]">Webhook:</span>
+                                                                    {bot.webhook_url ? (
+                                                                        <span className="font-bold text-emerald-600 text-[10px]">Active</span>
+                                                                    ) : (
+                                                                        <span className="font-semibold text-rose-500 text-[10px]">Unset</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {bot.description && (
+                                                                <p className="text-[11px] text-muted-foreground line-clamp-2">{bot.description}</p>
                                                             )}
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            {canManage && (
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between gap-1 pt-2 border-t mt-2">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="h-7 text-xs gap-1 px-2 text-purple-700 dark:text-purple-300 border-purple-200"
+                                                                onClick={() => handleSetSingleWebhook(bot.slug)}
+                                                            >
+                                                                <RefreshCw className="h-3 w-3" /> Webhook
+                                                            </Button>
+                                                            <div className="flex items-center gap-1">
                                                                 <Button
                                                                     size="sm"
-                                                                    variant="ghost"
-                                                                    onClick={() => handleOpenEditBranch(branch)}
-                                                                    title="Edit Branch Chat ID"
+                                                                    variant="outline"
+                                                                    className="h-7 text-xs gap-1 px-2"
+                                                                    onClick={() => handleOpenEditBot(bot)}
                                                                 >
-                                                                    <Edit3 className="size-4" />
+                                                                    <Edit3 className="h-3 w-3" /> Edit
                                                                 </Button>
-                                                            )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                                {totalBranchesPages > 1 && (
-                                    <div className="flex items-center justify-between mt-4">
-                                        <div className="text-xs text-muted-foreground">
-                                            Showing {(branchesPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(branchesPage * ITEMS_PER_PAGE, filteredBranches.length)} of {filteredBranches.length}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => setBranchesPage(p => Math.max(1, p - 1))} disabled={branchesPage === 1}>Previous</Button>
-                                            <div className="text-xs font-medium px-2">Page {branchesPage} of {totalBranchesPages}</div>
-                                            <Button variant="outline" size="sm" onClick={() => setBranchesPage(p => Math.min(totalBranchesPages, p + 1))} disabled={branchesPage === totalBranchesPages}>Next</Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="h-7 text-xs gap-1 px-2 text-red-600 hover:text-red-700 border-red-200"
+                                                                    onClick={() => handleDeleteBot(bot)}
+                                                                >
+                                                                    <Trash2 className="h-3 w-3" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    </Card>
+                                                );
+                                            })}
                                         </div>
                                     </div>
-                                )}
+                                ) : (
+                                    <div className="p-6 text-center text-xs text-muted-foreground border rounded-lg bg-slate-50">
+                                        No bot credentials found. Click "Add New Bot Credential" above to create a bot token record.
+                                    </div>
+                                ))}
                             </CardContent>
                         </Card>
                     </TabsContent>
 
-                    {/* Tab 2: Users Telegram Linking Table */}
-                    <TabsContent value="users" className="space-y-4">
-                        <Card>
-                            <CardHeader>
-                                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                                    <div>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <Users className="size-5 text-primary" />
-                                            User Telegram Chat ID Mapping (IT & Operations Staff)
-                                        </CardTitle>
-                                        <CardDescription>
-                                            Manage Telegram Chat IDs for Department Managers, IT Technicians, and Operations staff users so they receive assigned/escalation alerts.
-                                        </CardDescription>
+                    {/* TAB 2: WEBHOOK SETUP */}
+                    <TabsContent value="webhook" className="space-y-6">
+                        {/* Global Registrar Header */}
+                        <Card className="border border-slate-200 shadow-sm dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                    <Link2 className="h-5 w-5 text-blue-600" />
+                                    Global Base Domain / Tunnel Registrar
+                                </CardTitle>
+                                <CardDescription>
+                                    Enter your base HTTPS domain or active tunnel URL (e.g., <code>https://localtunnel.loca.lt</code>). You can register all bots at once or manage each bot independently below.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <form onSubmit={handleSetWebhook} className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="webhook_url" className="font-semibold">Public HTTPS Base Domain</Label>
+                                        <Input
+                                            id="webhook_url"
+                                            placeholder="https://your-domain.com or https://localtunnel-url.loca.lt"
+                                            value={webhookForm.data.webhook_url}
+                                            onChange={(e) => webhookForm.setData('webhook_url', e.target.value)}
+                                            className="font-mono text-xs max-w-xl"
+                                            required
+                                        />
                                     </div>
 
-                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                        <Input
-                                            placeholder="Search users, dept, chat ID..."
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            className="w-full sm:w-64"
-                                        />
+                                    <div className="flex flex-wrap gap-2 pt-1">
+                                        <Button
+                                            type="submit"
+                                            disabled={webhookForm.processing}
+                                            className="bg-blue-600 text-white hover:bg-blue-700 text-xs gap-1.5"
+                                        >
+                                            <RefreshCw className="h-3.5 w-3.5" /> Register All Bot Webhooks
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={handleRemoveWebhook}
+                                            className="text-xs text-red-600 hover:text-red-700"
+                                        >
+                                            Remove All Registered Webhooks
+                                        </Button>
+                                    </div>
+                                </form>
+                            </CardContent>
+                        </Card>
 
-                                        <Select value={statusFilter} onValueChange={(val: any) => setStatusFilter(val)}>
-                                            <SelectTrigger className="w-full sm:w-36">
-                                                <SelectValue placeholder="Status Filter" />
+                        {/* DYNAMIC BOT WEBHOOK MATRIX */}
+                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                            {allBots.length > 0 ? (
+                                allBots.map((b) => {
+                                    const whUrl = b.webhook_info?.url || b.webhook_url;
+                                    const isSet = !!whUrl;
+                                    const slugPath = ['helpdesk', 'budget', 'memo', 'pre_order', 'pre-order', 'training'].includes(b.slug)
+                                        ? (b.slug === 'helpdesk' ? 'helpdesk-webhook' : `${b.slug.replace('_', '-')}-webhook`)
+                                        : `webhook/${b.slug}`;
+
+                                    return (
+                                        <Card key={b.id} className="border shadow-sm flex flex-col justify-between">
+                                            <CardHeader className="pb-3">
+                                                <div className="flex items-center justify-between">
+                                                    <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground truncate">
+                                                        <Bot className="h-4 w-4 text-purple-600 shrink-0" /> {b.name}
+                                                    </CardTitle>
+                                                    <Badge variant={isSet ? 'default' : 'outline'} className={isSet ? 'bg-emerald-600 text-white' : 'text-slate-500'}>
+                                                        {isSet ? 'Active' : 'Unset'}
+                                                    </Badge>
+                                                </div>
+                                                <CardDescription className="text-xs font-mono">
+                                                    Endpoint: <code>/api/telegram/{slugPath}</code>
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="space-y-3 text-xs flex-1">
+                                                <div className="rounded-md bg-slate-100 dark:bg-slate-800 p-2.5 space-y-1 font-mono text-[11px] break-all">
+                                                    <span className="text-muted-foreground font-sans block text-[10px] uppercase font-bold">Registered Webhook URL:</span>
+                                                    {whUrl ? (
+                                                        <span className="text-emerald-700 dark:text-emerald-300 font-semibold">{whUrl}</span>
+                                                    ) : (
+                                                        <span className="text-amber-600 font-sans italic">Not registered with Telegram</span>
+                                                    )}
+                                                </div>
+                                                {b.webhook_info && (
+                                                    <div className="space-y-1 text-muted-foreground text-[11px]">
+                                                        <div>Pending Updates: <span className="font-semibold text-foreground">{b.webhook_info.pending_update_count ?? 0}</span></div>
+                                                        {b.webhook_info.last_error_message && (
+                                                            <div className="text-red-600 font-sans mt-1">Error: {b.webhook_info.last_error_message}</div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                            <div className="p-4 pt-0 flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => handleSetSingleWebhook(b.slug)}
+                                                    className="bg-purple-700 hover:bg-purple-800 text-white text-xs w-full gap-1"
+                                                >
+                                                    <RefreshCw className="h-3 w-3" /> Set Webhook
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleRemoveSingleWebhook(b.slug)}
+                                                    className="text-xs text-red-600 hover:text-red-700 shrink-0"
+                                                >
+                                                    Remove
+                                                </Button>
+                                            </div>
+                                        </Card>
+                                    );
+                                })
+                            ) : (
+                                <div className="col-span-full p-4 text-center text-xs text-muted-foreground border rounded-lg bg-slate-50">
+                                    No bots configured yet.
+                                </div>
+                            )}
+                        </div>
+                    </TabsContent>
+
+                    {/* TAB 3: IT & OPS USERS */}
+                    <TabsContent value="users">
+                        <Card className="border border-slate-200 shadow-sm dark:border-slate-800">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                    <Users className="h-5 w-5 text-indigo-600" /> IT & Ops Users (Linked Telegram Accounts)
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <Input
+                                        placeholder="Search users by name, email, department..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="max-w-md"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Filter Status:</Label>
+                                        <Select value={statusFilter} onValueChange={(val: 'all' | 'linked' | 'unlinked') => setStatusFilter(val)}>
+                                            <SelectTrigger className="w-[170px] text-xs">
+                                                <SelectValue placeholder="All Users" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All Users</SelectItem>
-                                                <SelectItem value="linked">Linked</SelectItem>
-                                                <SelectItem value="unlinked">Not Linked</SelectItem>
+                                                <SelectItem value="all">All Users ({users.length})</SelectItem>
+                                                <SelectItem value="linked">✅ Linked ({users.filter(u => u.is_linked).length})</SelectItem>
+                                                <SelectItem value="unlinked">❌ Not Linked ({users.filter(u => !u.is_linked).length})</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
                                 </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="rounded-md border overflow-x-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>User Name</TableHead>
-                                                <TableHead>Department</TableHead>
-                                                <TableHead>Roles</TableHead>
-                                                <TableHead>Telegram Chat ID</TableHead>
-                                                <TableHead>Username</TableHead>
-                                                <TableHead>Telegram Status</TableHead>
-                                                <TableHead className="text-right">Actions</TableHead>
+
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="font-bold">User Name</TableHead>
+                                            <TableHead className="font-bold">Department</TableHead>
+                                            <TableHead className="font-bold">Telegram Chat ID</TableHead>
+                                            <TableHead className="font-bold">Username</TableHead>
+                                            <TableHead className="text-right font-bold">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {paginatedUsers.map((u) => (
+                                            <TableRow key={u.id}>
+                                                <TableCell className="font-semibold">{u.name}</TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">{u.department}</TableCell>
+                                                <TableCell className="font-mono text-xs">
+                                                    {u.telegram_chat_id ? u.telegram_chat_id : <span className="text-muted-foreground">Not Linked</span>}
+                                                </TableCell>
+                                                <TableCell className="font-mono text-xs">
+                                                    {u.telegram_username ? `@${u.telegram_username}` : '-'}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => handleOpenEditUser(u)}
+                                                    >
+                                                        <Edit3 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </TableCell>
                                             </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {filteredUsers.length === 0 ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                                                        No users found matching your filter criteria.
-                                                    </TableCell>
-                                                </TableRow>
-                                            ) : (
-                                                paginatedUsers.map((user) => (
-                                                    <TableRow key={user.id}>
-                                                        <TableCell className="font-medium">
-                                                            <div>
-                                                                <div>{user.name}</div>
-                                                                <div className="text-xs text-muted-foreground">{user.email}</div>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>{user.department}</TableCell>
-                                                        <TableCell>
-                                                            <div className="flex flex-wrap gap-1">
-                                                                {user.roles.map((r, i) => (
-                                                                    <Badge key={i} variant="secondary" className="text-xs">
-                                                                        {r}
-                                                                    </Badge>
-                                                                ))}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="font-mono text-xs">
-                                                            {user.telegram_chat_id ? user.telegram_chat_id : <span className="text-muted-foreground italic">None</span>}
-                                                        </TableCell>
-                                                        <TableCell className="font-mono text-xs">
-                                                            {user.telegram_username ? `@${user.telegram_username}` : '-'}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {user.is_linked ? (
-                                                                <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                                                                    <UserCheck className="mr-1 size-3" /> Linked
-                                                                </Badge>
-                                                            ) : (
-                                                                <Badge variant="outline" className="border-amber-500 text-amber-600">
-                                                                    <UserX className="mr-1 size-3" /> Not Linked
-                                                                </Badge>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            {canManage && (
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="ghost"
-                                                                    onClick={() => handleOpenEditUser(user)}
-                                                                    title="Edit Chat ID"
-                                                                >
-                                                                    <Edit3 className="size-4" />
-                                                                </Button>
-                                                            )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                                {totalUsersPages > 1 && (
-                                    <div className="flex items-center justify-between mt-4">
-                                        <div className="text-xs text-muted-foreground">
-                                            Showing {(usersPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(usersPage * ITEMS_PER_PAGE, filteredUsers.length)} of {filteredUsers.length}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => setUsersPage(p => Math.max(1, p - 1))} disabled={usersPage === 1}>Previous</Button>
-                                            <div className="text-xs font-medium px-2">Page {usersPage} of {totalUsersPages}</div>
-                                            <Button variant="outline" size="sm" onClick={() => setUsersPage(p => Math.min(totalUsersPages, p + 1))} disabled={usersPage === totalUsersPages}>Next</Button>
-                                        </div>
-                                    </div>
-                                )}
+                                        ))}
+                                    </TableBody>
+                                </Table>
                             </CardContent>
                         </Card>
                     </TabsContent>
-                    {/* Tab 3: Weekly Budget Users Telegram Linking Table */}
-                    <TabsContent value="budget-users" className="space-y-4">
-                        <Card>
-                            <CardHeader>
-                                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                                    <div>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <UserCheck className="size-5 text-primary" />
-                                            Weekly Budget Users Telegram Chat ID Mapping (Head Office)
-                                        </CardTitle>
-                                        <CardDescription>
-                                            Manage Telegram Chat IDs for Head Office users involved in the Weekly Budget workflow.
-                                        </CardDescription>
-                                    </div>
 
-                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                        <Input
-                                            placeholder="Search users, dept, chat ID..."
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            className="w-full sm:w-64"
-                                        />
-
-                                        <Select value={statusFilter} onValueChange={(val: any) => setStatusFilter(val)}>
-                                            <SelectTrigger className="w-full sm:w-36">
-                                                <SelectValue placeholder="Status Filter" />
+                    {/* TAB 4: WEEKLY BUDGET USERS */}
+                    <TabsContent value="budget_users">
+                        <Card className="border border-slate-200 shadow-sm dark:border-slate-800">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                    <Bot className="h-5 w-5 text-emerald-600" /> Weekly Budget Notification Users
+                                </CardTitle>
+                                <CardDescription>
+                                    Authorized budget managers, department heads, finance team, and executives receiving automated budget dispatches.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <Input
+                                        placeholder="Search budget users by name, email, department..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="max-w-md"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Filter Status:</Label>
+                                        <Select value={statusFilter} onValueChange={(val: 'all' | 'linked' | 'unlinked') => setStatusFilter(val)}>
+                                            <SelectTrigger className="w-[170px] text-xs">
+                                                <SelectValue placeholder="All Budget Users" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All Users</SelectItem>
-                                                <SelectItem value="linked">Linked</SelectItem>
-                                                <SelectItem value="unlinked">Not Linked</SelectItem>
+                                                <SelectItem value="all">All ({budgetUsersList.length})</SelectItem>
+                                                <SelectItem value="linked">✅ Linked ({budgetUsersList.filter(u => u.is_linked).length})</SelectItem>
+                                                <SelectItem value="unlinked">❌ Not Linked ({budgetUsersList.filter(u => !u.is_linked).length})</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
                                 </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="rounded-md border overflow-x-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>User Name</TableHead>
-                                                <TableHead>Department</TableHead>
-                                                <TableHead>Roles</TableHead>
-                                                <TableHead>Telegram Chat ID</TableHead>
-                                                <TableHead>Username</TableHead>
-                                                <TableHead>Telegram Status</TableHead>
-                                                <TableHead className="text-right">Actions</TableHead>
+
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="font-bold">User Name</TableHead>
+                                            <TableHead className="font-bold">Department</TableHead>
+                                            <TableHead className="font-bold">Telegram Chat ID</TableHead>
+                                            <TableHead className="font-bold">Username</TableHead>
+                                            <TableHead className="text-right font-bold">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {paginatedBudgetUsers.map((u) => (
+                                            <TableRow key={u.id}>
+                                                <TableCell className="font-semibold">{u.name}</TableCell>
+                                                <TableCell className="text-xs text-muted-foreground">{u.department}</TableCell>
+                                                <TableCell className="font-mono text-xs">
+                                                    {u.telegram_chat_id ? u.telegram_chat_id : <span className="text-muted-foreground">Not Linked</span>}
+                                                </TableCell>
+                                                <TableCell className="font-mono text-xs">
+                                                    {u.telegram_username ? `@${u.telegram_username}` : '-'}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => handleOpenEditUser(u)}
+                                                    >
+                                                        <Edit3 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </TableCell>
                                             </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {filteredBudgetUsers.length === 0 ? (
-                                                <TableRow>
-                                                    <TableCell colSpan={7} className="text-center py-6 text-muted-foreground">
-                                                        No users found matching your filter criteria.
-                                                    </TableCell>
-                                                </TableRow>
-                                            ) : (
-                                                paginatedBudgetUsers.map((user) => (
-                                                    <TableRow key={user.id}>
-                                                        <TableCell className="font-medium">
-                                                            <div>
-                                                                <div>{user.name}</div>
-                                                                <div className="text-xs text-muted-foreground">{user.email}</div>
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell>{user.department}</TableCell>
-                                                        <TableCell>
-                                                            <div className="flex flex-wrap gap-1">
-                                                                {user.roles.map((r, i) => (
-                                                                    <Badge key={i} variant="secondary" className="text-xs">
-                                                                        {r}
-                                                                    </Badge>
-                                                                ))}
-                                                            </div>
-                                                        </TableCell>
-                                                        <TableCell className="font-mono text-xs">
-                                                            {user.telegram_chat_id ? user.telegram_chat_id : <span className="text-muted-foreground italic">None</span>}
-                                                        </TableCell>
-                                                        <TableCell className="font-mono text-xs">
-                                                            {user.telegram_username ? `@${user.telegram_username}` : '-'}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {user.is_linked ? (
-                                                                <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                                                                    <UserCheck className="mr-1 size-3" /> Linked
-                                                                </Badge>
-                                                            ) : (
-                                                                <Badge variant="outline" className="border-amber-500 text-amber-600">
-                                                                    <UserX className="mr-1 size-3" /> Not Linked
-                                                                </Badge>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell className="text-right">
-                                                            {canManage && (
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="ghost"
-                                                                    onClick={() => handleOpenEditUser(user)}
-                                                                    title="Edit Chat ID"
-                                                                >
-                                                                    <Edit3 className="size-4" />
-                                                                </Button>
-                                                            )}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                                {totalBudgetUsersPages > 1 && (
-                                    <div className="flex items-center justify-between mt-4">
-                                        <div className="text-xs text-muted-foreground">
-                                            Showing {(budgetUsersPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(budgetUsersPage * ITEMS_PER_PAGE, filteredBudgetUsers.length)} of {filteredBudgetUsers.length}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button variant="outline" size="sm" onClick={() => setBudgetUsersPage(p => Math.max(1, p - 1))} disabled={budgetUsersPage === 1}>Previous</Button>
-                                            <div className="text-xs font-medium px-2">Page {budgetUsersPage} of {totalBudgetUsersPages}</div>
-                                            <Button variant="outline" size="sm" onClick={() => setBudgetUsersPage(p => Math.min(totalBudgetUsersPages, p + 1))} disabled={budgetUsersPage === totalBudgetUsersPages}>Next</Button>
-                                        </div>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    {/* TAB 5: BRANCH MAPPINGS */}
+                    <TabsContent value="branches">
+                        <Card className="border border-slate-200 shadow-sm dark:border-slate-800">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-lg font-bold flex items-center gap-2">
+                                    <Building2 className="h-5 w-5 text-amber-700" /> Linked Branch Telegram Channels
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <Input
+                                        placeholder="Search branches by code or name..."
+                                        value={branchSearchQuery}
+                                        onChange={(e) => setBranchSearchQuery(e.target.value)}
+                                        className="max-w-md"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Filter Status:</Label>
+                                        <Select value={branchStatusFilter} onValueChange={(val: 'all' | 'linked' | 'unlinked') => setBranchStatusFilter(val)}>
+                                            <SelectTrigger className="w-[170px] text-xs">
+                                                <SelectValue placeholder="All Branches" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Branches ({branches.length})</SelectItem>
+                                                <SelectItem value="linked">✅ Linked ({branches.filter(b => b.is_linked).length})</SelectItem>
+                                                <SelectItem value="unlinked">❌ Not Linked ({branches.filter(b => !b.is_linked).length})</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
-                                )}
+                                </div>
+
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="font-bold">Branch Code</TableHead>
+                                            <TableHead className="font-bold">Branch Name</TableHead>
+                                            <TableHead className="font-bold">Telegram Chat ID</TableHead>
+                                            <TableHead className="text-right font-bold">Actions</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {paginatedBranches.map((b) => (
+                                            <TableRow key={b.id}>
+                                                <TableCell className="font-mono text-xs font-bold">{b.branch_code}</TableCell>
+                                                <TableCell className="font-semibold">{b.name}</TableCell>
+                                                <TableCell className="font-mono text-xs">
+                                                    {b.telegram_chat_id ? b.telegram_chat_id : <span className="text-muted-foreground">Not Linked</span>}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => handleOpenEditBranch(b)}
+                                                    >
+                                                        <Edit3 className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
                             </CardContent>
                         </Card>
                     </TabsContent>
                 </Tabs>
             </div>
 
-            {/* Modal: Edit Branch Telegram Chat ID */}
-            <Dialog open={isBranchModalOpen} onOpenChange={setIsBranchModalOpen}>
-                <DialogContent>
+            {/* MODAL: CREATE BOT CREDENTIAL */}
+            <Dialog open={isCreateBotModalOpen} onOpenChange={setIsCreateBotModalOpen}>
+                <DialogContent className="max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Edit Branch Telegram Details</DialogTitle>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Plus className="h-5 w-5 text-amber-700" />
+                            Create New Bot Credential
+                        </DialogTitle>
                         <DialogDescription>
-                            Set Telegram Chat ID for branch <b>{selectedBranch?.name} ({selectedBranch?.branch_code})</b> to receive branch ticket notifications.
+                            Add a new Telegram Bot token for a new feature or custom module.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <form onSubmit={handleSaveBranchChatId} className="space-y-4 py-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="branch_chat_id">Branch Telegram Chat ID</Label>
+                    <form onSubmit={handleCreateBot} className="space-y-4">
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Bot Display Name <span className="text-red-500">*</span></Label>
                             <Input
-                                id="branch_chat_id"
-                                placeholder="e.g. -100123456789 or 123456789"
-                                value={branchChatIdForm.data.telegram_chat_id}
-                                onChange={(e) => branchChatIdForm.setData('telegram_chat_id', e.target.value)}
+                                placeholder="e.g. HR & Leave Bot"
+                                value={createBotForm.data.name}
+                                onChange={(e) => createBotForm.setData('name', e.target.value)}
+                                required
                             />
-                            <p className="text-xs text-muted-foreground">
-                                For Telegram group channels, ensure the bot is added as an administrator and use the Group/Channel Chat ID (starts with <code>-100</code>).
-                            </p>
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Telegram Bot API Token <span className="text-red-500">*</span></Label>
+                            <Input
+                                placeholder="123456789:ABCdef..."
+                                value={createBotForm.data.bot_token}
+                                onChange={(e) => createBotForm.setData('bot_token', e.target.value)}
+                                className="font-mono text-xs"
+                                required
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Bot Username</Label>
+                            <Input
+                                placeholder="@KaldisHRBot"
+                                value={createBotForm.data.bot_username}
+                                onChange={(e) => createBotForm.setData('bot_username', e.target.value)}
+                                className="font-mono text-xs"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Description / System Purpose</Label>
+                            <Textarea
+                                rows={2}
+                                placeholder="Purpose of this bot..."
+                                value={createBotForm.data.description}
+                                onChange={(e) => createBotForm.setData('description', e.target.value)}
+                            />
                         </div>
 
                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setIsBranchModalOpen(false)}>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsCreateBotModalOpen(false)}
+                            >
                                 Cancel
                             </Button>
-                            <Button type="submit" disabled={branchChatIdForm.processing}>
-                                Save Details
+                            <Button
+                                type="submit"
+                                disabled={createBotForm.processing}
+                                className="bg-amber-700 text-white hover:bg-amber-800"
+                            >
+                                Save Bot Credential
                             </Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
 
-            {/* Modal: Edit User Telegram Chat ID */}
+            {/* MODAL: EDIT BOT CREDENTIAL */}
+            <Dialog open={isEditBotModalOpen} onOpenChange={setIsEditBotModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Bot Credential: {editingBot?.name}</DialogTitle>
+                        <DialogDescription>
+                            Update API token, username, status, or description for this bot credential.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleUpdateBot} className="space-y-4">
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Bot Display Name <span className="text-red-500">*</span></Label>
+                            <Input
+                                placeholder="e.g. HR & Leave Bot"
+                                value={editBotForm.data.name}
+                                onChange={(e) => editBotForm.setData('name', e.target.value)}
+                                required
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Telegram Bot API Token</Label>
+                            <Input
+                                type="password"
+                                placeholder="123456789:ABCdef..."
+                                value={editBotForm.data.bot_token}
+                                onChange={(e) => editBotForm.setData('bot_token', e.target.value)}
+                                className="font-mono text-xs"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Bot Username</Label>
+                            <Input
+                                placeholder="@KaldisBot"
+                                value={editBotForm.data.bot_username}
+                                onChange={(e) => editBotForm.setData('bot_username', e.target.value)}
+                                className="font-mono text-xs"
+                            />
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Description / System Purpose</Label>
+                            <Textarea
+                                rows={2}
+                                placeholder="Purpose of this bot..."
+                                value={editBotForm.data.description}
+                                onChange={(e) => editBotForm.setData('description', e.target.value)}
+                            />
+                        </div>
+
+                        <div className="flex items-center space-x-2 pt-2">
+                            <Switch
+                                id="edit_is_active"
+                                checked={editBotForm.data.is_active}
+                                onCheckedChange={(checked) => editBotForm.setData('is_active', checked)}
+                            />
+                            <Label htmlFor="edit_is_active" className="text-xs font-semibold cursor-pointer">
+                                Active Status
+                            </Label>
+                        </div>
+
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsEditBotModalOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={editBotForm.processing}
+                                className="bg-amber-700 text-white hover:bg-amber-800"
+                            >
+                                Update Bot Credential
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* MODAL: EDIT USER CHAT ID */}
             <Dialog open={isUserModalOpen} onOpenChange={setIsUserModalOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Edit Telegram Details</DialogTitle>
-                        <DialogDescription>
-                            Set Telegram Chat ID for user <b>{selectedUser?.name}</b> to receive instant ticket notifications.
-                        </DialogDescription>
+                        <DialogTitle>Edit Telegram Link for {selectedUser?.name}</DialogTitle>
                     </DialogHeader>
-
-                    <form onSubmit={handleSaveUserChatId} className="space-y-4 py-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="user_chat_id">Telegram Chat ID</Label>
+                    <form onSubmit={handleSaveUserChatId} className="space-y-4">
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Telegram Chat ID</Label>
                             <Input
-                                id="user_chat_id"
-                                placeholder="e.g. 123456789"
                                 value={userChatIdForm.data.telegram_chat_id}
                                 onChange={(e) => userChatIdForm.setData('telegram_chat_id', e.target.value)}
+                                className="font-mono text-xs"
                             />
-                            <p className="text-xs text-muted-foreground">
-                                Users can get their Chat ID by messaging <code>/start</code> to the Telegram bot.
-                            </p>
                         </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="user_username">Telegram Username (Optional)</Label>
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Telegram Username</Label>
                             <Input
-                                id="user_username"
-                                placeholder="e.g. username (without @)"
                                 value={userChatIdForm.data.telegram_username}
                                 onChange={(e) => userChatIdForm.setData('telegram_username', e.target.value)}
+                                className="font-mono text-xs"
                             />
                         </div>
-
                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setIsUserModalOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button type="submit" disabled={userChatIdForm.processing}>
-                                Save Details
-                            </Button>
+                            <Button type="submit" disabled={userChatIdForm.processing}>Save</Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
 
-            {/* Modal: Send Test Message */}
+            {/* MODAL: EDIT BRANCH CHAT ID */}
+            <Dialog open={isBranchModalOpen} onOpenChange={setIsBranchModalOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Telegram Chat ID for {selectedBranch?.name}</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={handleSaveBranchChatId} className="space-y-4">
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Telegram Group/Channel Chat ID</Label>
+                            <Input
+                                value={branchChatIdForm.data.telegram_chat_id}
+                                onChange={(e) => branchChatIdForm.setData('telegram_chat_id', e.target.value)}
+                                className="font-mono text-xs"
+                                placeholder="-1001234567890"
+                            />
+                        </div>
+                        <DialogFooter>
+                            <Button type="submit" disabled={branchChatIdForm.processing}>Save</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* MODAL: TEST MESSAGE */}
             <Dialog open={isTestModalOpen} onOpenChange={setIsTestModalOpen}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Send Test Telegram Message</DialogTitle>
-                        <DialogDescription>
-                            Send a test message to a Telegram Chat ID to verify bot credentials and notification delivery.
-                        </DialogDescription>
                     </DialogHeader>
+                    <form onSubmit={handleSendTestMessage} className="space-y-4">
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Select Bot to Test</Label>
+                            <Select
+                                value={testMsgForm.data.bot_slug}
+                                onValueChange={(val) => testMsgForm.setData('bot_slug', val)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="helpdesk">🎧 Helpdesk Support Bot</SelectItem>
+                                    <SelectItem value="budget">💰 Budget System Bot</SelectItem>
+                                    <SelectItem value="memo">📜 Internal Memorandum Bot</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                    <form onSubmit={handleSendTestMessage} className="space-y-4 py-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="test_chat_id">Recipient Chat ID</Label>
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Recipient Chat ID</Label>
                             <Input
-                                id="test_chat_id"
-                                placeholder="Enter Telegram Chat ID (e.g. 987654321)"
-                                value={testMsgForm.data.chat_id}
-                                onChange={(e) => testMsgForm.setData('chat_id', e.target.value)}
+                                placeholder="Enter user or group Chat ID"
+                                value={testMsgForm.data.custom_chat_id}
+                                onChange={(e) => testMsgForm.setData('custom_chat_id', e.target.value)}
+                                className="font-mono text-xs"
                                 required
                             />
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="test_message">Message Content</Label>
+                        <div className="space-y-1">
+                            <Label className="text-xs font-bold">Message Content</Label>
                             <Textarea
-                                id="test_message"
                                 rows={3}
                                 value={testMsgForm.data.message}
                                 onChange={(e) => testMsgForm.setData('message', e.target.value)}
-                                required
                             />
                         </div>
 
                         <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setIsTestModalOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button type="submit" disabled={testMsgForm.processing}>
-                                <Send className="mr-2 size-4" /> Send Test
+                            <Button type="submit" disabled={testMsgForm.processing} className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white">
+                                <Send className="h-3.5 w-3.5" /> Send Test Message
                             </Button>
                         </DialogFooter>
                     </form>

@@ -18,6 +18,19 @@ class TelegramTicketNotificationService
 
     private function getAppUrl(): string
     {
+        try {
+            $settings = \App\Models\TelegramSettings::getInstance();
+            if (!empty($settings->webhook_url) && str_starts_with($settings->webhook_url, 'https://')) {
+                $parsed = parse_url($settings->webhook_url);
+                if (!empty($parsed['scheme']) && !empty($parsed['host'])) {
+                    $port = !empty($parsed['port']) ? ":{$parsed['port']}" : '';
+                    return "{$parsed['scheme']}://{$parsed['host']}{$port}";
+                }
+            }
+        } catch (\Throwable $e) {
+            // fallback
+        }
+
         if (app()->runningInConsole()) {
             return config('app.url', 'http://localhost:8000');
         }
@@ -44,32 +57,111 @@ class TelegramTicketNotificationService
         $rawPriority = $ticket->priority;
         $priorityVal = is_object($rawPriority) && isset($rawPriority->value) ? $rawPriority->value : (is_string($rawPriority) ? $rawPriority : 'Normal');
 
-        $rawSeverity = $ticket->severity;
-        $severityVal = is_object($rawSeverity) && isset($rawSeverity->value) ? $rawSeverity->value : (is_string($rawSeverity) ? $rawSeverity : 'No Impact');
+        $rawStatus = $ticket->status;
+        $statusVal = is_object($rawStatus) && isset($rawStatus->value) ? $rawStatus->value : (is_string($rawStatus) ? $rawStatus : 'pending_approval');
 
-        $priority = e(ucfirst($priorityVal));
-        $severity = e(ucfirst($severityVal));
+        $priorityBadge = $this->getPriorityBadge($priorityVal);
+        $statusBadge = $this->getStatusBadge($statusVal);
         $branch = e($ticket->requestorBranch?->name ?? 'N/A');
+        $phone = e($ticket->requestor_phone ?? $ticket->requestorBranch?->phone ?? 'N/A');
 
-        return "🎫 <b>Ticket #{$ticket->id}</b>: " . e($ticket->title) . "\n" .
-               "📍 <b>Branch:</b> {$branch}\n" .
-               "🏷️ <b>Category:</b> {$category} / {$subCategory}\n" .
-               "⚠️ <b>Priority:</b> {$priority} | <b>Severity:</b> {$severity}";
+        $header = "🎫 <b>Ticket #{$ticket->id}</b>: " . e($ticket->title) . "\n" .
+               "🏢 <b>Requestor Branch:</b> {$branch}\n" .
+               "📞 <b>Phone:</b> {$phone}\n" .
+               "📌 <b>Status:</b> {$statusBadge}\n" .
+               "⚠️ <b>Priority:</b> {$priorityBadge}\n" .
+               "🏷️ <b>Category:</b> {$category} / {$subCategory}";
+
+        if ($ticket->deadline && !in_array($statusVal, ['closed', 'rejected'], true)) {
+            if ($ticket->deadline->isPast()) {
+                $header .= "\n⏳ <b>SLA Status:</b> 🔴 <b>OVERDUE by " . e($ticket->deadline->diffForHumans(['parts' => 2, 'syntax' => \Carbon\CarbonInterface::DIFF_ABSOLUTE])) . "</b>";
+            } else {
+                $header .= "\n⏰ <b>Deadline:</b> " . e($ticket->deadline->format('M d, Y g:i A')) . " (" . e($ticket->deadline->diffForHumans()) . ")";
+            }
+        }
+
+        if (!empty($ticket->image_path)) {
+            $imageUrl = "{$this->getAppUrl()}/storage/" . ltrim($ticket->image_path, '/');
+            $header .= "\n🖼️ <b>Attachment:</b> <a href=\"{$imageUrl}\">View Photo Attachment</a>";
+        }
+
+        return $header;
     }
 
-    private function buildTicketInlineButton(Ticket $ticket): array
+    private function getPriorityBadge(string $priority): string
     {
-        $ticketUrl = "{$this->getAppUrl()}/tickets/{$ticket->id}";
-        return [
-            'inline_keyboard' => [
-                [
-                    [
-                        'text' => "👁️ View Ticket #{$ticket->id}",
-                        'url' => $ticketUrl,
-                    ],
-                ],
-            ],
+        return match (strtolower($priority)) {
+            'urgent' => '🔴 Urgent',
+            'high' => '🟠 High',
+            'medium' => '🟡 Medium',
+            'low' => '🔵 Low',
+            default => '⚪ ' . ucfirst($priority),
+        };
+    }
+
+    private function getStatusBadge(string $status): string
+    {
+        return match (strtolower($status)) {
+            'pending_approval' => '🟡 Pending Manager Approval',
+            'approved' => '🔵 Approved',
+            'not_started' => '🔵 Assigned (Not Started)',
+            'in_progress' => '▶️ In Progress',
+            'hold' => '⏸️ On Hold',
+            'escalated' => '🚨 Escalated to Manager',
+            'done' => '🟢 Resolved (Waiting Branch Approval)',
+            'ticket_approved' => '✅ Approved & Rated by Branch',
+            'closed' => '⚪ Closed',
+            'rejected' => '❌ Rejected',
+            default => '📌 ' . ucwords(str_replace('_', ' ', $status)),
+        };
+    }
+
+    public function buildTicketInlineButton(Ticket $ticket, string $recipientRole = 'manager'): array
+    {
+        $statusVal = is_object($ticket->status) ? $ticket->status->value : $ticket->status;
+        $buttons = [];
+
+        if (!in_array($statusVal, ['closed', 'rejected'])) {
+            $row = [];
+            if ($recipientRole === 'manager') {
+                if ($statusVal === 'pending_approval') {
+                    $row[] = ['text' => "👍 Approve & Assign Tech", 'callback_data' => "t_asgn_list_{$ticket->id}"];
+                    $row[] = ['text' => "❌ Reject", 'callback_data' => "t_st_{$ticket->id}_rejected"];
+                } elseif ($statusVal === 'ticket_approved') {
+                    $row[] = ['text' => "🔒 Close Ticket", 'callback_data' => "t_st_{$ticket->id}_closed"];
+                } else {
+                    $row[] = ['text' => "🔄 Change Status", 'callback_data' => "t_st_menu_{$ticket->id}"];
+                    $row[] = ['text' => "👨‍🔧 Reassign Tech", 'callback_data' => "t_asgn_list_{$ticket->id}"];
+                }
+            } elseif ($recipientRole === 'requestor') {
+                if ($statusVal === 'done') {
+                    $row[] = ['text' => "⭐ Rate & Approve Completion", 'callback_data' => "t_st_{$ticket->id}_ticket_approved"];
+                    $row[] = ['text' => "❌ Reject Completion", 'callback_data' => "t_st_{$ticket->id}_rejected"];
+                }
+            } else {
+                if (!in_array($statusVal, ['done', 'ticket_approved'])) {
+                    $row[] = ['text' => "🔄 Change Status", 'callback_data' => "t_st_menu_{$ticket->id}"];
+                }
+            }
+            if (!empty($row)) {
+                $buttons[] = $row;
+            }
+        }
+
+        $row2 = [
+            ['text' => "💬 Add Comment", 'callback_data' => "t_cmt_prompt_{$ticket->id}"],
+            ['text' => "👁️ View Ticket Detail", 'callback_data' => "t_view_{$ticket->id}"],
         ];
+        $buttons[] = $row2;
+
+        $appUrl = $this->getAppUrl();
+        if (str_starts_with($appUrl, 'https://')) {
+            $buttons[] = [
+                ['text' => "🌐 Open in Web App", 'url' => "{$appUrl}/tickets/{$ticket->id}"],
+            ];
+        }
+
+        return ['inline_keyboard' => $buttons];
     }
 
     /**
@@ -78,13 +170,11 @@ class TelegramTicketNotificationService
     public function notifyRequestSubmitted(Ticket $ticket): void
     {
         $header = $this->formatTicketHeader($ticket);
-        $requestor = e($ticket->requestor_full_name ?? $ticket->requestor?->name ?? 'Branch User');
         $description = e(mb_strimwidth($ticket->description ?? '', 0, 150, '...'));
-        $buttons = $this->buildTicketInlineButton($ticket);
+        $buttons = $this->buildTicketInlineButton($ticket, 'manager');
 
         $text = "📩 <b>NEW TICKET SUBMITTED</b>\n\n" .
                "{$header}\n" .
-               "👤 <b>Requestor:</b> {$requestor}\n" .
                "📝 <b>Description:</b> {$description}\n\n" .
                "<i>Please review and assign a technical staff.</i>";
 
@@ -102,19 +192,17 @@ class TelegramTicketNotificationService
         $header = $this->formatTicketHeader($ticket);
         $assignedBy = e($actor->name);
         $deadline = $ticket->deadline ? $ticket->deadline->format('Y-m-d') : 'Not Set';
-        $requestor = e($ticket->requestor_full_name ?? 'Branch User');
-        $phone = e($ticket->requestor_phone ?? 'N/A');
 
-        $buttons = $this->buildTicketInlineButton($ticket);
+        $techButtons = $this->buildTicketInlineButton($ticket, 'technician');
+        $branchButtons = $this->buildTicketInlineButton($ticket, 'requestor');
 
         // Notify Technical Staff
         $techText = "👨‍💻 <b>TICKET ASSIGNED TO YOU</b>\n\n" .
                "{$header}\n" .
-               "👤 <b>Requestor:</b> {$requestor} (📞 {$phone})\n" .
                "📅 <b>Deadline:</b> {$deadline}\n" .
                "✍️ <b>Assigned By:</b> {$assignedBy}\n\n" .
                "<i>Please attend to this case.</i>";
-        $this->botService->sendToUser($assignee, $techText, $buttons);
+        $this->botService->sendToUser($assignee, $techText, $techButtons);
 
         // Notify Requested Branch
         $branchText = "👨‍💻 <b>STAFF ASSIGNED TO TICKET</b>\n\n" .
@@ -124,7 +212,7 @@ class TelegramTicketNotificationService
                       "✍️ <b>Assigned By:</b> {$assignedBy}\n\n" .
                       "<i>Technical staff has been assigned to your request.</i>";
         $assigneeChatId = !empty($assignee->telegram_chat_id) ? [(string) $assignee->telegram_chat_id] : [];
-        $this->sendToBranchOrRequestor($ticket, $branchText, $buttons, $assigneeChatId);
+        $this->sendToBranchOrRequestor($ticket, $branchText, $branchButtons, $assigneeChatId);
     }
 
     private function sendToBranchOrRequestor(Ticket $ticket, string $text, ?array $replyMarkup = null, array $excludeChatIds = []): void
