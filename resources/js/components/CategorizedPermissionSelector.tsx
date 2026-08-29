@@ -95,48 +95,57 @@ export default function CategorizedPermissionSelector({
     }, [categoryGroups, categories, search, activeCategoryFilter]);
 
     const totalPermissionsCount = allPermissions.length;
-    const selectedCount = selectedPermissions.length;
+    const safeSelectedPermissions = useMemo(() => (Array.isArray(selectedPermissions) ? selectedPermissions : []), [selectedPermissions]);
+    const selectedCount = safeSelectedPermissions.length;
 
     // Toggle single permission
     const togglePermission = (perm: string) => {
-        if (selectedPermissions.includes(perm)) {
-            onChange(selectedPermissions.filter((p) => p !== perm));
+        if (safeSelectedPermissions.includes(perm)) {
+            onChange(safeSelectedPermissions.filter((p) => p !== perm));
         } else {
-            onChange([...selectedPermissions, perm]);
+            onChange([...safeSelectedPermissions, perm]);
         }
     };
 
     // Category specific select/deselect all
     const isCategoryFullySelected = (catPerms: string[]) => {
-        return catPerms.every((p) => selectedPermissions.includes(p));
+        if (!catPerms || catPerms.length === 0) return false;
+        return catPerms.every((p) => safeSelectedPermissions.includes(p));
     };
 
     const isCategoryPartiallySelected = (catPerms: string[]) => {
-        const count = catPerms.filter((p) => selectedPermissions.includes(p)).length;
+        if (!catPerms || catPerms.length === 0) return false;
+        const count = catPerms.filter((p) => safeSelectedPermissions.includes(p)).length;
         return count > 0 && count < catPerms.length;
     };
 
-    const toggleCategory = (catPerms: string[]) => {
+    const toggleCategory = (catPerms: string[], e?: React.MouseEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (isCategoryFullySelected(catPerms)) {
-            // Remove all
-            onChange(selectedPermissions.filter((p) => !catPerms.includes(p)));
+            // Remove all category permissions
+            onChange(safeSelectedPermissions.filter((p) => !catPerms.includes(p)));
         } else {
-            // Add remaining
-            const toAdd = catPerms.filter((p) => !selectedPermissions.includes(p));
-            onChange([...selectedPermissions, ...toAdd]);
+            // Add remaining category permissions
+            const toAdd = catPerms.filter((p) => !safeSelectedPermissions.includes(p));
+            onChange([...safeSelectedPermissions, ...toAdd]);
         }
     };
 
     // Global Select All / Deselect All
-    const selectAllVisible = () => {
+    const selectAllVisible = (e?: React.MouseEvent) => {
+        if (e) e.preventDefault();
         const visiblePerms = Object.values(filteredGroups).flat();
-        const combined = Array.from(new Set([...selectedPermissions, ...visiblePerms]));
+        const combined = Array.from(new Set([...safeSelectedPermissions, ...visiblePerms]));
         onChange(combined);
     };
 
-    const deselectAllVisible = () => {
+    const deselectAllVisible = (e?: React.MouseEvent) => {
+        if (e) e.preventDefault();
         const visiblePerms = Object.values(filteredGroups).flat();
-        onChange(selectedPermissions.filter((p) => !visiblePerms.includes(p)));
+        onChange(safeSelectedPermissions.filter((p) => !visiblePerms.includes(p)));
     };
 
     const toggleCollapseCategory = (cat: string) => {
@@ -151,6 +160,16 @@ export default function CategorizedPermissionSelector({
         const next: Record<string, boolean> = {};
         categories.forEach((c) => (next[c] = true));
         setCollapsedCategories(next);
+    };
+
+    const handleCheckChange = (perm: string, checked: boolean) => {
+        if (checked) {
+            if (!safeSelectedPermissions.includes(perm)) {
+                onChange([...safeSelectedPermissions, perm]);
+            }
+        } else {
+            onChange(safeSelectedPermissions.filter((p) => p !== perm));
+        }
     };
 
     return (
@@ -176,7 +195,7 @@ export default function CategorizedPermissionSelector({
                             className="h-9 gap-1 text-xs"
                         >
                             <CheckSquare className="h-3.5 w-3.5 text-emerald-600" />
-                            Select All {search ? 'Filtered' : ''}
+                            Select All {search || activeCategoryFilter !== 'ALL' ? 'Filtered' : ''}
                         </Button>
                         <Button
                             type="button"
@@ -186,7 +205,7 @@ export default function CategorizedPermissionSelector({
                             className="h-9 gap-1 text-xs"
                         >
                             <Square className="h-3.5 w-3.5 text-slate-400" />
-                            Deselect All
+                            Deselect All {search || activeCategoryFilter !== 'ALL' ? 'Filtered' : ''}
                         </Button>
                         <Button
                             type="button"
@@ -219,7 +238,7 @@ export default function CategorizedPermissionSelector({
 
                     {categories.map((cat) => {
                         const count = categoryGroups[cat]?.length || 0;
-                        const catSelected = categoryGroups[cat]?.filter((p) => selectedPermissions.includes(p)).length || 0;
+                        const catSelected = categoryGroups[cat]?.filter((p) => safeSelectedPermissions.includes(p)).length || 0;
                         const isActive = activeCategoryFilter === cat;
 
                         return (
@@ -277,7 +296,7 @@ export default function CategorizedPermissionSelector({
                         const isCollapsed = !!collapsedCategories[cat];
                         const isFullySelected = isCategoryFullySelected(perms);
                         const isPartiallySelected = isCategoryPartiallySelected(perms);
-                        const selectedInCat = perms.filter((p) => selectedPermissions.includes(p)).length;
+                        const selectedInCat = perms.filter((p) => safeSelectedPermissions.includes(p)).length;
 
                         return (
                             <Card key={cat} className="overflow-hidden border transition-all">
@@ -304,7 +323,7 @@ export default function CategorizedPermissionSelector({
                                             variant="ghost"
                                             size="sm"
                                             className="h-8 gap-1.5 text-xs font-medium"
-                                            onClick={() => toggleCategory(perms)}
+                                            onClick={(e) => toggleCategory(perms, e)}
                                         >
                                             {isFullySelected ? (
                                                 <>
@@ -324,7 +343,11 @@ export default function CategorizedPermissionSelector({
                                             variant="ghost"
                                             size="sm"
                                             className="h-8 w-8 p-0"
-                                            onClick={() => toggleCollapseCategory(cat)}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                toggleCollapseCategory(cat);
+                                            }}
                                         >
                                             {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
                                         </Button>
@@ -335,11 +358,12 @@ export default function CategorizedPermissionSelector({
                                     <CardContent className="p-4 pt-3">
                                         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                                             {perms.map((permission) => {
-                                                const isChecked = selectedPermissions.includes(permission);
+                                                const isChecked = safeSelectedPermissions.includes(permission);
+                                                const elemId = `perm-${permission.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
                                                 return (
-                                                    <div
+                                                    <label
                                                         key={permission}
-                                                        onClick={() => togglePermission(permission)}
+                                                        htmlFor={elemId}
                                                         className={`flex cursor-pointer items-start gap-2.5 rounded-md border p-2.5 transition-all select-none ${
                                                             isChecked
                                                                 ? 'border-primary/50 bg-primary/5 shadow-xs dark:bg-primary/10'
@@ -347,23 +371,20 @@ export default function CategorizedPermissionSelector({
                                                         }`}
                                                     >
                                                         <Checkbox
-                                                            id={`perm-${permission}`}
+                                                            id={elemId}
                                                             checked={isChecked}
-                                                            onCheckedChange={() => togglePermission(permission)}
+                                                            onCheckedChange={(checked) => handleCheckChange(permission, !!checked)}
                                                             className="mt-0.5"
                                                         />
                                                         <div className="grid gap-0.5 text-xs leading-tight">
-                                                            <Label
-                                                                htmlFor={`perm-${permission}`}
-                                                                className="cursor-pointer font-medium text-slate-800 dark:text-slate-200"
-                                                            >
+                                                            <span className="font-medium text-slate-800 dark:text-slate-200">
                                                                 {formatPermissionLabel(permission)}
-                                                            </Label>
+                                                            </span>
                                                             <span className="font-mono text-[10px] text-muted-foreground break-all">
                                                                 {permission}
                                                             </span>
                                                         </div>
-                                                    </div>
+                                                    </label>
                                                 );
                                             })}
                                         </div>

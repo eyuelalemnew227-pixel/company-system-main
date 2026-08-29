@@ -26,7 +26,10 @@ export default function EditRole({
 	groupedPermissions?: GroupedPermissions;
 	role: RolePermission;
 }) {
-	const permissionList = role.permissions.map((perm) => perm.name);
+	const permissionList = (role.permissions || [])
+		.map((perm: any) => (typeof perm === 'string' ? perm : perm?.name))
+		.filter(Boolean);
+
 	const { data, setData, put, errors, processing } = useForm({
 		name: role.name,
 		permissions: permissionList,
