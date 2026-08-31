@@ -1,5 +1,6 @@
 import { SuccessModal } from '@/components/tickets/success-modal';
 import { StatusBadge } from '@/components/tickets/status-badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ import {
   CheckCircle2,
   MessageSquare,
   History,
+  Send,
   Star,
   ArrowLeft,
   ChevronRight,
@@ -784,6 +786,119 @@ export default function TicketShow() {
 
           {/* Secondary Details & History */}
           <div className="space-y-6">
+            {/* Requester Rate & Approve Card when Ticket Status is Done */}
+            {ticket.status === 'done' && (
+              <Card className="border-2 border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/40 shadow-lg p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="h-6 w-6 text-emerald-600" />
+                  <h3 className="text-base font-bold text-emerald-950 dark:text-emerald-200">Technical Work Completed!</h3>
+                </div>
+                <p className="text-xs text-emerald-800 dark:text-emerald-300 mb-4 leading-relaxed">
+                  The technical staff has finished work on this ticket. Please rate their service quality and approve completion to finalize this request.
+                </p>
+                <Button
+                  onClick={() => setIsRatingModalOpen(true)}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 gap-2 text-sm shadow-md"
+                >
+                  <Star className="h-4 w-4 fill-white" />
+                  Approve Completion & Rate Technical
+                </Button>
+              </Card>
+            )}
+
+            {/* Ticket Discussion Chat */}
+            <Card className="overflow-hidden border-indigo-200 shadow-md bg-indigo-50/10 dark:border-indigo-900 dark:bg-indigo-950/20">
+              <CardHeader className="bg-indigo-50/50 dark:bg-indigo-950/40 border-b border-indigo-100 dark:border-indigo-900 flex flex-row items-center justify-between p-4">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                  <CardTitle className="text-base font-bold text-indigo-950 dark:text-indigo-200">
+                    Ticket Discussion Chat
+                  </CardTitle>
+                </div>
+                <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-300 text-[10px] font-semibold dark:bg-indigo-900 dark:text-indigo-200">
+                  📲 Telegram Bot Notified
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-4 space-y-4">
+                <div className="max-h-80 overflow-y-auto space-y-2.5 p-1">
+                  {ticket.activity_logs && ticket.activity_logs.filter((l: any) => l.action === 'chat_comment' || l.action === 'commented' || l.reason).length > 0 ? (
+                    ticket.activity_logs
+                      .filter((l: any) => l.action === 'chat_comment' || l.action === 'commented' || l.reason)
+                      .map((log: any) => (
+                        <div key={log.id} className="flex flex-col gap-1 p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                              <User className="h-3.5 w-3.5 text-indigo-600" />
+                              {log.user?.name ?? 'System User'}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {new Date(log.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 whitespace-pre-wrap leading-relaxed">
+                            {log.reason}
+                          </p>
+                        </div>
+                      ))
+                  ) : (
+                    <div className="text-center py-6 text-xs text-muted-foreground italic">
+                      No chat messages yet. Start a discussion between requester, manager & technician below!
+                    </div>
+                  )}
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const formEl = e.currentTarget;
+                    const inputEl = formEl.querySelector('input') as HTMLInputElement;
+                    const msg = inputEl?.value?.trim();
+                    if (!msg) return;
+
+                    // Optimistic instant message display
+                    const newLog = {
+                      id: Date.now(),
+                      action: 'chat_comment',
+                      reason: msg,
+                      created_at: new Date().toISOString(),
+                      user: { name: 'Me' },
+                    };
+                    if (!ticket.activity_logs) {
+                      ticket.activity_logs = [];
+                    }
+                    ticket.activity_logs.push(newLog);
+
+                    inputEl.value = '';
+                    toast.success('Message sent! Participants notified via Telegram bot.');
+
+                    router.post(
+                      route('tickets.chat', ticket.id),
+                      { message: msg },
+                      {
+                        preserveScroll: true,
+                        onError: () => toast.error('Failed to send message.'),
+                      }
+                    );
+                  }}
+                  className="flex gap-2 pt-2 border-t border-indigo-100 dark:border-indigo-900"
+                >
+                  <Input
+                    placeholder="Ask a question or provide additional details..."
+                    className="h-10 text-xs bg-white dark:bg-slate-950 flex-1"
+                    required
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="h-10 px-4 font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-1.5 text-xs shadow-sm"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Send & Notify
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
             {ticket.description && (
               <Card className="overflow-hidden border-none shadow-md">
                 <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b">

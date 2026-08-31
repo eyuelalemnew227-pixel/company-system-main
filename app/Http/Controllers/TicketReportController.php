@@ -291,4 +291,24 @@ class TicketReportController extends Controller
             ],
         ]);
     }
+
+    public function sendTelegramReport(Request $request)
+    {
+        $request->validate([
+            'period' => 'required|string|in:weekly,monthly',
+            'department_id' => 'nullable',
+        ]);
+
+        $period = $request->input('period', 'weekly');
+        $user = auth()->user();
+
+        $reportService = app(\App\Services\TelegramReportNotificationService::class);
+        $sent = $reportService->sendReportToManager($user, $period);
+
+        if (!$sent) {
+            $reportService->sendReportsToAllManagers($period);
+        }
+
+        return redirect()->back()->with('success', ucfirst($period) . ' performance report dispatched to Department Head(s) via Telegram.');
+    }
 }

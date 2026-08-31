@@ -53,6 +53,9 @@ Route::get('/offline', fn() => Inertia::render('offline'))->name('offline');
 // Public Telegram MiniApp Route
 Route::get('/pre-orders/miniapp', fn() => view('miniapp'))->name('pre-orders.miniapp');
 
+// Direct Memo PDF stream route
+Route::get('memos/{memo}/pdf', [\App\Http\Controllers\MemoController::class, 'pdf'])->name('memos.pdf');
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', fn() => Inertia::render('dashboard'))->name('dashboard');
 
@@ -435,6 +438,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('tickets/reports', [\App\Http\Controllers\TicketReportController::class, 'index'])
         ->name('tickets.reports')
         ->middleware('permission:ticket.report.view');
+    Route::post('tickets/reports/send-telegram', [\App\Http\Controllers\TicketReportController::class, 'sendTelegramReport'])
+        ->name('tickets.reports.send-telegram')
+        ->middleware('permission:ticket.report.view');
 
     // Tickets
     Route::get('tickets', [\App\Http\Controllers\TicketController::class, 'index'])
@@ -473,6 +479,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('tickets/{ticket}/rate', [\App\Http\Controllers\TicketController::class, 'rate'])
         ->name('tickets.rate')
         ->middleware('permission:ticket.rate');
+    Route::post('tickets/{ticket}/chat', [\App\Http\Controllers\TicketController::class, 'sendChatComment'])
+        ->name('tickets.chat')
+        ->middleware('permission:ticket.view.own|ticket.view.department|ticket.view.all');
+    Route::post('tickets/{ticket}/approve-rate', [\App\Http\Controllers\TicketController::class, 'approveAndRate'])
+        ->name('tickets.approve-rate')
+        ->middleware('permission:ticket.view.own|ticket.view.department|ticket.view.all');
     Route::post('tickets/{ticket}/asset', [\App\Http\Controllers\TicketController::class, 'updateAsset'])
         ->name('tickets.update-asset')
         ->middleware('permission:ticket.status.update|ticket.assign|ticket.view.all');
@@ -535,6 +547,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('telegram-config/bots/{bot}', [\App\Http\Controllers\TelegramConfigController::class, 'destroyBot'])->name('telegram-config.bots.destroy');
     Route::post('telegram-config/bots/{bot}/set-webhook', [\App\Http\Controllers\TelegramConfigController::class, 'setBotWebhook'])->name('telegram-config.bots.set-webhook');
     Route::post('telegram-config/bots/{bot}/remove-webhook', [\App\Http\Controllers\TelegramConfigController::class, 'removeBotWebhook'])->name('telegram-config.bots.remove-webhook');
+
+    // Kaldis Branch Communication Platform Management
+    Route::get('kaldis-communication', [\App\Http\Controllers\KaldisCommunicationController::class, 'index'])->name('kaldis-communication.index');
+    Route::post('kaldis-communication/config', [\App\Http\Controllers\KaldisCommunicationController::class, 'updateConfig'])->name('kaldis-communication.update-config');
+    Route::post('kaldis-communication/bindings', [\App\Http\Controllers\KaldisCommunicationController::class, 'storeBinding'])->name('kaldis-communication.store-binding');
+    Route::put('kaldis-communication/bindings', [\App\Http\Controllers\KaldisCommunicationController::class, 'updateBinding'])->name('kaldis-communication.update-binding');
+    Route::delete('kaldis-communication/bindings', [\App\Http\Controllers\KaldisCommunicationController::class, 'deleteBinding'])->name('kaldis-communication.delete-binding');
+    Route::post('kaldis-communication/users', [\App\Http\Controllers\KaldisCommunicationController::class, 'storeUser'])->name('kaldis-communication.store-user');
+    Route::put('kaldis-communication/users', [\App\Http\Controllers\KaldisCommunicationController::class, 'updateUser'])->name('kaldis-communication.update-user');
+    Route::delete('kaldis-communication/users/{telegramUserId}', [\App\Http\Controllers\KaldisCommunicationController::class, 'deleteUser'])->name('kaldis-communication.delete-user');
+    Route::post('kaldis-communication/sync-members', [\App\Http\Controllers\KaldisCommunicationController::class, 'syncMembersFromTelegram'])->name('kaldis-communication.sync-members');
+    Route::post('kaldis-communication/fetch-member', [\App\Http\Controllers\KaldisCommunicationController::class, 'fetchTelegramMember'])->name('kaldis-communication.fetch-member');
+    Route::put('kaldis-communication/status/{referenceNo}', [\App\Http\Controllers\KaldisCommunicationController::class, 'updateStatus'])->name('kaldis-communication.update-status');
+    Route::post('kaldis-communication/sync-topics', [\App\Http\Controllers\KaldisCommunicationController::class, 'syncTopics'])->name('kaldis-communication.sync-topics');
+    Route::post('kaldis-communication/bulk-delete-bindings', [\App\Http\Controllers\KaldisCommunicationController::class, 'bulkDeleteBindings'])->name('kaldis-communication.bulk-delete-bindings');
+    Route::post('kaldis-communication/moderation/settings', [\App\Http\Controllers\KaldisCommunicationController::class, 'updateModerationSettings'])->name('kaldis-communication.moderation.settings');
+    Route::post('kaldis-communication/moderation/member', [\App\Http\Controllers\KaldisCommunicationController::class, 'moderateMember'])->name('kaldis-communication.moderation.member');
+    Route::post('kaldis-communication/moderation/broadcast', [\App\Http\Controllers\KaldisCommunicationController::class, 'broadcastChannel'])->name('kaldis-communication.moderation.broadcast');
+    Route::post('kaldis-communication/register-commands', [\App\Http\Controllers\KaldisCommunicationController::class, 'registerCommands'])->name('kaldis-communication.register-commands');
+    Route::post('kaldis-communication/set-webhook', [\App\Http\Controllers\KaldisCommunicationController::class, 'registerWebhook'])->name('kaldis-communication.set-webhook');
+    Route::post('kaldis-communication/generate-invite-link', [\App\Http\Controllers\KaldisCommunicationController::class, 'generateInviteLink'])->name('kaldis-communication.generate-invite-link');
 
     // Telecom Management
     Route::middleware(['permission:view telecom management'])->prefix('telecom')->group(function () {
@@ -633,10 +666,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/schedules/{schedule}/publish', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'publishSchedule'])->middleware('permission:training.master_schedule.create')->name('schedules.publish');
         Route::post('/schedules/items/{item}/approve', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'approveScheduleItem'])->middleware('permission:training.master_schedule.create')->name('schedules.items.approve');
 
-        // Trainer Department Evaluation
-        Route::get('/evaluations', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'evaluationsIndex'])->middleware('permission:training.evaluations.manage')->name('evaluations.index');
-        Route::get('/evaluations/create/{item?}', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'createEvaluation'])->middleware('permission:training.evaluations.manage')->name('evaluations.create');
-        Route::post('/evaluations', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'storeEvaluation'])->middleware('permission:training.evaluations.manage')->name('evaluations.store');
+        // Attendance Management (Branch Managers & Trainers)
+        Route::get('/attendance', [\App\Http\Controllers\Training\TrainingAttendanceController::class, 'index'])->middleware('permission:training.attendance.view|training.attendance.create|training.attendance.manage')->name('attendance.index');
+        Route::post('/attendance', [\App\Http\Controllers\Training\TrainingAttendanceController::class, 'store'])->middleware('permission:training.attendance.create|training.attendance.manage')->name('attendance.store');
+        Route::post('/attendance/toggle', [\App\Http\Controllers\Training\TrainingAttendanceController::class, 'toggleAttendance'])->middleware('permission:training.attendance.create|training.attendance.manage')->name('attendance.toggle');
+        Route::patch('/attendance/{attendance}/status', [\App\Http\Controllers\Training\TrainingAttendanceController::class, 'updateStatus'])->middleware('permission:training.attendance.create|training.attendance.manage')->name('attendance.update-status');
+
+        // Feedback Questionnaires (11 Amharic Questions)
+        Route::get('/feedback', [\App\Http\Controllers\Training\TrainingFeedbackController::class, 'index'])->middleware('permission:training.feedback.view|training.feedback.view_own|training.feedback.manage')->name('feedback.index');
+        Route::get('/feedback/create', [\App\Http\Controllers\Training\TrainingFeedbackController::class, 'create'])->middleware('permission:training.feedback.create|training.feedback.manage')->name('feedback.create');
+        Route::post('/feedback', [\App\Http\Controllers\Training\TrainingFeedbackController::class, 'store'])->middleware('permission:training.feedback.create|training.feedback.manage')->name('feedback.store');
 
         // Training Settings & Questionnaire Customization
         Route::get('/settings', [\App\Http\Controllers\Training\TrainingSettingsController::class, 'index'])->middleware('permission:training.settings.manage')->name('settings.index');
@@ -653,7 +692,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/forums/thread/{thread}/posts/{post}/solution', [\App\Http\Controllers\Training\ForumController::class, 'markSolution'])->name('forums.mark-solution');
 
         // Reports
-        Route::get('/reports', [\App\Http\Controllers\Training\ReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports', [\App\Http\Controllers\Training\ReportController::class, 'index'])->middleware('permission:training.reports.view|training.reports.export|training.online.reports.view')->name('reports.index');
     });
 });
 

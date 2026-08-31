@@ -119,20 +119,26 @@ export default function MemoCreate({
     const [changeSignature, setChangeSignature] = useState<boolean>(!hasSavedSignature);
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-    // Combine Departments and Branches into unified target options
-    const targetOptions = useMemo(() => {
-        const deptOpts = (departments || []).map((d) => ({
-            id: `dept_${d.id}`,
-            name: `🏢 Dept: ${d.name}`,
-            rawName: d.name,
-        }));
-        const branchOpts = (branches || []).map((b) => ({
+    // Target Options
+    const branchOptions = useMemo(() => {
+        return (branches || []).map((b) => ({
             id: `branch_${b.id}`,
-            name: `📍 Branch: ${b.name}`,
+            name: b.name,
             rawName: b.name,
         }));
-        return [...deptOpts, ...branchOpts];
-    }, [departments, branches]);
+    }, [branches]);
+
+    const departmentOptions = useMemo(() => {
+        return (departments || []).map((d) => ({
+            id: `dept_${d.id}`,
+            name: d.name,
+            rawName: d.name,
+        }));
+    }, [departments]);
+
+    const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+    const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
+    const [isHeadOffice, setIsHeadOffice] = useState<boolean>(false);
 
     const handleApplyTemplate = (templateId: string) => {
         setSelectedTemplateId(templateId);
@@ -144,15 +150,43 @@ export default function MemoCreate({
         }
     };
 
-    const handleTargetChange = (optionId: string) => {
-        const match = targetOptions.find((opt) => String(opt.id) === optionId || opt.rawName === optionId);
-        const targetName = match ? match.rawName : optionId;
+    const handleBranchChange = (branchOptionId: string) => {
+        const match = branchOptions.find((opt) => String(opt.id) === branchOptionId || opt.rawName === branchOptionId);
+        const branchName = match ? match.rawName : branchOptionId;
+        const normalized = branchName.toLowerCase().replace(/[\s\-_]/g, '');
+        const isHO = normalized.includes('headoffice') || branchName.toLowerCase().includes('head office');
 
+        setSelectedBranchId(branchOptionId);
+        setIsHeadOffice(isHO);
+        setSelectedDepartmentId('');
+
+        if (isHO) {
+            setData((prev) => ({
+                ...prev,
+                target_department: branchOptionId,
+                recipient_name: '',
+                departments: [],
+            }));
+            toast.info('Head Office selected. Please select target department.');
+        } else {
+            setData((prev) => ({
+                ...prev,
+                target_department: branchOptionId,
+                recipient_name: branchName,
+                departments: [branchName],
+            }));
+        }
+    };
+
+    const handleDepartmentChange = (deptOptionId: string) => {
+        const match = departmentOptions.find((opt) => String(opt.id) === deptOptionId || opt.rawName === deptOptionId);
+        const deptName = match ? match.rawName : deptOptionId;
+
+        setSelectedDepartmentId(deptOptionId);
         setData((prev) => ({
             ...prev,
-            target_department: optionId,
-            recipient_name: targetName,
-            departments: [targetName],
+            recipient_name: deptName,
+            departments: [deptName],
         }));
     };
 
@@ -181,6 +215,10 @@ export default function MemoCreate({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (isHeadOffice && !data.recipient_name) {
+            toast.error('Please select a target Department for Head Office.');
+            return;
+        }
         post('/memos', {
             onSuccess: () => toast.success('Internal Memorandum published successfully! Signature saved.'),
             onError: () => toast.error('Please fix the errors in the form.'),
@@ -235,7 +273,7 @@ export default function MemoCreate({
                 <Card className="border border-slate-200 shadow-lg dark:border-slate-800 bg-white dark:bg-slate-950">
                     <CardContent className="p-5 space-y-4">
                         <form onSubmit={handleSubmit} className="space-y-4">
-                            {/* Row 1: Ref ID, Date, From (Sender & Branch), To (Target Department or Branch) */}
+                            {/* Row 1: Ref ID, Date, From (Sender & Position), Target Branch */}
                             <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                                 <div className="space-y-1">
                                     <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
@@ -264,7 +302,7 @@ export default function MemoCreate({
 
                                 <div className="space-y-1">
                                     <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        From (Sender & Branch)
+                                        From (Sender Name)
                                     </Label>
                                     <Input
                                         value={data.sender_name}
@@ -276,16 +314,46 @@ export default function MemoCreate({
 
                                 <div className="space-y-1">
                                     <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        To (Target Department / Branch)
+                                        To (Target Branch) <span className="text-red-500">*</span>
                                     </Label>
                                     <SearchableSelect
-                                        options={targetOptions}
-                                        value={data.target_department}
-                                        onValueChange={handleTargetChange}
-                                        placeholder="Search Department or Branch..."
-                                        searchPlaceholder="Search Dept / Branch..."
+                                        options={branchOptions}
+                                        value={selectedBranchId}
+                                        onValueChange={handleBranchChange}
+                                        placeholder="Select Branch..."
+                                        searchPlaceholder="Search Branch..."
                                     />
                                 </div>
+                            </div>
+
+                            {/* Head Office Department Selector & Sender Position Row */}
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        Sender Position
+                                    </Label>
+                                    <Input
+                                        placeholder="e.g. IT Manager, Operations Supervisor"
+                                        value={data.sender_position}
+                                        onChange={(e) => setData('sender_position', e.target.value)}
+                                        className="h-9 text-xs"
+                                    />
+                                </div>
+
+                                {isHeadOffice && (
+                                    <div className="space-y-1 bg-amber-50 p-2.5 rounded-lg border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
+                                        <Label className="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1">
+                                            Head Office Department <span className="text-red-500">*</span>
+                                        </Label>
+                                        <SearchableSelect
+                                            options={departmentOptions}
+                                            value={selectedDepartmentId}
+                                            onValueChange={handleDepartmentChange}
+                                            placeholder="Select Head Office Department..."
+                                            searchPlaceholder="Search Department..."
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Row 2: Subject Title */}
@@ -315,7 +383,7 @@ export default function MemoCreate({
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 font-bold text-xs"
-                                            onClick={() => insertFormatting('**', '**')}
+                                            onClick={() => insertFormatting('<b>', '</b>')}
                                             title="Bold"
                                         >
                                             <Bold className="h-3.5 w-3.5" />
@@ -325,7 +393,7 @@ export default function MemoCreate({
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 italic text-xs"
-                                            onClick={() => insertFormatting('*', '*')}
+                                            onClick={() => insertFormatting('<i>', '</i>')}
                                             title="Italic"
                                         >
                                             <Italic className="h-3.5 w-3.5" />
@@ -335,7 +403,7 @@ export default function MemoCreate({
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 text-xs"
-                                            onClick={() => insertFormatting('### ')}
+                                            onClick={() => insertFormatting('<h3>', '</h3>')}
                                             title="Heading"
                                         >
                                             <Heading className="h-3.5 w-3.5" />
@@ -345,7 +413,7 @@ export default function MemoCreate({
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 text-xs"
-                                            onClick={() => insertFormatting('\n- ')}
+                                            onClick={() => insertFormatting('\n• ')}
                                             title="Bullet List"
                                         >
                                             <List className="h-3.5 w-3.5" />

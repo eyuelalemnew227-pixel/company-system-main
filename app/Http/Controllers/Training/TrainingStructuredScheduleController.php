@@ -22,7 +22,7 @@ class TrainingStructuredScheduleController extends Controller
     ) {}
 
     /**
-     * Agendas Overview & List
+     * Agendas Overview & List with Search and Filtering
      */
     public function agendasIndex(Request $request): Response
     {
@@ -35,10 +35,44 @@ class TrainingStructuredScheduleController extends Controller
             $query->where('department_id', $user->department_id);
         }
 
+        if ($request->filled('search')) {
+            $search = trim($request->input('search'));
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                  ->orWhere('delivery_method', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhereHas('department', fn($d) => $d->where('name', 'like', "%{$search}%"));
+            });
+        }
+
+        if ($request->filled('department_id') && $request->input('department_id') !== 'all') {
+            $query->where('department_id', $request->input('department_id'));
+        }
+
+        if ($request->filled('status') && $request->input('status') !== 'all') {
+            $query->where('status', $request->input('status'));
+        }
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('proposed_date', '>=', $request->input('start_date'));
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('proposed_date', '<=', $request->input('end_date'));
+        }
+
         $agendas = $query->orderBy('created_at', 'desc')->get();
+        $departments = Department::orderBy('name')->get();
 
         return Inertia::render('training/agendas/index', [
             'agendas' => $agendas,
+            'departments' => $departments,
+            'filters' => [
+                'search' => $request->input('search', ''),
+                'department_id' => $request->input('department_id', 'all'),
+                'status' => $request->input('status', 'all'),
+                'start_date' => $request->input('start_date', ''),
+                'end_date' => $request->input('end_date', ''),
+            ],
             'userDepartment' => $user->department,
         ]);
     }
@@ -213,7 +247,6 @@ class TrainingStructuredScheduleController extends Controller
     {
         $schedule->update(['status' => 'published']);
 
-        // Update connected agendas status
         foreach ($schedule->items as $item) {
             if ($item->training_agenda_id) {
                 TrainingAgenda::where('id', $item->training_agenda_id)
@@ -221,7 +254,6 @@ class TrainingStructuredScheduleController extends Controller
             }
         }
 
-        // Broadcast Telegram Notification to all departments & branch managers
         $this->telegramService->notifyMasterSchedulePublished($schedule);
 
         return back()->with('success', 'Master Training Schedule published and announced to all Departments and Branch Managers via Telegram!');
@@ -322,21 +354,71 @@ class TrainingStructuredScheduleController extends Controller
     }
 
     /**
-     * List Branch Manager Trainer Department Evaluations & Ratings
+     * List Branch Manager Trainer Department Evaluations & Ratings with Filters
      */
     public function evaluationsIndex(Request $request): Response
     {
-        $evaluations = TrainerEvaluation::with([
+        $query = TrainerEvaluation::with([
             'scheduleItem.schedule',
             'evaluatorUser',
             'evaluatorBranch',
             'trainerDepartment',
-        ])
-        ->orderBy('created_at', 'desc')
-        ->get();
+        ]);
+
+        $user = $request->user();
+        if ($user && !$user->can('training.evaluations.view') && !$user->can('training.evaluations.manage') && $user->can('training.evaluations.view_own')) {
+            $query->where('evaluator_user_id', $user->id);
+        }
+
+        if ($request->filled('search')) {
+            $search = trim($request->input('search'));
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('evaluatorBranch', fn($b) => $b->where('name', 'like', "%{$search}%"))
+                  ->orWhereHas('trainerDepartment', fn($d) => $d->where('name', 'like', "%{$search}%"))
+                  ->orWhereHas('evaluatorUser', fn($u) => $u->where('name', 'like', "%{$search}%"))
+                  ->orWhere('strengths', 'like', "%{$search}%")
+                  ->orWhere('areas_for_improvement', 'like', "%{$search}%")
+                  ->orWhere('feedback_notes', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('trainer_department_id') && $request->input('trainer_department_id') !== 'all') {
+            $query->where('trainer_department_id', $request->input('trainer_department_id'));
+        }
+
+        if ($request->filled('rating') && $request->input('rating') !== 'all') {
+            $minRating = (float) $request->input('rating');
+            if ($minRating >= 5) {
+                $query->where('overall_rating', '>=', 4.8);
+            } elseif ($minRating >= 4) {
+                $query->whereBetween('overall_rating', [4.0, 4.79]);
+            } elseif ($minRating >= 3) {
+                $query->whereBetween('overall_rating', [3.0, 3.99]);
+            } else {
+                $query->where('overall_rating', '<', 3.0);
+            }
+        }
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->input('start_date'));
+        }
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->input('end_date'));
+        }
+
+        $evaluations = $query->orderBy('created_at', 'desc')->get();
+        $departments = Department::orderBy('name')->get();
 
         return Inertia::render('training/evaluations/Index', [
             'evaluations' => $evaluations,
+            'departments' => $departments,
+            'filters' => [
+                'search' => $request->input('search', ''),
+                'trainer_department_id' => $request->input('trainer_department_id', 'all'),
+                'rating' => $request->input('rating', 'all'),
+                'start_date' => $request->input('start_date', ''),
+                'end_date' => $request->input('end_date', ''),
+            ],
         ]);
     }
 }

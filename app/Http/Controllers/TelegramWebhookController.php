@@ -68,12 +68,38 @@ class TelegramWebhookController extends Controller
                     $botService->handlePreOrderWebhookUpdate($update);
                 } elseif (in_array($cleanSlug, ['training', 'training-bot', 'training-and-lms', 'lms'], true)) {
                     $botService->handleTrainingWebhookUpdate($update);
+                } elseif (in_array($cleanSlug, ['kaldis', 'kaldis-communication', 'communication', 'kaldis-bot'], true)) {
+                    $this->handleKaldisCommunication($request);
                 } else {
                     Log::info("Telegram dynamic bot update received for custom slug '{$slug}': ", $update);
                 }
             }
         } catch (\Throwable $e) {
             Log::error("Telegram dynamic webhook error ({$slug}): " . $e->getMessage());
+        }
+
+        return response()->json(['status' => 'ok']);
+    }
+
+    public function handleKaldisCommunication(Request $request): JsonResponse
+    {
+        try {
+            $update = $request->all();
+            if (!empty($update)) {
+                $configPath = base_path('telegramgroup_mgt/config.json');
+                $dbPath = base_path('telegramgroup_mgt/kaldis.db');
+                if (file_exists($configPath) && file_exists($dbPath)) {
+                    require_once base_path('telegramgroup_mgt/src/bootstrap.php');
+
+                    $config = \KaldisTelegram\BotConfig::fromFile($configPath);
+                    $storage = new \KaldisTelegram\SQLiteStorage($dbPath);
+                    $client = new \KaldisTelegram\TelegramClient($config->botToken);
+                    $bot = new \KaldisTelegram\KaldisBot($config, $storage, $client);
+                    $bot->handleUpdate($update);
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error("Telegram Kaldis communication webhook error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
         }
 
         return response()->json(['status' => 'ok']);

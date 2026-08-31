@@ -125,7 +125,7 @@ class TelegramBotService
                 $payload['reply_markup'] = is_string($replyMarkup) ? json_decode($replyMarkup, true) : $replyMarkup;
             }
 
-            $res = Http::withoutVerifying()->timeout(10)->post("https://api.telegram.org/bot{$token}/sendMessage", $payload);
+            $res = Http::withoutVerifying()->timeout(3)->post("https://api.telegram.org/bot{$token}/sendMessage", $payload);
             return $res->successful() && ($res->json()['ok'] ?? false);
         } catch (\Throwable $e) {
             Log::error("sendBotMessage error for slug '{$slug}': " . $e->getMessage());
@@ -148,7 +148,7 @@ class TelegramBotService
      */
     private function http(): \Illuminate\Http\Client\PendingRequest
     {
-        return Http::withoutVerifying()->timeout(10);
+        return Http::withoutVerifying()->timeout(3);
     }
 
     /**
@@ -241,6 +241,77 @@ class TelegramBotService
             Log::error("Telegram getWebhookInfo error: {$e->getMessage()}");
             return ['ok' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Send a broadcast announcement to selected audience channels & chat IDs.
+     */
+    public function sendBroadcastAnnouncement(
+        User $sender,
+        string $targetAudience,
+        string $title,
+        string $message,
+        ?int $departmentId = null,
+        ?int $branchId = null
+    ): int {
+        $senderName = e($sender->name);
+        $cleanTitle = e($title);
+        $cleanMessage = e($message);
+        $dateStr = now()->format('M d, Y g:i A');
+
+        $formattedText = "📢 <b>BROADCAST ANNOUNCEMENT</b>\n\n" .
+                         "📌 <b>Title:</b> {$cleanTitle}\n" .
+                         "👤 <b>From:</b> {$senderName}\n" .
+                         "📅 <b>Date:</b> {$dateStr}\n\n" .
+                         "📝 <b>Announcement:</b>\n" .
+                         "{$cleanMessage}";
+
+        $chatIds = [];
+
+        if (in_array($targetAudience, ['everything', 'all_branches'], true)) {
+            $branchChatIds = Branch::whereNotNull('telegram_chat_id')
+                ->where('telegram_chat_id', '!=', '')
+                ->pluck('telegram_chat_id')
+                ->toArray();
+            $chatIds = array_merge($chatIds, $branchChatIds);
+        }
+
+        if (in_array($targetAudience, ['everything', 'all_users'], true)) {
+            $userChatIds = User::whereNotNull('telegram_chat_id')
+                ->where('telegram_chat_id', '!=', '')
+                ->pluck('telegram_chat_id')
+                ->toArray();
+            $chatIds = array_merge($chatIds, $userChatIds);
+        }
+
+        if ($targetAudience === 'department_users' && $departmentId) {
+            $deptUserChatIds = User::query()
+                ->join('employees', 'users.employee_id', '=', 'employees.id')
+                ->where('employees.department_id', $departmentId)
+                ->whereNotNull('users.telegram_chat_id')
+                ->where('users.telegram_chat_id', '!=', '')
+                ->pluck('users.telegram_chat_id')
+                ->toArray();
+            $chatIds = array_merge($chatIds, $deptUserChatIds);
+        }
+
+        if ($targetAudience === 'specific_branch' && $branchId) {
+            $branch = Branch::find($branchId);
+            if ($branch && !empty($branch->telegram_chat_id)) {
+                $chatIds[] = $branch->telegram_chat_id;
+            }
+        }
+
+        $chatIds = array_unique(array_filter($chatIds));
+        $sentCount = 0;
+
+        foreach ($chatIds as $cid) {
+            if ($this->sendMessage($cid, $formattedText)) {
+                $sentCount++;
+            }
+        }
+
+        return $sentCount;
     }
 
     /**
@@ -557,8 +628,77 @@ class TelegramBotService
         $this->sendMessage($chatId, "🤖 <b>Company System Bot</b>\n\nTo submit a new support ticket, please type <b>/ticket</b>.\n\nAvailable commands:\n• <b>/ticket</b> — Create a new support ticket\n• <b>/mytickets</b> — View & update status of active cases\n• <b>/search &lt;query&gt;</b> — Search tickets by ID or keyword\n• <b>/help</b> — View command manual & workflow guide");
     }
 
+    public function getPublicBaseUrl(): string
+    {
+        try {
+            $settings = TelegramSettings::getInstance();
+            if (!empty($settings->webhook_url)) {
+                $parsed = parse_url($settings->webhook_url);
+                if (!empty($parsed['scheme']) && !empty($parsed['host']) && $parsed['scheme'] === 'https') {
+                    $port = !empty($parsed['port']) ? ":{$parsed['port']}" : '';
+                    return "https://{$parsed['host']}{$port}";
+                }
+            }
+        } catch (\Throwable $e) {}
+
+        $url = config('app.url', 'http://localhost:8000');
+        if (str_starts_with($url, 'http://')) {
+            $url = 'https://' . substr($url, 7);
+        }
+        return rtrim($url, '/');
+    }
+
     public function handleTrainingWebhookUpdate(array $update): void
     {
+        $token = $this->getTrainingBotToken();
+        if (empty($token)) {
+            Log::warning("Training webhook update received, but Training Bot token is not configured.");
+            return;
+        }
+
+        $baseUrl = $this->getPublicBaseUrl();
+
+        // Handle Telegram Callback Query for Feedback
+        if (isset($update['callback_query'])) {
+            $cb = $update['callback_query'];
+            $queryId = $cb['id'] ?? '';
+            $chatId = (string) ($cb['message']['chat']['id'] ?? '');
+            $data = $cb['data'] ?? '';
+
+            if (str_starts_with($data, 'tf_rate_')) {
+                $rating = (int) str_replace('tf_rate_', '', $data);
+                $user = User::where('telegram_chat_id', $chatId)->first();
+                $bId = $user?->employee?->branch_id;
+                $uName = $user ? $user->name : "Branch Manager ({$chatId})";
+
+                \App\Models\Training\TrainingFeedbackResponse::create([
+                    'user_id' => $user?->id,
+                    'branch_id' => $bId,
+                    'trainee_name' => $uName,
+                    'q1_relevance' => $rating,
+                    'q2_objective_clarity' => 'Yes',
+                    'q3_response_quality' => $rating,
+                    'q4_participatory' => $rating,
+                    'q5_motivating' => $rating,
+                    'q6_gained_new_knowledge' => 'Yes',
+                    'q9_one_word_summary' => 'Telegram Bot',
+                    'q11_additional_comments' => "Feedback rating {$rating}/5 submitted directly via Telegram Bot.",
+                ]);
+
+                \Illuminate\Support\Facades\Http::withoutVerifying()->post("https://api.telegram.org/bot{$token}/answerCallbackQuery", [
+                    'callback_query_id' => $queryId,
+                    'text' => '✅ Thank you! Your feedback was recorded.',
+                ]);
+
+                \Illuminate\Support\Facades\Http::withoutVerifying()->post("https://api.telegram.org/bot{$token}/sendMessage", [
+                    'chat_id' => $chatId,
+                    'text' => "✅ <b>FEEDBACK RECEIVED!</b>\n\nThank you <b>{$uName}</b>. Your <b>{$rating}/5 Star</b> training rating has been successfully saved.\n\n🌐 Complete full 11 Amharic Questionnaires:\n{$baseUrl}/training/feedback/create",
+                    'parse_mode' => 'HTML',
+                ]);
+                return;
+            }
+        }
+
         if (!isset($update['message'])) {
             return;
         }
@@ -572,7 +712,6 @@ class TelegramBotService
             return;
         }
 
-        // Auto-link Telegram Chat ID to User if username matches
         if ($username) {
             $user = User::where('telegram_username', ltrim($username, '@'))->first();
             if ($user && empty($user->telegram_chat_id)) {
@@ -580,27 +719,112 @@ class TelegramBotService
             }
         }
 
-        $msg = "🎓 <b>KALDIS TRAINING & LMS SYSTEM BOT</b>\n\n";
-        $msg .= "Welcome! Your Telegram Chat ID is: <code>{$chatId}</code>\n\n";
-        $msg .= "This bot delivers:\n";
-        $msg .= "• 📋 <b>Department Agenda Alerts</b>\n";
-        $msg .= "• 📅 <b>Training Schedule Timetable Slots</b>\n";
-        $msg .= "• 📢 <b>Master Training Timetable Announcements</b>\n";
-        $msg .= "• 📝 <b>Trainer Feedback & Evaluation Links</b>\n\n";
-        $msg .= "<i>Your notifications are active. Make sure your Chat ID is linked in your profile settings!</i>";
+        $user = User::where('telegram_chat_id', $chatId)->first();
+        $userBranch = $user?->employee?->branch?->name ?? 'Branch Manager';
+        $isBranchUser = !empty($user?->employee?->branch_id)
+            || str_contains(strtolower($user?->employee?->position ?? ''), 'manager')
+            || str_contains(strtolower($user?->employee?->position ?? ''), 'bm')
+            || str_contains(strtolower($userBranch), 'branch');
 
-        $token = $this->getTrainingBotToken();
+        // Only for Branch Managers / Branch Users: Redirect to Telegram Mini App
+        if ($isBranchUser) {
+            $uName = $user ? $user->name : 'Branch Manager';
 
-        if (!empty($token)) {
+            // Configure Telegram Chat Menu Button to open Mini App
+            if (str_starts_with($baseUrl, 'https://')) {
+                try {
+                    \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(5)->post("https://api.telegram.org/bot{$token}/setChatMenuButton", [
+                        'chat_id' => (string) $chatId,
+                        'menu_button' => [
+                            'type' => 'web_app',
+                            'text' => '📝 Submit Feedback',
+                            'web_app' => ['url' => "{$baseUrl}/training/feedback/create"]
+                        ]
+                    ]);
+                } catch (\Throwable $e) {}
+            }
+
+            $msg = "🏢 <b>KALDI'S BRANCH TRAINING FEEDBACK (የቅርንጫፍ ስልጠና አስተያየት መስጫ)</b>\n\n";
+            $msg .= "Welcome <b>{$uName}</b> ({$userBranch})!\n\n";
+            $msg .= "Please tap the button below to open and submit your <b>Training Feedback Questionnaire</b> directly inside Telegram Mini App:";
+
+            $inlineKeyboard = [];
+            if (str_starts_with($baseUrl, 'https://')) {
+                $inlineKeyboard[] = [
+                    ['text' => '📝 Open Feedback Form (Telegram Mini App)', 'web_app' => ['url' => "{$baseUrl}/training/feedback/create"]]
+                ];
+            } else {
+                $inlineKeyboard[] = [
+                    ['text' => '⭐⭐⭐⭐⭐ Quick 5-Star Rating', 'callback_data' => 'tf_rate_5']
+                ];
+            }
+
             \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->post("https://api.telegram.org/bot{$token}/sendMessage", [
                 'chat_id' => (string) $chatId,
                 'text' => $msg,
                 'parse_mode' => 'HTML',
-                'disable_web_page_preview' => true,
+                'reply_markup' => json_encode(['inline_keyboard' => $inlineKeyboard]),
             ]);
-        } else {
-            Log::warning("Training webhook update received, but Training Bot token is not configured.");
+            return;
         }
+
+        if (str_starts_with($text, '/feedback') || str_contains($text, 'feedback') || str_contains($text, 'Feedback')) {
+            $msg = "📝 <b>SUBMIT TRAINING FEEDBACK (የስልጠና አስተያየት መስጫ)</b>\n\n";
+            $msg .= "Hello <b>{$userBranch}</b>!\n\nHow would you rate the overall quality & usefulness of your recent training session?\n\nSelect rating below:";
+
+            $inlineKeyboard = [
+                [
+                    ['text' => '⭐⭐⭐⭐⭐ 5 - Excellent (ድንቅ)', 'callback_data' => 'tf_rate_5'],
+                ],
+                [
+                    ['text' => '⭐⭐⭐⭐ 4 - Very Good (በጣም ጥሩ)', 'callback_data' => 'tf_rate_4'],
+                ],
+                [
+                    ['text' => '⭐⭐⭐ 3 - Good (ጥሩ)', 'callback_data' => 'tf_rate_3'],
+                ],
+            ];
+
+            if (str_starts_with($baseUrl, 'https://')) {
+                $inlineKeyboard[] = [
+                    ['text' => '🌐 Open Full 11 Amharic Form on Web', 'url' => "{$baseUrl}/training/feedback/create"]
+                ];
+            }
+
+            \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->post("https://api.telegram.org/bot{$token}/sendMessage", [
+                'chat_id' => (string) $chatId,
+                'text' => $msg,
+                'parse_mode' => 'HTML',
+                'reply_markup' => json_encode(['inline_keyboard' => $inlineKeyboard]),
+            ]);
+            return;
+        }
+
+        $msg = "🎓 <b>KALDIS COFFEE TRAINING & LMS BOT</b>\n\n";
+        $msg .= "Welcome! Your Chat ID: <code>{$chatId}</code>\n\n";
+        $msg .= "Commands & Actions:\n";
+        $msg .= "• 📝 /feedback - <b>Submit Training Feedback</b>\n";
+        $msg .= "• 📋 <b>View Department Agendas & Schedules</b>\n\n";
+        $msg .= "<i>Use the button below or type /feedback anytime to evaluate training sessions!</i>";
+
+        $inlineKeyboard = [
+            [
+                ['text' => '📝 Submit Training Feedback', 'callback_data' => 'tf_rate_5'],
+            ]
+        ];
+
+        if (str_starts_with($baseUrl, 'https://')) {
+            $inlineKeyboard[] = [
+                ['text' => '🌐 Open Feedback Form on Web App', 'url' => "{$baseUrl}/training/feedback/create"]
+            ];
+        }
+
+        \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->post("https://api.telegram.org/bot{$token}/sendMessage", [
+            'chat_id' => (string) $chatId,
+            'text' => $msg,
+            'parse_mode' => 'HTML',
+            'reply_markup' => json_encode(['inline_keyboard' => $inlineKeyboard]),
+            'disable_web_page_preview' => true,
+        ]);
     }
 
     public function startTicketWizard(string|int $chatId): void

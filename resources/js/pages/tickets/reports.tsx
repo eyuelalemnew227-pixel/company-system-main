@@ -12,6 +12,7 @@ import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
+import { toast } from 'sonner';
 import {
   AlertTriangle,
   Award,
@@ -26,6 +27,7 @@ import {
   Filter,
   MessageSquare,
   Printer,
+  Send,
   Star,
   Ticket,
   TrendingUp,
@@ -132,6 +134,25 @@ export default function TicketingReport() {
     window.location.href = `/tickets/reports?period=${period}&department_id=${departmentId}&start_date=${startDate}&end_date=${endDate}&export=csv`;
   };
 
+  const [sendingReport, setSendingReport] = useState<'weekly' | 'monthly' | null>(null);
+
+  const handleSendTelegramReport = (type: 'weekly' | 'monthly') => {
+    setSendingReport(type);
+    router.post(
+      '/tickets/reports/send-telegram',
+      { period: type, department_id: departmentId },
+      {
+        onSuccess: () => {
+          toast.success(`${type === 'weekly' ? 'Weekly' : 'Monthly'} performance report dispatched to Department Head(s) via Telegram!`);
+        },
+        onError: () => {
+          toast.error('Failed to send Telegram report.');
+        },
+        onFinish: () => setSendingReport(null),
+      }
+    );
+  };
+
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Ticketing Performance Report" />
@@ -148,7 +169,27 @@ export default function TicketingReport() {
               Real-time daily, weekly, and monthly SLA, technical staff resolution speed, and manager department oversight.
             </p>
           </div>
-          <div className="flex items-center gap-2 print:hidden">
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <Button
+              variant="default"
+              size="sm"
+              disabled={sendingReport === 'weekly'}
+              onClick={() => handleSendTelegramReport('weekly')}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs h-9 shadow-sm"
+            >
+              <Send className="mr-1.5 size-3.5" />
+              {sendingReport === 'weekly' ? 'Sending...' : 'Send Weekly Report'}
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              disabled={sendingReport === 'monthly'}
+              onClick={() => handleSendTelegramReport('monthly')}
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs h-9 shadow-sm"
+            >
+              <Send className="mr-1.5 size-3.5" />
+              {sendingReport === 'monthly' ? 'Sending...' : 'Send Monthly Report'}
+            </Button>
             <Button
               variant="outline"
               onClick={handleExportCsv}

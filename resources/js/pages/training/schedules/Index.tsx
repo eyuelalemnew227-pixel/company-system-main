@@ -100,11 +100,6 @@ export default function SchedulesIndex({ schedules = [], submittedAgendas = [] }
                                 <FileSpreadsheet className="h-4 w-4" /> View Department Agendas ({submittedAgendas.length})
                             </Button>
                         </Link>
-                        <Link href="/training/schedules/create">
-                            <Button className="gap-2 bg-purple-700 hover:bg-purple-800">
-                                <Plus className="h-4 w-4" /> Build Master Schedule
-                            </Button>
-                        </Link>
                     </div>
                 </div>
 

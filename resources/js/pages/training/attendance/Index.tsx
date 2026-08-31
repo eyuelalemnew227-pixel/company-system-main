@@ -1,0 +1,284 @@
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import AppLayout from '@/layouts/app-layout';
+import { Head, router } from '@inertiajs/react';
+import { CheckCircle2, Calendar, Search, UserCheck, UserX, Users, Building, GraduationCap } from 'lucide-react';
+import React, { useState } from 'react';
+
+type RosterItem = {
+    id?: number | null;
+    user_id?: number | null;
+    user_type: 'branch_manager' | 'trainer';
+    name: string;
+    branch_or_department?: string | null;
+    session_date: string;
+    is_attended: boolean;
+    status: 'on_time' | 'late' | 'absent';
+    notes?: string | null;
+};
+
+type AttendanceStats = {
+    total: number;
+    branch_managers: { on_time: number; late: number; absent: number };
+    trainers: { on_time: number; late: number; absent: number };
+};
+
+type PageProps = {
+    branchRoster: RosterItem[];
+    deptRoster: RosterItem[];
+    stats: AttendanceStats;
+    selectedDate: string;
+    filters?: {
+        search: string;
+        session_date: string;
+    };
+};
+
+export default function AttendanceIndex({
+    branchRoster = [],
+    deptRoster = [],
+    stats = { total: 0, branch_managers: { on_time: 0, late: 0, absent: 0 }, trainers: { on_time: 0, late: 0, absent: 0 } },
+    selectedDate = new Date().toISOString().split('T')[0],
+    filters = { search: '', session_date: '' },
+}: PageProps) {
+    const [search, setSearch] = useState(filters.search || '');
+    const [sessionDate, setSessionDate] = useState(selectedDate);
+
+    const handleDateChange = (newDate: string) => {
+        setSessionDate(newDate);
+        router.get('/training/attendance', { session_date: newDate, search }, { preserveState: true, replace: true });
+    };
+
+    const handleToggleAttendance = (item: RosterItem) => {
+        router.post(
+            '/training/attendance/toggle',
+            {
+                user_id: item.user_id,
+                user_type: item.user_type,
+                name: item.name,
+                branch_or_department: item.branch_or_department,
+                session_date: sessionDate,
+                is_attended: !item.is_attended,
+            },
+            { preserveScroll: true }
+        );
+    };
+
+    const filterRecords = (items: RosterItem[]) => {
+        if (!search.trim()) return items;
+        const q = search.toLowerCase().trim();
+        return items.filter(
+            (i) => i.name.toLowerCase().includes(q) || (i.branch_or_department && i.branch_or_department.toLowerCase().includes(q))
+        );
+    };
+
+    const filteredBranchRoster = filterRecords(branchRoster);
+    const filteredDeptRoster = filterRecords(deptRoster);
+
+    const renderRosterTable = (items: RosterItem[], categoryTitle: string) => (
+        <Table>
+            <TableHeader className="bg-slate-800 text-white">
+                <TableRow>
+                    <TableHead className="w-12 text-center text-white font-bold">ተ.ቁ</TableHead>
+                    <TableHead className="font-bold text-white">Category</TableHead>
+                    <TableHead className="font-bold text-white">User / Manager Name (የተሳታፊ ስም)</TableHead>
+                    <TableHead className="font-bold text-white">Branch / Department (ቅርንጫፍ / ዲፓርትመንት)</TableHead>
+                    <TableHead className="font-bold text-white text-center w-56">Attendance (ተገኝቷል? Tik/Untik)</TableHead>
+                    <TableHead className="font-bold text-white text-center w-36">Status</TableHead>
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {items.map((item, idx) => (
+                    <TableRow key={idx} className="odd:bg-muted/40 hover:bg-slate-100 dark:hover:bg-slate-900 transition-colors">
+                        <TableCell className="text-center font-bold text-xs">{idx + 1}</TableCell>
+                        <TableCell>
+                            <Badge
+                                variant="outline"
+                                className={
+                                    item.user_type === 'branch_manager'
+                                        ? 'bg-blue-50 text-blue-800 border-blue-200 font-semibold'
+                                        : 'bg-purple-50 text-purple-800 border-purple-200 font-semibold'
+                                }
+                            >
+                                {item.user_type === 'branch_manager' ? '🏢 Branch User' : '🎓 Department User'}
+                            </Badge>
+                        </TableCell>
+                        <TableCell className="font-bold text-slate-900 dark:text-slate-100 text-sm">{item.name}</TableCell>
+                        <TableCell className="text-xs font-bold text-purple-900 dark:text-purple-300">
+                            {item.branch_or_department || '-'}
+                        </TableCell>
+                        <TableCell className="text-center">
+                            <button
+                                type="button"
+                                onClick={() => handleToggleAttendance(item)}
+                                className={`inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border text-xs font-extrabold transition-all shadow-sm cursor-pointer ${
+                                    item.is_attended
+                                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700 ring-2 ring-emerald-400'
+                                        : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300'
+                                }`}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={item.is_attended}
+                                    onChange={() => {}}
+                                    className="h-4 w-4 rounded accent-emerald-600 pointer-events-none"
+                                />
+                                <span>{item.is_attended ? '✓ Attended (Tik)' : '✗ Not Attended (Untik)'}</span>
+                            </button>
+                        </TableCell>
+                        <TableCell className="text-center">
+                            {item.is_attended ? (
+                                <Badge className="bg-emerald-600 font-bold gap-1">
+                                    <CheckCircle2 className="h-3 w-3" /> Attended
+                                </Badge>
+                            ) : (
+                                <Badge variant="secondary" className="font-bold gap-1 text-slate-500">
+                                    <UserX className="h-3 w-3" /> Absent
+                                </Badge>
+                            )}
+                        </TableCell>
+                    </TableRow>
+                ))}
+                {items.length === 0 && (
+                    <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            No {categoryTitle} users found.
+                        </TableCell>
+                    </TableRow>
+                )}
+            </TableBody>
+        </Table>
+    );
+
+    return (
+        <AppLayout
+            breadcrumbs={[
+                { title: 'Training Management', href: '/training/dashboard' },
+                { title: 'Attendance Roster List', href: '/training/attendance' },
+            ]}
+        >
+            <Head title="Attendance Roster List" />
+
+            <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6 max-w-7xl mx-auto">
+                {/* Header & Date Picker */}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b pb-4">
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                            <UserCheck className="h-6 w-6 text-blue-700" /> Attendance Roster List
+                        </h1>
+                        <p className="text-sm text-muted-foreground">
+                            Simple attendance checklist: Tick [✓] if user attended, Untick [✗] if absent
+                        </p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <Label className="text-xs font-bold flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                            <Calendar className="h-4 w-4 text-blue-600" /> Session Date:
+                        </Label>
+                        <Input
+                            type="date"
+                            value={sessionDate}
+                            onChange={(e) => handleDateChange(e.target.value)}
+                            className="h-9 w-44 font-mono font-bold text-xs bg-white dark:bg-slate-950 border-blue-300"
+                        />
+                    </div>
+                </div>
+
+                {/* Counter Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Card className="border-blue-200 dark:border-blue-900 bg-blue-50/20">
+                        <CardHeader className="py-3 px-4 border-b border-blue-100 dark:border-blue-900 flex flex-row items-center justify-between">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2 text-blue-950 dark:text-blue-300">
+                                <Building className="h-4 w-4 text-blue-700" /> 🏢 Branch Users & Managers Roster
+                            </CardTitle>
+                            <Badge className="bg-blue-700 font-bold">{branchRoster.length} Branches / Users</Badge>
+                        </CardHeader>
+                        <CardContent className="p-4 flex items-center justify-around text-center">
+                            <div>
+                                <div className="text-2xl font-black text-emerald-600">
+                                    {branchRoster.filter((b) => b.is_attended).length} / {branchRoster.length}
+                                </div>
+                                <div className="text-xs font-bold text-slate-600 dark:text-slate-400">✓ Ticked (Attended)</div>
+                            </div>
+                            <div className="border-r h-8" />
+                            <div>
+                                <div className="text-2xl font-black text-slate-500">
+                                    {branchRoster.filter((b) => !b.is_attended).length}
+                                </div>
+                                <div className="text-xs font-bold text-slate-500">✗ Unticked (Absent)</div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-purple-200 dark:border-purple-900 bg-purple-50/20">
+                        <CardHeader className="py-3 px-4 border-b border-purple-100 dark:border-purple-900 flex flex-row items-center justify-between">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2 text-purple-950 dark:text-purple-300">
+                                <GraduationCap className="h-4 w-4 text-purple-700" /> 🎓 Department Users & Trainers Roster
+                            </CardTitle>
+                            <Badge className="bg-purple-700 font-bold">{deptRoster.length} Departments / Users</Badge>
+                        </CardHeader>
+                        <CardContent className="p-4 flex items-center justify-around text-center">
+                            <div>
+                                <div className="text-2xl font-black text-emerald-600">
+                                    {deptRoster.filter((d) => d.is_attended).length} / {deptRoster.length}
+                                </div>
+                                <div className="text-xs font-bold text-slate-600 dark:text-slate-400">✓ Ticked (Attended)</div>
+                            </div>
+                            <div className="border-r h-8" />
+                            <div>
+                                <div className="text-2xl font-black text-slate-500">
+                                    {deptRoster.filter((d) => !d.is_attended).length}
+                                </div>
+                                <div className="text-xs font-bold text-slate-500">✗ Unticked (Absent)</div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Filter & Search Input */}
+                <div className="relative max-w-md">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Search name, branch, or department..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="pl-9 text-xs h-9 bg-white dark:bg-slate-950 border-slate-300"
+                    />
+                </div>
+
+                {/* Tabbed Roster Register Table */}
+                <Card>
+                    <CardHeader className="py-3 px-4 border-b">
+                        <CardTitle className="text-base font-bold flex items-center gap-2">
+                            <Users className="h-5 w-5 text-blue-700" /> Full System Attendance Roster List
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4">
+                        <Tabs defaultValue="branches" className="space-y-4">
+                            <TabsList className="bg-slate-100 dark:bg-slate-900 p-1">
+                                <TabsTrigger value="branches" className="text-xs font-bold">
+                                    🏢 Branch Users ({filteredBranchRoster.length})
+                                </TabsTrigger>
+                                <TabsTrigger value="departments" className="text-xs font-bold">
+                                    🎓 Department Users ({filteredDeptRoster.length})
+                                </TabsTrigger>
+                            </TabsList>
+
+                            <TabsContent value="branches" className="border rounded-lg overflow-hidden">
+                                {renderRosterTable(filteredBranchRoster, 'Branch')}
+                            </TabsContent>
+
+                            <TabsContent value="departments" className="border rounded-lg overflow-hidden">
+                                {renderRosterTable(filteredDeptRoster, 'Department')}
+                            </TabsContent>
+                        </Tabs>
+                    </CardContent>
+                </Card>
+            </div>
+        </AppLayout>
+    );
+}

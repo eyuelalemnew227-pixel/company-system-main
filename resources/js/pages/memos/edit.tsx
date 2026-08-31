@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm } from '@inertiajs/react';
 import { FileText, Save, ArrowLeft, Bold, Italic, List, ListOrdered, Heading } from 'lucide-react';
-import React, { useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { toast } from 'sonner';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -49,7 +49,7 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
         title: memo.title || '',
         memo_date: memo.memo_date || '',
         sender_name: memo.sender_name || '',
-        sender_position: '',
+        sender_position: memo.sender_position || '',
         target_department: (memo.departments && memo.departments[0]) || memo.recipient_name || '',
         recipient_name: memo.recipient_name || '',
         content: memo.content || '',
@@ -61,29 +61,76 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
 
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-    const targetOptions = useMemo(() => {
-        const deptOpts = (departments || []).map((d) => ({
-            id: `dept_${d.id}`,
-            name: `🏢 Dept: ${d.name}`,
-            rawName: d.name,
-        }));
-        const branchOpts = (branches || []).map((b) => ({
+    // Target Options
+    const branchOptions = useMemo(() => {
+        return (branches || []).map((b) => ({
             id: `branch_${b.id}`,
-            name: `📍 Branch: ${b.name}`,
+            name: b.name,
             rawName: b.name,
         }));
-        return [...deptOpts, ...branchOpts];
-    }, [departments, branches]);
+    }, [branches]);
 
-    const handleTargetChange = (optionId: string) => {
-        const match = targetOptions.find((opt) => String(opt.id) === optionId || opt.rawName === optionId);
-        const targetName = match ? match.rawName : optionId;
+    const departmentOptions = useMemo(() => {
+        return (departments || []).map((d) => ({
+            id: `dept_${d.id}`,
+            name: d.name,
+            rawName: d.name,
+        }));
+    }, [departments]);
 
+    // Pre-calculate initial branch / department matching
+    const initialDeptOrBranch = (memo.departments && memo.departments[0]) || memo.recipient_name || '';
+    const initialBranchMatch = branchOptions.find((b) => b.rawName === initialDeptOrBranch || b.id === initialDeptOrBranch);
+    const initialDeptMatch = departmentOptions.find((d) => d.rawName === initialDeptOrBranch || d.id === initialDeptOrBranch);
+
+    const initialIsHO = Boolean(
+        initialDeptMatch ||
+        (initialBranchMatch && (initialBranchMatch.rawName.toLowerCase().includes('head office') || initialBranchMatch.rawName.toLowerCase().replace(/[\s\-_]/g, '').includes('headoffice')))
+    );
+
+    const [selectedBranchId, setSelectedBranchId] = useState<string>(
+        initialBranchMatch ? initialBranchMatch.id : (initialIsHO ? (branchOptions.find((b) => b.rawName.toLowerCase().includes('head office'))?.id || '') : '')
+    );
+    const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>(initialDeptMatch ? initialDeptMatch.id : '');
+    const [isHeadOffice, setIsHeadOffice] = useState<boolean>(initialIsHO);
+
+    const handleBranchChange = (branchOptionId: string) => {
+        const match = branchOptions.find((opt) => String(opt.id) === branchOptionId || opt.rawName === branchOptionId);
+        const branchName = match ? match.rawName : branchOptionId;
+        const normalized = branchName.toLowerCase().replace(/[\s\-_]/g, '');
+        const isHO = normalized.includes('headoffice') || branchName.toLowerCase().includes('head office');
+
+        setSelectedBranchId(branchOptionId);
+        setIsHeadOffice(isHO);
+        setSelectedDepartmentId('');
+
+        if (isHO) {
+            setData((prev) => ({
+                ...prev,
+                target_department: branchOptionId,
+                recipient_name: '',
+                departments: [],
+            }));
+            toast.info('Head Office selected. Please select target department.');
+        } else {
+            setData((prev) => ({
+                ...prev,
+                target_department: branchOptionId,
+                recipient_name: branchName,
+                departments: [branchName],
+            }));
+        }
+    };
+
+    const handleDepartmentChange = (deptOptionId: string) => {
+        const match = departmentOptions.find((opt) => String(opt.id) === deptOptionId || opt.rawName === deptOptionId);
+        const deptName = match ? match.rawName : deptOptionId;
+
+        setSelectedDepartmentId(deptOptionId);
         setData((prev) => ({
             ...prev,
-            target_department: optionId,
-            recipient_name: targetName,
-            departments: [targetName],
+            recipient_name: deptName,
+            departments: [deptName],
         }));
     };
 
@@ -112,6 +159,10 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (isHeadOffice && !data.recipient_name) {
+            toast.error('Please select a target Department for Head Office.');
+            return;
+        }
         put(`/memos/${memo.id}`, {
             onSuccess: () => toast.success('Internal Memorandum updated successfully!'),
             onError: () => toast.error('Failed to update memorandum.'),
@@ -172,7 +223,7 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
 
                                 <div className="space-y-1">
                                     <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        From (Sender & Branch)
+                                        From (Sender Name)
                                     </Label>
                                     <Input
                                         value={data.sender_name}
@@ -184,16 +235,46 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
 
                                 <div className="space-y-1">
                                     <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                        To (Target Department / Branch)
+                                        To (Target Branch) <span className="text-red-500">*</span>
                                     </Label>
                                     <SearchableSelect
-                                        options={targetOptions}
-                                        value={data.target_department}
-                                        onValueChange={handleTargetChange}
-                                        placeholder="Select Department or Branch..."
-                                        searchPlaceholder="Search Dept / Branch..."
+                                        options={branchOptions}
+                                        value={selectedBranchId}
+                                        onValueChange={handleBranchChange}
+                                        placeholder="Select Branch..."
+                                        searchPlaceholder="Search Branch..."
                                     />
                                 </div>
+                            </div>
+
+                            {/* Head Office Department Selector & Sender Position Row */}
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div className="space-y-1">
+                                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        Sender Position
+                                    </Label>
+                                    <Input
+                                        placeholder="e.g. IT Manager, Operations Supervisor"
+                                        value={data.sender_position}
+                                        onChange={(e) => setData('sender_position', e.target.value)}
+                                        className="h-9 text-xs"
+                                    />
+                                </div>
+
+                                {isHeadOffice && (
+                                    <div className="space-y-1 bg-amber-50 p-2.5 rounded-lg border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
+                                        <Label className="text-xs font-bold text-amber-900 dark:text-amber-300 flex items-center gap-1">
+                                            Head Office Department <span className="text-red-500">*</span>
+                                        </Label>
+                                        <SearchableSelect
+                                            options={departmentOptions}
+                                            value={selectedDepartmentId}
+                                            onValueChange={handleDepartmentChange}
+                                            placeholder="Select Head Office Department..."
+                                            searchPlaceholder="Search Department..."
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             <div className="space-y-1">
@@ -219,7 +300,8 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 font-bold text-xs"
-                                            onClick={() => insertFormatting('**', '**')}
+                                            onClick={() => insertFormatting('<b>', '</b>')}
+                                            title="Bold"
                                         >
                                             <Bold className="h-3.5 w-3.5" />
                                         </Button>
@@ -228,7 +310,8 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 italic text-xs"
-                                            onClick={() => insertFormatting('*', '*')}
+                                            onClick={() => insertFormatting('<i>', '</i>')}
+                                            title="Italic"
                                         >
                                             <Italic className="h-3.5 w-3.5" />
                                         </Button>
@@ -237,7 +320,8 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 text-xs"
-                                            onClick={() => insertFormatting('### ')}
+                                            onClick={() => insertFormatting('<h3>', '</h3>')}
+                                            title="Heading"
                                         >
                                             <Heading className="h-3.5 w-3.5" />
                                         </Button>
@@ -246,7 +330,8 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 text-xs"
-                                            onClick={() => insertFormatting('\n- ')}
+                                            onClick={() => insertFormatting('\n• ')}
+                                            title="Bullet List"
                                         >
                                             <List className="h-3.5 w-3.5" />
                                         </Button>

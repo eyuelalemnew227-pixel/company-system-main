@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
     ArrowLeft,
     Calendar,
@@ -92,94 +92,117 @@ export default function MasterScheduleBuilder({ departments = [], agendas = [] }
         }
     };
 
+    const recalculateAllRowTimes = (updatedRows: ScheduleGridRow[]): ScheduleGridRow[] => {
+        if (updatedRows.length === 0) return updatedRows;
+        
+        let currentStart = updatedRows[0].start_time || '03:00';
+        return updatedRows.map((r, i) => {
+            if (i === 0) {
+                const endTime = calculateEndTime(currentStart, r.allocated_minutes || 30);
+                return { ...r, start_time: currentStart, end_time: endTime };
+            }
+            const prevEnd = updatedRows[i - 1]?.end_time || currentStart;
+            const newStart = prevEnd;
+            const newEnd = calculateEndTime(newStart, r.allocated_minutes || 30);
+            return { ...r, start_time: newStart, end_time: newEnd };
+        });
+    };
+
     const handleAddSubmittedAgenda = (agendaIdStr: string) => {
         const agId = parseInt(agendaIdStr);
         const selectedAgenda = agendas.find((a) => a.id === agId);
         if (!selectedAgenda) return;
 
         const deptName = selectedAgenda.department ? selectedAgenda.department.name : 'General';
-
-        const lastRow = rows[rows.length - 1];
-        let startTime = '03:00';
-        if (lastRow && lastRow.end_time) {
-            startTime = lastRow.end_time;
-        }
-
         const duration = selectedAgenda.allocated_minutes || 35;
-        const endTime = calculateEndTime(startTime, duration);
 
-        // Format topics from form
         let topicsText = selectedAgenda.title;
         if (selectedAgenda.content_outline && selectedAgenda.content_outline.length > 0) {
             topicsText += ' (' + selectedAgenda.content_outline.join(', ') + ')';
         }
 
-        setRows([
-            ...rows,
-            {
-                training_agenda_id: selectedAgenda.id,
-                department_id: selectedAgenda.department?.id,
-                department_name: deptName,
-                topic_title: topicsText,
-                allocated_minutes: duration,
-                start_time: startTime,
-                end_time: endTime,
-                is_break: false,
-            },
-        ]);
+        const newRow: ScheduleGridRow = {
+            training_agenda_id: selectedAgenda.id,
+            department_id: selectedAgenda.department?.id,
+            department_name: deptName,
+            topic_title: topicsText,
+            allocated_minutes: duration,
+            start_time: '03:00',
+            end_time: '03:35',
+            is_break: false,
+        };
+
+        const updated = [...rows, newRow];
+        setRows(recalculateAllRowTimes(updated));
     };
 
     const handleAddTeaBreak = () => {
-        const lastRow = rows[rows.length - 1];
-        let startTime = '05:00';
-        if (lastRow && lastRow.end_time) {
-            startTime = lastRow.end_time;
-        }
-        const endTime = calculateEndTime(startTime, 20);
+        const newRow: ScheduleGridRow = {
+            department_name: 'የሻይ እረፍት',
+            topic_title: 'የሻይ እረፍት (Tea Break)',
+            allocated_minutes: 20,
+            start_time: '05:00',
+            end_time: '05:20',
+            is_break: true,
+        };
 
-        setRows([
-            ...rows,
-            {
-                department_name: 'የሻይ እረፍት',
-                topic_title: 'የሻይ እረፍት (Tea Break)',
-                allocated_minutes: 20,
-                start_time: startTime,
-                end_time: endTime,
-                is_break: true,
-            },
-        ]);
+        const updated = [...rows, newRow];
+        setRows(recalculateAllRowTimes(updated));
+    };
+
+    const handleAddLunchBreak = () => {
+        const newRow: ScheduleGridRow = {
+            department_name: 'የምሳ እረፍት',
+            topic_title: 'የምሳ እረፍት (Lunch Break)',
+            allocated_minutes: 60,
+            start_time: '06:00',
+            end_time: '07:00',
+            is_break: true,
+        };
+
+        const updated = [...rows, newRow];
+        setRows(recalculateAllRowTimes(updated));
     };
 
     const handleAddCustomRow = () => {
-        const lastRow = rows[rows.length - 1];
-        let startTime = '03:00';
-        if (lastRow && lastRow.end_time) {
-            startTime = lastRow.end_time;
-        }
-        const endTime = calculateEndTime(startTime, 30);
+        const newRow: ScheduleGridRow = {
+            department_id: departments[0]?.id || '',
+            department_name: departments[0]?.name || 'Department',
+            topic_title: '',
+            allocated_minutes: 30,
+            start_time: '03:00',
+            end_time: '03:30',
+            is_break: false,
+        };
 
-        setRows([
-            ...rows,
-            {
-                department_id: departments[0]?.id || '',
-                department_name: departments[0]?.name || 'Department',
-                topic_title: '',
-                allocated_minutes: 30,
-                start_time: startTime,
-                end_time: endTime,
-                is_break: false,
-            },
-        ]);
+        const updated = [...rows, newRow];
+        setRows(recalculateAllRowTimes(updated));
+    };
+
+    const handleMoveRow = (index: number, direction: 'up' | 'down') => {
+        const targetIdx = direction === 'up' ? index - 1 : index + 1;
+        if (targetIdx < 0 || targetIdx >= rows.length) return;
+        const updated = [...rows];
+        const temp = updated[index];
+        updated[index] = updated[targetIdx];
+        updated[targetIdx] = temp;
+        setRows(recalculateAllRowTimes(updated));
     };
 
     const handleRemoveRow = (index: number) => {
-        setRows(rows.filter((_, i) => i !== index));
+        const updated = rows.filter((_, i) => i !== index);
+        setRows(recalculateAllRowTimes(updated));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        setData('items', rows);
-        post('/training/schedules');
+        router.post('/training/schedules', {
+            title: data.title,
+            schedule_date: data.schedule_date,
+            venue: data.venue,
+            notes: data.notes,
+            items: rows,
+        });
     };
 
     return (
@@ -286,11 +309,14 @@ export default function MasterScheduleBuilder({ departments = [], agendas = [] }
                                         <Clock className="h-5 w-5 text-purple-600" /> የስልጠና መርሃግብር ሰሌዳ (Master Timetable)
                                     </Label>
                                     <div className="flex items-center gap-2">
-                                        <Button type="button" variant="outline" size="sm" onClick={handleAddTeaBreak} className="gap-1.5 text-xs border-amber-500 text-amber-700 dark:text-amber-400">
-                                            <Coffee className="h-3.5 w-3.5" /> Add Tea Break (የሻይ እረፍት)
+                                        <Button type="button" variant="outline" size="sm" onClick={handleAddTeaBreak} className="gap-1 text-xs border-amber-500 text-amber-700 dark:text-amber-400 font-bold">
+                                            <Coffee className="h-3.5 w-3.5" /> ☕ 20-min Tea Break
                                         </Button>
-                                        <Button type="button" variant="outline" size="sm" onClick={handleAddCustomRow} className="gap-1.5 text-xs">
-                                            <Plus className="h-3.5 w-3.5" /> Add Custom Row
+                                        <Button type="button" variant="outline" size="sm" onClick={handleAddLunchBreak} className="gap-1 text-xs border-amber-600 text-amber-800 dark:text-amber-300 font-bold">
+                                            🍽️ 1-hr Lunch Break
+                                        </Button>
+                                        <Button type="button" variant="outline" size="sm" onClick={handleAddCustomRow} className="gap-1.5 text-xs font-bold">
+                                            <Plus className="h-3.5 w-3.5" /> Add Custom Session
                                         </Button>
                                     </div>
                                 </div>

@@ -149,7 +149,6 @@ class TelegramTicketNotificationService
         }
 
         $row2 = [
-            ['text' => "💬 Add Comment", 'callback_data' => "t_cmt_prompt_{$ticket->id}"],
             ['text' => "👁️ View Ticket Detail", 'callback_data' => "t_view_{$ticket->id}"],
         ];
         $buttons[] = $row2;
@@ -546,6 +545,60 @@ class TelegramTicketNotificationService
         $managerIds = $this->ticketActionService->departmentManagerUserIds($ticket->department_id);
         if (!empty($managerIds)) {
             $this->botService->sendToUsers($managerIds, $text, $buttons);
+        }
+    }
+
+    /**
+     * Dispatch notification for new chat/discussion message sent on ticket
+     */
+    public function notifyTicketChatMessage(Ticket $ticket, User $sender, string $messageText): void
+    {
+        $ticket->loadMissing(['requestor', 'assignments.assignee']);
+        $header = $this->formatTicketHeader($ticket);
+        $senderName = e($sender->name);
+        $cleanMessage = e(mb_strimwidth($messageText, 0, 300, '...'));
+        
+        $appUrl = $this->getAppUrl();
+        $buttons = [
+            'inline_keyboard' => [
+                [
+                    ['text' => "👁️ View Ticket & Reply", 'url' => "{$appUrl}/tickets/{$ticket->id}"],
+                ]
+            ]
+        ];
+
+        $text = "💬 <b>NEW TICKET DISCUSSION MESSAGE</b>\n\n" .
+                "{$header}\n" .
+                "👤 <b>From:</b> {$senderName}\n\n" .
+                "📝 <b>Message:</b>\n<i>\"{$cleanMessage}\"</i>\n\n" .
+                "<i>Tap below to open ticket and reply in system.</i>";
+
+        $recipientIds = [];
+
+        // 1. Add Requestor
+        $requestorId = $ticket->user_id ?: $ticket->requestor?->id;
+        if ($requestorId && $requestorId !== $sender->id) {
+            $recipientIds[] = $requestorId;
+        }
+
+        // 2. Add Department Manager(s)
+        $managerIds = $this->ticketActionService->departmentManagerUserIds($ticket->department_id);
+        foreach ($managerIds as $mId) {
+            if ($mId !== $sender->id) {
+                $recipientIds[] = $mId;
+            }
+        }
+
+        // 3. Add Assigned Technical
+        $currentAssignee = $ticket->assignments()->where('is_current', true)->with('assignee')->first()?->assignee;
+        if ($currentAssignee && $currentAssignee->id !== $sender->id) {
+            $recipientIds[] = $currentAssignee->id;
+        }
+
+        $recipientIds = array_unique($recipientIds);
+
+        if (!empty($recipientIds)) {
+            $this->botService->sendToUsers($recipientIds, $text, $buttons);
         }
     }
 }

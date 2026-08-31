@@ -2,27 +2,30 @@
 
 namespace App\Models\Training;
 
+use App\Models\Branch;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class TrainingAttendance extends Model
+class TrainingFeedbackResponse extends Model
 {
     protected $fillable = [
         'training_schedule_id',
         'training_schedule_item_id',
         'user_id',
-        'user_type',
-        'name',
-        'branch_or_department',
-        'session_date',
-        'status',
-        'notes',
-        'recorded_by_user_id',
-    ];
-
-    protected $casts = [
-        'session_date' => 'date',
+        'branch_id',
+        'trainee_name',
+        'q1_relevance',
+        'q2_objective_clarity',
+        'q3_response_quality',
+        'q4_participatory',
+        'q5_motivating',
+        'q6_gained_new_knowledge',
+        'q7_motivation_diff',
+        'q8_knowledge_increase',
+        'q9_one_word_summary',
+        'q10_most_liked_aspects',
+        'q11_additional_comments',
     ];
 
     public function schedule(): BelongsTo
@@ -40,8 +43,8 @@ class TrainingAttendance extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    public function recordedBy(): BelongsTo
+    public function branch(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'recorded_by_user_id');
+        return $this->belongsTo(Branch::class, 'branch_id');
     }
 }

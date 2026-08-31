@@ -1,0 +1,15 @@
+{
+    "bot_token": "8989019561:AAHr6FYIYvXGv57bhu23ry_WkteMRAhFkeQ",
+    "region_groups": {
+        "Region 1": -1004315854895,
+        "Region 2": -1003782532757
+    },
+    "groups": {
+        "Region 1": -1004315854895,
+        "Region 2": -1003782532757,
+        "Head Office": -1004482619985
+    },
+    "ho_group_chat_id": -1004482619985,
+    "operations_director_user_id": 0,
+    "database": "kaldis.db"
+}

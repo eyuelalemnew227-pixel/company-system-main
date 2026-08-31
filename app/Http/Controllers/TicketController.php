@@ -20,7 +20,9 @@ use App\Models\TicketMainCategory;
 use App\Models\TicketSubCategory;
 use App\Models\User;
 use App\Services\TicketActionService;
+use App\Services\TelegramTicketNotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -955,5 +957,55 @@ class TicketController extends Controller
         }
 
         return back()->with('message', 'Case updated successfully.');
+    }
+
+    public function sendChatComment(Request $request, Ticket $ticket)
+    {
+        $request->validate([
+            'message' => 'required|string|max:2000',
+        ]);
+
+        $actor = auth()->user();
+        $message = trim($request->input('message'));
+
+        $this->actionService->logActivity(
+            $ticket,
+            $actor,
+            'chat_comment',
+            $ticket->status->value,
+            $ticket->status->value,
+            $message
+        );
+
+        app(TelegramTicketNotificationService::class)->notifyTicketChatMessage($ticket, $actor, $message);
+
+        return back()->with('message', 'Discussion message sent successfully.');
+    }
+
+    public function approveAndRate(Request $request, Ticket $ticket)
+    {
+        $request->validate([
+            'rating' => 'required|integer|min:1|max:5',
+            'comment' => 'nullable|string|max:1000',
+        ]);
+
+        $actor = auth()->user();
+
+        \App\Models\TicketRating::create([
+            'ticket_id' => $ticket->id,
+            'user_id' => $actor->id,
+            'branch_id' => $ticket->requestor_branch_id,
+            'stars' => (int) $request->input('rating'),
+            'comment' => $request->input('comment'),
+        ]);
+
+        $this->actionService->setStatus(
+            $ticket,
+            \App\Enums\TicketStatus::TicketApproved,
+            $actor,
+            'Approved and rated by requester.'
+        );
+
+        return back()->with('message', 'Thank you! Ticket completion approved and rated successfully.');
     }
 }

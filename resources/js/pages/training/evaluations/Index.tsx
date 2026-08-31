@@ -1,12 +1,15 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link } from '@inertiajs/react';
-import { Award, Building, Calendar, Star, ThumbsUp, UserCheck } from 'lucide-react';
-import React from 'react';
+import { Head, Link, router } from '@inertiajs/react';
+import { Award, Calendar, Filter, RotateCcw, Search, Star } from 'lucide-react';
+import React, { useState } from 'react';
 
+type Department = { id: number; name: string };
 type Evaluation = {
     id: number;
     content_clarity_rating: number;
@@ -31,12 +34,45 @@ type Evaluation = {
 
 type PageProps = {
     evaluations: Evaluation[];
+    departments?: Department[];
+    filters?: {
+        search: string;
+        trainer_department_id: string;
+        rating: string;
+        start_date: string;
+        end_date: string;
+    };
 };
 
-export default function EvaluationsIndex({ evaluations = [] }: PageProps) {
+export default function EvaluationsIndex({ evaluations = [], departments = [], filters = { search: '', trainer_department_id: 'all', rating: 'all', start_date: '', end_date: '' } }: PageProps) {
+    const [search, setSearch] = useState(filters.search || '');
+    const [deptFilter, setDeptFilter] = useState(filters.trainer_department_id || 'all');
+    const [ratingFilter, setRatingFilter] = useState(filters.rating || 'all');
+    const [startDate, setStartDate] = useState(filters.start_date || '');
+    const [endDate, setEndDate] = useState(filters.end_date || '');
+
+    const handleApplyFilters = () => {
+        router.get('/training/evaluations', {
+            search,
+            trainer_department_id: deptFilter,
+            rating: ratingFilter,
+            start_date: startDate,
+            end_date: endDate,
+        }, { preserveState: true, replace: true });
+    };
+
+    const handleResetFilters = () => {
+        setSearch('');
+        setDeptFilter('all');
+        setRatingFilter('all');
+        setStartDate('');
+        setEndDate('');
+        router.get('/training/evaluations', {}, { preserveState: true, replace: true });
+    };
+
     const renderStars = (rating: number) => {
         return (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 justify-center">
                 <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
                 <span className="font-mono font-bold text-sm">{rating.toFixed(1)}</span>
             </div>
@@ -74,15 +110,89 @@ export default function EvaluationsIndex({ evaluations = [] }: PageProps) {
                     </div>
                 </div>
 
+                {/* Filters Card */}
+                <Card className="border-amber-100 dark:border-amber-900 bg-amber-50/20 dark:bg-amber-950/10">
+                    <CardHeader className="py-3 px-4 flex flex-row items-center justify-between border-b border-amber-100 dark:border-amber-900">
+                        <CardTitle className="text-sm font-bold flex items-center gap-2 text-amber-900 dark:text-amber-300">
+                            <Filter className="h-4 w-4 text-amber-600" /> Filter Trainer Evaluations
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                        <div className="space-y-1">
+                            <label className="text-xs font-semibold text-muted-foreground">Search Branch / Feedback</label>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search evaluation..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
+                                    className="pl-8 text-xs h-9 bg-white dark:bg-slate-950"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-xs font-semibold text-muted-foreground">Trainer Department</label>
+                            <Select value={deptFilter} onValueChange={setDeptFilter}>
+                                <SelectTrigger className="h-9 text-xs bg-white dark:bg-slate-950">
+                                    <SelectValue placeholder="All Departments" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Departments</SelectItem>
+                                    {departments.map((d) => (
+                                        <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-xs font-semibold text-muted-foreground">Rating Score</label>
+                            <Select value={ratingFilter} onValueChange={setRatingFilter}>
+                                <SelectTrigger className="h-9 text-xs bg-white dark:bg-slate-950">
+                                    <SelectValue placeholder="All Scores" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Scores</SelectItem>
+                                    <SelectItem value="5">5.0 Excellent</SelectItem>
+                                    <SelectItem value="4">4.0 - 4.8 Very Good</SelectItem>
+                                    <SelectItem value="3">3.0 - 3.9 Satisfactory</SelectItem>
+                                    <SelectItem value="2">Below 3.0 Needs Improvement</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-xs font-semibold text-muted-foreground">Start Date</label>
+                            <Input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="h-9 text-xs bg-white dark:bg-slate-950"
+                            />
+                        </div>
+
+                        <div className="flex items-end gap-2">
+                            <Button onClick={handleApplyFilters} className="h-9 text-xs bg-amber-600 hover:bg-amber-700 flex-1 font-bold">
+                                Filter
+                            </Button>
+                            <Button onClick={handleResetFilters} variant="outline" className="h-9 text-xs gap-1">
+                                <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <Card>
-                    <CardHeader>
-                        <CardTitle className="text-lg font-bold flex items-center gap-2">
-                            <Award className="h-5 w-5 text-amber-500" /> Submitted Trainer Department Ratings & Feedback
+                    <CardHeader className="py-3 px-4 border-b flex flex-row items-center justify-between">
+                        <CardTitle className="text-base font-bold flex items-center gap-2">
+                            <Award className="h-5 w-5 text-amber-500" /> Submitted Trainer Department Ratings ({evaluations.length})
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="p-0">
                         <Table>
-                            <TableHeader className="bg-slate-700 dark:bg-slate-800">
+                            <TableHeader className="bg-slate-800 text-white">
                                 <TableRow>
                                     <TableHead className="font-bold text-white">Trainer Dept</TableHead>
                                     <TableHead className="font-bold text-white">Training Session & Topic</TableHead>
@@ -133,7 +243,7 @@ export default function EvaluationsIndex({ evaluations = [] }: PageProps) {
                                 {evaluations.length === 0 && (
                                     <TableRow>
                                         <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                                            No trainer department evaluations submitted yet.
+                                            No evaluations match the selected filter criteria.
                                         </TableCell>
                                     </TableRow>
                                 )}

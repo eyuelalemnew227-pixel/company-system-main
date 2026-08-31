@@ -53,7 +53,8 @@ export default function BroadcastAnnouncementsIndex({
                 toast.success('Broadcast announcement dispatched successfully!');
                 reset('title', 'message');
             },
-            onError: () => {
+            onError: (errs) => {
+                console.error('Broadcast errors:', errs);
                 toast.error('Failed to send broadcast announcement. Please check form inputs.');
             },
         });

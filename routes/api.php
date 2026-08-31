@@ -24,6 +24,7 @@ Route::post('/telegram/budget-webhook', [TelegramWebhookController::class, 'hand
 Route::post('/telegram/memo-webhook', [TelegramWebhookController::class, 'handleMemo']);
 Route::post('/telegram/pre-order-webhook', [TelegramWebhookController::class, 'handlePreOrderBot']);
 Route::post('/telegram/training-webhook', [TelegramWebhookController::class, 'handleTraining']);
+Route::post('/telegram/kaldis-communication', [TelegramWebhookController::class, 'handleKaldisCommunication']);
 Route::post('/telegram/webhook/training', [TelegramWebhookController::class, 'handleTraining']);
 Route::post('/telegram/webhook/{slug}', [TelegramWebhookController::class, 'handleDynamicWebhook']);
 

@@ -63,10 +63,16 @@ export default function MemoShow({
         window.print();
     };
 
+    const formatContentHtml = (content: string) => {
+        if (!content) return '';
+        return content.replace(/\n/g, '<br />');
+    };
+
     const handleCopyLink = () => {
-        navigator.clipboard.writeText(window.location.href);
+        const pdfUrl = `${window.location.origin}/memos/${memo.id}/pdf`;
+        navigator.clipboard.writeText(pdfUrl);
         setCopied(true);
-        toast.success('Memorandum link copied to clipboard!');
+        toast.success('Direct PDF link copied to clipboard!');
         setTimeout(() => setCopied(false), 3000);
     };
 
@@ -84,6 +90,34 @@ export default function MemoShow({
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={`Memo - ${memo.memo_id}`} />
+
+            <style dangerouslySetInnerHTML={{ __html: `
+                @media print {
+                    header, nav, aside, .print\\:hidden {
+                        display: none !important;
+                    }
+                    body * {
+                        visibility: hidden;
+                    }
+                    #printable-memo-card, #printable-memo-card * {
+                        visibility: visible;
+                    }
+                    #printable-memo-card {
+                        position: absolute !important;
+                        left: 0 !important;
+                        top: 0 !important;
+                        width: 100% !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        border: none !important;
+                        box-shadow: none !important;
+                        background: transparent !important;
+                    }
+                    @page {
+                        margin: 1.5cm;
+                    }
+                }
+            ` }} />
 
             <div className="mx-auto max-w-4xl space-y-6 p-6">
                 {/* Top Actions Bar (Hidden on Print) */}
@@ -105,9 +139,10 @@ export default function MemoShow({
                             size="sm"
                             onClick={handleCopyLink}
                             className="gap-2"
+                            title="Copy direct PDF link"
                         >
                             {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-                            {copied ? 'Copied!' : 'Copy Link'}
+                            {copied ? 'Copied!' : 'Copy PDF Link'}
                         </Button>
 
                         {/* Send Telegram Button */}
@@ -138,6 +173,7 @@ export default function MemoShow({
                 </div>
 
                 {/* MEMORANDUM DOCUMENT CONTAINER (Printable Target) */}
+                <div id="printable-memo-card">
                 <Card className="border border-slate-300 shadow-xl dark:border-slate-800 bg-white dark:bg-slate-950 p-8 md:p-12 print:border-none print:shadow-none print:p-0">
                     {/* Header Logo & Title */}
                     <div className="border-b-4 border-amber-900 pb-6 text-center dark:border-amber-700">
@@ -189,9 +225,10 @@ export default function MemoShow({
                     </div>
 
                     {/* Memorandum Body Content */}
-                    <div className="min-h-[260px] py-4 text-slate-900 dark:text-slate-100 leading-relaxed space-y-4 whitespace-pre-wrap font-sans text-base">
-                        {memo.content}
-                    </div>
+                    <div
+                        className="min-h-[260px] py-4 text-slate-900 dark:text-slate-100 leading-relaxed font-sans text-base prose dark:prose-invert max-w-none"
+                        dangerouslySetInnerHTML={{ __html: formatContentHtml(memo.content) }}
+                    />
 
                     {/* Sender Signature Block */}
                     <div className="mt-12 flex justify-end">
@@ -211,9 +248,15 @@ export default function MemoShow({
                             <div className="font-bold text-sm text-slate-900 dark:text-slate-100">
                                 {memo.sender_name}
                             </div>
+                            {memo.sender_position && (
+                                <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mt-0.5">
+                                    {memo.sender_position}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </Card>
+                </div>
             </div>
         </AppLayout>
     );

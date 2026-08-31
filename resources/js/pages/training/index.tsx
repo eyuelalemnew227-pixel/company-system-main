@@ -286,6 +286,21 @@ export default function TrainingDashboard({ stats, myEnrollments = [], topLeader
                     <Sparkles className="mr-2 h-4 w-4 text-purple-600" /> Generate AI Quiz
                   </Button>
                 </Link>
+                <Link href="/training/attendance" className="block">
+                  <Button variant="ghost" className="w-full justify-start text-xs font-medium h-9">
+                    <Users className="mr-2 h-4 w-4 text-blue-600" /> Training Attendance Register
+                  </Button>
+                </Link>
+                <Link href="/training/feedback" className="block">
+                  <Button variant="ghost" className="w-full justify-start text-xs font-medium h-9">
+                    <FileCheck className="mr-2 h-4 w-4 text-emerald-600" /> 11 Amharic Questionnaires
+                  </Button>
+                </Link>
+                <Link href="/training/reports" className="block">
+                  <Button variant="ghost" className="w-full justify-start text-xs font-medium h-9">
+                    <Award className="mr-2 h-4 w-4 text-purple-600" /> Consolidated Training Report
+                  </Button>
+                </Link>
                 <Link href="/training/sop" className="block">
                   <Button variant="ghost" className="w-full justify-start text-xs font-medium h-9">
                     <FileCheck className="mr-2 h-4 w-4 text-emerald-600" /> SOP Compliance Hub

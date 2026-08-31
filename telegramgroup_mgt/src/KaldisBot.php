@@ -261,12 +261,23 @@ interface TelegramClientInterface
 
     /** @return array<string, mixed> */
     public function editMessageReplyMarkup(int $chatId, int $messageId, ?array $replyMarkup): array;
+
+    /** @return array<string, mixed> */
+    public function deleteMessage(int $chatId, int $messageId): array;
 }
 
 final class TelegramClient implements TelegramClientInterface
 {
     public function __construct(private string $token)
     {
+    }
+
+    public function deleteMessage(int $chatId, int $messageId): array
+    {
+        return $this->requestJson('deleteMessage', [
+            'chat_id' => $chatId,
+            'message_id' => $messageId,
+        ]);
     }
 
     public function getUpdates(?int $offset = null, int $timeout = 25): array
@@ -289,7 +300,8 @@ final class TelegramClient implements TelegramClientInterface
         $params = [
             'chat_id' => $chatId,
             'text' => $text,
-            'disable_web_page_preview' => true,
+            'parse_mode' => 'HTML',
+            'disable_web_page_preview' => false,
         ];
 
         if ($messageThreadId !== null) {
@@ -590,17 +602,31 @@ final class SQLiteStorage
         return $row === false ? null : $this->hydrateRecord($row);
     }
 
-    public function findCommunicationBySourceMessage(int $chatId, int $messageId): ?CommunicationRecord
+    public function findCommunicationBySourceMessage(int $chatId, int $messageId, ?int $threadId = null): ?CommunicationRecord
     {
         $stmt = $this->pdo->prepare(
-            'SELECT * FROM communications WHERE source_chat_id = :source_chat_id AND source_message_id = :source_message_id'
+            'SELECT * FROM communications WHERE source_chat_id = :source_chat_id AND (source_message_id = :source_message_id OR ho_summary_message_id = :source_message_id) LIMIT 1'
         );
         $stmt->execute([
             ':source_chat_id' => $chatId,
             ':source_message_id' => $messageId,
         ]);
         $row = $stmt->fetch();
-        return $row === false ? null : $this->hydrateRecord($row);
+        if ($row !== false) return $this->hydrateRecord($row);
+
+        if ($threadId !== null && $threadId > 0) {
+            $stmt = $this->pdo->prepare(
+                'SELECT * FROM communications WHERE source_chat_id = :source_chat_id AND source_thread_id = :source_thread_id ORDER BY created_at DESC LIMIT 1'
+            );
+            $stmt->execute([
+                ':source_chat_id' => $chatId,
+                ':source_thread_id' => $threadId,
+            ]);
+            $row = $stmt->fetch();
+            if ($row !== false) return $this->hydrateRecord($row);
+        }
+
+        return null;
     }
 
     public function findCommunicationByHoMessageId(int $hoMessageId): ?CommunicationRecord
@@ -865,29 +891,104 @@ final class KaldisBot
         $senderId = isset($sender['id']) ? (int) $sender['id'] : null;
         $senderName = Helpers::displayName($sender);
 
-        if ($text !== '' && str_starts_with($text, '/')) {
-            $tokens = Helpers::parseCommandArguments($text);
-            $command = strtolower($tokens[0] ?? '');
+        // Auto Record & Auto Welcome Message for New Group Members
+        if (isset($message['new_chat_members']) && is_array($message['new_chat_members'])) {
+            foreach ($message['new_chat_members'] as $newMember) {
+                if (($newMember['is_bot'] ?? false) === true) continue;
 
-            if ($command === '/bind_topic') {
-                $this->handleBindTopicCommand($message, $tokens, $chatId, $threadId);
-                return;
+                $newUserId = (int) ($newMember['id'] ?? 0);
+                $memberName = Helpers::displayName($newMember);
+
+                // Auto-record new group member in Staff Roster database
+                if ($newUserId > 0) {
+                    $existingUser = $this->storage->getUser($newUserId);
+                    if ($existingUser === null) {
+                        $detectedRegion = $this->config->regionForChatId($chatId);
+                        $hoId = (int) ($this->config->hoGroupChatId ?? 0);
+
+                        $assignedRegion = $detectedRegion;
+                        $assignedRole = Roles::BRANCH_MANAGER;
+                        $assignedDept = null;
+
+                        if ($chatId === $hoId || ($detectedRegion === null && $chatId !== 0)) {
+                            if ($chatId === $hoId) {
+                                $assignedRegion = 'Head Office';
+                                $assignedRole = Roles::DEPARTMENT_HEAD;
+                                $assignedDept = 'Operations';
+                            }
+                        }
+
+                        $this->storage->upsertUser(new UserProfile(
+                            telegramUserId: $newUserId,
+                            displayName: $memberName,
+                            role: $assignedRole,
+                            region: $assignedRegion,
+                            branchName: null,
+                            department: $assignedDept,
+                            canForward: false,
+                        ));
+                    }
+                }
+
+                if (!empty($this->config->autoWelcome)) {
+                    $welcomeTpl = (string) ($this->config->welcomeMessage ?? 'Welcome {name} to {group}! Please follow group rules.');
+                    $groupTitle = (string) ($chat['title'] ?? 'Kaldis Communication Group');
+                    $msgText = str_replace(['{name}', '{group}'], [$memberName, $groupTitle], $welcomeTpl);
+                    $this->client->sendMessage($chatId, "👋 <b>{$msgText}</b>", $threadId);
+                }
             }
-
-            if ($chatType === 'private') {
-                $this->handlePrivateCommand($message, $tokens, $senderId, $senderName);
-                return;
-            }
-
             return;
         }
 
-        if ($chatType === 'private') {
-            $this->client->sendMessage(
-                $chatId,
-                'Use /help to see the registration commands for the Kaldis communication bot.'
-            );
-            return;
+        // Auto-record any message sender in Staff Roster if not yet registered
+        if ($senderId !== null && $senderId > 0) {
+            $existingUser = $this->storage->getUser($senderId);
+            if ($existingUser === null) {
+                $detectedRegion = $this->config->regionForChatId($chatId);
+                $hoId = (int) ($this->config->hoGroupChatId ?? 0);
+
+                $assignedRegion = $detectedRegion;
+                $assignedRole = Roles::BRANCH_MANAGER;
+                $assignedDept = null;
+
+                if ($chatId === $hoId) {
+                    $assignedRegion = 'Head Office';
+                    $assignedRole = Roles::DEPARTMENT_HEAD;
+                    $assignedDept = 'Operations';
+                }
+
+                $this->storage->upsertUser(new UserProfile(
+                    telegramUserId: $senderId,
+                    displayName: $senderName,
+                    role: $assignedRole,
+                    region: $assignedRegion,
+                    branchName: null,
+                    department: $assignedDept,
+                    canForward: false,
+                ));
+            }
+        }
+
+        // Anti-Link Protection
+        $antiLink = is_array($this->config) ? (!empty($this->config['anti_link_protection'])) : (!empty($this->config->antiLinkProtection ?? false));
+        if ($text !== '' && $antiLink) {
+            if (preg_match('/(https?:\/\/|t\.me\/|www\.)[^\s]+/i', $text)) {
+                $userProfile = $senderId !== null ? $this->storage->getUser($senderId) : null;
+                $isAllowed = $userProfile !== null && in_array($userProfile->role, [Roles::REGIONAL_MANAGER, Roles::OPERATIONS_DIRECTOR], true);
+                if (!$isAllowed && isset($message['message_id'])) {
+                    try {
+                        $this->client->deleteMessage($chatId, (int) $message['message_id']);
+                        $this->client->sendMessage(
+                            $chatId,
+                            "⚠️ <b>Link Removed</b>: Unverified links are strictly prohibited in Kaldis groups for security, @{$senderName}.",
+                            $threadId
+                        );
+                    } catch (\Throwable $e) {
+                        // ignore delete failures if permissions missing
+                    }
+                    return;
+                }
+            }
         }
 
         if ($threadId === null) {
@@ -899,7 +1000,7 @@ final class KaldisBot
             return;
         }
 
-        if (str_starts_with($groupKey, 'ho:')) {
+        if ($groupKey === 'Head Office') {
             $binding = $this->storage->getTopicBinding($groupKey, $threadId);
             if ($binding !== null && isset($message['reply_to_message'])) {
                 $this->processHoReply($message, $binding, $senderId, $senderName);
@@ -912,22 +1013,7 @@ final class KaldisBot
             return;
         }
 
-        $region = $this->regionForGroupKey($groupKey);
-        if ($region === null) {
-            return;
-        }
-
-        $this->createOrGetReference(
-            chatId: $chatId,
-            messageId: (int) ($message['message_id'] ?? 0),
-            threadId: $threadId,
-            region: $region,
-            branchName: $this->storage->getUser($senderId ?? 0)?->branchName,
-            topicName: $binding->topicName,
-            department: $binding->department,
-            senderId: $senderId,
-            senderName: $senderName,
-        );
+        $this->processBranchCommunication($message, $binding, $senderId, $senderName);
     }
 
     /** @param array<string, mixed> $callbackQuery */
@@ -1160,6 +1246,163 @@ final class KaldisBot
         $this->client->sendMessage($chatId, sprintf("Bound topic '%s' to department '%s'.", $topicName, $department));
     }
 
+    private function getTopicUrl(?string $groupKey, string $topicName, int $chatId): string
+    {
+        $cleanChatId = (string) preg_replace('/^-100|^-\s*/', '', (string) $chatId);
+        $allBindings = $this->storage->getAllTopicBindings();
+        foreach ($allBindings as $b) {
+            if ($groupKey !== null && $b->groupKey === $groupKey && strcasecmp($b->topicName, $topicName) === 0) {
+                return sprintf('https://t.me/c/%s/%d', $cleanChatId, $b->threadId);
+            }
+        }
+        foreach ($allBindings as $b) {
+            if (strcasecmp($b->topicName, $topicName) === 0) {
+                return sprintf('https://t.me/c/%s/%d', $cleanChatId, $b->threadId);
+            }
+        }
+        return 'https://t.me';
+    }
+
+    private function handleTopicJumpCommand(string $command, int $chatId, ?int $threadId): void
+    {
+        $groupKey = $this->groupKey($chatId);
+        $allBindings = $this->storage->getAllTopicBindings();
+
+        $cmdMap = [
+            '/it' => 'IT',
+            '/hr' => 'HR',
+            '/finance' => 'Finance',
+            '/ops' => 'Operations',
+            '/operations' => 'Operations',
+            '/supply' => 'Supply Chain',
+            '/supplychain' => 'Supply Chain',
+            '/maintenance' => 'Maintenance',
+            '/fb' => 'F&B',
+            '/td' => 'T&D',
+            '/qa' => 'QA',
+            '/logistics' => 'Logistics & BI',
+            '/suggestions' => 'Suggestions & Improvements',
+            '/announcements' => 'Announcements',
+        ];
+
+        if (isset($cmdMap[$command])) {
+            $targetTopic = $cmdMap[$command];
+            $matchedBinding = null;
+
+            foreach ($allBindings as $b) {
+                if ($groupKey !== null && $b->groupKey === $groupKey && strcasecmp($b->topicName, $targetTopic) === 0) {
+                    $matchedBinding = $b;
+                    break;
+                }
+            }
+            if ($matchedBinding === null) {
+                foreach ($allBindings as $b) {
+                    if (strcasecmp($b->topicName, $targetTopic) === 0) {
+                        $matchedBinding = $b;
+                        break;
+                    }
+                }
+            }
+
+            if ($matchedBinding !== null) {
+                $cleanChat = (string) preg_replace('/^-100|^-\s*/', '', (string) $chatId);
+                $url = sprintf('https://t.me/c/%s/%d', $cleanChat, $matchedBinding->threadId);
+                $this->client->sendMessage(
+                    $chatId,
+                    sprintf("📌 <b>%s Topic Thread</b>\nHO Department: <b>%s</b>\nThread ID: <code>%d</code>\n\n🔗 Click below to jump directly to this topic thread:", $matchedBinding->topicName, $matchedBinding->department, $matchedBinding->threadId),
+                    $threadId,
+                    [
+                        'inline_keyboard' => [
+                            [
+                                ['text' => sprintf('➡️ Open %s Topic', $matchedBinding->topicName), 'url' => $url]
+                            ]
+                        ]
+                    ]
+                );
+                return;
+            }
+        }
+
+        // Default: Full Directory Menu
+        $text = "☕ <b>KALDIS TOPICS DIRECTORY</b> ☕\nSelect a topic below to jump directly to its conversation thread:";
+        $keyboard = [
+            [
+                ['text' => '📢 Announcements', 'url' => $this->getTopicUrl($groupKey, 'Announcements', $chatId)],
+                ['text' => '⚙️ Operations', 'url' => $this->getTopicUrl($groupKey, 'Operations', $chatId)],
+            ],
+            [
+                ['text' => '💼 HR', 'url' => $this->getTopicUrl($groupKey, 'HR', $chatId)],
+                ['text' => '💰 Finance', 'url' => $this->getTopicUrl($groupKey, 'Finance', $chatId)],
+            ],
+            [
+                ['text' => '📦 Supply Chain', 'url' => $this->getTopicUrl($groupKey, 'Supply Chain', $chatId)],
+                ['text' => '💻 IT', 'url' => $this->getTopicUrl($groupKey, 'IT', $chatId)],
+            ],
+            [
+                ['text' => '🔧 Maintenance', 'url' => $this->getTopicUrl($groupKey, 'Maintenance', $chatId)],
+                ['text' => '☕ F&B', 'url' => $this->getTopicUrl($groupKey, 'F&B', $chatId)],
+            ],
+            [
+                ['text' => '🎓 T&D', 'url' => $this->getTopicUrl($groupKey, 'T&D', $chatId)],
+                ['text' => '🛡️ QA', 'url' => $this->getTopicUrl($groupKey, 'QA', $chatId)],
+            ],
+            [
+                ['text' => '🚚 Logistics & BI', 'url' => $this->getTopicUrl($groupKey, 'Logistics & BI', $chatId)],
+                ['text' => '💡 Suggestions', 'url' => $this->getTopicUrl($groupKey, 'Suggestions & Improvements', $chatId)],
+            ],
+        ];
+
+        $this->client->sendMessage($chatId, $text, $threadId, ['inline_keyboard' => $keyboard]);
+    }
+
+    /** @param array<string, mixed> $message */
+    private function processBranchCommunication(array $message, TopicBinding $binding, ?int $senderId, string $senderName): void
+    {
+        $messageId = (int) ($message['message_id'] ?? 0);
+        $threadId = (int) ($message['message_thread_id'] ?? 0);
+        $chatId = (int) ($message['chat']['id'] ?? 0);
+        if ($messageId <= 0 || $threadId <= 0 || $chatId === 0) return;
+
+        $region = $binding->groupKey;
+        $userProfile = $senderId !== null ? $this->storage->getUser($senderId) : null;
+
+        // Allow Regional Manager or Director to reply directly & resolve locally without forwarding to HO
+        if (isset($message['reply_to_message'])) {
+            $repliedMsgId = (int) ($message['reply_to_message']['message_id'] ?? 0);
+            $record = $this->storage->findCommunicationBySourceMessage($chatId, $repliedMsgId, $threadId);
+
+            if ($record !== null) {
+                $isManager = $userProfile !== null && in_array($userProfile->role, [Roles::REGIONAL_MANAGER, Roles::OPERATIONS_DIRECTOR], true);
+                if ($isManager || $senderId > 0) {
+                    $record->status = 'resolved';
+                    $record->regionalManagerUserId = $senderId;
+                    $this->storage->updateCommunication($record);
+
+                    $this->client->sendMessage(
+                        $chatId,
+                        "✅ <b>Reference {$record->referenceNo} Resolved</b>\nRegional Manager @{$senderName} answered this request locally without forwarding to HO.",
+                        $threadId
+                    );
+                    return;
+                }
+            }
+        }
+
+        $branchName = $userProfile?->branchName;
+
+        $this->createOrGetReference(
+            chatId: $chatId,
+            messageId: $messageId,
+            threadId: $threadId,
+            region: $region,
+            branchName: $branchName,
+            topicName: $binding->topicName,
+            department: $binding->department,
+            senderId: $senderId,
+            senderName: $senderName,
+        );
+    }
+
     private function createOrGetReference(
         int $chatId,
         int $messageId,
@@ -1277,11 +1520,11 @@ final class KaldisBot
     {
         $region = $this->config->regionForChatId($chatId);
         if ($region !== null) {
-            return 'region:' . $region;
+            return $region;
         }
 
-        if ($this->config->hoGroupChatId === $chatId) {
-            return $this->hoGroupKey();
+        if ((int) $this->config->hoGroupChatId === $chatId) {
+            return 'Head Office';
         }
 
         return null;
@@ -1289,13 +1532,16 @@ final class KaldisBot
 
     private function hoGroupKey(): string
     {
-        return 'ho:head_office';
+        return 'Head Office';
     }
 
     private function regionForGroupKey(string $groupKey): ?string
     {
         if (str_starts_with($groupKey, 'region:')) {
             return substr($groupKey, strlen('region:'));
+        }
+        if (in_array($groupKey, ['Region 1', 'Region 2', 'Head Office'], true)) {
+            return $groupKey;
         }
 
         return null;

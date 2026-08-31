@@ -31,6 +31,7 @@ class MemoController extends Controller
     {
         $user = Auth::user();
         $canViewAll = $user->can('memo.view.all');
+        $isSuperAdmin = $canViewAll;
         $query = Memo::with('creator');
 
         // Unless granted memo.view.all, users only view their own saved memos
@@ -108,7 +109,7 @@ class MemoController extends Controller
             'departments' => $departments,
             'branches' => $branches,
             'userSignature' => $userSignature,
-            'isSuperAdmin' => $canViewAll,
+            'isSuperAdmin' => $isSuperAdmin,
         ]);
     }
 
@@ -337,6 +338,58 @@ class MemoController extends Controller
     }
 
     /**
+     * Generate and stream direct PDF representation of the memorandum.
+     */
+    public function pdf($memo)
+    {
+        if (!($memo instanceof Memo)) {
+            $memo = Memo::where('id', $memo)->orWhere('memo_id', $memo)->firstOrFail();
+        }
+
+        $memo->load('creator');
+        $companyName = MemoSetting::getValue('COMPANY_NAME', "KALDI'S COFFEE P.L.C.");
+        $memoDateStr = $memo->memo_date ? $memo->memo_date->format('d/m/Y') : date('d/m/Y');
+
+        $logoSetting = MemoSetting::getValue('COMPANY_LOGO_URL') ?: '/images/logo.png';
+        $logoPath = public_path(ltrim($logoSetting, '/'));
+        if (!file_exists($logoPath)) {
+            $logoPath = public_path('images/logo.png');
+        }
+
+        $logoBase64 = '';
+        if (file_exists($logoPath)) {
+            $type = pathinfo($logoPath, PATHINFO_EXTENSION);
+            $data = file_get_contents($logoPath);
+            $logoBase64 = 'data:image/' . $type . ';base64,' . base64_encode($data);
+        }
+
+        $contentHtml = nl2br($memo->content);
+
+        if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.memo', [
+                'memo' => $memo,
+                'companyName' => $companyName,
+                'companyLogo' => $logoBase64,
+                'memoDateStr' => $memoDateStr,
+                'contentHtml' => $contentHtml,
+            ]);
+
+            return response($pdf->output(), 200, [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="memo-' . $memo->memo_id . '.pdf"',
+            ]);
+        }
+
+        return response()->view('pdf.memo', [
+            'memo' => $memo,
+            'companyName' => $companyName,
+            'companyLogo' => $logoBase64,
+            'memoDateStr' => $memoDateStr,
+            'contentHtml' => $contentHtml,
+        ]);
+    }
+
+    /**
      * Dispatch Telegram Notification for memo.
      */
     public function sendTelegram(Memo $memo)
@@ -375,17 +428,21 @@ class MemoController extends Controller
     protected function dispatchTelegramNotification(Memo $memo): bool
     {
         try {
-            $companyName = MemoSetting::getValue('COMPANY_NAME', "KALDI'S COFFEE P.L.C.");
-            $memoDateStr = $memo->memo_date ? $memo->memo_date->format('M j, Y') : date('M j, Y');
-            
-            $text = "📄 <b>INTERNAL MEMORANDUM</b> 📄\n\n";
-            $text .= "<b>Company:</b> " . e($companyName) . "\n";
-            $text .= "<b>Memo ID:</b> <code>" . e($memo->memo_id) . "</code>\n";
-            $text .= "<b>Subject:</b> " . e($memo->title) . "\n";
-            $text .= "<b>Date:</b> " . e($memoDateStr) . "\n";
-            $text .= "<b>From:</b> " . e($memo->sender_name) . "\n";
-            $text .= "<b>To:</b> " . e($memo->recipient_name) . "\n\n";
-            $text .= "🌐 <a href=\"" . route('memos.show', $memo->id) . "\">Click here to view full memorandum</a>";
+            $memoDateStr = $memo->memo_date ? $memo->memo_date->format('d/m/Y') : date('d/m/Y');
+            $generatedAtStr = now()->format('d/m/Y \a\t H:i:s');
+            $pdfUrl = route('memos.pdf', $memo->id);
+
+            // Strip HTML tags for clean plain content excerpt in Telegram
+            $plainContent = trim(strip_tags($memo->content));
+
+            $text = "📄 <b>KALDI'S COFFEE MEMORANDUM</b> 📄\n\n";
+            $text .= "📌 <b>Title:</b> " . e($memo->title) . "\n";
+            $text .= "📅 <b>Date:</b> " . e($memoDateStr) . "\n";
+            $text .= "👤 <b>From:</b> " . e($memo->sender_name) . "\n";
+            $text .= "👥 <b>To:</b> " . e($memo->recipient_name) . "\n\n";
+            $text .= "📝 <b>Content:</b>\n" . e($plainContent) . "\n\n";
+            $text .= "📎 <b>View PDF:</b> <a href=\"" . e($pdfUrl) . "\">Click Here</a>\n\n";
+            $text .= "Generated on " . $generatedAtStr;
 
             $sentAny = false;
             $sentChatIds = [];

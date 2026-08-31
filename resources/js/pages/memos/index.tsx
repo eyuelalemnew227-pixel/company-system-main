@@ -120,10 +120,10 @@ export default function MemosIndex({ memos, filters, stats, departments, isSuper
     };
 
     const handleCopyLink = (memoId: number) => {
-        const url = `${window.location.origin}/memos/${memoId}`;
+        const url = `${window.location.origin}/memos/${memoId}/pdf`;
         navigator.clipboard.writeText(url);
         setCopiedId(memoId);
-        toast.success('Memorandum link copied!');
+        toast.success('Direct PDF link copied to clipboard!');
         setTimeout(() => setCopiedId(null), 2500);
     };
 

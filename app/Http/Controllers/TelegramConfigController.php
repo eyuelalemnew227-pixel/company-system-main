@@ -834,10 +834,22 @@ class TelegramConfigController extends Controller
             abort(403, 'Only managers and administrators can send broadcast announcements.');
         }
 
+        $rawTarget = $request->input('target_audience') ?: $request->input('target', 'everything');
+        $targetAudience = match ($rawTarget) {
+            'all', 'everything' => 'everything',
+            'branches', 'all_branches' => 'all_branches',
+            'users', 'all_users' => 'all_users',
+            'department', 'department_users' => 'department_users',
+            'specific_branch' => 'specific_branch',
+            default => 'everything',
+        };
+
+        $request->merge(['target_audience' => $targetAudience]);
+
         $validated = $request->validate([
             'target_audience' => ['required', 'string', 'in:all_users,all_branches,department_users,specific_branch,everything'],
-            'department_id' => ['required_if:target_audience,department_users', 'nullable', 'integer'],
-            'branch_id' => ['required_if:target_audience,specific_branch', 'nullable', 'integer'],
+            'department_id' => ['nullable'],
+            'branch_id' => ['nullable'],
             'title' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string', 'max:2000'],
         ]);
@@ -847,8 +859,8 @@ class TelegramConfigController extends Controller
             $validated['target_audience'],
             $validated['title'],
             $validated['message'],
-            $validated['department_id'] ?? null,
-            $validated['branch_id'] ?? null
+            !empty($validated['department_id']) ? (int) $validated['department_id'] : null,
+            !empty($validated['branch_id']) ? (int) $validated['branch_id'] : null
         );
 
         return redirect()->back()->with('success', 'Broadcast announcement queued and dispatched successfully.');

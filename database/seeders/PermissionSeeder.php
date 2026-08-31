@@ -262,7 +262,7 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'export telecom data']);
         Permission::firstOrCreate(['name' => 'manage telecom connections']);
 
-        // Online Training & LMS
+        // Online Training & LMS Reports
         Permission::firstOrCreate(['name' => 'training.online.view']);
         Permission::firstOrCreate(['name' => 'training.online.courses.manage']);
         Permission::firstOrCreate(['name' => 'training.online.courses.enroll']);
@@ -277,12 +277,19 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'training.online.forums.manage']);
         Permission::firstOrCreate(['name' => 'training.online.reports.view']);
 
-        // Structured Training & Agendas
+        // Structured Training, Attendance, Feedback & Agendas
         Permission::firstOrCreate(['name' => 'training.agendas.view']);
         Permission::firstOrCreate(['name' => 'training.agendas.create']);
         Permission::firstOrCreate(['name' => 'training.master_schedule.view']);
         Permission::firstOrCreate(['name' => 'training.master_schedule.create']);
-        Permission::firstOrCreate(['name' => 'training.evaluations.manage']);
+        Permission::firstOrCreate(['name' => 'training.attendance.view']);
+        Permission::firstOrCreate(['name' => 'training.attendance.create']);
+        Permission::firstOrCreate(['name' => 'training.attendance.manage']);
+        Permission::firstOrCreate(['name' => 'training.feedback.view']);
+        Permission::firstOrCreate(['name' => 'training.feedback.create']);
+        Permission::firstOrCreate(['name' => 'training.feedback.manage']);
+        Permission::firstOrCreate(['name' => 'training.reports.view']);
+        Permission::firstOrCreate(['name' => 'training.reports.export']);
         Permission::firstOrCreate(['name' => 'training.settings.manage']);
 
         // Spare Part Categories
