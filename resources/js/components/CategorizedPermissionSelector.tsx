@@ -58,8 +58,6 @@ export default function CategorizedPermissionSelector({
 }: CategorizedPermissionSelectorProps) {
     const [search, setSearch] = useState('');
     const [activeCategoryFilter, setActiveCategoryFilter] = useState<string>('ALL');
-    const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
-
     const categoryGroups = useMemo(() => {
         if (serverGrouped && Object.keys(serverGrouped).length > 0) {
             return serverGrouped;
@@ -69,6 +67,18 @@ export default function CategorizedPermissionSelector({
 
     // Categories list
     const categories = useMemo(() => Object.keys(categoryGroups), [categoryGroups]);
+
+    // Initialize all categories as collapsed by default
+    const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>(() => {
+        const initial: Record<string, boolean> = {};
+        const groups = serverGrouped && Object.keys(serverGrouped).length > 0
+            ? serverGrouped
+            : groupPermissionsList(allPermissions);
+        Object.keys(groups).forEach((cat) => {
+            initial[cat] = true;
+        });
+        return initial;
+    });
 
     // Filter permissions by search query and category tab
     const filteredGroups = useMemo(() => {
@@ -211,10 +221,10 @@ export default function CategorizedPermissionSelector({
                             type="button"
                             variant="ghost"
                             size="sm"
-                            onClick={Object.keys(collapsedCategories).length > 0 ? expandAll : collapseAll}
+                            onClick={Object.values(collapsedCategories).some(Boolean) ? expandAll : collapseAll}
                             className="h-9 text-xs"
                         >
-                            {Object.keys(collapsedCategories).length > 0 ? 'Expand All' : 'Collapse All'}
+                            {Object.values(collapsedCategories).some(Boolean) ? 'Expand All' : 'Collapse All'}
                         </Button>
                     </div>
                 </div>
@@ -293,7 +303,7 @@ export default function CategorizedPermissionSelector({
             ) : (
                 <div className="space-y-4">
                     {Object.entries(filteredGroups).map(([cat, perms]) => {
-                        const isCollapsed = !!collapsedCategories[cat];
+                        const isCollapsed = search.trim().length > 0 ? false : (collapsedCategories[cat] ?? true);
                         const isFullySelected = isCategoryFullySelected(perms);
                         const isPartiallySelected = isCategoryPartiallySelected(perms);
                         const selectedInCat = perms.filter((p) => safeSelectedPermissions.includes(p)).length;

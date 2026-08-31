@@ -81,9 +81,10 @@ interface Props {
         todayCount: number;
     };
     departments: DepartmentItem[];
+    isSuperAdmin?: boolean;
 }
 
-export default function MemosIndex({ memos, filters, stats, departments }: Props) {
+export default function MemosIndex({ memos, filters, stats, departments, isSuperAdmin }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [department, setDepartment] = useState(filters.department || 'all');
     const [tab, setTab] = useState(filters.tab || 'all');
@@ -130,12 +131,12 @@ export default function MemosIndex({ memos, filters, stats, departments }: Props
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Internal Memorandum" />
 
-            <div className="space-y-6 p-6">
-                {/* Header */}
+            <div className="flex flex-1 flex-col gap-6 p-6">
+                {/* Header Banner */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                            <FileText className="h-7 w-7 text-amber-700 dark:text-amber-500" />
+                            <FileText className="h-6 w-6 text-amber-700 dark:text-amber-500" />
                             Internal Memorandum
                         </h1>
                         <p className="text-sm text-muted-foreground">
@@ -150,12 +151,14 @@ export default function MemosIndex({ memos, filters, stats, departments }: Props
                                 Templates
                             </Button>
                         </Link>
-                        <Link href="/memo-settings">
-                            <Button variant="outline" size="sm" className="gap-2">
-                                <Settings className="h-4 w-4" />
-                                Settings
-                            </Button>
-                        </Link>
+                        {isSuperAdmin && (
+                            <Link href="/memo-settings">
+                                <Button variant="outline" size="sm" className="gap-2">
+                                    <Settings className="h-4 w-4" />
+                                    Settings
+                                </Button>
+                            </Link>
+                        )}
                         <Link href="/memos/create">
                             <Button size="sm" className="gap-2 bg-amber-700 text-white hover:bg-amber-800 dark:bg-amber-600 dark:hover:bg-amber-700">
                                 <Plus className="h-4 w-4" />
@@ -170,22 +173,22 @@ export default function MemosIndex({ memos, filters, stats, departments }: Props
                     <Card className="border border-slate-200 shadow-sm dark:border-slate-800">
                         <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                             <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                                Total Memorandums
+                                Total Memos
                             </CardTitle>
-                            <FileText className="h-4 w-4 text-amber-700 dark:text-amber-500" />
+                            <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                                 {stats.total}
                             </div>
-                            <p className="text-xs text-muted-foreground">All published internal memos</p>
+                            <p className="text-xs text-muted-foreground">Internal memorandums</p>
                         </CardContent>
                     </Card>
 
                     <Card className="border border-slate-200 shadow-sm dark:border-slate-800">
                         <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
                             <CardTitle className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                                Created by Me
+                                Authored by Me
                             </CardTitle>
                             <UserCheck className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         </CardHeader>
@@ -216,18 +219,20 @@ export default function MemosIndex({ memos, filters, stats, departments }: Props
                 {/* Filters & Tabs Card */}
                 <Card className="border border-slate-200 shadow-sm dark:border-slate-800">
                     <CardContent className="p-4 space-y-4">
-                        <Tabs
-                            value={tab}
-                            onValueChange={(v) => {
-                                setTab(v);
-                                handleFilterChange({ tab: v });
-                            }}
-                        >
-                            <TabsList className="grid w-full grid-cols-2 max-w-xs">
-                                <TabsTrigger value="all">All Memos</TabsTrigger>
-                                <TabsTrigger value="my">My Memos</TabsTrigger>
-                            </TabsList>
-                        </Tabs>
+                        {isSuperAdmin && (
+                            <Tabs
+                                value={tab}
+                                onValueChange={(v) => {
+                                    setTab(v);
+                                    handleFilterChange({ tab: v });
+                                }}
+                            >
+                                <TabsList className="grid w-full grid-cols-2 max-w-xs">
+                                    <TabsTrigger value="all">All Memos</TabsTrigger>
+                                    <TabsTrigger value="my">My Memos</TabsTrigger>
+                                </TabsList>
+                            </Tabs>
+                        )}
 
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <div className="relative">

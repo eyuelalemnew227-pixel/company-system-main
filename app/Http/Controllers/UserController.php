@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\Models\Permission;
 
 class UserController extends Controller {
     public function index() {
@@ -108,10 +109,14 @@ class UserController extends Controller {
             ];
         });
 
+        $allPermissions = Permission::all()->pluck('name')->toArray();
+
         return Inertia::render('users/create', [
             'roles' => Role::all()->pluck('name'),
             'rolesWithPermissions' => $rolesWithPermissions,
             'employees' => $employees,
+            'allPermissions' => $allPermissions,
+            'groupedPermissions' => PermissionCategoryHelper::groupPermissions($allPermissions),
         ]);
     }
 
@@ -123,6 +128,8 @@ class UserController extends Controller {
             'password' => 'required|string|min:8',
             'roles' => 'array',
             'roles.*' => 'string|exists:roles,name',
+            'direct_permissions' => 'array',
+            'direct_permissions.*' => 'string|exists:permissions,name',
         ]);
 
         $user = User::create([
@@ -132,9 +139,15 @@ class UserController extends Controller {
             'password' => bcrypt($request->password),
         ]);
 
-        if ($request->roles) {
-            $user->syncRoles($request->roles);
+        if ($request->has('roles')) {
+            $user->syncRoles($request->input('roles', []));
+        } else {
+            $user->syncRoles([]);
         }
+        if ($request->has('direct_permissions')) {
+            $user->syncPermissions($request->input('direct_permissions', []));
+        }
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
         return to_route('users.index')->with('message', 'User Created Successfully!');
     }
@@ -156,6 +169,8 @@ class UserController extends Controller {
             ];
         });
 
+        $allPermissions = Permission::all()->pluck('name')->toArray();
+
         return Inertia::render('users/edit', [
             'user' => [
                 'id' => $user->id,
@@ -163,6 +178,7 @@ class UserController extends Controller {
                 'name' => $user->name,
                 'email' => $user->email,
                 'roles' => $user->roles->pluck('name'),
+                'direct_permissions' => $user->getDirectPermissions()->pluck('name'),
                 'employee' => $user->employee ? [
                     'id' => $user->employee->id,
                     'employee_code' => $user->employee->employee_code,
@@ -172,6 +188,8 @@ class UserController extends Controller {
             'roles' => Role::all()->pluck('name'),
             'rolesWithPermissions' => $rolesWithPermissions,
             'employees' => $employees,
+            'allPermissions' => $allPermissions,
+            'groupedPermissions' => PermissionCategoryHelper::groupPermissions($allPermissions),
         ]);
     }
 
@@ -187,6 +205,8 @@ class UserController extends Controller {
             'password' => 'nullable|string|min:8',
             'roles' => 'array',
             'roles.*' => 'string|exists:roles,name',
+            'direct_permissions' => 'array',
+            'direct_permissions.*' => 'string|exists:permissions,name',
         ]);
 
         $updateData = [
@@ -202,9 +222,15 @@ class UserController extends Controller {
 
         $user->update($updateData);
 
-        if ($request->roles) {
-            $user->syncRoles($request->roles);
+        if ($request->has('roles')) {
+            $user->syncRoles($request->input('roles', []));
+        } else {
+            $user->syncRoles([]);
         }
+        if ($request->has('direct_permissions')) {
+            $user->syncPermissions($request->input('direct_permissions', []));
+        }
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
         return to_route('users.index')->with('message', 'User Updated Successfully!');
     }

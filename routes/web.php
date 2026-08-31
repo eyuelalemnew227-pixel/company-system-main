@@ -537,7 +537,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('telegram-config/bots/{bot}/remove-webhook', [\App\Http\Controllers\TelegramConfigController::class, 'removeBotWebhook'])->name('telegram-config.bots.remove-webhook');
 
     // Telecom Management
-    Route::middleware(['permission:view telecom management', 'it_department'])->prefix('telecom')->group(function () {
+    Route::middleware(['permission:view telecom management'])->prefix('telecom')->group(function () {
         Route::get('dashboard', [TelecomDashboardController::class, 'index'])->name('telecom.dashboard');
 
         Route::get('phone-numbers/export', [TelecomPhoneNumberController::class, 'export'])->name('telecom.phone-numbers.export');
@@ -569,7 +569,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Training Management System
-    Route::prefix('training')->name('training.')->middleware(['permission:training.view'])->group(function () {
+    Route::prefix('training')->name('training.')->middleware(['permission:training.online.view|training.agendas.view|training.agendas.create|training.master_schedule.view|training.master_schedule.create|training.evaluations.manage|training.settings.manage'])->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Training\TrainingDashboardController::class, 'index'])->name('dashboard');
 
         // Courses & Lessons
@@ -620,27 +620,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/sop/{sop}/acknowledge', [\App\Http\Controllers\Training\SopController::class, 'acknowledge'])->name('sop.acknowledge');
         Route::delete('/sop/{sop}', [\App\Http\Controllers\Training\SopController::class, 'destroy'])->name('sop.destroy');
 
-        // Agendas & Structured Training Proposals (Image 1 Format)
-        Route::get('/agendas', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'agendasIndex'])->name('agendas.index');
-        Route::get('/agendas/create', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'createAgenda'])->name('agendas.create');
-        Route::post('/agendas', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'storeAgenda'])->name('agendas.store');
-        Route::get('/agendas/{agenda}', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'showAgenda'])->name('agendas.show');
+        // Agendas & Structured Training Proposals
+        Route::get('/agendas', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'agendasIndex'])->middleware('permission:training.agendas.view|training.agendas.create')->name('agendas.index');
+        Route::get('/agendas/create', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'createAgenda'])->middleware('permission:training.agendas.create')->name('agendas.create');
+        Route::post('/agendas', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'storeAgenda'])->middleware('permission:training.agendas.create')->name('agendas.store');
+        Route::get('/agendas/{agenda}', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'showAgenda'])->middleware('permission:training.agendas.view|training.agendas.create')->name('agendas.show');
 
-        // Master Schedules & Timetable (Image 2 Format)
-        Route::get('/schedules', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'schedulesIndex'])->name('schedules.index');
-        Route::get('/schedules/create', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'createSchedule'])->name('schedules.create');
-        Route::post('/schedules', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'storeSchedule'])->name('schedules.store');
-        Route::post('/schedules/{schedule}/publish', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'publishSchedule'])->name('schedules.publish');
-        Route::post('/schedules/items/{item}/approve', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'approveScheduleItem'])->name('schedules.items.approve');
+        // Master Schedules & Timetable
+        Route::get('/schedules', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'schedulesIndex'])->middleware('permission:training.master_schedule.view|training.master_schedule.create')->name('schedules.index');
+        Route::get('/schedules/create', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'createSchedule'])->middleware('permission:training.master_schedule.create')->name('schedules.create');
+        Route::post('/schedules', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'storeSchedule'])->middleware('permission:training.master_schedule.create')->name('schedules.store');
+        Route::post('/schedules/{schedule}/publish', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'publishSchedule'])->middleware('permission:training.master_schedule.create')->name('schedules.publish');
+        Route::post('/schedules/items/{item}/approve', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'approveScheduleItem'])->middleware('permission:training.master_schedule.create')->name('schedules.items.approve');
 
         // Trainer Department Evaluation
-        Route::get('/evaluations', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'evaluationsIndex'])->name('evaluations.index');
-        Route::get('/evaluations/create/{item?}', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'createEvaluation'])->name('evaluations.create');
-        Route::post('/evaluations', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'storeEvaluation'])->name('evaluations.store');
+        Route::get('/evaluations', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'evaluationsIndex'])->middleware('permission:training.evaluations.manage')->name('evaluations.index');
+        Route::get('/evaluations/create/{item?}', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'createEvaluation'])->middleware('permission:training.evaluations.manage')->name('evaluations.create');
+        Route::post('/evaluations', [\App\Http\Controllers\Training\TrainingStructuredScheduleController::class, 'storeEvaluation'])->middleware('permission:training.evaluations.manage')->name('evaluations.store');
 
         // Training Settings & Questionnaire Customization
-        Route::get('/settings', [\App\Http\Controllers\Training\TrainingSettingsController::class, 'index'])->name('settings.index');
-        Route::post('/settings', [\App\Http\Controllers\Training\TrainingSettingsController::class, 'update'])->name('settings.update');
+        Route::get('/settings', [\App\Http\Controllers\Training\TrainingSettingsController::class, 'index'])->middleware('permission:training.settings.manage')->name('settings.index');
+        Route::post('/settings', [\App\Http\Controllers\Training\TrainingSettingsController::class, 'update'])->middleware('permission:training.settings.manage')->name('settings.update');
 
         Route::post('/agendas/{event}/check-in', [\App\Http\Controllers\Training\AgendaController::class, 'checkIn'])->name('agendas.check-in');
 

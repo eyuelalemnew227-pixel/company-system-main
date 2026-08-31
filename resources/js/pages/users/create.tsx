@@ -179,38 +179,38 @@ export default function CreateUsers({
                             <div className="space-y-3 pt-2">
                                 <Label className="text-base font-semibold">Select Assignable Roles</Label>
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                                    {roles.map((role) => (
-                                        <div
-                                            key={role}
-                                            onClick={() => {
-                                                if (data.roles.includes(role)) {
-                                                    setData('roles', data.roles.filter((r) => r !== role));
-                                                } else {
-                                                    setData('roles', [...data.roles, role]);
-                                                }
-                                            }}
-                                            className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-all select-none ${
-                                                data.roles.includes(role)
-                                                    ? 'border-primary bg-primary/5 shadow-xs'
-                                                    : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950'
-                                            }`}
-                                        >
-                                            <Checkbox
-                                                id={role}
-                                                checked={data.roles.includes(role)}
-                                                onCheckedChange={(checked) => {
-                                                    if (checked) {
-                                                        setData('roles', [...data.roles, role]);
-                                                    } else {
-                                                        setData('roles', data.roles.filter((r) => r !== role));
-                                                    }
-                                                }}
-                                            />
-                                            <Label htmlFor={role} className="cursor-pointer font-semibold">
-                                                {role}
-                                            </Label>
-                                        </div>
-                                    ))}
+                                    {roles.map((role) => {
+                                        const isChecked = data.roles.includes(role);
+                                        const elemId = `role-${role.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+                                        return (
+                                            <label
+                                                key={role}
+                                                htmlFor={elemId}
+                                                className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-all select-none ${
+                                                    isChecked
+                                                        ? 'border-primary bg-primary/5 shadow-xs'
+                                                        : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950'
+                                                }`}
+                                            >
+                                                <Checkbox
+                                                    id={elemId}
+                                                    checked={isChecked}
+                                                    onCheckedChange={(checked) => {
+                                                        if (checked) {
+                                                            if (!data.roles.includes(role)) {
+                                                                setData('roles', [...data.roles, role]);
+                                                            }
+                                                        } else {
+                                                            setData('roles', data.roles.filter((r) => r !== role));
+                                                        }
+                                                    }}
+                                                />
+                                                <span className="cursor-pointer font-semibold text-sm">
+                                                    {role}
+                                                </span>
+                                            </label>
+                                        );
+                                    })}
                                 </div>
                                 <InputError message={errors.roles} />
                             </div>

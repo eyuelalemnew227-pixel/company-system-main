@@ -254,6 +254,37 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'manage external links']);
         Permission::firstOrCreate(['name' => 'view employee directory']);
 
+        // Telecom Management
+        Permission::firstOrCreate(['name' => 'view telecom management']);
+        Permission::firstOrCreate(['name' => 'telecom.phone_numbers.manage']);
+        Permission::firstOrCreate(['name' => 'telecom.broadbands.manage']);
+        Permission::firstOrCreate(['name' => 'telecom.providers.manage']);
+        Permission::firstOrCreate(['name' => 'export telecom data']);
+        Permission::firstOrCreate(['name' => 'manage telecom connections']);
+
+        // Online Training & LMS
+        Permission::firstOrCreate(['name' => 'training.online.view']);
+        Permission::firstOrCreate(['name' => 'training.online.courses.manage']);
+        Permission::firstOrCreate(['name' => 'training.online.courses.enroll']);
+        Permission::firstOrCreate(['name' => 'training.online.quizzes.take']);
+        Permission::firstOrCreate(['name' => 'training.online.quizzes.manage']);
+        Permission::firstOrCreate(['name' => 'training.online.question_banks.manage']);
+        Permission::firstOrCreate(['name' => 'training.online.ai_quiz.generate']);
+        Permission::firstOrCreate(['name' => 'training.online.sop.view']);
+        Permission::firstOrCreate(['name' => 'training.online.sop.manage']);
+        Permission::firstOrCreate(['name' => 'training.online.certificates.manage']);
+        Permission::firstOrCreate(['name' => 'training.online.leaderboard.view']);
+        Permission::firstOrCreate(['name' => 'training.online.forums.manage']);
+        Permission::firstOrCreate(['name' => 'training.online.reports.view']);
+
+        // Structured Training & Agendas
+        Permission::firstOrCreate(['name' => 'training.agendas.view']);
+        Permission::firstOrCreate(['name' => 'training.agendas.create']);
+        Permission::firstOrCreate(['name' => 'training.master_schedule.view']);
+        Permission::firstOrCreate(['name' => 'training.master_schedule.create']);
+        Permission::firstOrCreate(['name' => 'training.evaluations.manage']);
+        Permission::firstOrCreate(['name' => 'training.settings.manage']);
+
         // Spare Part Categories
         Permission::firstOrCreate(['name' => 'view spare part categories']);
         Permission::firstOrCreate(['name' => 'create spare part categories']);

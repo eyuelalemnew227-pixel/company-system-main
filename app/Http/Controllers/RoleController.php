@@ -63,8 +63,11 @@ class RoleController extends Controller {
 		]);
 
 		if ($request->has('permissions')) {
-			$role->syncPermissions($request->permissions);
+			$role->syncPermissions($request->input('permissions', []));
+		} else {
+			$role->syncPermissions([]);
 		}
+		app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
 		return to_route('roles.index')->with('message', 'Role Created Successfully!');
 	}
@@ -107,8 +110,11 @@ class RoleController extends Controller {
 		$role->save();
 
 		if ($request->has('permissions')) {
-			$role->syncPermissions($request->permissions);
+			$role->syncPermissions($request->input('permissions', []));
+		} else {
+			$role->syncPermissions([]);
 		}
+		app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
 		return to_route('roles.index')->with('message', 'Role Updated Successfully!');
 	}
@@ -118,6 +124,7 @@ class RoleController extends Controller {
 	 */
 	public function destroy(Role $role) {
 		$role->delete();
+		app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 		return to_route('roles.index')->with('message', 'Role Deleted Successfully!');
 	}
 
@@ -161,6 +168,7 @@ class RoleController extends Controller {
 			$role->revokePermissionTo($request->permission);
 			$msg = "Revoked permission '{$request->permission}' from '{$role->name}'";
 		}
+		app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
 		return back()->with('message', $msg);
 	}

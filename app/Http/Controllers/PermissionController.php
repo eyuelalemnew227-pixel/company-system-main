@@ -37,6 +37,7 @@ class PermissionController extends Controller {
 		Permission::create($request->validate([
 			'name' => ['required', 'string', 'max:255', 'unique:permissions,name']
 		]));
+		app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
 		return to_route('permissions.index')->with('message', 'Permission Created Successfully!');
 	}
@@ -46,6 +47,7 @@ class PermissionController extends Controller {
 		$permission->update($request->validate([
 			'name' => 'required|string|max:255|unique:permissions,name,' . $permission->id,
 		]));
+		app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 
 		return to_route('permissions.index')->with('message', 'Permission Updated Successfully!');
 	}
@@ -53,6 +55,7 @@ class PermissionController extends Controller {
 	// destroy method
 	public function destroy(Permission $permission) {
 		$permission->delete();
+		app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
 		return to_route('permissions.index')->with('message', 'Permission Deleted Successfully!');
 	}
 }

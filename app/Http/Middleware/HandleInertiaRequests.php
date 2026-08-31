@@ -38,8 +38,19 @@ class HandleInertiaRequests extends Middleware {
 	public function share(Request $request): array {
 		[$message, $author] = str(Inspiring::quotes()->random())->explode('-');
 
-		$permissions = $request->user()
-			? $request->user()->getAllPermissions()->pluck('name')
+		$user = $request->user();
+		$isSuperAdmin = $user ? $user->hasRole('Super Admin') : false;
+
+		$userPermissions = $user ? $user->getAllPermissions()->pluck('name') : collect();
+		$permissions = $user
+			? ($isSuperAdmin
+				? \Spatie\Permission\Models\Permission::pluck('name')->filter(function ($name) use ($userPermissions) {
+					if (str_starts_with($name, 'memo.') || str_starts_with($name, 'training.online.') || str_starts_with($name, 'telecom.') || $name === 'view telecom management') {
+						return $userPermissions->contains($name);
+					}
+					return true;
+				})->values()
+				: $userPermissions)
 			: collect();
 
 		return [
@@ -47,11 +58,11 @@ class HandleInertiaRequests extends Middleware {
 			'name' => config('app.name'),
 			'quote' => ['message' => trim($message), 'author' => trim($author)],
 			'auth' => [
-				'user' => $request->user(),
+				'user' => $user ? array_merge($user->toArray(), ['roles' => $user->roles->pluck('name')]) : null,
 				'permissions' => $permissions,
-				'roles' => $request->user() ? $request->user()->getRoleNames() : [],
-				'canManageExpenseBudget' => $request->user()
-					? ExpenseBudgetAccess::canManage($request->user())
+				'roles' => $user ? $user->roles->pluck('name') : [],
+				'canManageExpenseBudget' => $user
+					? ExpenseBudgetAccess::canManage($user)
 					: false,
 			],
 

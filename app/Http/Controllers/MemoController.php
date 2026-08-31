@@ -30,7 +30,13 @@ class MemoController extends Controller
     public function index(Request $request): Response
     {
         $user = Auth::user();
+        $canViewAll = $user->can('memo.view.all');
         $query = Memo::with('creator');
+
+        // Unless granted memo.view.all, users only view their own saved memos
+        if (!$canViewAll) {
+            $query->where('created_by', $user->id);
+        }
 
         // Search
         if ($search = $request->input('search')) {
@@ -54,7 +60,7 @@ class MemoController extends Controller
 
         // Tab Filtering
         $tab = $request->input('tab', 'all');
-        if ($tab === 'my') {
+        if ($tab === 'my' && $isSuperAdmin) {
             $query->where('created_by', $user->id);
         }
 
@@ -69,10 +75,16 @@ class MemoController extends Controller
         });
 
         // Statistics
-        $totalMemos = Memo::count();
-        $myMemosCount = Memo::where('created_by', $user->id)->count();
-        $todayMemosCount = Memo::whereDate('created_at', now()->today())->count();
-        
+        if ($isSuperAdmin) {
+            $totalMemos = Memo::count();
+            $myMemosCount = Memo::where('created_by', $user->id)->count();
+            $todayMemosCount = Memo::whereDate('created_at', now()->today())->count();
+        } else {
+            $totalMemos = Memo::where('created_by', $user->id)->count();
+            $myMemosCount = $totalMemos;
+            $todayMemosCount = Memo::where('created_by', $user->id)->whereDate('created_at', now()->today())->count();
+        }
+
         $departments = Department::orderBy('name')->get(['id', 'name']);
         $branches = Branch::orderBy('name')->get(['id', 'name']);
 
@@ -96,6 +108,7 @@ class MemoController extends Controller
             'departments' => $departments,
             'branches' => $branches,
             'userSignature' => $userSignature,
+            'isSuperAdmin' => $canViewAll,
         ]);
     }
 
@@ -204,10 +217,14 @@ class MemoController extends Controller
         $memo->load('creator');
         $user = Auth::user();
         
+        if ($memo->created_by !== $user->id && !$user->can('memo.view.all')) {
+            abort(403, 'Unauthorized action. You can only view your own memorandums.');
+        }
+
         $companyName = MemoSetting::getValue('COMPANY_NAME', "KALDI'S COFFEE P.L.C.");
         $companyLogoUrl = MemoSetting::getValue('COMPANY_LOGO_URL') ?: '/images/logo.png';
 
-        $canEdit = ($user->id === $memo->created_by) || $user->hasRole(['Super Admin', 'Admin']);
+        $canEdit = ($user->id === $memo->created_by) || $user->can('memo.edit');
 
         // Convert memo_date to clean short date string Y-m-d
         $memoArray = $memo->toArray();
@@ -239,7 +256,7 @@ class MemoController extends Controller
     public function edit(Memo $memo): Response
     {
         $user = Auth::user();
-        if ($memo->created_by !== $user->id && !$user->hasRole(['Super Admin', 'Admin'])) {
+        if ($memo->created_by !== $user->id && !$user->can('memo.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -264,7 +281,7 @@ class MemoController extends Controller
     public function update(Request $request, Memo $memo)
     {
         $user = Auth::user();
-        if ($memo->created_by !== $user->id && !$user->hasRole(['Super Admin', 'Admin'])) {
+        if ($memo->created_by !== $user->id && !$user->can('memo.edit')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -310,7 +327,7 @@ class MemoController extends Controller
     public function destroy(Memo $memo)
     {
         $user = Auth::user();
-        if ($memo->created_by !== $user->id && !$user->hasRole(['Super Admin', 'Admin'])) {
+        if ($memo->created_by !== $user->id && !$user->can('memo.delete')) {
             abort(403, 'Unauthorized action.');
         }
 

@@ -13,8 +13,8 @@ class MemoSettingController extends Controller
     public function index()
     {
         $user = Auth::user();
-        if (!$user->hasRole(['Super Admin', 'Admin'])) {
-            // Non-admins view settings
+        if (!$user->can('memo.settings')) {
+            abort(403, 'Unauthorized action. Memo Settings are restricted to users with explicit memo.settings permission.');
         }
 
         $settings = MemoSetting::all()->pluck('setting_value', 'setting_key')->toArray();
@@ -44,8 +44,8 @@ class MemoSettingController extends Controller
     public function update(Request $request)
     {
         $user = Auth::user();
-        if (!$user->hasRole(['Super Admin', 'Admin'])) {
-            abort(403, 'Unauthorized action.');
+        if (!$user->can('memo.settings')) {
+            abort(403, 'Unauthorized action. Memo Settings are restricted to users with explicit memo.settings permission.');
         }
 
         $validated = $request->validate([

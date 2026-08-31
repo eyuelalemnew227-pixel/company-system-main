@@ -19,20 +19,16 @@ class EnsureItDepartment
             abort(403, 'Unauthorized.');
         }
 
-        // Super Admin always has access
-        if ($user->hasRole('Super Admin')) {
+        // Super Admin and IT Admin always have access
+        if ($user->hasRole('Super Admin') || $user->hasRole('IT Admin')) {
             return $next($request);
         }
 
-        // Check if user's employee department is IT Department
-        $departmentName = $user->employee?->department?->name ?? '';
-        $isItDepartment = strtoupper(trim($departmentName)) === 'IT'
-            || str_contains(strtolower($departmentName), 'it department');
-
-        if ($isItDepartment && $user->can('view telecom management')) {
+        // Allow any user with view telecom management permission regardless of department
+        if ($user->can('view telecom management')) {
             return $next($request);
         }
 
-        abort(403, 'Access denied. Telecom Management is restricted to the IT Department.');
+        abort(403, 'Access denied. You do not have permission to view Telecom Management.');
     }
 }

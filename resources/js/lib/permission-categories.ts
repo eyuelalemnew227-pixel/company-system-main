@@ -9,6 +9,7 @@ export function getPermissionCategory(permission: string): string {
     if (perm.startsWith('ticket.')) return 'Tickets & Support';
     if (perm.startsWith('memo.')) return 'Memos & Documents';
     if (perm.startsWith('training.')) return 'Training & LMS';
+    if (perm === 'view telecom management' || perm.startsWith('telecom.')) return 'Telecom & SMS';
 
     const containsAny = (needles: string[]) => needles.some((needle) => perm.includes(needle));
 

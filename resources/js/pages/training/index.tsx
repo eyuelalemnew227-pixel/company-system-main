@@ -48,11 +48,6 @@ export default function TrainingDashboard({ stats, myEnrollments = [], topLeader
                   <BookOpen className="mr-2 h-4 w-4" /> Explore Courses
                 </Button>
               </Link>
-              <Link href="/training/agendas">
-                <Button className="bg-purple-800 text-white hover:bg-purple-900 font-semibold shadow-md">
-                  <FileCheck className="mr-2 h-4 w-4" /> Department Agendas
-                </Button>
-              </Link>
               <Link href="/training/schedules">
                 <Button className="bg-emerald-800 text-white hover:bg-emerald-900 font-semibold shadow-md">
                   <Clock className="mr-2 h-4 w-4" /> Master Timetables

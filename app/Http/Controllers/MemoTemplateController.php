@@ -13,10 +13,15 @@ class MemoTemplateController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $templates = MemoTemplate::where('user_id', $user->id)->latest()->get();
+        if ($user->can('memo.templates.manage')) {
+            $templates = MemoTemplate::latest()->get();
+        } else {
+            $templates = MemoTemplate::where('user_id', $user->id)->latest()->get();
+        }
 
         return Inertia::render('memos/templates/index', [
             'templates' => $templates,
+            'isSuperAdmin' => $user->can('memo.templates.manage'),
         ]);
     }
 
@@ -45,7 +50,7 @@ class MemoTemplateController extends Controller
     public function destroy(MemoTemplate $memoTemplate)
     {
         $user = Auth::user();
-        if ($memoTemplate->user_id !== $user->id) {
+        if ($memoTemplate->user_id !== $user->id && !$user->can('memo.templates.manage')) {
             abort(403, 'Unauthorized action.');
         }
 

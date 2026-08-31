@@ -1,3 +1,4 @@
+import CategorizedPermissionSelector from '@/components/CategorizedPermissionSelector';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,7 @@ import AppLayout from '@/layouts/app-layout';
 import { groupPermissionsList } from '@/lib/permission-categories';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem, EmployeeOption } from '@/types';
-import { RolesWithPermissionsMap } from '@/types/role_permission';
+import { GroupedPermissions, RolesWithPermissionsMap } from '@/types/role_permission';
 import { UserRole } from '@/types/users';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { Check, ChevronsUpDown, ShieldCheck } from 'lucide-react';
@@ -24,23 +25,30 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
+interface EditUserProps {
+    roles: string[];
+    rolesWithPermissions?: RolesWithPermissionsMap;
+    employees: EmployeeOption[];
+    user: UserRole & { direct_permissions?: string[] };
+    allPermissions?: string[];
+    groupedPermissions?: GroupedPermissions;
+}
+
 export default function EditUser({
     roles,
     rolesWithPermissions,
     employees,
     user,
-}: {
-    roles: string[];
-    rolesWithPermissions?: RolesWithPermissionsMap;
-    employees: EmployeeOption[];
-    user: UserRole;
-}) {
+    allPermissions = [],
+    groupedPermissions,
+}: EditUserProps) {
     const { data, setData, put, errors, processing } = useForm({
         employee_id: user.employee_id?.toString() || '',
         name: user.name,
         email: user.email,
         password: '',
         roles: user.roles || [],
+        direct_permissions: user.direct_permissions || [],
     });
 
     function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -182,38 +190,38 @@ export default function EditUser({
                             <div className="space-y-3 pt-2">
                                 <Label className="text-base font-semibold">Assigned Roles</Label>
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                                    {roles.map((role) => (
-                                        <div
-                                            key={role}
-                                            onClick={() => {
-                                                if (data.roles.includes(role)) {
-                                                    setData('roles', data.roles.filter((r) => r !== role));
-                                                } else {
-                                                    setData('roles', [...data.roles, role]);
-                                                }
-                                            }}
-                                            className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-all select-none ${
-                                                data.roles.includes(role)
-                                                    ? 'border-primary bg-primary/5 shadow-xs'
-                                                    : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950'
-                                            }`}
-                                        >
-                                            <Checkbox
-                                                id={role}
-                                                checked={data.roles.includes(role)}
-                                                onCheckedChange={(checked) => {
-                                                    if (checked) {
-                                                        setData('roles', [...data.roles, role]);
-                                                    } else {
-                                                        setData('roles', data.roles.filter((r) => r !== role));
-                                                    }
-                                                }}
-                                            />
-                                            <Label htmlFor={role} className="cursor-pointer font-semibold">
-                                                {role}
-                                            </Label>
-                                        </div>
-                                    ))}
+                                    {roles.map((role) => {
+                                        const isChecked = data.roles.includes(role);
+                                        const elemId = `role-${role.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+                                        return (
+                                            <label
+                                                key={role}
+                                                htmlFor={elemId}
+                                                className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-all select-none ${
+                                                    isChecked
+                                                        ? 'border-primary bg-primary/5 shadow-xs'
+                                                        : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-950'
+                                                }`}
+                                            >
+                                                <Checkbox
+                                                    id={elemId}
+                                                    checked={isChecked}
+                                                    onCheckedChange={(checked) => {
+                                                        if (checked) {
+                                                            if (!data.roles.includes(role)) {
+                                                                setData('roles', [...data.roles, role]);
+                                                            }
+                                                        } else {
+                                                            setData('roles', data.roles.filter((r) => r !== role));
+                                                        }
+                                                    }}
+                                                />
+                                                <span className="cursor-pointer font-semibold text-sm">
+                                                    {role}
+                                                </span>
+                                            </label>
+                                        );
+                                    })}
                                 </div>
                                 <InputError message={errors.roles} />
                             </div>
@@ -247,6 +255,25 @@ export default function EditUser({
                                         ))}
                                     </div>
                                 </Card>
+                            )}
+
+                            {/* Direct User Extra Permissions */}
+                            {allPermissions.length > 0 && (
+                                <div className="space-y-3 pt-4 border-t">
+                                    <div>
+                                        <Label className="text-base font-semibold">Direct Specific Permissions (Optional)</Label>
+                                        <p className="text-xs text-muted-foreground mt-0.5">
+                                            Grant specific individual module permissions directly to this user (e.g. Telecom Management or Online Training) without changing their assigned roles.
+                                        </p>
+                                    </div>
+                                    <CategorizedPermissionSelector
+                                        allPermissions={allPermissions}
+                                        groupedPermissions={groupedPermissions}
+                                        selectedPermissions={data.direct_permissions}
+                                        onChange={(perms) => setData('direct_permissions', perms)}
+                                    />
+                                    <InputError message={errors.direct_permissions} />
+                                </div>
                             )}
 
                             <div className="flex justify-end pt-2">

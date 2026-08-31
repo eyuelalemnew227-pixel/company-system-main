@@ -11,7 +11,7 @@ class PermissionCategoryHelper
     {
         $perm = strtolower(trim($permission));
 
-        // Prefix check (e.g. ticket.view, memo.create, training.courses.manage)
+        // Prefix and exact module checks
         if (str_starts_with($perm, 'ticket.')) {
             return 'Tickets & Support';
         }
@@ -20,6 +20,9 @@ class PermissionCategoryHelper
         }
         if (str_starts_with($perm, 'training.')) {
             return 'Training & LMS';
+        }
+        if ($perm === 'view telecom management' || str_starts_with($perm, 'telecom.')) {
+            return 'Telecom & SMS';
         }
 
         // Keyword rules for action-entity format (e.g. "view users", "create roles", "manage weekly budgets")
