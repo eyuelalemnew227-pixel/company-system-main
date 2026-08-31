@@ -33,7 +33,18 @@ type Props = {
 		create_regular: boolean;
 		mark_late_payment: boolean;
 	};
-	paymentSettings: Array<{ payment_method: string; example: string | null }>;
+	paymentSettings: Array<{ 
+        payment_method: string; 
+        payment_type: string;
+        validation_type: string;
+        validation_pattern: string | null;
+        example: string | null;
+        reference_prefix: string | null;
+        auto_fill_prefix: boolean;
+        reference_length: number | null;
+        reference_required: boolean;
+        is_active: boolean;
+    }>;
 };
 
 type OrderItem = {
@@ -77,6 +88,8 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 		title: '',
 		description: '',
 	});
+	
+	const [transactionRefError, setTransactionRefError] = useState<string>('');
 
 	// Handle initial order type based on permissions
 	useMemo(() => {
@@ -162,12 +175,42 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 	const { flash } = usePage<SharedData>().props;
 
 	useEffect(() => {
+		if (data.payment_method) {
+            const setting = paymentSettings.find(s => s.payment_method === data.payment_method);
+			if (setting?.auto_fill_prefix && setting.reference_prefix) {
+                if (!data.transaction_reference?.startsWith(setting.reference_prefix)) {
+                    setData('transaction_reference', setting.reference_prefix);
+                }
+            }
+		}
+	}, [data.payment_method]);
+
+	const validateTransactionReference = (method: string, value: string): string => {
+        const setting = paymentSettings.find(s => s.payment_method === method);
+        if (!setting) return '';
+
+        if (setting.reference_required && !value) {
+            return 'format_error';
+        }
+
+		return '';
+	};
+
+	useEffect(() => {
+		if ((isWalkinCustomer || data.payment_method) && data.payment_method !== 'RTGS (Bank to Other Bank)') {
+			if (data.transaction_reference) {
+				setTransactionRefError(validateTransactionReference(data.payment_method, data.transaction_reference));
+			} else {
+				setTransactionRefError('');
+			}
+		} else {
+			setTransactionRefError('');
+		}
+	}, [data.transaction_reference, data.payment_method, isWalkinCustomer]);
+
+	useEffect(() => {
 		if (flash.success) {
-			setSuccessModal({
-				isOpen: true,
-				title: 'Success',
-				description: flash.success,
-			});
+			toast.success(flash.success, { duration: 4000 });
 		}
 		if (flash.error) {
 			toast.error(flash.error);
@@ -175,14 +218,31 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 	}, [flash.success, flash.error]);
 
 	const handleSubmit: FormEventHandler = (e) => {
+		// Always prevent the default page reload first, then use reportValidity()
+		// to trigger the browser's native "Please fill out this field." tooltip.
 		e.preventDefault();
+		if (!(e.currentTarget as HTMLFormElement).reportValidity()) {
+			return;
+		}
+		
+		const isPaid = isWalkinCustomer; // In store, Walkin Customer is implicitly Paid
+		const method = data.payment_method;
+        const setting = paymentSettings.find(s => s.payment_method === method);
+		if (isPaid && setting?.reference_required) {
+			const error = validateTransactionReference(method, data.transaction_reference || '');
+			if (error) {
+				setTransactionRefError(error);
+				toast.error('Please fix the transaction reference errors before submitting.');
+				return;
+			}
+		}
+		
 		post(route('pre-orders.store'), {
 			onSuccess: () => {
 				// Flash success handled by global listener or this page if it redirects back
 			},
-			onError: (err) => {
-				const message = Object.values(err).flat().join(', ');
-				toast.error(message || 'Failed to create pre-order');
+			onError: () => {
+				toast.error('Unable to create the order. Please review the information and try again.');
 			},
 		});
 	};
@@ -219,11 +279,14 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 							</div>
 
 							<div className="grid gap-2">
-								<Label htmlFor="father_name">Father Name</Label>
+								<Label htmlFor="father_name">
+									Father Name <span className="text-black">*</span>
+								</Label>
 								<Input
 									id="father_name"
 									value={data.father_name}
 									onChange={(e) => setData('father_name', e.target.value)}
+									required
 									placeholder="Father's name"
 								/>
 								<InputError message={errors.father_name} />
@@ -253,9 +316,9 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 										id="phone_number"
 										value={data.phone_number}
 										onChange={(e) => {
-											// Only allow digits and limit to 9 characters starting with 9 or 7
+											// Only allow digits, up to 9 characters
 											const value = e.target.value.replace(/\D/g, '');
-											if (value === '' || ((value.startsWith('9') || value.startsWith('7')) && value.length <= 9)) {
+											if (value.length <= 9) {
 												setData('phone_number', value);
 											}
 										}}
@@ -274,7 +337,8 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 					<div className="space-y-4 rounded-lg border p-6">
 						<h3 className="text-lg font-semibold">Order Details</h3>
 
-						<div className="grid gap-4 md:grid-cols-2">
+						{/* Order Type + Voucher Code (walkin only) row */}
+						<div className={`grid gap-4 ${isWalkinCustomer ? 'md:grid-cols-2' : 'md:grid-cols-1 md:max-w-sm'}`}>
 							<div className="grid gap-2">
 								<Label htmlFor="order_type_id">Order Type *</Label>
 								<Select
@@ -296,7 +360,8 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 								<InputError message={errors.order_type_id} />
 							</div>
 
-							{isWalkinCustomer ? (
+							{/* Voucher Code — walkin only */}
+							{isWalkinCustomer && (
 								<div className="grid gap-2">
 									<Label htmlFor="voucher_code">Voucher Code *</Label>
 									<Input
@@ -308,43 +373,10 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 									/>
 									<InputError message={errors.voucher_code} />
 								</div>
-							) : (
-								<div className="grid gap-2">
-									<Label htmlFor="transaction_reference">Transaction Reference</Label>
-									<Input
-										id="transaction_reference"
-										value={data.transaction_reference}
-										onChange={(e) => setData('transaction_reference', e.target.value)}
-										placeholder={paymentSettings.find(s => s.payment_method === data.payment_method)?.example
-											? `e.g. ${paymentSettings.find(s => s.payment_method === data.payment_method)?.example}`
-											: 'Enter transaction reference'}
-									/>
-									{data.payment_method && paymentSettings.find(s => s.payment_method === data.payment_method)?.example && (
-										<p className="text-xs text-muted-foreground">
-											Expected format example: <code className="bg-muted px-1 rounded">{paymentSettings.find(s => s.payment_method === data.payment_method)?.example}</code>
-										</p>
-									)}
-									<InputError message={errors.transaction_reference} />
-								</div>
 							)}
 						</div>
 
-						{!isWalkinCustomer && (
-							<div className="grid gap-2">
-								<Label htmlFor="payment_method">Payment Method</Label>
-								<Select value={data.payment_method} onValueChange={(value) => setData('payment_method', value)}>
-									<SelectTrigger>
-										<SelectValue placeholder="Select payment method" />
-									</SelectTrigger>
-									<SelectContent>
-										{paymentSettings.map((s) => (
-											<SelectItem key={s.payment_method} value={s.payment_method}>{s.payment_method}</SelectItem>
-										))}
-									</SelectContent>
-								</Select>
-								<InputError message={errors.payment_method} />
-							</div>
-						)}
+
 
 						{userPermissions.mark_late_payment && (
 							<div className="flex items-center space-x-2 pt-2">
@@ -459,7 +491,7 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 						<Button type="button" variant="outline" onClick={() => window.history.back()}>
 							Cancel
 						</Button>
-						<Button type="submit" disabled={processing || data.items.length === 0}>
+						<Button type="submit" disabled={processing || data.items.length === 0 || !!transactionRefError}>
 							Create Pre-Order
 						</Button>
 					</div>

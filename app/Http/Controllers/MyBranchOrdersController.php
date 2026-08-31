@@ -107,7 +107,7 @@ class MyBranchOrdersController extends Controller
             $sortDirection = 'desc';
         }
 
-        $perPage = (int) $request->query('per_page', 15);
+        $perPage = (int) $request->query('per_page', 10);
         $orders = $query->orderBy($sortField, $sortDirection)->paginate($perPage)->withQueryString();
 
         // Calculate KPIs for all orders (not just paginated)

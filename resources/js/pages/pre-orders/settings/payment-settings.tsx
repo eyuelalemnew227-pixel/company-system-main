@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { PencilIcon, CheckIcon, XIcon } from 'lucide-react';
+import { PencilIcon, CheckIcon, XIcon, PlusIcon } from 'lucide-react';
 import { ActionSuccessModal } from '@/components/pre-order/action-success-modal';
+import { PaymentMethodModal } from '@/components/pre-order/payment-method-modal';
 
 interface PaymentSetting {
     id: number;
@@ -50,6 +51,15 @@ export default function PaymentSettings({ paymentSettings, adminGroupChatId }: P
     const [adminChatId, setAdminChatId] = useState(adminGroupChatId || '');
     const [isSavingChatId, setIsSavingChatId] = useState(false);
     const [successModal, setSuccessModal] = useState({ isOpen: false, title: '', description: '' });
+    
+    // Modal states
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingSetting, setEditingSetting] = useState<PaymentSetting | null>(null);
+
+    const handleAdd = () => {
+        setEditingSetting(null);
+        setIsModalOpen(true);
+    };
 
     const handleSaveAdminChatId = (e: React.FormEvent) => {
         e.preventDefault();
@@ -143,9 +153,15 @@ export default function PaymentSettings({ paymentSettings, adminGroupChatId }: P
             <div className="container mx-auto p-6 space-y-6">
                 <div className="flex items-center justify-between">
                     <Heading
-                        title="Payment Method Settings & Verification"
-                        description="Configure bank details, account numbers, instructions, and validation rules for each payment method."
+                        title="Payment Method Verification Settings"
+                        description="Configure dynamic validation rules and formats for transaction references by payment method."
                     />
+                    {canManage && (
+                        <Button onClick={handleAdd}>
+                            <PlusIcon className="w-4 h-4 mr-2" />
+                            Add New Payment Method
+                        </Button>
+                    )}
                 </div>
 
                 <Card className="border shadow-sm bg-card">
@@ -313,11 +329,28 @@ export default function PaymentSettings({ paymentSettings, adminGroupChatId }: P
                 </div>
             </div>
 
+            <PaymentMethodModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                editingSetting={editingSetting as any}
+                onSuccess={() => {
+                    const isEdit = Boolean(editingSetting);
+                    setSuccessModal({
+                        isOpen: true,
+                        title: isEdit ? 'Payment Method Updated' : 'Payment Method Added Successfully',
+                        description: isEdit
+                            ? 'The payment method configuration has been updated successfully.'
+                            : 'New payment method has been added to the system successfully.',
+                    });
+                }}
+            />
+
             <ActionSuccessModal
                 isOpen={successModal.isOpen}
                 onClose={() => setSuccessModal({ ...successModal, isOpen: false })}
                 title={successModal.title}
                 description={successModal.description}
+                autoCloseDuration={3000}
             />
         </AppLayout>
     );

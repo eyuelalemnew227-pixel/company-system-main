@@ -175,8 +175,8 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
-			<div className="container mx-auto max-w-7xl px-4 py-6">
-				<div className="mt-6 space-y-6">
+			<div className="container mx-auto max-w-7xl px-4 py-3">
+				<div className="mt-3 space-y-3">
 					{/* KPI - Collection Progress */}
 					<div className="rounded-lg border bg-card p-3">
 						<div className="flex items-center justify-between">
@@ -372,9 +372,10 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 					</div>
 
 					{/* Orders Table */}
-					<div className="rounded-lg border">
-						<Table>
-							<TableHeader>
+					<div className="rounded-lg border overflow-hidden">
+						<div className="max-h-[55vh] lg:max-h-[calc(100vh-280px)] overflow-y-auto relative">
+							<Table>
+								<TableHeader className="sticky top-0 z-10 bg-background shadow-sm">
 								<TableRow>
 									<TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('order_number')}>
 										<div className="flex items-center">
@@ -384,17 +385,17 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 									</TableHead>
 									<TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('first_name')}>
 										<div className="flex items-center">
-											First Name
+											Client Name
 											<SortIcon field="first_name" />
 										</div>
 									</TableHead>
-									<TableHead>Father Name</TableHead>
-									<TableHead>Surname</TableHead>
 									<TableHead>Phone</TableHead>
 									<TableHead>Order Type</TableHead>
+									<TableHead>Payment Method</TableHead>
+									<TableHead>Collection Branch</TableHead>
+									<TableHead>Registering Branch</TableHead>
 									<TableHead>Collection Day</TableHead>
-									<TableHead>Payment Slip</TableHead>
-									<TableHead>Products</TableHead>
+									<TableHead>Product(s)</TableHead>
 									<TableHead className="cursor-pointer hover:bg-muted/50" onClick={() => handleSort('total_amount')}>
 										<div className="flex items-center">
 											Total Amount
@@ -417,9 +418,7 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 										return (
 											<TableRow key={order.id} className={isCollected ? 'opacity-60' : ''}>
 												<TableCell className={isCollected ? 'line-through' : ''}>{order.order_number}</TableCell>
-												<TableCell className={isCollected ? 'line-through' : ''}>{order.first_name}</TableCell>
-												<TableCell className={isCollected ? 'line-through' : ''}>{order.father_name || '-'}</TableCell>
-												<TableCell className={isCollected ? 'line-through' : ''}>{order.surname || '-'}</TableCell>
+												<TableCell className={isCollected ? 'line-through' : ''}>{[order.first_name, order.father_name, order.surname].filter(Boolean).join(' ')}</TableCell>
 												<TableCell className={isCollected ? 'line-through' : ''}>{order.phone_number}</TableCell>
 
 												<TableCell className={isCollected ? 'line-through' : ''}>
@@ -434,27 +433,11 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 														)}
 													</div>
 												</TableCell>
+												<TableCell className={isCollected ? 'line-through' : ''}>{order.payment_method || '-'}</TableCell>
+												<TableCell className={isCollected ? 'line-through' : ''}>{order.collection_branch?.name}</TableCell>
+												<TableCell className={isCollected ? 'line-through' : ''}>{order.registering_branch?.name || '-'}</TableCell>
 
 												<TableCell className={isCollected ? 'line-through' : ''}>{order.collection_day?.name}</TableCell>
-												<TableCell className={isCollected ? 'line-through' : ''}>
-													{(() => {
-														const filename = order.payment_slip || order.transaction_reference?.match(/slip_[\w.-]+\.(?:jpg|jpeg|png)/i)?.[0];
-														return filename ? (
-															<a
-																href={`https://preorder.kaldisbunnaet.com//uploads/${filename}`}
-																target="_blank"
-																rel="noopener noreferrer"
-																className="flex items-center gap-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
-															>
-																<ImageIcon className="size-4" />
-																<span className="text-xs font-medium">View Slip</span>
-																<ExternalLink className="size-3" />
-															</a>
-														) : (
-															<span className="text-muted-foreground">-</span>
-														);
-													})()}
-												</TableCell>
 												<TableCell className={isCollected ? 'line-through' : ''}>
 													<div className="flex flex-col gap-1">
 														{order.items && order.items.length > 0 ? (
@@ -502,6 +485,7 @@ export default function Index({ orders, collectionDays, orderTypes, kpis, produc
 								)}
 							</TableBody>
 						</Table>
+						</div>
 					</div>
 
 					{/* Pagination */}

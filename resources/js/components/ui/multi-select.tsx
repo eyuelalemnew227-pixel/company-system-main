@@ -69,92 +69,98 @@ export function MultiSelect({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className={cn('w-full justify-between min-h-10 h-auto py-2', className)}
-        >
-          <div className="flex flex-wrap gap-1 flex-1 overflow-hidden">
-            {selected.length === 0 ? (
-              <span className="text-muted-foreground">{placeholder}</span>
-            ) : !showSelectedLabels ? (
-              <span className="text-sm font-medium">
-                {selected.length === options.length ? 'All Selected' : `${selected.length} Selected`}
-              </span>
-            ) : (
-              <>
-                {selectedLabels.slice(0, 2).map((label, index) => (
-                  <Badge
-                    key={selected[index]}
-                    variant="secondary"
-                    className="mr-1"
-                    onClick={(e) => handleRemove(selected[index], e)}
-                  >
-                    {label}
-                    <X className="ml-1 h-3 w-3" />
-                  </Badge>
-                ))}
-                {selected.length > 2 && (
-                  <Badge variant="secondary">+{selected.length - 2} more</Badge>
-                )}
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-1 ml-2">
-            {selected.length > 0 && (
-              <X
-                className="h-4 w-4 opacity-50 hover:opacity-100"
-                onClick={handleClearAll}
-              />
-            )}
-            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-          </div>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-full p-0" align="start">
-        <div className="max-h-[300px] overflow-y-auto p-2">
-          {options.length === 0 ? (
-            <div className="py-6 text-center text-sm text-muted-foreground">
-              No options available
+      <div className="relative inline-flex w-full">
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className={cn('w-full justify-between min-h-10 h-auto py-2', selected.length > 0 ? 'pr-14' : '', className)}
+          >
+            <div className="flex flex-wrap gap-1 flex-1 overflow-hidden">
+              {selected.length === 0 ? (
+                <span className="text-muted-foreground">{placeholder}</span>
+              ) : !showSelectedLabels ? (
+                <span className="text-sm font-medium">
+                  {selected.length === options.length ? 'All Selected' : `${selected.length} Selected`}
+                </span>
+              ) : (
+                <>
+                  {selectedLabels.slice(0, 2).map((label, index) => (
+                    <Badge
+                      key={selected[index]}
+                      variant="secondary"
+                      className="mr-1"
+                      onClick={(e) => handleRemove(selected[index], e)}
+                    >
+                      {label}
+                      <X className="ml-1 h-3 w-3" />
+                    </Badge>
+                  ))}
+                  {selected.length > 2 && (
+                    <Badge variant="secondary">+{selected.length - 2} more</Badge>
+                  )}
+                </>
+              )}
             </div>
-          ) : (
-            <div className="space-y-1">
-              <div
-                className="flex items-center space-x-2 p-2 rounded-sm hover:bg-accent cursor-pointer border-b mb-1 pb-2"
-                onClick={handleSelectAll}
-              >
-                <Checkbox
-                  checked={isAllSelected}
-                  onCheckedChange={handleSelectAll}
-                />
-                <label className="flex-1 cursor-pointer text-sm font-medium">
-                  Select All
-                </label>
+            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
+          </Button>
+        </PopoverTrigger>
+        {selected.length > 0 && (
+          <span
+            role="button"
+            tabIndex={0}
+            title="Clear selection"
+            onClick={handleClearAll}
+            onKeyDown={(e) => e.key === 'Enter' && handleClearAll(e as any)}
+            className="absolute right-7 top-1/2 -translate-y-1/2 flex items-center justify-center h-5 w-5 rounded cursor-pointer text-muted-foreground hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-800 dark:hover:text-gray-200 transition-colors z-10"
+          >
+            <X className="h-3.5 w-3.5" />
+          </span>
+        )}
+        <PopoverContent className="w-full p-0" align="start">
+          <div className="max-h-[300px] overflow-y-auto p-2">
+            {options.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">
+                No options available
               </div>
-              {options.map((option) => (
+            ) : (
+              <div className="space-y-1">
                 <div
-                  key={option.value}
-                  className="flex items-center space-x-2 p-2 rounded-sm hover:bg-accent cursor-pointer"
-                  onClick={() => handleSelect(option.value)}
+                  className="flex items-center space-x-2 p-2 rounded-sm hover:bg-accent cursor-pointer border-b mb-1 pb-2"
+                  onClick={handleSelectAll}
                 >
                   <Checkbox
-                    checked={selected.includes(option.value)}
-                    onCheckedChange={() => handleSelect(option.value)}
+                    checked={isAllSelected}
+                    onCheckedChange={handleSelectAll}
                   />
-                  <label className="flex-1 cursor-pointer text-sm">
-                    {option.label}
+                  <label className="flex-1 cursor-pointer text-sm font-medium">
+                    Select All
                   </label>
-                  {selected.includes(option.value) && (
-                    <Check className="h-4 w-4 text-primary" />
-                  )}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </PopoverContent>
+                {options.map((option) => (
+                  <div
+                    key={option.value}
+                    className="flex items-center space-x-2 p-2 rounded-sm hover:bg-accent cursor-pointer"
+                    onClick={() => handleSelect(option.value)}
+                  >
+                    <Checkbox
+                      checked={selected.includes(option.value)}
+                      onCheckedChange={() => handleSelect(option.value)}
+                    />
+                    <label className="flex-1 cursor-pointer text-sm">
+                      {option.label}
+                    </label>
+                    {selected.includes(option.value) && (
+                      <Check className="h-4 w-4 text-primary" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </PopoverContent>
+      </div>
     </Popover>
   );
 }

@@ -35,19 +35,55 @@ class PreOrderPaymentSettingController extends Controller
         return back()->with('success', 'Admin Telegram group chat ID updated successfully.');
     }
 
-    public function update(Request $request, PreOrderPaymentSetting $preOrderPaymentSetting)
+    public function store(Request $request)
     {
         $validated = $request->validate([
+            'payment_method' => 'required|string|max:255|unique:pre_order_payment_settings',
             'account_name' => 'nullable|string|max:255',
             'account_number' => 'nullable|string|max:255',
             'instructions' => 'nullable|string|max:1000',
+            'payment_type' => 'required|string|max:255',
+            'validation_type' => 'required|string|max:255',
             'validation_pattern' => 'nullable|string|max:255',
             'example' => 'nullable|string|max:255',
+            'reference_prefix' => 'nullable|string|max:255',
+            'auto_fill_prefix' => 'boolean',
+            'reference_length' => 'nullable|integer|min:1',
+            'reference_required' => 'boolean',
             'is_active' => 'boolean',
         ]);
 
-        // Specific rule to ensure pattern is a valid regex
-        if (!empty($validated['validation_pattern'])) {
+        if ($validated['validation_type'] === 'Regex Validation' && !empty($validated['validation_pattern'])) {
+            $isValidPattern = @preg_match('/' . $validated['validation_pattern'] . '/', '') !== false;
+            if (!$isValidPattern) {
+                return back()->withErrors(['validation_pattern' => 'The provided regex pattern is invalid.']);
+            }
+        }
+
+        PreOrderPaymentSetting::create($validated);
+
+        return back()->with('success', 'Payment setting created successfully.');
+    }
+
+    public function update(Request $request, PreOrderPaymentSetting $preOrderPaymentSetting)
+    {
+        $validated = $request->validate([
+            'payment_method' => 'required|string|max:255|unique:pre_order_payment_settings,payment_method,' . $preOrderPaymentSetting->id,
+            'account_name' => 'nullable|string|max:255',
+            'account_number' => 'nullable|string|max:255',
+            'instructions' => 'nullable|string|max:1000',
+            'payment_type' => 'required|string|max:255',
+            'validation_type' => 'required|string|max:255',
+            'validation_pattern' => 'nullable|string|max:255',
+            'example' => 'nullable|string|max:255',
+            'reference_prefix' => 'nullable|string|max:255',
+            'auto_fill_prefix' => 'boolean',
+            'reference_length' => 'nullable|integer|min:1',
+            'reference_required' => 'boolean',
+            'is_active' => 'boolean',
+        ]);
+
+        if ($validated['validation_type'] === 'Regex Validation' && !empty($validated['validation_pattern'])) {
             $isValidPattern = @preg_match('/' . $validated['validation_pattern'] . '/', '') !== false;
             if (!$isValidPattern) {
                 return back()->withErrors(['validation_pattern' => 'The provided regex pattern is invalid.']);

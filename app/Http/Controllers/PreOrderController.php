@@ -40,18 +40,23 @@ class PreOrderController extends Controller
                 'items.product:id,product_name',
             ]);
 
-        // Filter by creator unless user has permission to view all
         if (!auth()->user()->can('view all pre-orders')) {
-            $query->where('created_by', auth()->id());
-        }
-
-        // Filter by active holidays only (skip for users who can view all holidays)
-        if (!auth()->user()->can('view all holidays')) {
-            $query->where(function ($q) {
-                $q->whereHas('holiday', function ($hq) {
-                    $hq->where('status', 'Active');
-                })->orWhereNull('holiday_id');
-            });
+            // Branch User Restrictions: Only active holidays for their assigned branch
+            $userBranchId = auth()->user()->employee?->branch_id;
+            
+            $query->where('collection_branch_id', $userBranchId)
+                  ->whereHas('holiday', function ($hq) {
+                      $hq->where('status', 'Active');
+                  });
+        } else {
+            // For users who CAN view all pre-orders, apply the holiday filter if they can't view all holidays
+            if (!auth()->user()->can('view all holidays')) {
+                $query->where(function ($q) {
+                    $q->whereHas('holiday', function ($hq) {
+                        $hq->where('status', 'Active');
+                    })->orWhereNull('holiday_id');
+                });
+            }
         }
 
         if ($search = $request->query('search')) {
@@ -147,7 +152,7 @@ class PreOrderController extends Controller
             $sortDirection = 'desc';
         }
 
-        $perPage = (int) $request->query('per_page', 15);
+        $perPage = (int) $request->query('per_page', 10);
         $preOrders = $query->orderBy($sortField, $sortDirection)
             ->paginate($perPage)
             ->withQueryString();
@@ -251,7 +256,7 @@ class PreOrderController extends Controller
                 'create_regular' => $canCreateRegular,
                 'mark_late_payment' => $user->can('mark pre-order late payment'),
             ],
-            'paymentSettings' => \App\Models\PreOrderPaymentSetting::where('is_active', true)->get(['payment_method', 'example']),
+            'paymentSettings' => \App\Models\PreOrderPaymentSetting::where('is_active', true)->get(),
         ]);
     }
 
@@ -278,9 +283,9 @@ class PreOrderController extends Controller
 
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:255'],
-            'father_name' => ['nullable', 'string', 'max:255'],
+            'father_name' => ['required', 'string', 'max:255'],
             'surname' => ['nullable', 'string', 'max:255'],
-            'phone_number' => ['required', 'string', 'max:9', new EthiopianPhoneNumber],
+            'phone_number' => ['required', 'string', 'max:9'],
             'order_type_id' => ['required', 'integer', 'exists:order_types,id'],
             'collection_day_id' => ['required', 'integer', 'exists:collection_days,id'],
             'collection_branch_id' => ['required', 'integer', 'exists:branches,id'],
@@ -422,7 +427,7 @@ class PreOrderController extends Controller
             }
 
             return redirect()->route('pre-orders.index')
-                ->with('success', "Pre-order {$orderNumber} created successfully.");
+                ->with('success', "Order created successfully.");
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['error' => 'Failed to create pre-order: ' . $e->getMessage()]);
@@ -456,6 +461,15 @@ class PreOrderController extends Controller
     {
         $user = auth()->user();
         $isOwnOrder = $preOrder->created_by === auth()->id();
+        
+        // Branch User active holiday order bypass
+        if (!$user->can('view all pre-orders')) {
+            $userBranchId = $user->employee?->branch_id;
+            $preOrder->load('holiday');
+            if ($userBranchId && $preOrder->collection_branch_id === $userBranchId && $preOrder->holiday && $preOrder->holiday->status === 'Active') {
+                $isOwnOrder = true; // Bypass own order restriction for their branch's active holidays
+            }
+        }
         $preOrder->load('orderType');
         $isWalkin = $preOrder->orderType->name === 'Walkin Customer';
 
@@ -517,7 +531,7 @@ class PreOrderController extends Controller
                 'mark_late_payment' => $user->can('mark pre-order late payment'),
                 'can_cancel' => $user->can('cancel pre-orders'),
             ],
-            'paymentSettings' => \App\Models\PreOrderPaymentSetting::where('is_active', true)->get(['payment_method', 'example']),
+            'paymentSettings' => \App\Models\PreOrderPaymentSetting::where('is_active', true)->get(),
         ]);
     }
 
@@ -525,6 +539,16 @@ class PreOrderController extends Controller
     {
         $user = auth()->user();
         $isOwnOrder = $preOrder->created_by === auth()->id();
+        
+        // Branch User active holiday order bypass
+        if (!$user->can('view all pre-orders')) {
+            $userBranchId = $user->employee?->branch_id;
+            $preOrder->load('holiday');
+            if ($userBranchId && $preOrder->collection_branch_id === $userBranchId && $preOrder->holiday && $preOrder->holiday->status === 'Active') {
+                $isOwnOrder = true; // Bypass own order restriction for their branch's active holidays
+            }
+        }
+        
         $preOrder->load('orderType');
         $isWalkinBefore = $preOrder->orderType->name === 'Walkin Customer';
 
@@ -564,7 +588,7 @@ class PreOrderController extends Controller
 
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:255'],
-            'father_name' => ['nullable', 'string', 'max:255'],
+            'father_name' => ['required', 'string', 'max:255'],
             'surname' => ['nullable', 'string', 'max:255'],
             'phone_number' => ['required', 'string', 'max:9', new EthiopianPhoneNumber],
             'order_type_id' => ['required', 'integer', 'exists:order_types,id'],
@@ -577,26 +601,36 @@ class PreOrderController extends Controller
             'items.*.quantity' => ['required', 'integer', 'min:1'],
             'late_payment' => ['nullable', 'boolean'],
             'payment_method' => [
-                Rule::requiredIf($isPaid),
+                Rule::requiredIf(function () use ($request) {
+                    $orderType = \App\Models\OrderType::find($request->input('order_type_id'));
+                    return $orderType && $orderType->name !== 'Walkin Customer';
+                }),
                 'nullable',
                 'string',
                 Rule::in($validMethods),
             ],
             'transaction_reference' => [
-                $isPaid && !$request->input('voucher_code') ? 'required' : 'nullable',
+                Rule::requiredIf(function () use ($request) {
+                    $orderType = \App\Models\OrderType::find($request->input('order_type_id'));
+                    return $orderType && $orderType->name !== 'Walkin Customer';
+                }),
+                'nullable',
                 'string',
                 'max:255',
                 'unique:pre_orders,transaction_reference,' . $preOrder->id,
-                function ($attribute, $value, $fail) use ($request, $paymentSettings, $isPaid) {
-                    if (!$isPaid || !$value)
+                function ($attribute, $value, $fail) use ($request, $paymentSettings) {
+                    if (!$value)
                         return;
                     $method = $request->input('payment_method');
                     $setting = $paymentSettings->get($method);
                     if ($setting && !empty($setting->validation_pattern)) {
                         if (!preg_match('/' . $setting->validation_pattern . '/i', $value)) {
                             $example = $setting->example ? " Example: {$setting->example}" : "";
-                            $fail("The transaction reference format is invalid for {$method}.{$example}");
+                            $fail("Transaction reference format is invalid.{$example}");
                         }
+                    }
+                    if (!empty($setting->reference_length) && strlen($value) !== $setting->reference_length) {
+                        $fail("Transaction reference must contain exactly {$setting->reference_length} characters.");
                     }
                 },
             ],
@@ -794,7 +828,7 @@ class PreOrderController extends Controller
             }
 
             return redirect()->route('pre-orders.index')
-                ->with('success', "Pre-order {$preOrder->order_number} updated successfully.");
+                ->with('success', "Order updated successfully.");
         } catch (\Exception $e) {
             DB::rollBack();
             return back()->withErrors(['error' => 'Failed to update pre-order: ' . $e->getMessage()]);

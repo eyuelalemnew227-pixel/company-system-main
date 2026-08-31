@@ -52,7 +52,18 @@ type Props = {
         can_cancel: boolean;
         mark_late_payment: boolean;
     };
-    paymentSettings: Array<{ payment_method: string; example: string | null }>;
+    paymentSettings: Array<{ 
+        payment_method: string; 
+        payment_type: string;
+        validation_type: string;
+        validation_pattern: string | null;
+        example: string | null;
+        reference_prefix: string | null;
+        auto_fill_prefix: boolean;
+        reference_length: number | null;
+        reference_required: boolean;
+        is_active: boolean;
+    }>;
 };
 
 type OrderItem = {
@@ -103,6 +114,8 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
         description: '',
     });
 
+    const [transactionRefError, setTransactionRefError] = useState<string>('');
+
     const [showCancelConfirmation, setShowCancelConfirmation] = useState(false);
 
     // Initialize quantities from existing order items
@@ -139,6 +152,53 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
         // Fallback to the pre-order's original type if form data not ready
         return preOrder.order_type?.name === 'Walkin Customer';
     }, [data.order_type_id, orderTypes, preOrder.order_type]);
+
+    useEffect(() => {
+        if (data.payment_method) {
+            const setting = paymentSettings.find(s => s.payment_method === data.payment_method);
+            if (setting?.auto_fill_prefix && setting.reference_prefix) {
+                if (!data.transaction_reference?.startsWith(setting.reference_prefix)) {
+                    setData('transaction_reference', setting.reference_prefix);
+                }
+            }
+        }
+    }, [data.payment_method]);
+
+    const validateTransactionReference = (method: string, value: string): string => {
+        const setting = paymentSettings.find(s => s.payment_method === method);
+        if (!setting) return '';
+
+        if (setting.reference_required && !value) {
+            return 'Transaction reference is required for this payment method.';
+        }
+
+        if (setting.validation_type === 'Regex Validation' && setting.validation_pattern && value) {
+            try {
+                const regex = new RegExp(setting.validation_pattern);
+                if (!regex.test(value)) {
+                    return `Invalid format.${setting.example ? ` Expected example: ${setting.example}` : ''}`;
+                }
+            } catch (e) {
+                console.error("Invalid regex", e);
+            }
+        }
+
+        if (setting.reference_length && value && value.length !== setting.reference_length) {
+            return `Transaction reference must be exactly ${setting.reference_length} characters.`;
+        }
+        return '';
+    };
+
+    useEffect(() => {
+        const setting = paymentSettings.find(s => s.payment_method === data.payment_method);
+        if (data.payment_method && setting?.reference_required) {
+            setTransactionRefError(validateTransactionReference(data.payment_method, data.transaction_reference || ''));
+        } else if (data.payment_method && data.transaction_reference) {
+            setTransactionRefError(validateTransactionReference(data.payment_method, data.transaction_reference));
+        } else {
+            setTransactionRefError('');
+        }
+    }, [data.transaction_reference, data.payment_method, paymentSettings]);
 
     // Calculate totals in real-time
     const calculations = useMemo(() => {
@@ -221,11 +281,7 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
 
     useEffect(() => {
         if (flash.success) {
-            setSuccessModal({
-                isOpen: true,
-                title: 'Success',
-                description: flash.success,
-            });
+            toast.success(flash.success, { duration: 4000 });
         }
         if (flash.error) {
             toast.error(flash.error);
@@ -234,6 +290,18 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
 
     const handleSubmit: FormEventHandler = (e) => {
         e.preventDefault();
+        if (!(e.currentTarget as HTMLFormElement).reportValidity()) {
+            return;
+        }
+        
+        if (data.payment_method) {
+            const error = validateTransactionReference(data.payment_method, data.transaction_reference || '');
+            if (error) {
+                setTransactionRefError(error);
+                toast.error('Please fix the transaction reference errors before submitting.');
+                return;
+            }
+        }
 
         // If status is changed to Cancelled, show confirmation dialog
         if (data.status === 'Cancelled' && preOrder.status !== 'Cancelled') {
@@ -249,9 +317,8 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
             onSuccess: () => {
                 // Success
             },
-            onError: (err) => {
-                const message = Object.values(err).flat().join(', ');
-                toast.error(message || 'Failed to update pre-order');
+            onError: () => {
+                toast.error('Unable to update the order. Please review the information and try again.');
             },
         });
     };
@@ -415,44 +482,21 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
                                 <InputError message={errors.order_type_id} />
                             </div>
 
-                            {isWalkinCustomer ? (
-                                <div className="grid gap-2">
-                                    <Label htmlFor="voucher_code">
-                                        Voucher Code
-                                    </Label>
-                                    <Input
-                                        id="voucher_code"
-                                        value={data.voucher_code}
-                                        onChange={(e) => setData('voucher_code', e.target.value)}
-                                        placeholder="Enter voucher code"
-                                    />
-                                    <InputError message={errors.voucher_code} />
-                                </div>
-                            ) : (
-                                <div className="grid gap-2">
-                                    <Label htmlFor="transaction_reference">Transaction Reference</Label>
-                                    <Input
-                                        id="transaction_reference"
-                                        value={data.transaction_reference}
-                                        onChange={(e) => setData('transaction_reference', e.target.value)}
-                                        placeholder={paymentSettings.find(s => s.payment_method === data.payment_method)?.example
-                                            ? `e.g. ${paymentSettings.find(s => s.payment_method === data.payment_method)?.example}`
-                                            : 'Enter transaction reference'}
-                                    />
-                                    {data.payment_method && paymentSettings.find(s => s.payment_method === data.payment_method)?.example && (
-                                        <p className="text-xs text-muted-foreground">
-                                            Expected format example: <code className="bg-muted px-1 rounded">{paymentSettings.find(s => s.payment_method === data.payment_method)?.example}</code>
-                                        </p>
-                                    )}
-                                    <InputError message={errors.transaction_reference} />
-                                </div>
-                            )}
-
-
                             {!isWalkinCustomer && (
                                 <div className="grid gap-2">
                                     <Label htmlFor="payment_method">Payment Method *</Label>
-                                    <Select value={data.payment_method} onValueChange={(value) => setData('payment_method', value)}>
+                                    <Select 
+                                        value={data.payment_method} 
+                                        onValueChange={(value) => {
+                                            const setting = paymentSettings.find(s => s.payment_method === value);
+                                            setData({
+                                                ...data,
+                                                payment_method: value,
+                                                transaction_reference: (setting?.auto_fill_prefix && setting?.reference_prefix) ? setting.reference_prefix : ''
+                                            });
+                                        }}
+                                        required
+                                    >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Select payment method" />
                                         </SelectTrigger>
@@ -466,7 +510,55 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
                                 </div>
                             )}
 
+                            {isWalkinCustomer && (
+                                <div className="grid gap-2">
+                                    <Label htmlFor="voucher_code">
+                                        Voucher Code
+                                    </Label>
+                                    <Input
+                                        id="voucher_code"
+                                        value={data.voucher_code}
+                                        onChange={(e) => setData('voucher_code', e.target.value)}
+                                        placeholder="Enter voucher code"
+                                    />
+                                    <InputError message={errors.voucher_code} />
+                                </div>
+                            )}
+                        </div>
 
+                        {!isWalkinCustomer && (
+                            <div className="grid gap-2 md:w-1/2">
+                                <Label htmlFor="transaction_reference">Transaction Reference *</Label>
+                                <Input
+                                    id="transaction_reference"
+                                    value={data.transaction_reference}
+                                    onChange={(e) => {
+                                        let val = e.target.value;
+                                        const setting = paymentSettings.find(s => s.payment_method === data.payment_method);
+                                        if (setting?.auto_fill_prefix && setting.reference_prefix && !val.startsWith(setting.reference_prefix)) {
+                                            val = setting.reference_prefix;
+                                        }
+                                        setData('transaction_reference', val);
+                                    }}
+                                    placeholder={paymentSettings.find(s => s.payment_method === data.payment_method)?.example
+                                        ? `e.g. ${paymentSettings.find(s => s.payment_method === data.payment_method)?.example}`
+                                        : 'Enter transaction reference'}
+                                    required
+                                />
+                                {data.payment_method && paymentSettings.find(s => s.payment_method === data.payment_method)?.example && (
+                                    <p className="text-xs text-foreground mt-1 font-medium">
+                                        Expected format example: <code className="bg-muted px-1.5 py-0.5 rounded font-semibold">{paymentSettings.find(s => s.payment_method === data.payment_method)?.example}</code>
+                                    </p>
+                                )}
+                                {errors.transaction_reference ? (
+                                    <p className="text-[0.8rem] font-medium text-destructive">
+                                        {errors.transaction_reference}
+                                    </p>
+                                ) : null}
+                            </div>
+                        )}
+
+                        <div className="grid gap-4 md:grid-cols-2">
                             <div className="grid gap-2">
                                 <Label htmlFor="collection_day_id">Collection Day *</Label>
                                 <Select
@@ -591,7 +683,7 @@ export default function Edit({ preOrder, branches, collectionDays, orderTypes, p
                         >
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={processing || data.items.length === 0}>
+                        <Button type="submit" disabled={processing || data.items.length === 0 || !!transactionRefError}>
                             Update Pre-Order
                         </Button>
                     </div>
