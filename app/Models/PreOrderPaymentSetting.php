@@ -11,12 +11,21 @@ class PreOrderPaymentSetting extends Model
         'account_name',
         'account_number',
         'instructions',
+        'payment_type',
+        'validation_type',
         'validation_pattern',
         'example',
+        'reference_prefix',
+        'auto_fill_prefix',
+        'reference_length',
+        'reference_required',
         'is_active',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'auto_fill_prefix' => 'boolean',
+        'reference_required' => 'boolean',
     ];
+
 }

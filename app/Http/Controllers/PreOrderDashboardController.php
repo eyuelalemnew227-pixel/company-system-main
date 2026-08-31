@@ -155,11 +155,19 @@ class PreOrderDashboardController extends Controller
      */
     private function applyFilters($query, array $filters): void
     {
+        // Branch User Restrictions
+        if (!auth()->user()->can('view all pre-orders')) {
+            $userBranchId = auth()->user()->employee?->branch_id;
+            $query->where('pre_orders.collection_branch_id', $userBranchId)
+                  ->whereHas('holiday', function ($hq) {
+                      $hq->where('status', 'Active');
+                  });
+        }
+        
         if (!empty($filters['date'])) {
             $query->whereDate('pre_orders.created_at', $filters['date']);
         }
-
-
+        
         if (!empty($filters['branch_id'])) {
             $query->where('pre_orders.collection_branch_id', $filters['branch_id']);
         }

@@ -226,11 +226,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
 
     useEffect(() => {
         if (flash.success) {
-            setSuccessModal({
-                isOpen: true,
-                title: 'Success',
-                description: flash.success
-            });
+            toast.success(flash.success, { duration: 4000 });
         }
         if (flash.error) {
             toast.error(flash.error);
@@ -254,11 +250,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
         if (confirm(`Are you sure you want to delete order ${orderNumber}?`)) {
             router.delete(route('pre-orders.destroy', id), {
                 onSuccess: () => {
-                    setSuccessModal({
-                        isOpen: true,
-                        title: 'Order Deleted',
-                        description: `Order ${orderNumber} has been successfully deleted.`
-                    });
+                    toast.success(`Order ${orderNumber} has been successfully deleted.`, { duration: 4000 });
                 },
                 onError: (err) => {
                     const message = Object.values(err).flat().join(', ');
@@ -422,13 +414,13 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Pre-Orders" />
 
-            <div className="container mx-auto p-6 space-y-6">
+            <div className="container mx-auto px-4 py-3 space-y-3">
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                    <Heading title="Pre-Orders" description="Manage customer pre-orders" />
+                    <Heading title="Pre-Orders" />
                     {canCreateOrders && (
                         <Link href="/pre-orders/create">
-                            <Button>
+                            <Button size="sm">
                                 <PlusIcon className="mr-2 size-4" />
                                 New Pre-Order
                             </Button>
@@ -436,73 +428,61 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                     )}
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                     <Card className="bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-800">
-                        <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between space-y-0">
-                            <CardTitle className="text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wider">
-                                My Total Orders
-                            </CardTitle>
-                            <TableIcon className="size-4 text-blue-500" />
-                        </CardHeader>
-                        <CardContent className="pb-4 px-4">
-                            <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
-                                {operatorStats.total.toLocaleString()}
+                        <div className="p-3 flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wider mb-0.5">
+                                    My Total Orders
+                                </p>
+                                <div className="text-lg font-bold text-blue-900 dark:text-blue-100">
+                                    {operatorStats.total.toLocaleString()}
+                                </div>
                             </div>
-                            <p className="text-[10px] text-blue-600/80 dark:text-blue-400/80 font-medium">
-                                Lifetime performance
-                            </p>
-                        </CardContent>
+                            <TableIcon className="size-5 text-blue-500 opacity-70" />
+                        </div>
                     </Card>
 
                     <Card className="bg-emerald-50/50 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-800">
-                        <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between space-y-0">
-                            <CardTitle className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
-                                My Paid Orders
-                            </CardTitle>
-                            <PlusIcon className="size-4 text-emerald-500" />
-                        </CardHeader>
-                        <CardContent className="pb-4 px-4">
-                            <div className="text-2xl font-bold text-emerald-900 dark:text-emerald-100">
-                                {operatorStats.paid.toLocaleString()}
+                        <div className="p-3 flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-0.5">
+                                    My Paid Orders
+                                </p>
+                                <div className="text-lg font-bold text-emerald-900 dark:text-emerald-100">
+                                    {operatorStats.paid.toLocaleString()}
+                                </div>
                             </div>
-                            <p className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 font-medium">
-                                Successfully converted
-                            </p>
-                        </CardContent>
+                            <PlusIcon className="size-5 text-emerald-500 opacity-70" />
+                        </div>
                     </Card>
 
                     <Card className="bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800">
-                        <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between space-y-0">
-                            <CardTitle className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
-                                My Pending Orders
-                            </CardTitle>
-                            <MessageSquareIcon className="size-4 text-amber-500" />
-                        </CardHeader>
-                        <CardContent className="pb-4 px-4">
-                            <div className="text-2xl font-bold text-amber-900 dark:text-amber-100">
-                                {operatorStats.pending.toLocaleString()}
+                        <div className="p-3 flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-0.5">
+                                    My Pending Orders
+                                </p>
+                                <div className="text-lg font-bold text-amber-900 dark:text-amber-100">
+                                    {operatorStats.pending.toLocaleString()}
+                                </div>
                             </div>
-                            <p className="text-[10px] text-amber-600/80 dark:text-amber-400/80 font-medium">
-                                Awaiting payment/action
-                            </p>
-                        </CardContent>
+                            <MessageSquareIcon className="size-5 text-amber-500 opacity-70" />
+                        </div>
                     </Card>
 
                     <Card className="bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-800">
-                        <CardHeader className="pb-2 pt-4 px-4 flex flex-row items-center justify-between space-y-0">
-                            <CardTitle className="text-xs font-semibold text-purple-700 dark:text-purple-400 uppercase tracking-wider">
-                                System Paid Products
-                            </CardTitle>
-                            <FileTextIcon className="size-4 text-purple-500" />
-                        </CardHeader>
-                        <CardContent className="pb-4 px-4">
-                            <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                                {paidProductsCount.toLocaleString()}
+                        <div className="p-3 flex items-center justify-between">
+                            <div>
+                                <p className="text-[10px] font-semibold text-purple-700 dark:text-purple-400 uppercase tracking-wider mb-0.5">
+                                    System Paid Products
+                                </p>
+                                <div className="text-lg font-bold text-purple-900 dark:text-purple-100">
+                                    {paidProductsCount.toLocaleString()}
+                                </div>
                             </div>
-                            <p className="text-[10px] text-purple-600/80 dark:text-purple-400/80 font-medium">
-                                Total production volume
-                            </p>
-                        </CardContent>
+                            <FileTextIcon className="size-5 text-purple-500 opacity-70" />
+                        </div>
                     </Card>
                 </div>
 
@@ -779,9 +759,10 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                 )}
 
                 {/* Orders Table */}
-                <div className="rounded-lg border">
-                    <Table>
-                        <TableHeader>
+                <div className="rounded-lg border overflow-hidden">
+                    <div className="max-h-[55vh] lg:max-h-[calc(100vh-280px)] overflow-y-auto relative">
+                        <Table>
+                            <TableHeader className="sticky top-0 z-10 bg-background shadow-sm">
                             <TableRow>
                                 {canViewAllOrders && (
                                     <TableHead className="w-[50px]">
@@ -809,12 +790,10 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                     onClick={() => handleSort('first_name')}
                                 >
                                     <div className="flex items-center">
-                                        First Name
+                                        Client Name
                                         <SortIcon field="first_name" />
                                     </div>
                                 </TableHead>
-                                <TableHead>Father Name</TableHead>
-                                <TableHead>Surname</TableHead>
                                 <TableHead
                                     className="cursor-pointer hover:bg-muted/50"
                                     onClick={() => handleSort('phone_number')}
@@ -826,22 +805,10 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                 </TableHead>
                                  <TableHead>Order Type</TableHead>
                                 <TableHead>Payment Method</TableHead>
-                                <TableHead>Voucher Code</TableHead>
-                                <TableHead>Transaction Reference</TableHead>
-                                <TableHead>Payment Slip</TableHead>
                                 <TableHead>Collection Branch</TableHead>
                                 <TableHead>Registering Branch</TableHead>
                                 <TableHead>Collection Day</TableHead>
-                                <TableHead>Products</TableHead>
-                                <TableHead
-                                    className="cursor-pointer hover:bg-muted/50"
-                                    onClick={() => handleSort('status')}
-                                >
-                                    <div className="flex items-center">
-                                        Status
-                                        <SortIcon field="status" />
-                                    </div>
-                                </TableHead>
+                                <TableHead>Product(s)</TableHead>
                                 <TableHead
                                     className="cursor-pointer hover:bg-muted/50"
                                     onClick={() => handleSort('total_amount')}
@@ -851,33 +818,13 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                         <SortIcon field="total_amount" />
                                     </div>
                                 </TableHead>
-                                {canViewAuditTrail && (
-                                    <TableHead>Late Payment</TableHead>
-                                )}
-                                {canViewAuditTrail && (
-                                    <>
-                                        <TableHead
-                                            className="cursor-pointer hover:bg-muted/50"
-                                            onClick={() => handleSort('created_at')}
-                                        >
-                                            <div className="flex items-center">
-                                                Date
-                                                <SortIcon field="created_at" />
-                                            </div>
-                                        </TableHead>
-                                        <TableHead>Created By</TableHead>
-                                        <TableHead>Updated By</TableHead>
-                                    </>
-                                )}
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {preOrders.data.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={
-                                        (canViewAllOrders ? 16 : 15) + (canViewAuditTrail ? 3 : 0)
-                                    } className="text-center text-muted-foreground">
+                                    <TableCell colSpan={canViewAllOrders ? 12 : 11} className="text-center text-muted-foreground">
                                         No pre-orders found. Click "New Pre-Order" to create one.
                                     </TableCell>
                                 </TableRow>
@@ -897,9 +844,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                             </TableCell>
                                         )}
                                         <TableCell className="font-medium">{order.order_number}</TableCell>
-                                        <TableCell>{order.first_name}</TableCell>
-                                        <TableCell>{order.father_name || '-'}</TableCell>
-                                        <TableCell>{order.surname || '-'}</TableCell>
+                                        <TableCell>{[order.first_name, order.father_name, order.surname].filter(Boolean).join(' ')}</TableCell>
                                         <TableCell>{order.phone_number}</TableCell>
                                         <TableCell>{order.order_type?.name}</TableCell>
                                         <TableCell>{order.payment_method || '-'}</TableCell>
@@ -949,24 +894,6 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                             </span>
                                         </TableCell>
                                         <TableCell>ETB {order.total_amount}</TableCell>
-                                        {canViewAuditTrail && (
-                                            <TableCell>
-                                                {order.late_payment ? (
-                                                    <span className="inline-flex rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-800 dark:bg-red-900 dark:text-red-200">
-                                                        Yes
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-muted-foreground">-</span>
-                                                )}
-                                            </TableCell>
-                                        )}
-                                        {canViewAuditTrail && (
-                                            <>
-                                                <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
-                                                <TableCell>{order.creator?.name || '-'}</TableCell>
-                                                <TableCell>{order.updater?.name || '-'}</TableCell>
-                                            </>
-                                        )}
                                         <TableCell className="text-right">
                                             <div className="flex justify-end gap-2">
                                                 {canViewOrderDetails && (
@@ -1009,6 +936,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                             )}
                         </TableBody>
                     </Table>
+                    </div>
                 </div>
 
                 {/* Pagination */}

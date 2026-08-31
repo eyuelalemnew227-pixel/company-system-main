@@ -393,7 +393,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::middleware('permission:manage pre-order payment settings')->group(function () {
             Route::post('pre-order-payment-settings/admin-chat-id', [\App\Http\Controllers\PreOrderPaymentSettingController::class, 'updateAdminChatId'])->name('pre-order-payment-settings.admin-chat-id');
-            Route::resource('pre-order-payment-settings', \App\Http\Controllers\PreOrderPaymentSettingController::class)->only(['index', 'update']);
+            Route::resource('pre-order-payment-settings', \App\Http\Controllers\PreOrderPaymentSettingController::class)->only(['index', 'store', 'update']);
         });
 
         // Cost Management
