@@ -3,7 +3,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText, Plus, ClipboardList, Edit, Upload, Download, MoreHorizontal, History, Trash2 } from 'lucide-react';
+import { FileText, Plus, ClipboardList, Edit, Upload, Download, MoreHorizontal, History, Trash2, ShieldAlert } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import React, { useRef } from 'react';
@@ -47,7 +47,7 @@ export default function Index({ forms }: { forms: any[] }) {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Manage Forms" />
-            <div className="space-y-6">
+            <div className="max-w-7xl mx-auto space-y-6 pb-12">
                 <div className="flex items-center justify-between">
                     <div>
                         <h2 className="text-2xl font-bold tracking-tight">Form Builder</h2>
@@ -67,78 +67,104 @@ export default function Index({ forms }: { forms: any[] }) {
                     </div>
                 </div>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>All Forms</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {forms.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center space-y-3 py-12 text-center">
-                                <div className="rounded-full bg-secondary p-3">
-                                    <FileText className="h-6 w-6 text-muted-foreground" />
-                                </div>
-                                <div>
-                                    <p className="text-lg font-medium text-foreground">No forms created yet</p>
-                                    <p className="text-sm text-muted-foreground">Click "Create Form" to get started.</p>
-                                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-2">
+                    {forms.length === 0 ? (
+                        <div className="col-span-full py-16 text-center bg-white rounded-xl border border-dashed border-gray-300">
+                            <div className="mx-auto rounded-full bg-amber-50 p-4 w-fit mb-3">
+                                <FileText className="h-8 w-8 text-amber-400" />
                             </div>
-                        ) : (
-                            <div className="relative w-full overflow-auto">
-                                <table className="w-full caption-bottom text-sm text-left">
-                                    <thead className="[&_tr]:border-b">
-                                        <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                                            <th className="h-12 px-4 font-medium text-muted-foreground">ID</th>
-                                            <th className="h-12 px-4 font-medium text-muted-foreground">Title</th>
-                                            <th className="h-12 px-4 font-medium text-muted-foreground">Status</th>
-                                            <th className="h-12 px-4 font-medium text-muted-foreground text-right">Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="[&_tr:last-child]:border-0">
-                                        {forms.map((form: any) => (
-                                            <tr key={form.id} className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                                                <td className="p-4 align-middle">{form.id}</td>
-                                                <td className="p-4 align-middle font-medium">{form.title}</td>
-                                                <td className="p-4 align-middle">{form.status}</td>
-                                                <td className="p-4 align-middle text-right flex justify-end">
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" className="h-8 w-8 p-0">
-                                                                <span className="sr-only">Open menu</span>
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end" className="w-[160px]">
-                                                            <DropdownMenuLabel>Form Actions</DropdownMenuLabel>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem asChild className="cursor-pointer font-medium text-amber-700 focus:text-amber-800">
-                                                                <Link href={`/forms/${form.id}/edit`}>
-                                                                    <Edit className="mr-2 h-4 w-4" /> Edit Template
-                                                                </Link>
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuItem asChild className="cursor-pointer">
-                                                                <Link href={`/forms/${form.id}/versions`}>
-                                                                    <History className="mr-2 h-4 w-4" /> Version History
-                                                                </Link>
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem onClick={() => triggerReplace(form.id)} className="cursor-pointer text-gray-700">
-                                                                <Download className="mr-2 h-4 w-4" /> Replace Schema
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem onClick={() => setTimeout(() => setFormToDelete(form.id), 50)} className="cursor-pointer text-red-600 focus:bg-red-50 focus:text-red-700">
-                                                                <Trash2 className="mr-2 h-4 w-4" /> Delete Form
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                            <h3 className="text-lg font-medium text-gray-900">No forms created yet</h3>
+                            <p className="text-gray-500 mt-1">Click "Create Form" to get started building your checklists.</p>
+                        </div>
+                    ) : (
+                        forms.map((form: any) => (
+                            <Card key={form.id} className="hover:shadow-md transition-shadow group border-amber-900/10 h-full flex flex-col overflow-hidden bg-white">
+                                <CardHeader className="pb-3 flex-none border-b border-gray-100 bg-gradient-to-br from-white to-amber-50/20">
+                                    <div className="flex justify-between items-start gap-3">
+                                        <div className="bg-amber-100/50 p-2.5 rounded-lg border border-amber-200 text-amber-700 group-hover:scale-105 transition-transform">
+                                            <ClipboardList className="w-5 h-5" />
+                                        </div>
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center border ${form.status === 'active'
+                                            ? 'bg-green-100 text-green-800 border-green-200'
+                                            : form.status === 'archived'
+                                                ? 'bg-red-100 text-red-800 border-red-200'
+                                                : 'bg-gray-100 text-gray-800 border-gray-200'
+                                            }`}>
+                                            {form.status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></span>}
+                                            {form.status ? form.status.charAt(0).toUpperCase() + form.status.slice(1) : 'Unknown'}
+                                        </span>
+                                    </div>
+                                    <CardTitle className="text-xl mt-4 line-clamp-1 group-hover:text-amber-700 transition-colors">
+                                        {form.title}
+                                    </CardTitle>
+                                </CardHeader>
+
+                                <CardContent className="flex-grow pt-4 pb-2">
+                                    <p className="text-sm text-gray-500 line-clamp-2 min-h-[40px]">
+                                        {form.description || 'No description provided for this template.'}
+                                    </p>
+
+                                    <div className="mt-4 flex items-center gap-3 bg-gray-50/80 rounded-md p-3 border border-gray-100">
+                                        <div className="bg-white p-1.5 rounded-md shadow-sm border border-gray-100">
+                                            <ClipboardList className="w-4 h-4 text-gray-400" />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Template ID</span>
+                                            <span className="text-sm font-semibold text-gray-700">#{form.id}</span>
+                                        </div>
+                                    </div>
+                                </CardContent>
+
+                                <div className="p-4 border-t mt-auto flex items-center justify-between bg-gray-50/50">
+                                    <div className="flex gap-2 w-full">
+                                        {form.can_edit_schema ? (
+                                            <Button asChild variant="outline" size="sm" className="h-9 flex-1 text-amber-700 bg-amber-50 hover:bg-amber-100 border-amber-200 shadow-sm">
+                                                <Link href={`/forms/${form.id}/edit`}>
+                                                    <Edit className="w-4 h-4 mr-2" /> Edit Schema
+                                                </Link>
+                                            </Button>
+                                        ) : (
+                                            <div className="flex-1"></div>
+                                        )}
+                                        <div className="flex gap-1.5 ml-auto">
+                                            {form.can_edit_schema && (
+                                                <Button asChild variant="outline" size="sm" className="h-9 w-9 p-0 text-gray-600 bg-white" title="Version History">
+                                                    <Link href={`/forms/${form.id}/versions`}>
+                                                        <History className="w-4 h-4" />
+                                                    </Link>
+                                                </Button>
+                                            )}
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="outline" size="sm" className="h-9 w-9 p-0 text-gray-500 bg-white hover:text-amber-700 hover:border-amber-300">
+                                                        <MoreHorizontal className="w-4 h-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-[160px]">
+                                                    <DropdownMenuItem onClick={() => triggerReplace(form.id)} className="cursor-pointer text-gray-700">
+                                                        <Download className="mr-2 h-4 w-4" /> Import Schema
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    {form.can_manage_access && (
+                                                        <DropdownMenuItem asChild className="cursor-pointer text-indigo-700">
+                                                            <Link href={`/forms/${form.id}/permissions`}>
+                                                                <ShieldAlert className="mr-2 h-4 w-4" /> Manage Access
+                                                            </Link>
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem onClick={() => setTimeout(() => setFormToDelete(form.id), 50)} className="cursor-pointer text-red-600 focus:bg-red-50 focus:text-red-700">
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Delete Form
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Card>
+                        ))
+                    )}
+                </div>
             </div>
 
             <AlertDialog open={formToDelete !== null} onOpenChange={(open: boolean) => !open && setFormToDelete(null)}>

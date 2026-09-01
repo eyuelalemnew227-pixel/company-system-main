@@ -161,28 +161,51 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('inventory-periods', \App\Http\Controllers\InventoryPeriodController::class)->except(['show']);
     });
 
-    // Forms Builder
-    Route::get('available-forms', [FormController::class, 'available'])->name('forms.available');
-    Route::post('forms/import', [FormController::class, 'import'])->name('forms.import');
-    Route::post('forms/{form}/import', [FormController::class, 'importVersion'])->name('forms.import.version');
-    Route::get('/forms/{form}/versions', [FormController::class, 'versions'])->name('forms.versions');
-    Route::get('/forms/{form}/export', [FormController::class, 'export'])->name('forms.export');
-    Route::delete('/forms/{form}', [FormController::class, 'destroy'])->name('forms.destroy');
-    Route::get('fill-forms/{form}', [\App\Http\Controllers\FillFormController::class, 'show'])->name('forms.fill');
-    Route::post('fill-forms/{form}', [\App\Http\Controllers\FillFormController::class, 'store'])->name('forms.fill.store');
+    // Forms Builder - Fill Forms
+    Route::middleware('auth')->group(function () {
+        Route::get('available-forms', [FormController::class, 'available'])->name('forms.available');
+        Route::get('fill-forms/{form}', [\App\Http\Controllers\FillFormController::class, 'show'])->name('forms.fill');
+        Route::post('fill-forms/{form}', [\App\Http\Controllers\FillFormController::class, 'store'])->name('forms.fill.store');
+    });
 
-    // Global Submissions Viewer
-    Route::get('submissions', [\App\Http\Controllers\FormSubmissionAdminController::class, 'all_index'])->name('forms.submissions.index');
-    Route::get('submissions/form/{form}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'form_submissions'])->name('forms.submissions.by_form');
-    Route::get('submissions/form/{form}/export', [\App\Http\Controllers\FormSubmissionAdminController::class, 'export_csv'])->name('forms.submissions.export');
-    Route::get('submissions/form/{form}/analytics', [\App\Http\Controllers\FormSubmissionAdminController::class, 'analytics'])->name('forms.submissions.analytics');
-    Route::get('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'show'])->name('forms.submissions.show');
-    Route::get('submissions/{submission}/edit', [\App\Http\Controllers\FormSubmissionAdminController::class, 'edit'])->name('forms.submissions.edit');
-    Route::put('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update'])->name('forms.submissions.update');
-    Route::patch('submissions/{submission}/status', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update_status'])->name('forms.submissions.update_status');
-    Route::delete('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'destroy'])->name('forms.submissions.destroy');
+    // Forms Builder - Management (Controller-level ACL handled)
+    Route::middleware(['auth', 'permission:view forms'])->group(function () {
+        Route::resource('forms', FormController::class)->except(['destroy']);
+        Route::get('/forms/{form}/versions', [FormController::class, 'versions'])->name('forms.versions');
+        Route::get('/forms/{form}/permissions', [\App\Http\Controllers\FormPermissionController::class, 'index'])->name('forms.permissions');
+        Route::post('/forms/{form}/permissions', [\App\Http\Controllers\FormPermissionController::class, 'update'])->name('forms.permissions.update');
+    });
 
-    Route::resource('forms', FormController::class);
+    Route::middleware('permission:create forms')->group(function () {
+        Route::post('forms/import', [FormController::class, 'import'])->name('forms.import');
+        Route::post('forms/{form}/import', [FormController::class, 'importVersion'])->name('forms.import.version');
+    });
+
+    Route::middleware(['auth', 'permission:export form submissions'])->group(function () {
+        Route::get('/forms/{form}/export', [FormController::class, 'export'])->name('forms.export');
+    });
+
+    Route::middleware('permission:delete forms')->group(function () {
+        Route::delete('/forms/{form}', [FormController::class, 'destroy'])->name('forms.destroy');
+    });
+
+    // Global Submissions Viewer (Controller-level ACL handled)
+    Route::middleware(['auth', 'permission:view form submissions'])->group(function () {
+        Route::get('submissions', [\App\Http\Controllers\FormSubmissionAdminController::class, 'all_index'])->name('forms.submissions.index');
+        Route::get('submissions/form/{form}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'form_submissions'])->name('forms.submissions.by_form');
+        Route::get('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'show'])->name('forms.submissions.show');
+        Route::get('/submissions/{id}/edit', [\App\Http\Controllers\FormSubmissionAdminController::class, 'edit'])->name('submissions.edit');
+        Route::put('/submissions/{id}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update'])->name('submissions.update');
+        Route::patch('/submissions/{id}/status', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update_status'])->name('submissions.update_status');
+    });
+
+    Route::middleware('auth')->group(function () {
+        Route::get('submissions/form/{form}/export', [\App\Http\Controllers\FormSubmissionAdminController::class, 'export_csv'])->name('forms.submissions.export');
+    });
+
+    Route::middleware('permission:delete form submissions')->group(function () {
+        Route::delete('/submissions/{id}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'destroy'])->name('submissions.destroy');
+    });
 
     // Expense Budget Periods
     Route::resource('expense-budget-periods', \App\Http\Controllers\ExpenseBudgetPeriodController::class)->except(['show']);

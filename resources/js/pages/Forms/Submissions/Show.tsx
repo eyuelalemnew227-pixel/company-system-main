@@ -3,7 +3,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, User, Clock, ShieldCheck, Star } from 'lucide-react';
+import { ArrowLeft, User, Clock, ShieldCheck, Star, MapPin } from 'lucide-react';
 import React from 'react';
 
 export default function Show({ form, submission, branches, departments, employees }: { form: any, submission: any, branches?: any[], departments?: any[], employees?: any[] }) {
@@ -48,6 +48,17 @@ export default function Show({ form, submission, branches, departments, employee
             return (
                 <div className="border border-gray-200 rounded-md inline-block bg-gray-50 overflow-hidden shadow-sm mt-2">
                     <img src={val} alt="Signature Response" className="h-28 object-contain" />
+                </div>
+            );
+        }
+
+        if (qType === 'geolocation') {
+            return (
+                <div className="flex bg-blue-50/70 border border-blue-200 px-3 py-1.5 rounded-md items-center justify-center space-x-2 hover:bg-blue-100/60 transition-colors">
+                    <MapPin className="text-blue-600 h-4 w-4" />
+                    <a href={`https://maps.google.com/?q=${val}`} target="_blank" rel="noreferrer" className="text-blue-700 font-semibold text-sm hover:underline tracking-wide">
+                        View on Map
+                    </a>
                 </div>
             );
         }

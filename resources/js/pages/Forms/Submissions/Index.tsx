@@ -74,11 +74,6 @@ export default function Index({ forms }: { forms: any[] }) {
                                             View Data <ChevronRight className="w-4 h-4" />
                                         </Link>
                                     </Button>
-                                    <Button asChild className="w-full justify-between text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200" variant="outline">
-                                        <Link href={`/submissions/form/${form.id}/analytics`}>
-                                            View Analytics <BarChart2 className="w-4 h-4" />
-                                        </Link>
-                                    </Button>
                                 </CardFooter>
                             </Card>
                         ))

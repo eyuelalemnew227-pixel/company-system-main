@@ -7,8 +7,11 @@ import { Eye, Pencil, Trash2, ArrowLeft, Download, FilterX, ChevronLeft, Chevron
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import React, { useState, useMemo, useEffect } from 'react';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { MoreHorizontal } from 'lucide-react';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
-export default function FormSubmissions({ form, submissions, branches = {}, departments = {}, employees = {} }: { form: any, submissions: any[], branches?: Record<string, string>, departments?: Record<string, string>, employees?: Record<string, string> }) {
+export default function FormSubmissions({ form, submissions, branches = {}, departments = {}, employees = {}, fiscalYears = [], fiscalMonths = [], currentFiscalYearId = null, currentFiscalMonthId = null }: { form: any, submissions: any[], branches?: Record<string, string>, departments?: Record<string, string>, employees?: Record<string, string>, fiscalYears?: { id: number, name: string }[], fiscalMonths?: { id: number, fiscal_year_id: number, name: string }[], currentFiscalYearId?: number | null, currentFiscalMonthId?: number | null }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Form Builder', href: '/forms' },
         { title: 'All Submissions', href: '/submissions' },
@@ -20,7 +23,6 @@ export default function FormSubmissions({ form, submissions, branches = {}, depa
     };
 
     const hasBranch = useMemo(() => submissions.some(s => s.answers?.some((a: any) => (a.question?.input_type || a.question?.inputType)?.type_identifier === 'branch_lookup')), [submissions]);
-    const hasDepartment = useMemo(() => submissions.some(s => s.answers?.some((a: any) => (a.question?.input_type || a.question?.inputType)?.type_identifier === 'department_lookup')), [submissions]);
     const hasEmployee = useMemo(() => submissions.some(s => s.answers?.some((a: any) => (a.question?.input_type || a.question?.inputType)?.type_identifier === 'employee_lookup')), [submissions]);
 
     const getLookupValue = (sub: any, type: string, dictionary: Record<string, string>) => {
@@ -37,10 +39,9 @@ export default function FormSubmissions({ form, submissions, branches = {}, depa
     const [statusFilter, setStatusFilter] = useState('all');
     const [submittedByFilter, setSubmittedByFilter] = useState('all');
     const [branchFilter, setBranchFilter] = useState('all');
-    const [departmentFilter, setDepartmentFilter] = useState('all');
     const [employeeFilter, setEmployeeFilter] = useState('all');
-    const [dateFrom, setDateFrom] = useState('');
-    const [dateTo, setDateTo] = useState('');
+    const [fiscalYearFilter, setFiscalYearFilter] = useState(() => currentFiscalYearId ? String(currentFiscalYearId) : 'all');
+    const [fiscalMonthFilter, setFiscalMonthFilter] = useState(() => currentFiscalMonthId ? String(currentFiscalMonthId) : 'all');
 
     const getUserName = (user: any) => user?.name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.employee_code || 'Unknown User';
 
@@ -52,24 +53,16 @@ export default function FormSubmissions({ form, submissions, branches = {}, depa
             // Submitted By Pipeline
             if (submittedByFilter !== 'all' && getUserName(sub.user) !== submittedByFilter) return false;
 
-            // Date Pipeline
-            if (dateFrom) {
-                if (new Date(sub.created_at) < new Date(dateFrom)) return false;
-            }
-            if (dateTo) {
-                const toDate = new Date(dateTo);
-                toDate.setHours(23, 59, 59, 999);
-                if (new Date(sub.created_at) > toDate) return false;
-            }
+            // Fiscal Year Pipeline
+            if (fiscalYearFilter !== 'all' && String(sub.fiscal_year_id) !== fiscalYearFilter) return false;
+
+            // Fiscal Month Pipeline
+            if (fiscalMonthFilter !== 'all' && String(sub.fiscal_month_id) !== fiscalMonthFilter) return false;
 
             // Relationship Pipelines
             if (hasBranch && branchFilter !== 'all') {
                 const bVal = getLookupValue(sub, 'branch_lookup', branches);
                 if (bVal !== branchFilter) return false;
-            }
-            if (hasDepartment && departmentFilter !== 'all') {
-                const dVal = getLookupValue(sub, 'department_lookup', departments);
-                if (dVal !== departmentFilter) return false;
             }
             if (hasEmployee && employeeFilter !== 'all') {
                 const eVal = getLookupValue(sub, 'employee_lookup', employees);
@@ -78,7 +71,7 @@ export default function FormSubmissions({ form, submissions, branches = {}, depa
 
             return true;
         });
-    }, [submissions, statusFilter, submittedByFilter, dateFrom, dateTo, branchFilter, departmentFilter, employeeFilter, hasBranch, hasDepartment, hasEmployee, branches, departments, employees]);
+    }, [submissions, statusFilter, submittedByFilter, fiscalYearFilter, fiscalMonthFilter, branchFilter, employeeFilter, hasBranch, hasEmployee, branches, employees]);
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -100,10 +93,9 @@ export default function FormSubmissions({ form, submissions, branches = {}, depa
         setStatusFilter('all');
         setSubmittedByFilter('all');
         setBranchFilter('all');
-        setDepartmentFilter('all');
         setEmployeeFilter('all');
-        setDateFrom('');
-        setDateTo('');
+        setFiscalYearFilter('all');
+        setFiscalMonthFilter('all');
         setCurrentPage(1);
     };
 
@@ -137,82 +129,89 @@ export default function FormSubmissions({ form, submissions, branches = {}, depa
                 <div className="bg-white rounded-lg shadow-sm border border-amber-900/10 p-4">
                     <div className="flex flex-col gap-4">
                         <div className="flex flex-wrap items-center gap-3">
-                            {hasBranch && (
-                                <Select value={branchFilter} onValueChange={setBranchFilter}>
-                                    <SelectTrigger className="w-[180px] bg-gray-50/50">
-                                        <SelectValue placeholder={getDynamicLabel('branch_lookup', 'Branch')} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">{getDynamicLabel('branch_lookup', 'Branch')}</SelectItem>
-                                        {Array.from(new Set(submissions.map((s: any) => getLookupValue(s, 'branch_lookup', branches))))
-                                            .filter(v => v !== '-')
-                                            .sort()
-                                            .map((v: any, idx) => <SelectItem key={idx} value={v}>{v}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            )}
-
-                            {hasDepartment && (
-                                <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                                    <SelectTrigger className="w-[180px] bg-gray-50/50">
-                                        <SelectValue placeholder={getDynamicLabel('department_lookup', 'Department')} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">{getDynamicLabel('department_lookup', 'Department')}</SelectItem>
-                                        {Array.from(new Set(submissions.map((s: any) => getLookupValue(s, 'department_lookup', departments))))
-                                            .filter(v => v !== '-')
-                                            .sort()
-                                            .map((v: any, idx) => <SelectItem key={idx} value={v}>{v}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            )}
+                            <SearchableSelect
+                                value={branchFilter}
+                                onValueChange={setBranchFilter}
+                                placeholder="Branch"
+                                searchPlaceholder="Search branch..."
+                                allowAll={true}
+                                allLabel="All Branches"
+                                className="w-[180px] bg-gray-50/50"
+                                options={Array.from(new Set(submissions.map((s: any) => getLookupValue(s, 'branch_lookup', branches))))
+                                    .filter(v => v !== '-')
+                                    .sort()
+                                    .map(v => ({ id: String(v), name: String(v) }))}
+                            />
 
                             {hasEmployee && (
-                                <Select value={employeeFilter} onValueChange={setEmployeeFilter}>
-                                    <SelectTrigger className="w-[180px] bg-gray-50/50">
-                                        <SelectValue placeholder={getDynamicLabel('employee_lookup', 'Evaluated Employee')} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">{getDynamicLabel('employee_lookup', 'Evaluated Employee')}</SelectItem>
-                                        {Array.from(new Set(submissions.map((s: any) => getLookupValue(s, 'employee_lookup', employees))))
-                                            .filter(v => v !== '-')
-                                            .sort()
-                                            .map((v: any, idx) => <SelectItem key={idx} value={v}>{v}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
+                                <SearchableSelect
+                                    value={employeeFilter}
+                                    onValueChange={setEmployeeFilter}
+                                    placeholder={getDynamicLabel('employee_lookup', 'Evaluated Employee')}
+                                    searchPlaceholder="Search employee..."
+                                    allowAll={true}
+                                    allLabel={`All ${getDynamicLabel('employee_lookup', 'Evaluated Employee')}s`}
+                                    className="w-[180px] bg-gray-50/50"
+                                    options={Array.from(new Set(submissions.map((s: any) => getLookupValue(s, 'employee_lookup', employees))))
+                                        .filter(v => v !== '-')
+                                        .sort()
+                                        .map(v => ({ id: String(v), name: String(v) }))}
+                                />
                             )}
 
-                            <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                <SelectTrigger className="w-[140px] bg-gray-50/50">
-                                    <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">Status</SelectItem>
-                                    <SelectItem value="pending">Pending</SelectItem>
-                                    <SelectItem value="approved">Approved</SelectItem>
-                                    <SelectItem value="rejected">Rejected</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                value={statusFilter}
+                                onValueChange={setStatusFilter}
+                                placeholder="Status"
+                                searchPlaceholder="Search status..."
+                                allowAll={true}
+                                allLabel="All Statuses"
+                                className="w-[140px] bg-gray-50/50"
+                                options={[
+                                    { id: 'pending', name: 'Pending' },
+                                    { id: 'approved', name: 'Approved' },
+                                    { id: 'rejected', name: 'Rejected' },
+                                ]}
+                            />
 
-                            <Select value={submittedByFilter} onValueChange={setSubmittedByFilter}>
-                                <SelectTrigger className="w-[180px] bg-gray-50/50">
-                                    <SelectValue placeholder="Submitted By" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">Submitted By</SelectItem>
-                                    {Array.from(new Set(submissions.map((s: any) => getUserName(s.user))))
-                                        .filter(Boolean)
-                                        .sort()
-                                        .map((v: any, idx) => <SelectItem key={idx} value={v}>{v}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                value={submittedByFilter}
+                                onValueChange={setSubmittedByFilter}
+                                placeholder="Submitted By"
+                                searchPlaceholder="Search submitter..."
+                                allowAll={true}
+                                allLabel="All Submitters"
+                                className="w-[180px] bg-gray-50/50"
+                                options={Array.from(new Set(submissions.map((s: any) => getUserName(s.user))))
+                                    .filter(Boolean)
+                                    .sort()
+                                    .map(v => ({ id: String(v), name: String(v) }))}
+                            />
 
-                            <div className="flex items-center space-x-2 text-sm bg-gray-50/50 rounded-md border px-2">
-                                <span className="text-gray-500 font-medium px-2">From:</span>
-                                <Input type="date" className="border-0 bg-transparent h-9 w-[130px] shadow-none focus-visible:ring-0 px-0" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-                                <span className="text-gray-500 font-medium px-2 border-l">To:</span>
-                                <Input type="date" className="border-0 bg-transparent h-9 w-[130px] shadow-none focus-visible:ring-0 px-0" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-                            </div>
+                            <SearchableSelect
+                                value={fiscalYearFilter}
+                                onValueChange={setFiscalYearFilter}
+                                placeholder="Fiscal Year"
+                                searchPlaceholder="Search year..."
+                                allowAll={true}
+                                allLabel="All Fiscal Years"
+                                className="w-[160px] bg-gray-50/50"
+                                options={fiscalYears.map(fy => ({ id: String(fy.id), name: fy.name }))}
+                            />
+
+                            <SearchableSelect
+                                value={fiscalMonthFilter}
+                                onValueChange={setFiscalMonthFilter}
+                                placeholder="Fiscal Month"
+                                searchPlaceholder="Search month..."
+                                allowAll={true}
+                                allLabel="All Fiscal Months"
+                                className="w-[160px] bg-gray-50/50"
+                                options={(fiscalYearFilter !== 'all'
+                                    ? fiscalMonths.filter(fm => String(fm.fiscal_year_id) === fiscalYearFilter)
+                                    : fiscalMonths
+                                ).map(fm => ({ id: String(fm.id), name: fm.name }))}
+                            />
 
                             <Button variant="ghost" className="text-gray-500 hover:text-amber-700" onClick={resetFilters}>
                                 <FilterX className="w-4 h-4 mr-2" /> Reset
@@ -227,18 +226,18 @@ export default function FormSubmissions({ form, submissions, branches = {}, depa
                             <TableRow>
                                 <TableHead className="w-[100px] text-center">Record #</TableHead>
                                 {hasBranch && <TableHead>{getDynamicLabel('branch_lookup', 'Branch')}</TableHead>}
-                                {hasDepartment && <TableHead>{getDynamicLabel('department_lookup', 'Department')}</TableHead>}
                                 {hasEmployee && <TableHead>{getDynamicLabel('employee_lookup', 'Evaluated Employee')}</TableHead>}
                                 <TableHead>Status</TableHead>
                                 <TableHead>Submitted By</TableHead>
-                                <TableHead>Submission Date</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead>Submitted At</TableHead>
+
+                                <TableHead className="w-[50px]"></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {paginatedSubmissions.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={hasBranch ? (hasDepartment ? (hasEmployee ? 8 : 7) : (hasEmployee ? 7 : 6)) : (hasDepartment ? (hasEmployee ? 7 : 6) : (hasEmployee ? 6 : 5))} className="text-center py-10 text-muted-foreground">
+                                    <TableCell colSpan={hasBranch ? (hasEmployee ? 7 : 6) : (hasEmployee ? 6 : 5)} className="text-center py-10 text-muted-foreground">
                                         No items recorded strictly matching those filter parameters.
                                     </TableCell>
                                 </TableRow>
@@ -247,7 +246,6 @@ export default function FormSubmissions({ form, submissions, branches = {}, depa
                                     <TableRow key={sub.id} className="hover:bg-amber-50/30 transition-colors">
                                         <TableCell className="text-center font-medium">#{sub.id}</TableCell>
                                         {hasBranch && <TableCell className="font-medium text-amber-900">{getLookupValue(sub, 'branch_lookup', branches)}</TableCell>}
-                                        {hasDepartment && <TableCell className="font-medium text-amber-900">{getLookupValue(sub, 'department_lookup', departments)}</TableCell>}
                                         {hasEmployee && <TableCell className="font-semibold text-blue-900">{getLookupValue(sub, 'employee_lookup', employees)}</TableCell>}
                                         <TableCell>
                                             <span className={`px-2 py-1 flex w-fit items-center justify-center text-xs font-semibold rounded-full ${sub.status === 'approved' ? 'bg-green-100 text-green-800 border border-green-200' :
@@ -258,35 +256,49 @@ export default function FormSubmissions({ form, submissions, branches = {}, depa
                                                 {(sub.status || 'pending').toUpperCase()}
                                             </span>
                                         </TableCell>
-                                        <TableCell className="font-medium text-gray-700">
-                                            {getUserName(sub.user)}
+                                        <TableCell>
+                                            <div className="flex items-center space-x-2 text-gray-700">
+                                                <span className="font-semibold">{getUserName(sub.user)}</span>
+                                            </div>
                                         </TableCell>
-                                        <TableCell className="text-muted-foreground text-sm">
-                                            {new Date(sub.created_at).toLocaleDateString()} at {new Date(sub.created_at).toLocaleTimeString()}
+                                        <TableCell>
+                                            <div className="flex flex-col">
+                                                <span className="text-sm font-medium">{new Date(sub.created_at).toLocaleDateString()}</span>
+                                                <span className="text-xs text-muted-foreground">{new Date(sub.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                            </div>
                                         </TableCell>
-                                        <TableCell className="text-right flex items-center justify-end space-x-2">
-                                            <Button size="sm" variant="ghost" asChild className="text-amber-700 hover:text-amber-800 hover:bg-amber-100">
-                                                <Link href={`/submissions/${sub.id}`}>
-                                                    <Eye className="mr-1 w-4 h-4" /> View
-                                                </Link>
-                                            </Button>
-                                            <Button size="sm" variant="ghost" asChild className="text-blue-700 hover:text-blue-800 hover:bg-blue-100">
-                                                <Link href={`/submissions/${sub.id}/edit`}>
-                                                    <Pencil className="mr-1 w-4 h-4" /> Edit
-                                                </Link>
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                                                onClick={() => {
-                                                    if (confirm('Are you sure you want to permanently delete this submission?')) {
-                                                        destroy(`/submissions/${sub.id}`);
-                                                    }
-                                                }}
-                                            >
-                                                <Trash2 className="mr-1 w-4 h-4" /> Delete
-                                            </Button>
+
+                                        <TableCell className="text-center">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-52">
+                                                    <DropdownMenuLabel className="text-xs text-gray-500 uppercase tracking-wider">Actions</DropdownMenuLabel>
+                                                    <DropdownMenuItem asChild>
+                                                        <Link href={`/submissions/${sub.id}`} className="flex items-center cursor-pointer">
+                                                            <Eye className="mr-2 h-4 w-4 text-amber-700" /> View
+                                                        </Link>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem asChild>
+                                                        <Link href={`/submissions/${sub.id}/edit`} className="flex items-center cursor-pointer">
+                                                            <Pencil className="mr-2 h-4 w-4 text-blue-700" /> Edit
+                                                        </Link>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        className="text-red-600 focus:text-red-700 focus:bg-red-50 cursor-pointer"
+                                                        onClick={() => {
+                                                            if (confirm('Are you sure you want to permanently delete this submission?')) {
+                                                                destroy(`/submissions/${sub.id}`);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </TableCell>
                                     </TableRow>
                                 ))

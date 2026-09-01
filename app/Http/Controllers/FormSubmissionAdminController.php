@@ -13,7 +13,15 @@ class FormSubmissionAdminController extends Controller
      */
     public function all_index()
     {
+        $user = auth()->user();
+        $user = auth()->user();
         $forms = Form::withCount('submissions')
+            ->where(function ($query) use ($user) {
+                $query->where('created_by', $user->id)
+                    ->orWhereHas('user_permissions', function ($q) use ($user) {
+                        $q->where('user_id', $user->id)->where('can_view_submissions', true);
+                    });
+            })
             ->orderBy('title')
             ->get();
 
@@ -27,12 +35,35 @@ class FormSubmissionAdminController extends Controller
      */
     public function form_submissions(Form $form)
     {
+        $user = auth()->user();
+        if ($form->created_by !== $user->id) {
+            $hasAccess = $form->user_permissions()->where('user_id', $user->id)->where('can_view_submissions', true)->exists();
+            if (!$hasAccess) {
+                abort(403, 'You must be granted explicit form-level access to view submissions for this form.');
+            }
+        }
+
         $submissions = FormSubmission::whereHas('formVersion', function ($q) use ($form) {
             $q->where('form_id', $form->id);
         })
             ->with(['user:id,name', 'formVersion:id,version_number', 'answers.question.inputType'])
             ->orderByDesc('id')
             ->get();
+
+        $submissions->each(function ($sub) {
+            $yesAnswers = 0;
+            $totalBoolQuestions = 0;
+            foreach ($sub->answers as $ans) {
+                $qType = $ans->question->inputType->type_identifier ?? 'text';
+                if ($qType === 'select_one' && ($ans->value_text === '0' || $ans->value_text === '1')) {
+                    $totalBoolQuestions++;
+                    if ($ans->value_text === '1') {
+                        $yesAnswers++;
+                    }
+                }
+            }
+            $sub->calculated_score = $totalBoolQuestions > 0 ? round(($yesAnswers / $totalBoolQuestions) * 100, 1) : null;
+        });
 
         $branches = \App\Models\Branch::pluck('name', 'id')->toArray();
         $departments = \App\Models\Department::pluck('name', 'id')->toArray();
@@ -41,143 +72,54 @@ class FormSubmissionAdminController extends Controller
             return [$e->id => $name];
         })->toArray();
 
+        // Load fiscal periods and resolve each submission
+        $fiscalYears = \App\Models\FiscalYear::orderBy('gregorian_start_date')->get(['id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+        $fiscalMonths = \App\Models\FiscalMonth::orderBy('gregorian_start_date')->get(['id', 'fiscal_year_id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+
+        $submissions->each(function ($sub) use ($fiscalYears, $fiscalMonths) {
+            $submittedAt = \Carbon\Carbon::parse($sub->created_at);
+
+            $matchedYear = $fiscalYears->first(
+                fn($fy) =>
+                $submittedAt->between(
+                    \Carbon\Carbon::parse($fy->gregorian_start_date),
+                    \Carbon\Carbon::parse($fy->gregorian_end_date)
+                )
+            );
+            $sub->fiscal_year_id = $matchedYear?->id;
+            $sub->fiscal_year_name = $matchedYear?->name;
+
+            $matchedMonth = $fiscalMonths->first(
+                fn($fm) =>
+                $submittedAt->between(
+                    \Carbon\Carbon::parse($fm->gregorian_start_date),
+                    \Carbon\Carbon::parse($fm->gregorian_end_date)
+                )
+            );
+            $sub->fiscal_month_id = $matchedMonth?->id;
+            $sub->fiscal_month_name = $matchedMonth?->name;
+        });
+
+        $today = \Carbon\Carbon::today();
+        $currentFiscalYear = $fiscalYears->first(fn($fy) => $today->between(
+            \Carbon\Carbon::parse($fy->gregorian_start_date),
+            \Carbon\Carbon::parse($fy->gregorian_end_date)
+        ));
+        $currentFiscalMonth = $fiscalMonths->first(fn($fm) => $today->between(
+            \Carbon\Carbon::parse($fm->gregorian_start_date),
+            \Carbon\Carbon::parse($fm->gregorian_end_date)
+        ));
+
         return Inertia::render('Forms/Submissions/FormSubmissions', [
             'form' => $form,
             'submissions' => $submissions,
             'branches' => $branches,
             'departments' => $departments,
             'employees' => $employees,
-        ]);
-    }
-
-    public function analytics(Form $form)
-    {
-        $submissions = FormSubmission::whereHas('formVersion', function ($q) use ($form) {
-            $q->where('form_id', $form->id);
-        })
-            ->with(['answers.question.inputType'])
-            ->get();
-
-        $branches = \App\Models\Branch::pluck('name', 'id')->toArray();
-        $employees = \App\Models\Employee::with('branch')->get()->mapWithKeys(function ($e) {
-            $name = trim($e->first_name . ' ' . $e->last_name) ?: $e->employee_code;
-            return [
-                $e->id => [
-                    'name' => $name,
-                    'branch' => $e->branch ? $e->branch->name : 'Unknown Branch'
-                ]
-            ];
-        })->toArray();
-
-        $totalSubmissions = $submissions->count();
-        $branchScores = [];
-        $employeeScores = [];
-        $evaluatedEmpIds = [];
-        $evaluatedBranchIds = [];
-
-        foreach ($submissions as $sub) {
-            $branchId = null;
-            $employeeId = null;
-            $yesAnswers = 0;
-            $totalBoolQuestions = 0;
-
-            foreach ($sub->answers as $ans) {
-                $qType = $ans->question->inputType->type_identifier ?? 'text';
-                if ($qType === 'branch_lookup') {
-                    $branchId = $ans->value_text;
-                } elseif ($qType === 'employee_lookup') {
-                    $employeeId = $ans->value_text;
-                } elseif ($qType === 'select_one' && ($ans->value_text === '0' || $ans->value_text === '1')) {
-                    $totalBoolQuestions++;
-                    if ($ans->value_text === '1') {
-                        $yesAnswers++;
-                    }
-                }
-            }
-
-            if ($branchId && isset($branches[$branchId])) {
-                $evaluatedBranchIds[] = $branchId;
-                $bName = $branches[$branchId];
-                if (!isset($branchScores[$bName]))
-                    $branchScores[$bName] = ['total_yes' => 0, 'total_questions' => 0];
-                $branchScores[$bName]['total_yes'] += $yesAnswers;
-                $branchScores[$bName]['total_questions'] += $totalBoolQuestions;
-            }
-
-            if ($employeeId && isset($employees[$employeeId])) {
-                $evaluatedEmpIds[] = $employeeId;
-                $eName = $employees[$employeeId]['name'];
-                $eBranch = $employees[$employeeId]['branch'];
-                if (!isset($employeeScores[$eName]))
-                    $employeeScores[$eName] = ['total_yes' => 0, 'total_questions' => 0, 'branch' => $eBranch];
-                $employeeScores[$eName]['total_yes'] += $yesAnswers;
-                $employeeScores[$eName]['total_questions'] += $totalBoolQuestions;
-            }
-        }
-
-        $finalBranchScores = [];
-        foreach ($branchScores as $name => $data) {
-            $score = $data['total_questions'] > 0 ? ($data['total_yes'] / $data['total_questions']) * 100 : 0;
-            $finalBranchScores[] = ['name' => $name, 'score' => round($score, 1), 'total_questions' => $data['total_questions']];
-        }
-        usort($finalBranchScores, fn($a, $b) => $b['score'] <=> $a['score']);
-
-        $finalEmployeeScores = [];
-        foreach ($employeeScores as $name => $data) {
-            $score = $data['total_questions'] > 0 ? ($data['total_yes'] / $data['total_questions']) * 100 : 0;
-            $finalEmployeeScores[] = ['name' => $name, 'branch' => $data['branch'], 'score' => round($score, 1), 'total_questions' => $data['total_questions']];
-        }
-        usort($finalEmployeeScores, fn($a, $b) => $b['score'] <=> $a['score']);
-
-        $totalCompanyBranches = \App\Models\Branch::where('is_sales_generating', 1)->count();
-        $distinctEmpIds = array_unique($evaluatedEmpIds);
-
-        $totalPossibleEmployees = 0;
-        if (count($distinctEmpIds) > 0) {
-            $involvedDepartments = \App\Models\Employee::whereIn('id', $distinctEmpIds)
-                ->pluck('department_id')
-                ->unique()
-                ->filter()
-                ->toArray();
-
-            if (count($involvedDepartments) > 0) {
-                $totalPossibleEmployees = \App\Models\Employee::whereIn('department_id', $involvedDepartments)->where('status', 'active')->count();
-            }
-        }
-
-        $distinctBranchIds = array_unique($evaluatedBranchIds);
-        $unvisitedBranches = \App\Models\Branch::where('is_sales_generating', 1)
-            ->whereNotIn('id', $distinctBranchIds)
-            ->pluck('name')
-            ->toArray();
-
-        $unevaluatedEmployeesByBranch = [];
-        if (isset($involvedDepartments) && count($involvedDepartments) > 0) {
-            $missedEmps = \App\Models\Employee::with('branch')
-                ->where('status', 'active')
-                ->whereIn('department_id', $involvedDepartments)
-                ->whereNotIn('id', $distinctEmpIds)
-                ->get();
-
-            foreach ($missedEmps as $emp) {
-                $bName = $emp->branch ? $emp->branch->name : 'No Branch Assigned';
-                $eName = trim($emp->first_name . ' ' . $emp->last_name) ?: $emp->employee_code;
-                if (!isset($unevaluatedEmployeesByBranch[$bName])) {
-                    $unevaluatedEmployeesByBranch[$bName] = [];
-                }
-                $unevaluatedEmployeesByBranch[$bName][] = $eName;
-            }
-        }
-
-        return Inertia::render('Forms/Submissions/Analytics', [
-            'form' => $form->only('id', 'title'),
-            'totalSubmissions' => $totalSubmissions,
-            'branchScores' => $finalBranchScores,
-            'employeeScores' => $finalEmployeeScores,
-            'totalCompanyBranches' => $totalCompanyBranches,
-            'totalPossibleEmployees' => $totalPossibleEmployees,
-            'unvisitedBranches' => $unvisitedBranches,
-            'unevaluatedEmployeesByBranch' => $unevaluatedEmployeesByBranch,
+            'fiscalYears' => $fiscalYears->map(fn($fy) => ['id' => $fy->id, 'name' => $fy->name])->values(),
+            'fiscalMonths' => $fiscalMonths->map(fn($fm) => ['id' => $fm->id, 'fiscal_year_id' => $fm->fiscal_year_id, 'name' => $fm->name])->values(),
+            'currentFiscalYearId' => $currentFiscalYear?->id,
+            'currentFiscalMonthId' => $currentFiscalMonth?->id,
         ]);
     }
 
@@ -193,6 +135,13 @@ class FormSubmissionAdminController extends Controller
             'answers.question.inputType'
         ])->findOrFail($submissionId);
 
+        $user = auth()->user();
+        if ($submission->formVersion->form->created_by !== $user->id) {
+            if (!$submission->formVersion->form->user_permissions()->where('user_id', $user->id)->where('can_view_submissions', true)->exists()) {
+                abort(403, 'You must be granted explicit form-level access to view submissions for this form.');
+            }
+        }
+
         $branches = \App\Models\Branch::select('id', 'name')->get();
         $departments = \App\Models\Department::select('id', 'name')->get();
         $employees = \App\Models\Employee::get()->map(function ($e) {
@@ -201,6 +150,19 @@ class FormSubmissionAdminController extends Controller
                 'name' => trim($e->first_name . ' ' . $e->last_name) ?: $e->employee_code,
             ];
         });
+
+        $yesAnswers = 0;
+        $totalBoolQuestions = 0;
+        foreach ($submission->answers as $ans) {
+            $qType = $ans->question->inputType->type_identifier ?? 'text';
+            if ($qType === 'select_one' && ($ans->value_text === '0' || $ans->value_text === '1')) {
+                $totalBoolQuestions++;
+                if ($ans->value_text === '1') {
+                    $yesAnswers++;
+                }
+            }
+        }
+        $submission->calculated_score = $totalBoolQuestions > 0 ? round(($yesAnswers / $totalBoolQuestions) * 100, 1) : null;
 
         return Inertia::render('Forms/Submissions/Show', [
             'form' => $submission->formVersion->form, // Keep old prop structure to limit UI rewrites
@@ -219,6 +181,13 @@ class FormSubmissionAdminController extends Controller
             'formVersion.sections.questions.choices',
             'answers.question'
         ])->findOrFail($submissionId);
+
+        $user = auth()->user();
+        if ($submission->formVersion->form->created_by !== $user->id) {
+            if (!$submission->formVersion->form->user_permissions()->where('user_id', $user->id)->where('can_edit_submissions', true)->exists()) {
+                abort(403, 'You must be granted explicit form-level access to edit submissions for this form.');
+            }
+        }
 
         $parsedAnswers = [];
         foreach ($submission->answers as $ans) {
@@ -261,7 +230,14 @@ class FormSubmissionAdminController extends Controller
 
     public function update(\Illuminate\Http\Request $request, string $submissionId)
     {
-        $submission = FormSubmission::findOrFail($submissionId);
+        $submission = FormSubmission::with('formVersion.form')->findOrFail($submissionId);
+
+        $user = auth()->user();
+        if ($submission->formVersion->form->created_by !== $user->id) {
+            if (!$submission->formVersion->form->user_permissions()->where('user_id', $user->id)->where('can_edit_submissions', true)->exists()) {
+                abort(403, 'You must be granted explicit form-level access to edit submissions for this form.');
+            }
+        }
 
         $validated = $request->validate([
             'answers' => 'required|array',
@@ -297,22 +273,38 @@ class FormSubmissionAdminController extends Controller
      */
     public function update_status(\Illuminate\Http\Request $request, string $submissionId)
     {
-        $validated = $request->validate([
+        $validated = $request->request->all() ? $request->validate([
             'status' => 'required|in:pending,approved,rejected'
-        ]);
+        ]) : [];
 
-        $submission = FormSubmission::findOrFail($submissionId);
+        $submission = FormSubmission::with('formVersion.form')->findOrFail($submissionId);
+
+        $user = auth()->user();
+        if ($submission->formVersion->form->created_by !== $user->id) {
+            if (!$submission->formVersion->form->user_permissions()->where('user_id', $user->id)->where('can_edit_submissions', true)->exists()) {
+                abort(403, 'You must be granted explicit form-level access to edit submissions for this form.');
+            }
+        }
         $submission->update(['status' => $validated['status']]);
 
-        return back()->with('success', 'Status updated successfully.');
+        return back()->with('success', 'Submission status updated.');
     }
+
+
 
     /**
      * Delete the submission entirely.
      */
     public function destroy(string $submissionId)
     {
-        $submission = FormSubmission::findOrFail($submissionId);
+        $submission = FormSubmission::with('formVersion.form')->findOrFail($submissionId);
+
+        $user = auth()->user();
+        if ($submission->formVersion->form->created_by !== $user->id) {
+            if (!$submission->formVersion->form->user_permissions()->where('user_id', $user->id)->where('can_delete_submissions', true)->exists()) {
+                abort(403, 'You must be granted explicit form-level access to delete submissions for this form.');
+            }
+        }
         $submission->answers()->delete();
         $submission->delete();
 
@@ -324,6 +316,12 @@ class FormSubmissionAdminController extends Controller
      */
     public function export_csv(Form $form)
     {
+        $user = auth()->user();
+        if ($form->created_by !== $user->id) {
+            if (!$form->user_permissions()->where('user_id', $user->id)->where('can_view_submissions', true)->exists()) {
+                abort(403, 'You must be granted explicit form-level access to view/export submissions for this form.');
+            }
+        }
         // 1. Fetch lookups for decoding relational data types
         $branches = \App\Models\Branch::pluck('name', 'id')->toArray();
         $departments = \App\Models\Department::pluck('name', 'id')->toArray();

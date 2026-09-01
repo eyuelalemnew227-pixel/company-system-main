@@ -9,8 +9,74 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import SignatureCanvas from 'react-signature-canvas';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Star } from 'lucide-react';
+import { Star, MapPin } from 'lucide-react';
 import React from 'react';
+
+const GeoLocationPicker = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+    const [loading, setLoading] = React.useState(false);
+    const [error, setError] = React.useState('');
+
+    const getLocation = () => {
+        setLoading(true);
+        setError('');
+        if (!navigator.geolocation) {
+            setError('Geolocation is not supported by your browser.');
+            setLoading(false);
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const lat = parseFloat(position.coords.latitude.toFixed(6));
+                const lng = parseFloat(position.coords.longitude.toFixed(6));
+                onChange(`${lat}, ${lng}`);
+                setLoading(false);
+            },
+            (err) => {
+                setError(`Unable to retrieve your location: ${err.message}`);
+                setLoading(false);
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+        );
+    };
+
+    return (
+        <div className="flex flex-col space-y-2">
+            {!value ? (
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={getLocation}
+                    disabled={loading}
+                    className="w-full max-w-sm flex items-center justify-center border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                >
+                    {loading ? <><MapPin className="w-4 h-4 mr-2 animate-bounce" /> Acquiring Coordinates...</> : <><MapPin className="w-4 h-4 mr-2" /> Capture Current Location</>}
+                </Button>
+            ) : (
+                <div className="flex items-center space-x-3 p-3 bg-green-50/70 border border-green-200 rounded-md max-w-sm relative group">
+                    <div className="bg-green-100 p-2 rounded-full">
+                        <MapPin className="w-5 h-5 text-green-700" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-semibold text-green-900">Location Captured</p>
+                        <p className="text-xs text-green-700 font-mono mt-0.5">{value}</p>
+                    </div>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={getLocation}
+                        disabled={loading}
+                        className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity h-7 text-xs text-green-800 hover:bg-green-200/50"
+                    >
+                        Retake
+                    </Button>
+                </div>
+            )}
+            {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
+        </div>
+    );
+};
 
 const SignaturePad = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
     const sigPad = React.useRef<any>(null);
@@ -224,6 +290,13 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                             <span className="text-base font-medium leading-none">No</span>
                         </label>
                     </div>
+                );
+            case 'geolocation':
+                return (
+                    <GeoLocationPicker
+                        value={answer}
+                        onChange={(val) => handleAnswerChange(question.id, val)}
+                    />
                 );
             case 'branch_lookup':
                 return (

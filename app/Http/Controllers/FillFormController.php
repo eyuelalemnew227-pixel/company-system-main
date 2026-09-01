@@ -12,6 +12,27 @@ class FillFormController extends Controller
     public function show(string $id)
     {
         $form = Form::findOrFail($id);
+
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('fill forms')) {
+            abort(403, 'You do not have the global capability to fill forms.');
+        }
+
+        if ($form->created_by !== $user->id) {
+            if ($form->status !== 'active') {
+                abort(403, 'This form is currently inactive and cannot accept new submissions.');
+            }
+
+            $hasAccess = $form->user_permissions()
+                ->where('user_id', $user->id)
+                ->where('can_fill_submissions', true)
+                ->exists();
+
+            if (!$hasAccess) {
+                abort(403, 'You have not been granted explicit access to fill out this specific form.');
+            }
+        }
+
         $version = $form->versions()->latest()->first();
         if (!$version) {
             abort(404, 'Form has no active version.');
@@ -42,6 +63,24 @@ class FillFormController extends Controller
     public function store(Request $request, string $id)
     {
         $form = Form::findOrFail($id);
+
+        $user = auth()->user();
+        if (!$user->hasPermissionTo('fill forms')) {
+            abort(403, 'You do not have the global capability to fill forms.');
+        }
+        if ($form->created_by !== $user->id) {
+            if ($form->status !== 'active') {
+                abort(403, 'This form is currently inactive and cannot accept new submissions.');
+            }
+            $hasAccess = $form->user_permissions()
+                ->where('user_id', $user->id)
+                ->where('can_fill_submissions', true)
+                ->exists();
+            if (!$hasAccess) {
+                abort(403, 'You have not been granted explicit access to fill out this specific form.');
+            }
+        }
+
         $version = $form->versions()->latest()->first();
 
         \Illuminate\Support\Facades\Log::info('INCOMING FORM', $request->all());

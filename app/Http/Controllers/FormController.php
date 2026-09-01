@@ -19,7 +19,36 @@ class FormController extends Controller
      */
     public function index()
     {
-        $forms = Form::latest()->get();
+        $user = auth()->user();
+
+        $forms = Form::with([
+            'user_permissions' => function ($q) use ($user) {
+                $q->where('user_id', $user->id);
+            }
+        ])->where(function ($query) use ($user) {
+            $query->where('created_by', $user->id)
+                ->orWhereHas('user_permissions', function ($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                        ->where(function ($q2) {
+                            $q2->where('can_edit_schema', true)
+                                ->orWhere('can_delete_submissions', true)
+                                ->orWhere('can_manage_access', true);
+                        });
+                });
+        })->latest()->get();
+
+        $forms->transform(function ($form) use ($user) {
+            if ($form->created_by === $user->id) {
+                $form->can_manage_access = true;
+                $form->can_edit_schema = true;
+            } else {
+                $perm = $form->user_permissions->first();
+                $form->can_manage_access = $perm ? $perm->can_manage_access : false;
+                $form->can_edit_schema = $perm ? $perm->can_edit_schema : false;
+            }
+            return $form;
+        });
+
         return Inertia::render('Forms/Index', ['forms' => $forms]);
     }
 
@@ -28,7 +57,17 @@ class FormController extends Controller
      */
     public function available()
     {
-        $forms = Form::where('status', 'active')->latest()->get();
+        $user = auth()->user();
+        $forms = Form::where(function ($query) use ($user) {
+            $query->where('status', 'active')
+                ->whereHas('user_permissions', function ($q) use ($user) {
+                    $q->where('user_id', $user->id)->where('can_fill_submissions', true);
+                });
+        })
+            ->orWhere('created_by', $user->id)
+            ->latest()
+            ->get();
+
         return Inertia::render('Forms/Available', ['forms' => $forms]);
     }
 
@@ -75,6 +114,7 @@ class FormController extends Controller
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
                 'status' => 'draft',
+                'created_by' => auth()->id(),
             ]);
 
             $version = FormVersion::create([
@@ -129,6 +169,14 @@ class FormController extends Controller
     {
         $form = Form::findOrFail($id);
 
+        $user = auth()->user();
+        if ($form->created_by !== $user->id) {
+            $hasAccess = $form->user_permissions()->where('user_id', $user->id)->where('can_edit_schema', true)->exists();
+            if (!$hasAccess) {
+                abort(403, 'You must be granted explicit form-level access to edit this specific forms schema.');
+            }
+        }
+
         $version = $form->versions()->latest()->with([
             'sections' => function ($q) {
                 $q->orderBy('order_index')->with([
@@ -159,6 +207,14 @@ class FormController extends Controller
     public function versions(string $id)
     {
         $form = Form::findOrFail($id);
+        $user = auth()->user();
+
+        if ($form->created_by !== $user->id) {
+            $hasAccess = $form->user_permissions()->where('user_id', $user->id)->where('can_edit_schema', true)->exists();
+            if (!$hasAccess) {
+                abort(403, 'You must be granted explicit form-level access to view versions for this form.');
+            }
+        }
         $allVersions = $form->versions()->latest()->get(['id', 'version_number', 'status', 'created_at']);
 
         return Inertia::render('Forms/Versions/Index', [
@@ -174,6 +230,14 @@ class FormController extends Controller
     public function update(Request $request, string $id)
     {
         $form = Form::findOrFail($id);
+        $user = auth()->user();
+
+        if ($form->created_by !== $user->id) {
+            $hasAccess = $form->user_permissions()->where('user_id', $user->id)->where('can_edit_schema', true)->exists();
+            if (!$hasAccess) {
+                abort(403, 'You must be granted explicit form-level access to update this specific form.');
+            }
+        }
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
@@ -343,6 +407,7 @@ class FormController extends Controller
                 'title' => $formData['title'] . ' (Imported)',
                 'description' => $formData['description'] ?? null,
                 'status' => 'draft', // Force draft to prevent accidental deployment
+                'created_by' => auth()->id(),
             ]);
 
             $version = FormVersion::create([
@@ -350,6 +415,8 @@ class FormController extends Controller
                 'version_number' => 1,
                 'status' => 'draft',
             ]);
+
+
 
             if (!empty($formData['sections'])) {
                 foreach ($formData['sections'] as $sIndex => $sectionData) {

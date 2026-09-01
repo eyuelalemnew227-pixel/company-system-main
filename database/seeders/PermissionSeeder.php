@@ -325,5 +325,15 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'create spare parts']);
         Permission::firstOrCreate(['name' => 'update spare parts']);
         Permission::firstOrCreate(['name' => 'delete spare parts']);
+
+        // Form Builder
+        Permission::firstOrCreate(['name' => 'view forms']);
+        Permission::firstOrCreate(['name' => 'create forms']);
+        Permission::firstOrCreate(['name' => 'update forms']);
+        Permission::firstOrCreate(['name' => 'delete forms']);
+        Permission::firstOrCreate(['name' => 'fill forms']);
+        Permission::firstOrCreate(['name' => 'view form submissions']);
+        Permission::firstOrCreate(['name' => 'delete form submissions']);
+        Permission::firstOrCreate(['name' => 'export form submissions']);
     }
 }

@@ -84,45 +84,50 @@ class User extends Authenticatable
 		];
 	}
 
-    public function isManagerOfDepartment(int $departmentId): bool
-    {
-        if (!$this->employee_id) {
-            return false;
-        }
+	public function isManagerOfDepartment(int $departmentId): bool
+	{
+		if (!$this->employee_id) {
+			return false;
+		}
 
-        return \Illuminate\Support\Facades\DB::table('managers')
-            ->join('employees', 'managers.employee_id', '=', 'employees.id')
-            ->where('employees.department_id', $departmentId)
-            ->where('managers.employee_id', $this->employee_id)
-            ->exists();
-    }
+		return \Illuminate\Support\Facades\DB::table('managers')
+			->join('employees', 'managers.employee_id', '=', 'employees.id')
+			->where('employees.department_id', $departmentId)
+			->where('managers.employee_id', $this->employee_id)
+			->exists();
+	}
 
-    public function managedDepartmentIds(): array
-    {
-        if (!$this->employee_id) {
-            return [];
-        }
+	public function managedDepartmentIds(): array
+	{
+		if (!$this->employee_id) {
+			return [];
+		}
 
-        return \Illuminate\Support\Facades\DB::table('managers')
-            ->join('employees', 'managers.employee_id', '=', 'employees.id')
-            ->where('managers.employee_id', $this->employee_id)
-            ->pluck('employees.department_id')
-            ->toArray();
-    }
+		return \Illuminate\Support\Facades\DB::table('managers')
+			->join('employees', 'managers.employee_id', '=', 'employees.id')
+			->where('managers.employee_id', $this->employee_id)
+			->pluck('employees.department_id')
+			->toArray();
+	}
 
-    /**
-     * Pre-orders created by this user.
-     */
-    public function preOrders(): HasMany
-    {
-        return $this->hasMany(PreOrder::class, 'created_by');
-    }
+	/**
+	 * Pre-orders created by this user.
+	 */
+	public function preOrders(): HasMany
+	{
+		return $this->hasMany(PreOrder::class, 'created_by');
+	}
 
-    /**
-     * Ticket assignments assigned to this user.
-     */
-    public function ticketAssignments(): HasMany
-    {
-        return $this->hasMany(TicketAssignment::class, 'assigned_to');
-    }
+	public function form_permissions(): HasMany
+	{
+		return $this->hasMany(FormUserPermission::class);
+	}
+
+	/**
+	 * Ticket assignments assigned to this user.
+	 */
+	public function ticketAssignments(): HasMany
+	{
+		return $this->hasMany(TicketAssignment::class, 'assigned_to');
+	}
 }
