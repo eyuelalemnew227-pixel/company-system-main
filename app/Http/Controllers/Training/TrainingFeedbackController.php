@@ -15,44 +15,56 @@ class TrainingFeedbackController extends Controller
 {
     public function index(Request $request): Response
     {
-        $query = TrainingFeedbackResponse::with(['schedule', 'user', 'branch']);
-
-        $user = $request->user();
-        if ($user && !$user->can('training.feedback.view') && !$user->can('training.feedback.manage') && $user->can('training.feedback.view_own')) {
-            $userBranchId = $user->employee?->branch_id;
-            $query->where(function ($q) use ($user, $userBranchId) {
-                $q->where('user_id', $user->id);
-                if ($userBranchId) {
-                    $q->orWhere('branch_id', $userBranchId);
-                }
-            });
-        }
-
-        if ($request->filled('search')) {
-            $search = trim($request->input('search'));
-            $query->where(function ($q) use ($search) {
-                $q->where('trainee_name', 'like', "%{$search}%")
-                  ->orWhere('q9_one_word_summary', 'like', "%{$search}%")
-                  ->orWhere('q10_most_liked_aspects', 'like', "%{$search}%")
-                  ->orWhere('q11_additional_comments', 'like', "%{$search}%");
-            });
-        }
-
-        if ($request->filled('q6_gained_new_knowledge') && $request->input('q6_gained_new_knowledge') !== 'all') {
-            $query->where('q6_gained_new_knowledge', $request->input('q6_gained_new_knowledge'));
-        }
-
-        $responses = $query->orderBy('created_at', 'desc')->get();
-
-        $allResponses = TrainingFeedbackResponse::all();
+        $responses = collect();
         $summary = [
-            'total' => $allResponses->count(),
-            'avg_q1_relevance' => round($allResponses->avg('q1_relevance') ?? 0, 1),
-            'avg_q3_response_quality' => round($allResponses->avg('q3_response_quality') ?? 0, 1),
-            'avg_q4_participatory' => round($allResponses->avg('q4_participatory') ?? 0, 1),
-            'avg_q5_motivating' => round($allResponses->avg('q5_motivating') ?? 0, 1),
-            'gained_knowledge_yes_count' => $allResponses->where('q6_gained_new_knowledge', 'Yes')->count(),
+            'total' => 0,
+            'avg_q1_relevance' => 0,
+            'avg_q3_response_quality' => 0,
+            'avg_q4_participatory' => 0,
+            'avg_q5_motivating' => 0,
+            'gained_knowledge_yes_count' => 0,
         ];
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('training_feedback_responses')) {
+            $query = TrainingFeedbackResponse::with(['schedule', 'user', 'branch']);
+
+            $user = $request->user();
+            if ($user && !$user->can('training.feedback.view') && !$user->can('training.feedback.manage') && $user->can('training.feedback.view_own')) {
+                $userBranchId = $user->employee?->branch_id;
+                $query->where(function ($q) use ($user, $userBranchId) {
+                    $q->where('user_id', $user->id);
+                    if ($userBranchId) {
+                        $q->orWhere('branch_id', $userBranchId);
+                    }
+                });
+            }
+
+            if ($request->filled('search')) {
+                $search = trim($request->input('search'));
+                $query->where(function ($q) use ($search) {
+                    $q->where('trainee_name', 'like', "%{$search}%")
+                      ->orWhere('q9_one_word_summary', 'like', "%{$search}%")
+                      ->orWhere('q10_most_liked_aspects', 'like', "%{$search}%")
+                      ->orWhere('q11_additional_comments', 'like', "%{$search}%");
+                });
+            }
+
+            if ($request->filled('q6_gained_new_knowledge') && $request->input('q6_gained_new_knowledge') !== 'all') {
+                $query->where('q6_gained_new_knowledge', $request->input('q6_gained_new_knowledge'));
+            }
+
+            $responses = $query->orderBy('created_at', 'desc')->get();
+
+            $allResponses = TrainingFeedbackResponse::all();
+            $summary = [
+                'total' => $allResponses->count(),
+                'avg_q1_relevance' => round($allResponses->avg('q1_relevance') ?? 0, 1),
+                'avg_q3_response_quality' => round($allResponses->avg('q3_response_quality') ?? 0, 1),
+                'avg_q4_participatory' => round($allResponses->avg('q4_participatory') ?? 0, 1),
+                'avg_q5_motivating' => round($allResponses->avg('q5_motivating') ?? 0, 1),
+                'gained_knowledge_yes_count' => $allResponses->where('q6_gained_new_knowledge', 'Yes')->count(),
+            ];
+        }
 
         $schedules = TrainingSchedule::orderBy('schedule_date', 'desc')->get();
         $branches = Branch::orderBy('name')->get();
