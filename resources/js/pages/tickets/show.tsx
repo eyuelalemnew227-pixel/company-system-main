@@ -988,57 +988,58 @@ export default function TicketShow() {
                     );
                     return activityLogs.length > 0 ? (
                       activityLogs.map((log) => (
-                      <div key={log.id} className="relative pl-10">
-                        <div className="absolute left-0 top-1 flex h-9 w-9 items-center justify-center rounded-full bg-background border shadow-sm">
-                          {getActionIcon(log.action)}
-                        </div>
-                        <div className="flex flex-col rounded-lg border bg-card p-3 shadow-sm">
-                          <div className="flex items-center justify-between gap-2 mb-1">
-                            <span className="font-semibold text-sm capitalize">{log.action.replace('_', ' ')}</span>
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {new Date(log.created_at).toLocaleString()}
-                            </span>
+                        <div key={log.id} className="relative pl-10">
+                          <div className="absolute left-0 top-1 flex h-9 w-9 items-center justify-center rounded-full bg-background border shadow-sm">
+                            {getActionIcon(log.action)}
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            {log.user?.name ? (
-                              <span className="font-medium text-foreground">{log.user.name}</span>
-                            ) : (
-                              <span className="italic">System</span>
-                            )}
-                            {log.reason && (
-                              <div className="mt-2 text-xs italic bg-muted/50 p-2 rounded border-l-2 border-primary/50">
-                                "{log.reason}"
-                              </div>
-                            )}
-                            {log.old_status && log.new_status && (
-                              <div className="mt-1 flex items-center gap-2 text-xs">
-                                <span className="text-muted-foreground">Status:</span>
-                                <span className="px-1.5 py-0.5 rounded bg-muted">{log.old_status}</span>
-                                <ChevronRight className="h-3 w-3" />
-                                <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">{log.new_status}</span>
-                              </div>
-                            )}
-                            {log.action === 'priority_updated' && log.meta && (
-                              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                                <span>Priority changed from</span>
-                                <span className="font-bold uppercase">{(log.meta as any).old_priority}</span>
-                                <ChevronRight className="h-3 w-3" />
-                                <span className="font-bold uppercase text-foreground">{(log.meta as any).new_priority}</span>
-                              </div>
-                            )}
-                            {log.action === 'created' && (log.meta as any)?.priority && (
-                              <div className="mt-1 text-xs text-muted-foreground">
-                                Set with <span className="font-bold uppercase">{(log.meta as any).priority}</span> priority
-                              </div>
-                            )}
+                          <div className="flex flex-col rounded-lg border bg-card p-3 shadow-sm">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="font-semibold text-sm capitalize">{log.action.replace('_', ' ')}</span>
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                {new Date(log.created_at).toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {log.user?.name ? (
+                                <span className="font-medium text-foreground">{log.user.name}</span>
+                              ) : (
+                                <span className="italic">System</span>
+                              )}
+                              {log.reason && (
+                                <div className="mt-2 text-xs italic bg-muted/50 p-2 rounded border-l-2 border-primary/50">
+                                  "{log.reason}"
+                                </div>
+                              )}
+                              {log.old_status && log.new_status && (
+                                <div className="mt-1 flex items-center gap-2 text-xs">
+                                  <span className="text-muted-foreground">Status:</span>
+                                  <span className="px-1.5 py-0.5 rounded bg-muted">{log.old_status}</span>
+                                  <ChevronRight className="h-3 w-3" />
+                                  <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">{log.new_status}</span>
+                                </div>
+                              )}
+                              {log.action === 'priority_updated' && log.meta && (
+                                <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                                  <span>Priority changed from</span>
+                                  <span className="font-bold uppercase">{(log.meta as any).old_priority}</span>
+                                  <ChevronRight className="h-3 w-3" />
+                                  <span className="font-bold uppercase text-foreground">{(log.meta as any).new_priority}</span>
+                                </div>
+                              )}
+                              {log.action === 'created' && (log.meta as any)?.priority && (
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  Set with <span className="font-bold uppercase">{(log.meta as any).priority}</span> priority
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                  ) : (
-                    <div className="text-center py-6 text-muted-foreground italic text-sm">No activity recorded yet.</div>
-                  );
-                })()}
+                      ))
+                    ) : (
+                      <div className="text-center py-6 text-muted-foreground italic text-sm">No activity recorded yet.</div>
+                    );
+                  })()}
                 </div>
               </CardContent>
             </Card>
