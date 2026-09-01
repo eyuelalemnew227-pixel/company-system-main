@@ -141,7 +141,7 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
         const start = textarea.selectionStart;
         const end = textarea.selectionEnd;
         const selectedText = data.content.substring(start, end);
-        const replacement = prefix + (selectedText || 'Text') + suffix;
+        const replacement = prefix + selectedText + suffix;
 
         const newContent =
             data.content.substring(0, start) + replacement + data.content.substring(end);
@@ -150,10 +150,15 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
 
         setTimeout(() => {
             textarea.focus();
-            textarea.setSelectionRange(
-                start + prefix.length,
-                start + prefix.length + (selectedText ? selectedText.length : 4)
-            );
+            if (selectedText.length > 0) {
+                textarea.setSelectionRange(
+                    start + prefix.length,
+                    start + prefix.length + selectedText.length
+                );
+            } else {
+                const cursorPosition = start + prefix.length;
+                textarea.setSelectionRange(cursorPosition, cursorPosition);
+            }
         }, 0);
     };
 

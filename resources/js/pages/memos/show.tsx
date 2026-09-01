@@ -65,7 +65,15 @@ export default function MemoShow({
 
     const formatContentHtml = (content: string) => {
         if (!content) return '';
-        return content.replace(/\n/g, '<br />');
+        let html = content;
+        // Parse Markdown bold **text** to <b>text</b>
+        html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+        // Parse Markdown italic *text* to <i>text</i>
+        html = html.replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, '<i>$1</i>');
+        // Parse Markdown headers
+        html = html.replace(/^### (.*$)/gim, '<h3 class="font-bold text-base mt-2 mb-1">$1</h3>');
+        // Convert newlines to <br />
+        return html.replace(/\n/g, '<br />');
     };
 
     const handleCopyLink = () => {

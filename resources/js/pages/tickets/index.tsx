@@ -14,7 +14,7 @@ import AppLayout from '@/layouts/app-layout';
 import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Download, Edit3, Eye, Lock, Search, XCircle } from 'lucide-react';
+import { Check, ChevronsUpDown, Download, Edit3, Eye, Lock, Search, XCircle, ExternalLink, Ticket as TicketIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -98,6 +98,13 @@ export default function TicketIndex() {
 
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+  const [viewTicket, setViewTicket] = useState<Ticket | null>(null);
+
+  const handleOpenViewModal = (ticket: Ticket) => {
+    setViewTicket(ticket);
+    setIsViewModalOpen(true);
+  };
   const [successModal, setSuccessModal] = useState<{
     open: boolean;
     title?: string;
@@ -515,10 +522,14 @@ export default function TicketIndex() {
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1">
-                            <Button asChild size="icon" variant="ghost" className="size-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700" title="View Detail">
-                              <Link href={route('tickets.show', t.id)}>
-                                <Eye className="size-4" />
-                              </Link>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="size-8 text-blue-600 hover:bg-blue-50 hover:text-blue-700 cursor-pointer"
+                              title="View Case Details"
+                              onClick={() => handleOpenViewModal(t)}
+                            >
+                              <Eye className="size-4" />
                             </Button>
                             {((t.allowed_statuses && t.allowed_statuses.length > 0) || t.can_assign) && (
                               <Button
@@ -658,6 +669,101 @@ export default function TicketIndex() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick View Ticket Details Modal */}
+      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+        <DialogContent className="sm:max-w-2xl p-6 bg-background rounded-xl border shadow-xl max-h-[90vh] overflow-y-auto">
+          {viewTicket && (
+            <div className="space-y-5">
+              <DialogHeader className="pb-3 border-b flex flex-row items-center justify-between">
+                <div>
+                  <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                    <TicketIcon className="h-5 w-5 text-blue-600" />
+                    Ticket #{viewTicket.id}: {viewTicket.main_category?.name ?? viewTicket.mainCategory?.name ?? viewTicket.title}
+                  </DialogTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Submitted on {new Date(viewTicket.created_at).toLocaleString()}
+                  </p>
+                </div>
+              </DialogHeader>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-lg border text-xs">
+                <div>
+                  <span className="font-bold text-slate-500 block">Status</span>
+                  <StatusBadge status={viewTicket.status} />
+                </div>
+                <div>
+                  <span className="font-bold text-slate-500 block">Priority</span>
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border inline-block mt-0.5 ${
+                    viewTicket.priority === 'urgent' ? 'bg-red-50 text-red-700 border-red-200' :
+                    viewTicket.priority === 'high' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                    'bg-blue-50 text-blue-700 border-blue-200'
+                  }`}>
+                    {(viewTicket.priority ?? 'medium').toUpperCase()}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-500 block">Assigned Technician</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                    {viewTicket.assignments?.find((a) => a.is_current)?.assignee?.name ?? 'Unassigned'}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-500 block">Requesting Branch</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                    {viewTicket.requestor_branch?.name ?? '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-500 block">Department</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                    {viewTicket.department?.name ?? '—'}
+                  </span>
+                </div>
+                <div>
+                  <span className="font-bold text-slate-500 block">Sub-Category</span>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">
+                    {viewTicket.sub_category?.name ?? viewTicket.subCategory?.name ?? '—'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 border-t pt-3">
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">Ticket Issue & Description</h4>
+                <div className="p-3.5 bg-white dark:bg-slate-950 rounded-lg border text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+                  {viewTicket.title || 'No description provided.'}
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t">
+                <Button variant="outline" size="sm" onClick={() => setIsViewModalOpen(false)}>
+                  Close
+                </Button>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  {((viewTicket.allowed_statuses && viewTicket.allowed_statuses.length > 0) || viewTicket.can_assign) && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="font-bold border-blue-300 text-blue-700 hover:bg-blue-50"
+                      onClick={() => {
+                        setIsViewModalOpen(false);
+                        handleOpenUpdateModal(viewTicket);
+                      }}
+                    >
+                      <Edit3 className="h-3.5 w-3.5 mr-1" /> Update Case
+                    </Button>
+                  )}
+                  <Button asChild size="sm" className="font-bold bg-blue-700 hover:bg-blue-800 text-white">
+                    <Link href={route('tickets.show', viewTicket.id)}>
+                      Open Full Page & Chat <ExternalLink className="h-3.5 w-3.5 ml-1" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
