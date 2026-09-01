@@ -262,7 +262,7 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'export telecom data']);
         Permission::firstOrCreate(['name' => 'manage telecom connections']);
 
-        // Online Training & LMS Reports
+        // Online Training & LMS Reports (35 total Training & LMS permissions)
         Permission::firstOrCreate(['name' => 'training.online.view']);
         Permission::firstOrCreate(['name' => 'training.online.courses.manage']);
         Permission::firstOrCreate(['name' => 'training.online.courses.enroll']);
@@ -286,11 +286,33 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'training.attendance.create']);
         Permission::firstOrCreate(['name' => 'training.attendance.manage']);
         Permission::firstOrCreate(['name' => 'training.feedback.view']);
+        Permission::firstOrCreate(['name' => 'training.feedback.view_own']);
         Permission::firstOrCreate(['name' => 'training.feedback.create']);
         Permission::firstOrCreate(['name' => 'training.feedback.manage']);
         Permission::firstOrCreate(['name' => 'training.reports.view']);
         Permission::firstOrCreate(['name' => 'training.reports.export']);
         Permission::firstOrCreate(['name' => 'training.settings.manage']);
+        Permission::firstOrCreate(['name' => 'training.branch_manager.view']);
+        Permission::firstOrCreate(['name' => 'training.branch_manager.agendas.manage']);
+        Permission::firstOrCreate(['name' => 'training.branch_manager.schedules.manage']);
+        Permission::firstOrCreate(['name' => 'training.branch_manager.evaluations.manage']);
+        Permission::firstOrCreate(['name' => 'training.branch_manager.settings.manage']);
+        Permission::firstOrCreate(['name' => 'training.evaluations.view']);
+        Permission::firstOrCreate(['name' => 'training.evaluations.view_own']);
+        Permission::firstOrCreate(['name' => 'training.evaluations.manage']);
+
+        // Internal Memorandum & Documents (11 total Memos & Documents permissions)
+        Permission::firstOrCreate(['name' => 'memo.view']);
+        Permission::firstOrCreate(['name' => 'memo.view.all']);
+        Permission::firstOrCreate(['name' => 'memo.create']);
+        Permission::firstOrCreate(['name' => 'memo.edit']);
+        Permission::firstOrCreate(['name' => 'memo.delete']);
+        Permission::firstOrCreate(['name' => 'memo.settings']);
+        Permission::firstOrCreate(['name' => 'memo.sign']);
+        Permission::firstOrCreate(['name' => 'memo.telegram.send']);
+        Permission::firstOrCreate(['name' => 'memo.templates.manage']);
+        Permission::firstOrCreate(['name' => 'memo.access']);
+        Permission::firstOrCreate(['name' => 'memorandum.access']);
 
         // Spare Part Categories
         Permission::firstOrCreate(['name' => 'view spare part categories']);
