@@ -30,8 +30,12 @@ class MemoController extends Controller
     public function index(Request $request): Response
     {
         $user = Auth::user();
-        $canViewAll = $user->can('memo.view.all');
-        $isSuperAdmin = $canViewAll;
+        if (!$user->hasRole('Super Admin') && !$user->hasAnyPermission(['memo.view', 'memo.view.all', 'memo.create', 'memo.edit', 'memo.delete'])) {
+            abort(403, 'Access denied. You do not have permission to access the Internal Memorandum module.');
+        }
+
+        $canViewAll = $user->hasRole('Super Admin') || $user->can('memo.view.all');
+        $isSuperAdmin = $user->hasRole('Super Admin') || $canViewAll;
         $query = Memo::with('creator');
 
         // Unless granted memo.view.all, users only view their own saved memos

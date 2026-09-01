@@ -17,6 +17,11 @@ class TrainingAttendanceController extends Controller
 {
     public function index(Request $request): Response
     {
+        $user = $request->user();
+        if (!$user->hasRole('Super Admin') && !$user->hasAnyPermission(['training.attendance.view', 'training.attendance.create', 'training.attendance.manage', 'training.branch_manager.view'])) {
+            abort(403, 'Access denied. You do not have permission to access Branch Manager Training Attendance.');
+        }
+
         $selectedDate = $request->input('session_date', date('Y-m-d'));
 
         // Query existing attendance entries for the date
@@ -28,64 +33,70 @@ class TrainingAttendanceController extends Controller
 
         // 1. Branch Roster List (ONLY Branch Managers)
         $branches = Branch::orderBy('name')->get();
+
+        $managerUserIds = User::whereHas('employee', function ($q) {
+            $q->whereNotNull('branch_id')
+              ->where(function ($sub) {
+                  $sub->whereHas('position', function ($posQ) {
+                      $posQ->where('title', 'like', '%Branch Manager%')
+                           ->orWhere('title', 'like', '%BM%')
+                           ->orWhere('title', 'like', '%Manager%');
+                  })
+                  ->orWhereHas('user.roles', function ($rq) {
+                      $rq->where('name', 'like', '%Branch Manager%')
+                         ->orWhere('name', 'like', '%Manager%');
+                  })
+                  ->orWhereHas('manager');
+              });
+        })->pluck('id')->toArray();
+
         $branchUsers = User::with(['employee.branch', 'employee.position'])
-            ->whereHas('employee', function ($q) {
-                $q->whereNotNull('branch_id')
-                  ->where(function ($sub) {
-                      $sub->whereHas('position', function ($posQ) {
-                          $posQ->where('title', 'like', '%Manager%')
-                               ->orWhere('title', 'like', '%BM%')
-                               ->orWhere('title', 'like', '%Branch%');
-                      })
-                      ->orWhereHas('user.roles', function ($rq) {
-                          $rq->where('name', 'like', '%Branch%')
-                             ->orWhere('name', 'like', '%Manager%');
-                      });
-                  });
-            })
+            ->whereIn('id', $managerUserIds)
             ->get();
 
-        if ($branchUsers->isEmpty()) {
-            // Fallback: get any users assigned to branches
-            $branchUsers = User::with(['employee.branch', 'employee.position'])
-                ->whereHas('employee', fn($q) => $q->whereNotNull('branch_id'))
-                ->get();
-        }
-
         $branchRoster = collect();
+        $coveredBranchIds = [];
 
         if ($branchUsers->isNotEmpty()) {
             foreach ($branchUsers as $u) {
-                $bName = $u->employee->branch->name ?? 'Branch';
+                $b = $u->employee?->branch;
+                if ($b) {
+                    $coveredBranchIds[] = $b->id;
+                }
+                $bName = $b->name ?? 'Branch';
                 $key = "user_{$u->id}";
                 $att = $existingAttendances->get($key);
-                $posTitle = $u->employee?->position?->title ?? $u->employee?->position?->name;
+                $posTitle = $u->employee?->position?->title ?? $u->employee?->position?->name ?? 'Branch Manager';
 
                 $branchRoster->push([
                     'id' => $att ? $att->id : null,
                     'user_id' => $u->id,
+                    'branch_id' => $b?->id,
                     'user_type' => 'branch_manager',
                     'name' => $u->name . ($posTitle ? " ({$posTitle})" : ''),
                     'branch_or_department' => $bName,
                     'session_date' => $selectedDate,
-                    'is_attended' => $att ? ($att->status === 'on_time' || $att->status === 'late') : false,
+                    'is_attended' => $att ? in_array($att->status, ['on_time', 'late', 'attended'], true) : false,
                     'status' => $att ? $att->status : 'absent',
                     'notes' => $att ? $att->notes : null,
                 ]);
             }
-        } else {
-            foreach ($branches as $b) {
-                $key = "raw_branch_manager_{$b->name} Manager_{$b->name}";
+        }
+
+        foreach ($branches as $b) {
+            if (!in_array($b->id, $coveredBranchIds)) {
+                $key = "raw_branch_manager_{$b->name} Branch Manager_{$b->name}";
                 $att = $existingAttendances->get($key);
 
                 $branchRoster->push([
                     'id' => $att ? $att->id : null,
                     'user_id' => null,
+                    'branch_id' => $b->id,
                     'user_type' => 'branch_manager',
                     'name' => "{$b->name} Branch Manager",
                     'branch_or_department' => $b->name,
                     'session_date' => $selectedDate,
-                    'is_attended' => $att ? ($att->status === 'on_time' || $att->status === 'late') : false,
+                    'is_attended' => $att ? in_array($att->status, ['on_time', 'late', 'attended'], true) : false,
                     'status' => $att ? $att->status : 'absent',
                     'notes' => $att ? $att->notes : null,
                 ]);
@@ -99,10 +110,15 @@ class TrainingAttendanceController extends Controller
             ->get();
 
         $deptRoster = collect();
+        $coveredDeptIds = [];
 
         if ($deptUsers->isNotEmpty()) {
             foreach ($deptUsers as $u) {
-                $dName = $u->employee->department->name ?? 'Head Office Dept';
+                $d = $u->employee?->department;
+                if ($d) {
+                    $coveredDeptIds[] = $d->id;
+                }
+                $dName = $d->name ?? 'Head Office Dept';
                 $key = "user_{$u->id}";
                 $att = $existingAttendances->get($key);
                 $posTitle = $u->employee?->position?->title ?? $u->employee?->position?->name;
@@ -110,28 +126,32 @@ class TrainingAttendanceController extends Controller
                 $deptRoster->push([
                     'id' => $att ? $att->id : null,
                     'user_id' => $u->id,
+                    'department_id' => $d?->id,
                     'user_type' => 'trainer',
                     'name' => $u->name . ($posTitle ? " ({$posTitle})" : ''),
                     'branch_or_department' => $dName,
                     'session_date' => $selectedDate,
-                    'is_attended' => $att ? ($att->status === 'on_time' || $att->status === 'late') : false,
+                    'is_attended' => $att ? in_array($att->status, ['on_time', 'late', 'attended'], true) : false,
                     'status' => $att ? $att->status : 'absent',
                     'notes' => $att ? $att->notes : null,
                 ]);
             }
-        } else {
-            foreach ($departments as $d) {
-                $key = "raw_trainer_{$d->name} Head Office_{$d->name}";
+        }
+
+        foreach ($departments as $d) {
+            if (!in_array($d->id, $coveredDeptIds)) {
+                $key = "raw_trainer_{$d->name} HQ Dept User_{$d->name}";
                 $att = $existingAttendances->get($key);
 
                 $deptRoster->push([
                     'id' => $att ? $att->id : null,
                     'user_id' => null,
+                    'department_id' => $d->id,
                     'user_type' => 'trainer',
                     'name' => "{$d->name} HQ Dept User",
                     'branch_or_department' => $d->name,
                     'session_date' => $selectedDate,
-                    'is_attended' => $att ? ($att->status === 'on_time' || $att->status === 'late') : false,
+                    'is_attended' => $att ? in_array($att->status, ['on_time', 'late', 'attended'], true) : false,
                     'status' => $att ? $att->status : 'absent',
                     'notes' => $att ? $att->notes : null,
                 ]);
