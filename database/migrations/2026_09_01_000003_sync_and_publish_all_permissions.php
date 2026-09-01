@@ -3,6 +3,8 @@
 use Illuminate\Database\Migrations\Migration;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
+use Database\Seeders\PermissionSeeder;
+use Database\Seeders\TicketPermissionSeeder;
 
 return new class extends Migration
 {
@@ -10,6 +12,15 @@ return new class extends Migration
     {
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
+        // 1. Run all existing permission seeders
+        if (class_exists(PermissionSeeder::class)) {
+            (new PermissionSeeder())->run();
+        }
+        if (class_exists(TicketPermissionSeeder::class)) {
+            (new TicketPermissionSeeder())->run();
+        }
+
+        // 2. Sync all explicit new system permissions
         $allPermissions = [
             // Internal Memorandum Permissions
             'memo.view',

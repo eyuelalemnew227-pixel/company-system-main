@@ -177,9 +177,8 @@ class Ticket extends Model
                 || ($this->status === TicketStatus::Done && (int) $this->user_id === (int) $user->id),
             'canRate' => $this->status === TicketStatus::TicketApproved
                 && ((int) $this->user_id === (int) $user->id || $user->can('ticket.rate'))
-                && $this->ratings()->where('user_id', $user->id)->doesntExist(),
-            'hasRated' => (int) $this->user_id === (int) $user->id
-                && $this->ratings()->where('user_id', $user->id)->exists(),
+                && $this->ratings()->doesntExist(),
+            'hasRated' => $this->ratings()->exists(),
             'isRequestor' => (int) $this->user_id === (int) $user->id,
             'canDelete' => $user->can('ticket.delete') || $user->hasRole('Super Admin') || $user->hasRole('Ticket Super Admin'),
             'canUpdateAsset' => $user->can('updateAsset', $this),

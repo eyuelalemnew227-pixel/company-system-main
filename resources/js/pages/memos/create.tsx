@@ -388,7 +388,10 @@ export default function MemoCreate({
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 font-bold text-xs"
-                                            onClick={() => insertFormatting('<b>', '</b>')}
+                                            onClick={() => {
+                                                document.execCommand('bold', false);
+                                                if (textareaRef.current) setData('content', textareaRef.current.innerHTML);
+                                            }}
                                             title="Bold"
                                         >
                                             <Bold className="h-3.5 w-3.5" />
@@ -398,7 +401,10 @@ export default function MemoCreate({
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 italic text-xs"
-                                            onClick={() => insertFormatting('<i>', '</i>')}
+                                            onClick={() => {
+                                                document.execCommand('italic', false);
+                                                if (textareaRef.current) setData('content', textareaRef.current.innerHTML);
+                                            }}
                                             title="Italic"
                                         >
                                             <Italic className="h-3.5 w-3.5" />
@@ -408,7 +414,10 @@ export default function MemoCreate({
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 text-xs"
-                                            onClick={() => insertFormatting('<h3>', '</h3>')}
+                                            onClick={() => {
+                                                document.execCommand('formatBlock', false, '<h3>');
+                                                if (textareaRef.current) setData('content', textareaRef.current.innerHTML);
+                                            }}
                                             title="Heading"
                                         >
                                             <Heading className="h-3.5 w-3.5" />
@@ -418,7 +427,10 @@ export default function MemoCreate({
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 text-xs"
-                                            onClick={() => insertFormatting('\n• ')}
+                                            onClick={() => {
+                                                document.execCommand('insertUnorderedList', false);
+                                                if (textareaRef.current) setData('content', textareaRef.current.innerHTML);
+                                            }}
                                             title="Bullet List"
                                         >
                                             <List className="h-3.5 w-3.5" />
@@ -428,7 +440,10 @@ export default function MemoCreate({
                                             variant="ghost"
                                             size="sm"
                                             className="h-7 px-1.5 text-xs"
-                                            onClick={() => insertFormatting('\n1. ')}
+                                            onClick={() => {
+                                                document.execCommand('insertOrderedList', false);
+                                                if (textareaRef.current) setData('content', textareaRef.current.innerHTML);
+                                            }}
                                             title="Numbered List"
                                         >
                                             <ListOrdered className="h-3.5 w-3.5" />
@@ -436,14 +451,13 @@ export default function MemoCreate({
                                     </div>
                                 </div>
 
-                                <Textarea
-                                    ref={textareaRef}
-                                    rows={5}
-                                    placeholder="Type memorandum message body..."
-                                    value={data.content}
-                                    onChange={(e) => setData('content', e.target.value)}
-                                    className="font-sans text-sm p-3 leading-relaxed"
-                                    required
+                                <div
+                                    ref={textareaRef as any}
+                                    contentEditable
+                                    onInput={(e) => setData('content', e.currentTarget.innerHTML)}
+                                    onBlur={(e) => setData('content', e.currentTarget.innerHTML)}
+                                    className="min-h-[140px] p-3 text-sm rounded-md border border-input bg-background text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring leading-relaxed overflow-y-auto"
+                                    style={{ outline: 'none' }}
                                 />
                                 {errors.content && <p className="text-xs text-red-500">{errors.content}</p>}
                             </div>
