@@ -28,20 +28,26 @@ class TrainingAttendanceController extends Controller
 
         // 1. Branch Roster List (ONLY Branch Managers)
         $branches = Branch::orderBy('name')->get();
-        $branchUsers = User::with('employee.branch')
+        $branchUsers = User::with(['employee.branch', 'employee.position'])
             ->whereHas('employee', function ($q) {
                 $q->whereNotNull('branch_id')
                   ->where(function ($sub) {
-                      $sub->where('position', 'like', '%Manager%')
-                          ->orWhere('position', 'like', '%BM%')
-                          ->orWhere('position', 'like', '%Branch%');
+                      $sub->whereHas('position', function ($posQ) {
+                          $posQ->where('title', 'like', '%Manager%')
+                               ->orWhere('title', 'like', '%BM%')
+                               ->orWhere('title', 'like', '%Branch%');
+                      })
+                      ->orWhereHas('user.roles', function ($rq) {
+                          $rq->where('name', 'like', '%Branch%')
+                             ->orWhere('name', 'like', '%Manager%');
+                      });
                   });
             })
             ->get();
 
         if ($branchUsers->isEmpty()) {
             // Fallback: get any users assigned to branches
-            $branchUsers = User::with('employee.branch')
+            $branchUsers = User::with(['employee.branch', 'employee.position'])
                 ->whereHas('employee', fn($q) => $q->whereNotNull('branch_id'))
                 ->get();
         }
@@ -53,12 +59,13 @@ class TrainingAttendanceController extends Controller
                 $bName = $u->employee->branch->name ?? 'Branch';
                 $key = "user_{$u->id}";
                 $att = $existingAttendances->get($key);
+                $posTitle = $u->employee?->position?->title ?? $u->employee?->position?->name;
 
                 $branchRoster->push([
                     'id' => $att ? $att->id : null,
                     'user_id' => $u->id,
                     'user_type' => 'branch_manager',
-                    'name' => $u->name . ($u->employee->position ? " ({$u->employee->position})" : ''),
+                    'name' => $u->name . ($posTitle ? " ({$posTitle})" : ''),
                     'branch_or_department' => $bName,
                     'session_date' => $selectedDate,
                     'is_attended' => $att ? ($att->status === 'on_time' || $att->status === 'late') : false,
@@ -87,7 +94,7 @@ class TrainingAttendanceController extends Controller
 
         // 2. Department Roster List (ONLY Head Office Department Users)
         $departments = Department::orderBy('name')->get();
-        $deptUsers = User::with('employee.department')
+        $deptUsers = User::with(['employee.department', 'employee.position'])
             ->whereHas('employee', fn($q) => $q->whereNotNull('department_id'))
             ->get();
 
@@ -98,12 +105,13 @@ class TrainingAttendanceController extends Controller
                 $dName = $u->employee->department->name ?? 'Head Office Dept';
                 $key = "user_{$u->id}";
                 $att = $existingAttendances->get($key);
+                $posTitle = $u->employee?->position?->title ?? $u->employee?->position?->name;
 
                 $deptRoster->push([
                     'id' => $att ? $att->id : null,
                     'user_id' => $u->id,
                     'user_type' => 'trainer',
-                    'name' => $u->name . ($u->employee->position ? " ({$u->employee->position})" : ''),
+                    'name' => $u->name . ($posTitle ? " ({$posTitle})" : ''),
                     'branch_or_department' => $dName,
                     'session_date' => $selectedDate,
                     'is_attended' => $att ? ($att->status === 'on_time' || $att->status === 'late') : false,

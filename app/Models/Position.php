@@ -14,4 +14,11 @@ class Position extends Model
         'level',
         'description',
     ];
+
+    protected $appends = ['name'];
+
+    public function getNameAttribute(): ?string
+    {
+        return $this->title;
+    }
 }

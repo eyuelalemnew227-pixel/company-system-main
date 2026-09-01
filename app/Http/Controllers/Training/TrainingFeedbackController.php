@@ -19,7 +19,7 @@ class TrainingFeedbackController extends Controller
 
         $user = $request->user();
         if ($user && !$user->can('training.feedback.view') && !$user->can('training.feedback.manage') && $user->can('training.feedback.view_own')) {
-            $userBranchId = $user->employee->branch_id ?? null;
+            $userBranchId = $user->employee?->branch_id;
             $query->where(function ($q) use ($user, $userBranchId) {
                 $q->where('user_id', $user->id);
                 if ($userBranchId) {
