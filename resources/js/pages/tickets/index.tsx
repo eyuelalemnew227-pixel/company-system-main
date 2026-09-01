@@ -118,7 +118,7 @@ export default function TicketIndex() {
     const baseStatuses = ticket.allowed_statuses && ticket.allowed_statuses.length > 0
       ? ticket.allowed_statuses
       : options.statuses;
-    const remaining = baseStatuses.filter((s: string) => s !== 'in_progress' && s !== ticket.status);
+    const remaining = baseStatuses.filter((s: string) => s !== ticket.status);
     setUpdateData({
       status: remaining[0] ?? '',
       assigned_to: currentAssignee ? String(currentAssignee) : '',
@@ -567,7 +567,7 @@ export default function TicketIndex() {
                   const baseStatuses = selectedTicket?.allowed_statuses && selectedTicket.allowed_statuses.length > 0
                     ? selectedTicket.allowed_statuses
                     : options.statuses;
-                  const remaining = baseStatuses.filter((s: string) => s !== 'in_progress' && s !== selectedTicket?.status);
+                  const remaining = baseStatuses.filter((s: string) => s !== selectedTicket?.status);
                   if (remaining.length === 0) {
                     return <option value="">No other status transitions available</option>;
                   }

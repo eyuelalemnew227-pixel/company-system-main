@@ -1583,12 +1583,21 @@ class TelegramBotService
         }
 
         $userBranchId = $user->employee?->branch_id ?? $user->branch_id;
+        $userDeptId = $user->employee?->department_id ?? $user->department_id;
         $managedIds = $user->managedDepartmentIds() ?? [];
 
-        $q = Ticket::whereNotIn('status', [TicketStatus::Closed, TicketStatus::Rejected])
-            ->where(function ($sq) use ($user, $userBranchId, $managedIds) {
+        $q = Ticket::whereNotIn('status', [TicketStatus::Closed, TicketStatus::Rejected]);
+
+        if ($user->can('ticket.view.all') || $user->hasRole('Super Admin') || $user->hasRole('Ticket Super Admin')) {
+            // Full access to all active tickets system-wide
+        } else {
+            $q->where(function ($sq) use ($user, $userBranchId, $userDeptId, $managedIds) {
                 $sq->where('user_id', $user->id)
                     ->orWhereHas('assignments', fn($asq) => $asq->where('assigned_to', $user->id)->where('is_current', true));
+
+                if ($user->can('ticket.view.department') && $userDeptId) {
+                    $sq->orWhere('department_id', $userDeptId);
+                }
                 if ($userBranchId) {
                     $sq->orWhere('requestor_branch_id', $userBranchId);
                 }
@@ -1596,6 +1605,7 @@ class TelegramBotService
                     $sq->orWhereIn('department_id', $managedIds);
                 }
             });
+        }
 
         if ($filterStatus === 'pending') {
             $q->where('status', TicketStatus::PendingApproval);
@@ -1747,27 +1757,35 @@ class TelegramBotService
         }
 
         $actionService = app(TicketActionService::class);
-        $actionService->logActivity($ticket, $user, 'commented', $ticket->status->value, $ticket->status->value, null, [
-            'comment' => $commentText
-        ]);
+        $actionService->logActivity($ticket, $user, 'chat_comment', $ticket->status->value, $ticket->status->value, $commentText);
 
-        $confirmMsg = "✅ <b>Comment Added to Ticket #{$ticket->id}:</b>\n<i>" . e($commentText) . "</i>";
-        $this->sendMessage($chatId, $confirmMsg);
+        // Send Web In-App Notifications
+        $recipients = array_unique(array_merge(
+            [$ticket->user_id],
+            $ticket->assignments()->where('is_current', true)->pluck('assigned_to')->all(),
+            $actionService->departmentManagerUserIds($ticket->department_id)
+        ));
+        $recipients = array_values(array_filter($recipients, fn($id) => (int) $id !== (int) $user->id));
 
-        try {
-            $header = "💬 <b>NEW COMMENT ON TICKET #{$ticket->id}</b>\n\n" .
-                "🎫 <b>Ticket #{$ticket->id}</b>: " . e($ticket->title) . "\n" .
-                "👤 <b>Comment By:</b> " . e($user->name) . "\n" .
-                "💬 <b>Note:</b> " . e($commentText);
-
-            $notifService = app(TelegramTicketNotificationService::class);
-            $buttons = $notifService->buildTicketInlineButton($ticket);
-
-            $managerIds = $actionService->departmentManagerUserIds($ticket->department_id);
-            $this->sendToUsers(array_diff($managerIds, [$user->id]), $header, $buttons);
-        } catch (\Throwable $e) {
-            Log::error("Telegram comment notify error: " . $e->getMessage());
+        if (!empty($recipients)) {
+            $actionService->notifyUsers(
+                $ticket,
+                $recipients,
+                'ticket.chat',
+                "New Discussion Message on Ticket #{$ticket->id}",
+                "{$user->name}: " . mb_strimwidth($commentText, 0, 150, '...')
+            );
         }
+
+        // Send Telegram Bot Notifications
+        try {
+            app(TelegramTicketNotificationService::class)->notifyTicketChatMessage($ticket, $user, $commentText);
+        } catch (\Throwable $e) {
+            Log::error("Telegram processCommentInput notify error: " . $e->getMessage());
+        }
+
+        $confirmMsg = "✅ <b>Discussion Message Sent to Ticket #{$ticket->id}:</b>\n<i>" . e($commentText) . "</i>";
+        $this->sendMessage($chatId, $confirmMsg);
     }
 
     public function registerBotCommands(): void

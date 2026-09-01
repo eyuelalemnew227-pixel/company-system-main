@@ -45,12 +45,13 @@ class TicketController extends Controller
         $query = Ticket::query()->with(['department', 'mainCategory', 'subCategory', 'asset', 'requestorBranch', 'assignments.assignee']);
 
         // 1. Authorization Scoping
-        if ($user->can('ticket.view.all')) {
+        if ($user->can('ticket.view.all') || $user->hasRole('Super Admin') || $user->hasRole('Ticket Super Admin')) {
             // Full global access
         } else {
             $managedIds = $user->managedDepartmentIds();
-            $userBranchId = $user->employee?->branch_id;
-            $query->where(function ($q) use ($user, $managedIds, $userBranchId) {
+            $userBranchId = $user->employee?->branch_id ?? $user->branch_id;
+            $userDeptId = $user->employee?->department_id ?? $user->department_id;
+            $query->where(function ($q) use ($user, $managedIds, $userBranchId, $userDeptId) {
                 // Own requested tickets
                 $q->where('user_id', $user->id)
                     // Tickets where user is currently or was assigned
@@ -59,6 +60,10 @@ class TicketController extends Controller
                     })
                     // All tickets in departments they manage
                     ->orWhereIn('department_id', $managedIds);
+
+                if ($user->can('ticket.view.department') && $userDeptId) {
+                    $q->orWhere('department_id', $userDeptId);
+                }
 
                 if ($userBranchId) {
                     $q->orWhere('requestor_branch_id', $userBranchId);
@@ -531,84 +536,7 @@ class TicketController extends Controller
 
     public function getAvailableStatusesForUser(User $user, Ticket $ticket): array
     {
-        $managerUserIds = $this->actionService->departmentManagerUserIds($ticket->department_id);
-        $isManager = in_array((int) $user->id, $managerUserIds)
-            || $user->hasRole('Ticket Super Admin')
-            || $user->hasRole('Super Admin')
-            || $user->can('ticket.view.all');
-
-        $statusVal = is_object($ticket->status) ? $ticket->status->value : (string) $ticket->status;
-
-        if (in_array($statusVal, ['closed', 'rejected'], true)) {
-            return [];
-        }
-
-        $isRequestor = (int) $ticket->user_id === (int) $user->id
-            || ($ticket->requestor_branch_id && $user->employee?->branch_id && (int) $ticket->requestor_branch_id === (int) $user->employee->branch_id);
-
-        if ($isRequestor && !$isManager) {
-            if ($statusVal === 'done') {
-                return [TicketStatus::TicketApproved->value, TicketStatus::InProgress->value];
-            }
-            return [];
-        }
-
-        $isAssignee = $ticket->assignments()->where('is_current', true)->where('assigned_to', $user->id)->exists();
-        $isStaff = $isAssignee || $user->can('ticket.status.update') || $user->can('ticket.view.department');
-
-        if ($isStaff && !$isManager) {
-            switch ($statusVal) {
-                case 'approved':
-                case 'not_started':
-                    return [TicketStatus::InProgress->value, TicketStatus::Hold->value];
-
-                case 'in_progress':
-                    return [TicketStatus::Hold->value, TicketStatus::Escalated->value, TicketStatus::Done->value];
-
-                case 'hold':
-                    return [TicketStatus::InProgress->value, TicketStatus::Escalated->value, TicketStatus::Done->value];
-
-                case 'escalated':
-                    return [TicketStatus::InProgress->value, TicketStatus::Done->value];
-
-                case 'done':
-                    return [];
-
-                default:
-                    return [];
-            }
-        }
-
-        if ($isManager) {
-            switch ($statusVal) {
-                case 'pending_approval':
-                    return [TicketStatus::Approved->value, TicketStatus::Rejected->value];
-
-                case 'approved':
-                case 'not_started':
-                    return [TicketStatus::InProgress->value, TicketStatus::Hold->value];
-
-                case 'in_progress':
-                    return [TicketStatus::Hold->value, TicketStatus::Escalated->value, TicketStatus::Done->value];
-
-                case 'hold':
-                    return [TicketStatus::InProgress->value, TicketStatus::Escalated->value, TicketStatus::Done->value];
-
-                case 'escalated':
-                    return [TicketStatus::InProgress->value, TicketStatus::Done->value];
-
-                case 'done':
-                    return [];
-
-                case 'ticket_approved':
-                    return [TicketStatus::Closed->value];
-
-                default:
-                    return [];
-            }
-        }
-
-        return [];
+        return $this->statusService->getAvailableStatusesForUser($user, $ticket);
     }
 
     public function canUserAssignTicket(User $user, Ticket $ticket): bool
@@ -742,19 +670,30 @@ class TicketController extends Controller
     public function rate(TicketRateRequest $request, Ticket $ticket)
     {
         $this->authorize('rate', $ticket);
-        if ($ticket->status !== TicketStatus::TicketApproved) {
-            return back()->withErrors(['status' => 'Rating allowed only when ticket is approved by branch.']);
+
+        if (!in_array($ticket->status, [TicketStatus::Done, TicketStatus::TicketApproved, TicketStatus::Closed], true)) {
+            return back()->withErrors(['status' => 'Rating allowed only when ticket is completed or approved.']);
         }
 
         $data = $request->validated();
 
         $ticket->ratings()->create([
             'user_id' => $request->user()->id,
+            'branch_id' => $ticket->requestor_branch_id,
             'stars' => $data['stars'],
             'comment' => $data['comment'] ?? null,
         ]);
 
-        $this->actionService->logActivity($ticket, $request->user(), 'rated', $ticket->status->value, $ticket->status->value, null, ['stars' => $data['stars']]);
+        if ($ticket->status === TicketStatus::Done) {
+            $this->actionService->setStatus(
+                $ticket,
+                TicketStatus::TicketApproved,
+                $request->user(),
+                'Approved and rated by requester.'
+            );
+        } else {
+            $this->actionService->logActivity($ticket, $request->user(), 'rated', $ticket->status->value, $ticket->status->value, null, ['stars' => $data['stars']]);
+        }
 
         try {
             app(\App\Services\TelegramTicketNotificationService::class)->notifyApprovedAndRated(
@@ -767,7 +706,7 @@ class TicketController extends Controller
             \Illuminate\Support\Facades\Log::error("Telegram rate notification error: " . $e->getMessage());
         }
 
-        return back()->with('message', 'Rating saved successfully.');
+        return back()->with('message', 'Thank you! Rating submitted successfully.');
     }
 
     public function updateAsset(Request $request, Ticket $ticket)
@@ -977,13 +916,38 @@ class TicketController extends Controller
             $message
         );
 
-        app(TelegramTicketNotificationService::class)->notifyTicketChatMessage($ticket, $actor, $message);
+        // Send Web In-App Notifications
+        $recipients = array_unique(array_merge(
+            [$ticket->user_id],
+            $ticket->assignments()->where('is_current', true)->pluck('assigned_to')->all(),
+            $this->actionService->departmentManagerUserIds($ticket->department_id)
+        ));
+        $recipients = array_values(array_filter($recipients, fn($id) => (int) $id !== (int) $actor->id));
+
+        if (!empty($recipients)) {
+            $this->actionService->notifyUsers(
+                $ticket,
+                $recipients,
+                'ticket.chat',
+                "New Discussion Message on Ticket #{$ticket->id}",
+                "{$actor->name}: " . mb_strimwidth($message, 0, 150, '...')
+            );
+        }
+
+        // Send Telegram Bot Notifications
+        try {
+            app(TelegramTicketNotificationService::class)->notifyTicketChatMessage($ticket, $actor, $message);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Telegram notifyTicketChatMessage error: " . $e->getMessage());
+        }
 
         return back()->with('message', 'Discussion message sent successfully.');
     }
 
     public function approveAndRate(Request $request, Ticket $ticket)
     {
+        $this->authorize('rate', $ticket);
+
         $request->validate([
             'rating' => 'required|integer|min:1|max:5',
             'comment' => 'nullable|string|max:1000',

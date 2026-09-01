@@ -452,9 +452,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('tickets.export')
         ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
     Route::get('tickets/create', [\App\Http\Controllers\TicketController::class, 'create'])
-        ->name('tickets.create');
+        ->name('tickets.create')
+        ->middleware('permission:ticket.create|ticket.view.own|ticket.view.department|ticket.view.all');
     Route::post('tickets', [\App\Http\Controllers\TicketController::class, 'store'])
-        ->name('tickets.store');
+        ->name('tickets.store')
+        ->middleware('permission:ticket.create|ticket.view.own|ticket.view.department|ticket.view.all');
     Route::get('tickets/{ticket}', [\App\Http\Controllers\TicketController::class, 'show'])
         ->name('tickets.show')
         ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
@@ -472,10 +474,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:ticket.assign');
     Route::post('tickets/{ticket}/approve-completion', [\App\Http\Controllers\TicketController::class, 'approveCompletion'])
         ->name('tickets.approve-completion')
-        ->middleware('permission:ticket.view.own|ticket.view.department|ticket.view.all');
+        ->middleware('permission:ticket.approve|ticket.close|ticket.status.update|ticket.view.own|ticket.view.department|ticket.view.all');
     Route::post('tickets/{ticket}/reject-completion', [\App\Http\Controllers\TicketController::class, 'rejectCompletion'])
         ->name('tickets.reject-completion')
-        ->middleware('permission:ticket.view.own|ticket.view.department|ticket.view.all');
+        ->middleware('permission:ticket.reject|ticket.status.update|ticket.view.own|ticket.view.department|ticket.view.all');
     Route::post('tickets/{ticket}/rate', [\App\Http\Controllers\TicketController::class, 'rate'])
         ->name('tickets.rate')
         ->middleware('permission:ticket.rate');

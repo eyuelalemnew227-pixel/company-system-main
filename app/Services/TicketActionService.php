@@ -61,7 +61,7 @@ class TicketActionService
             dispatch(function () use ($ticket, $actor, $from, $to, $reason, $action) {
                 try {
                     $telegramNotif = app(TelegramTicketNotificationService::class);
-                    if ($action === 'rejected' || $to === TicketStatus::Rejected) {
+                    if ($action === 'rejected' || $to === TicketStatus::Rejected || ($to === TicketStatus::InProgress && $from === TicketStatus::Done)) {
                         $isActorRequestor = (int) $actor->id === (int) $ticket->user_id
                             || ($ticket->requestor_branch_id && $actor->employee?->branch_id && (int) $ticket->requestor_branch_id === (int) $actor->employee->branch_id);
 
