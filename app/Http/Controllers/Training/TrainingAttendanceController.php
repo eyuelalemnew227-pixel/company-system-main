@@ -24,12 +24,15 @@ class TrainingAttendanceController extends Controller
 
         $selectedDate = $request->input('session_date', date('Y-m-d'));
 
-        // Query existing attendance entries for the date
-        $existingAttendances = TrainingAttendance::whereDate('session_date', $selectedDate)
-            ->get()
-            ->keyBy(function ($a) {
-                return $a->user_id ? "user_{$a->user_id}" : "raw_{$a->user_type}_{$a->name}_{$a->branch_or_department}";
-            });
+        // Query existing attendance entries for the date (guarded against unmigrated production DB)
+        $existingAttendances = collect();
+        if (\Illuminate\Support\Facades\Schema::hasTable('training_attendances')) {
+            $existingAttendances = TrainingAttendance::whereDate('session_date', $selectedDate)
+                ->get()
+                ->keyBy(function ($a) {
+                    return $a->user_id ? "user_{$a->user_id}" : "raw_{$a->user_type}_{$a->name}_{$a->branch_or_department}";
+                });
+        }
 
         // 1. Branch Roster List (ONLY Branch Managers)
         $branches = Branch::orderBy('name')->get();
