@@ -75,7 +75,7 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
             const sourceSIdx = parseInt(source.droppableId.split('-')[1]);
             const destSIdx = parseInt(destination.droppableId.split('-')[1]);
 
-            const newSections = Array.from(data.sections);
+            const newSections: any[] = Array.from(data.sections);
             const sourceQuestions = Array.from(newSections[sourceSIdx].questions);
             const destQuestions = sourceSIdx === destSIdx ? sourceQuestions : Array.from(newSections[destSIdx].questions);
 

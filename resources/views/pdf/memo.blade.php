@@ -1,14 +1,85 @@
 <!DOCTYPE html>
 <html>
-<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <meta charset="utf-8">
     <title>Internal Memorandum - {{ $memo->memo_id }}</title>
     <style>
+        @php
+            $storageFontPath = str_replace('\\', '/', storage_path('fonts/NotoSansEthiopic-Regular.ttf'));
+        @endphp
+
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: normal;
+            font-weight: 400;
+            src: url('{{ $storageFontPath }}') format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: normal;
+            font-weight: 700;
+            src: url('{{ $storageFontPath }}') format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: italic;
+            font-weight: 400;
+            src: url('{{ $storageFontPath }}') format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: italic;
+            font-weight: 700;
+            src: url('{{ $storageFontPath }}') format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: oblique;
+            font-weight: 400;
+            src: url('{{ $storageFontPath }}') format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: oblique;
+            font-weight: 700;
+            src: url('{{ $storageFontPath }}') format('truetype');
+        }
+
+        @if (!empty($fontBase64))
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: normal;
+            font-weight: 400;
+            src: url(data:font/truetype;charset=utf-8;base64,{{ $fontBase64 }}) format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: normal;
+            font-weight: 700;
+            src: url(data:font/truetype;charset=utf-8;base64,{{ $fontBase64 }}) format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: italic;
+            font-weight: 400;
+            src: url(data:font/truetype;charset=utf-8;base64,{{ $fontBase64 }}) format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: italic;
+            font-weight: 700;
+            src: url(data:font/truetype;charset=utf-8;base64,{{ $fontBase64 }}) format('truetype');
+        }
+        @endif
+
+        * {
+            font-family: 'Noto Sans Ethiopic', 'DejaVu Sans', sans-serif !important;
+        }
         @page {
             margin: 40px 45px;
         }
         body {
-            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-family: 'Noto Sans Ethiopic', 'DejaVu Sans', sans-serif;
             color: #1e293b;
             line-height: 1.6;
             font-size: 13px;
@@ -91,7 +162,7 @@
             margin-bottom: 5px;
         }
         .typed-signature {
-            font-family: 'Georgia', 'Times New Roman', serif;
+            font-family: 'Noto Sans Ethiopic', 'DejaVu Sans', serif;
             font-style: italic;
             font-size: 20px;
             color: #78350f;
@@ -123,6 +194,7 @@
             color: #94a3b8;
             border-top: 1px solid #e2e8f0;
             padding-top: 8px;
+        }
         .header-logo {
             height: 40px;
             width: 40px;

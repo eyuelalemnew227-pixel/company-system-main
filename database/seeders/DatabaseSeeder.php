@@ -17,6 +17,18 @@ class DatabaseSeeder extends Seeder
         $this->call([
             PermissionSeeder::class,
             TicketPermissionSeeder::class,
+            TelecomPermissionSeeder::class,
+            ExpenseBudgetPermissionSeeder::class,
+            SalesBudgetPermissionSeeder::class,
+            WeeklyBudgetPermissionSeeder::class,
+            WeeklyBudgetActivityLogPermissionSeeder::class,
+            WeeklyBudgetCeoPermissionSeeder::class,
+            WeeklyBudgetDepartmentPermissionSeeder::class,
+            WeeklyBudgetFinancePermissionSeeder::class,
+            WeeklyBudgetSummaryPermissionSeeder::class,
+            PreOrderCostPermissionSeeder::class,
+            PreOrderTargetPermissionSeeder::class,
+            BankPermissionSeeder::class,
         ]);
     }
 }

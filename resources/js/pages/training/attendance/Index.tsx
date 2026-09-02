@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import AppLayout from '@/layouts/app-layout';
@@ -59,6 +59,7 @@ export default function AttendanceIndex({
     const [sessionDate, setSessionDate] = useState(selectedDate);
     const [selectedBranchId, setSelectedBranchId] = useState<string>('all');
     const [selectedDeptId, setSelectedDeptId] = useState<string>('all');
+    const [activeTab, setActiveTab] = useState<'branches' | 'departments'>('branches');
 
     const [localBranchRoster, setLocalBranchRoster] = useState<RosterItem[]>(branchRoster);
     const [localDeptRoster, setLocalDeptRoster] = useState<RosterItem[]>(deptRoster);
@@ -342,38 +343,40 @@ export default function AttendanceIndex({
                             <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
                                 <Building className="h-3.5 w-3.5 text-blue-600" /> Select Branch:
                             </Label>
-                            <Select value={selectedBranchId} onValueChange={setSelectedBranchId}>
-                                <SelectTrigger className="w-56 h-9 text-xs font-bold bg-white dark:bg-slate-950 border-blue-300">
-                                    <SelectValue placeholder="All Branches" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all" className="font-bold">🏢 All Branches ({branches.length})</SelectItem>
-                                    {branches.map((b) => (
-                                        <SelectItem key={b.id} value={String(b.id)}>
-                                            {b.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                options={branches}
+                                value={selectedBranchId}
+                                onValueChange={(val) => {
+                                    setSelectedBranchId(val);
+                                    setActiveTab('branches');
+                                }}
+                                placeholder="Select Branch..."
+                                searchPlaceholder="Search branch..."
+                                allowAll
+                                allLabel={`🏢 All Branches (${branches.length})`}
+                                allValue="all"
+                                className="w-56 h-9 text-xs font-bold bg-white dark:bg-slate-950 border-blue-300"
+                            />
                         </div>
 
                         <div className="flex items-center gap-2">
                             <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
                                 <GraduationCap className="h-3.5 w-3.5 text-purple-600" /> Select Department:
                             </Label>
-                            <Select value={selectedDeptId} onValueChange={setSelectedDeptId}>
-                                <SelectTrigger className="w-56 h-9 text-xs font-bold bg-white dark:bg-slate-950 border-purple-300">
-                                    <SelectValue placeholder="All Departments" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all" className="font-bold">🎓 All Departments ({departments.length})</SelectItem>
-                                    {departments.map((d) => (
-                                        <SelectItem key={d.id} value={String(d.id)}>
-                                            {d.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <SearchableSelect
+                                options={departments}
+                                value={selectedDeptId}
+                                onValueChange={(val) => {
+                                    setSelectedDeptId(val);
+                                    setActiveTab('departments');
+                                }}
+                                placeholder="Select Department..."
+                                searchPlaceholder="Search department..."
+                                allowAll
+                                allLabel={`🎓 All Departments (${departments.length})`}
+                                allValue="all"
+                                className="w-56 h-9 text-xs font-bold bg-white dark:bg-slate-950 border-purple-300"
+                            />
                         </div>
                     </div>
                 </div>
@@ -386,7 +389,7 @@ export default function AttendanceIndex({
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4">
-                        <Tabs defaultValue="branches" className="space-y-4">
+                        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'branches' | 'departments')} className="space-y-4">
                             <TabsList className="bg-slate-100 dark:bg-slate-900 p-1">
                                 <TabsTrigger value="branches" className="text-xs font-bold">
                                     🏢 Branch Users ({filteredBranchRoster.length})

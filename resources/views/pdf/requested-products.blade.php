@@ -2,12 +2,58 @@
 <html>
 
 <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <meta charset="utf-8">
     @php $isSparePart = $ticket->productRequests->first()?->spare_part_id !== null; @endphp
     <title>{{ $isSparePart ? 'Requested Spare Parts' : 'Requested Products' }} - Ticket #{{ $ticket->id }}</title>
     <style>
+        @php
+            $storageFontPath = str_replace('\\', '/', storage_path('fonts/NotoSansEthiopic-Regular.ttf'));
+        @endphp
+
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: normal;
+            font-weight: 400;
+            src: url('{{ $storageFontPath }}') format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: normal;
+            font-weight: 700;
+            src: url('{{ $storageFontPath }}') format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: italic;
+            font-weight: 400;
+            src: url('{{ $storageFontPath }}') format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: italic;
+            font-weight: 700;
+            src: url('{{ $storageFontPath }}') format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: oblique;
+            font-weight: 400;
+            src: url('{{ $storageFontPath }}') format('truetype');
+        }
+        @font-face {
+            font-family: 'Noto Sans Ethiopic';
+            font-style: oblique;
+            font-weight: 700;
+            src: url('{{ $storageFontPath }}') format('truetype');
+        }
+
+        * {
+            font-family: 'Noto Sans Ethiopic', 'DejaVu Sans', sans-serif !important;
+        }
+
         body {
-            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-family: 'Noto Sans Ethiopic', 'DejaVu Sans', sans-serif;
             color: #333;
             line-height: 1.5;
             padding: 20px;

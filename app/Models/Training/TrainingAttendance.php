@@ -29,10 +29,15 @@ class TrainingAttendance extends Model
     protected static function booted(): void
     {
         static::saving(function (self $model) {
-            if (empty($model->trainee_name) && !empty($model->name)) {
-                $model->trainee_name = $model->name;
-            } elseif (empty($model->name) && !empty($model->trainee_name)) {
-                $model->name = $model->trainee_name;
+            if (\Illuminate\Support\Facades\Schema::hasTable('training_attendances') && 
+                \Illuminate\Support\Facades\Schema::hasColumn('training_attendances', 'trainee_name')) {
+                if (empty($model->trainee_name) && !empty($model->name)) {
+                    $model->trainee_name = $model->name;
+                } elseif (empty($model->name) && !empty($model->trainee_name)) {
+                    $model->name = $model->trainee_name;
+                }
+            } else {
+                unset($model->trainee_name);
             }
         });
     }

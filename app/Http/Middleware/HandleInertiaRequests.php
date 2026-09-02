@@ -41,7 +41,7 @@ class HandleInertiaRequests extends Middleware {
 		$user = $request->user();
 		$isSuperAdmin = $user ? $user->hasRole('Super Admin') : false;
 
-		$userPermissions = $user ? $user->getAllPermissions()->pluck('name') : collect();
+		$userPermissions = $user ? $user->getAllPermissions()->pluck('name')->unique()->values() : collect();
 		$permissions = $user
 			? ($isSuperAdmin
 				? \Spatie\Permission\Models\Permission::pluck('name')->filter(function ($name) use ($userPermissions) {

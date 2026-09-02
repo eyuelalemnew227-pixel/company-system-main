@@ -367,6 +367,18 @@ class MemoController extends Controller
             $logoBase64 = 'data:image/' . $type . ';base64,' . base64_encode($data);
         }
 
+        $fontDir = storage_path('fonts');
+        if (!file_exists($fontDir)) {
+            @mkdir($fontDir, 0777, true);
+        }
+
+        $fontPath = public_path('fonts/NotoSansEthiopic-Regular.ttf');
+        if (file_exists($fontPath) && !file_exists($fontDir . '/NotoSansEthiopic-Regular.ttf')) {
+            @copy($fontPath, $fontDir . '/NotoSansEthiopic-Regular.ttf');
+        }
+
+        $fontBase64 = file_exists($fontPath) ? base64_encode(file_get_contents($fontPath)) : '';
+
         $contentHtml = nl2br($memo->content);
 
         if (class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
@@ -376,7 +388,10 @@ class MemoController extends Controller
                 'companyLogo' => $logoBase64,
                 'memoDateStr' => $memoDateStr,
                 'contentHtml' => $contentHtml,
+                'fontBase64' => $fontBase64,
             ]);
+            $pdf->setOption('isFontSubsettingEnabled', true);
+            $pdf->setOption('isRemoteEnabled', true);
 
             return response($pdf->output(), 200, [
                 'Content-Type' => 'application/pdf',
@@ -390,6 +405,7 @@ class MemoController extends Controller
             'companyLogo' => $logoBase64,
             'memoDateStr' => $memoDateStr,
             'contentHtml' => $contentHtml,
+            'fontBase64' => $fontBase64,
         ]);
     }
 

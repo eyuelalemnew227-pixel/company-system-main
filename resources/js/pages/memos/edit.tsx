@@ -94,6 +94,12 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
     const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>(initialDeptMatch ? initialDeptMatch.id : '');
     const [isHeadOffice, setIsHeadOffice] = useState<boolean>(initialIsHO);
 
+    React.useEffect(() => {
+        if (textareaRef.current && memo.content) {
+            textareaRef.current.innerHTML = memo.content;
+        }
+    }, []);
+
     const handleBranchChange = (branchOptionId: string) => {
         const match = branchOptions.find((opt) => String(opt.id) === branchOptionId || opt.rawName === branchOptionId);
         const branchName = match ? match.rawName : branchOptionId;
@@ -371,7 +377,6 @@ export default function MemoEdit({ memo, departments, branches }: Props) {
                                 <div
                                     ref={textareaRef as any}
                                     contentEditable
-                                    dangerouslySetInnerHTML={{ __html: data.content }}
                                     onInput={(e) => setData('content', e.currentTarget.innerHTML)}
                                     onBlur={(e) => setData('content', e.currentTarget.innerHTML)}
                                     className="min-h-[140px] p-3 text-sm rounded-md border border-input bg-background text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring leading-relaxed overflow-y-auto"
