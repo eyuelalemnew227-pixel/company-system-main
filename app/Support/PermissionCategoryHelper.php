@@ -11,11 +11,11 @@ class PermissionCategoryHelper
     {
         $perm = strtolower(trim($permission));
 
-        // Prefix and exact module checks
+        // 1. Explicit Prefix checks
         if (str_starts_with($perm, 'ticket.')) {
             return 'Tickets & Support';
         }
-        if (str_starts_with($perm, 'memo.')) {
+        if (str_starts_with($perm, 'memo.') || $perm === 'memorandum.access') {
             return 'Memos & Documents';
         }
         if (str_starts_with($perm, 'training.')) {
@@ -25,39 +25,59 @@ class PermissionCategoryHelper
             return 'Telecom & SMS';
         }
 
-        // Keyword rules for action-entity format (e.g. "view users", "create roles", "manage weekly budgets")
+        // 2. Pre-Orders & Sales (check FIRST so pre-order costs/payments/products go here!)
+        if (self::containsAny($perm, ['pre-order', 'preorder', 'walkin', 'collection days', 'order type', 'order types'])) {
+            return 'Pre-Orders & Sales';
+        }
+
+        // 3. Telegram Integration
+        if (self::containsAny($perm, ['telegram'])) {
+            return 'Telegram Integration';
+        }
+
+        // 4. Tickets & Support
         if (self::containsAny($perm, ['ticket', 'tickets'])) {
             return 'Tickets & Support';
         }
+
+        // 5. Memos & Documents
         if (self::containsAny($perm, ['memo', 'memos'])) {
             return 'Memos & Documents';
         }
+
+        // 6. Training & LMS
         if (self::containsAny($perm, ['training', 'course', 'quiz', 'sop', 'certificate', 'agenda', 'forum'])) {
             return 'Training & LMS';
         }
-        if (self::containsAny($perm, ['user', 'users', 'employee', 'employees', 'position', 'positions', 'department', 'departments', 'branch', 'branches', 'manager', 'managers'])) {
-            return 'User & Organization';
-        }
+
+        // 7. Roles & Access Control
         if (self::containsAny($perm, ['role', 'roles', 'permission', 'permissions'])) {
             return 'Roles & Access Control';
         }
-        if (self::containsAny($perm, ['budget', 'budgets', 'finance', 'expense', 'ceo', 'sales', 'bank', 'payment', 'cost'])) {
-            return 'Budget & Finance';
+
+        // 8. User & Organization
+        if (self::containsAny($perm, ['user', 'users', 'employee', 'employees', 'position', 'positions', 'department', 'departments', 'branch', 'branches', 'manager', 'managers', 'directory'])) {
+            return 'User & Organization';
         }
-        if (self::containsAny($perm, ['inventory', 'spare part', 'spare parts', 'product', 'products', 'category', 'categories', 'count'])) {
-            return 'Inventory & Assets';
-        }
+
+        // 9. Evaluations & Performance
         if (self::containsAny($perm, ['evaluation', 'evaluations', 'evaluator', 'evaluates', 'question', 'questions', 'evaluable', 'appraisal', 'results', 'fill evaluation'])) {
             return 'Evaluations & Performance';
         }
-        if (self::containsAny($perm, ['pre-order', 'pre-orders', 'walkin', 'collection days', 'order types', 'order', 'orders', 'broadcast'])) {
-            return 'Pre-Orders & Sales';
+
+        // 10. Inventory & Assets
+        if (self::containsAny($perm, ['inventory', 'spare part', 'spare parts', 'product', 'products', 'category', 'categories', 'count'])) {
+            return 'Inventory & Assets';
         }
-        if (self::containsAny($perm, ['telecom', 'sms'])) {
+
+        // 11. Budget & Finance
+        if (self::containsAny($perm, ['budget', 'budgets', 'finance', 'expense', 'ceo', 'sales budget', 'bank', 'payment', 'cost', 'fiscal'])) {
+            return 'Budget & Finance';
+        }
+
+        // 12. Telecom & SMS
+        if (self::containsAny($perm, ['telecom', 'sms', 'broadband', 'phone_number', 'provider'])) {
             return 'Telecom & SMS';
-        }
-        if (self::containsAny($perm, ['telegram'])) {
-            return 'Telegram Integration';
         }
 
         return 'System & General';
