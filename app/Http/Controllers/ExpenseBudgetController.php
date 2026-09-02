@@ -416,7 +416,7 @@ class ExpenseBudgetController extends Controller
 
     public function create(): Response|RedirectResponse
     {
-        abort_unless(ExpenseBudgetAccess::canManage(), 403, ExpenseBudgetAccess::manageDeniedMessage());
+        abort_unless(ExpenseBudgetAccess::canView(), 403);
 
         $branches = Branch::query()
             ->where(function ($query) {
@@ -491,7 +491,7 @@ class ExpenseBudgetController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        abort_unless(ExpenseBudgetAccess::canManage(), 403, ExpenseBudgetAccess::manageDeniedMessage());
+        abort_unless(ExpenseBudgetAccess::canView(), 403);
 
         $validated = $request->validate([
             'fiscal_year_id' => ['required', 'integer', 'exists:fiscal_years,id'],
@@ -734,7 +734,7 @@ class ExpenseBudgetController extends Controller
 
     public function getPrevBudget(Request $request): JsonResponse
     {
-        abort_unless(ExpenseBudgetAccess::canManage(), 403, ExpenseBudgetAccess::manageDeniedMessage());
+        abort_unless(ExpenseBudgetAccess::canView(), 403);
 
         $validated = $request->validate([
             'expense_item_id' => ['required', 'exists:expenses,expense_parent_acc_code'],
@@ -776,7 +776,7 @@ class ExpenseBudgetController extends Controller
 
     public function getBudgetedExpenseItems(Request $request): JsonResponse
     {
-        abort_unless(ExpenseBudgetAccess::canManage(), 403, ExpenseBudgetAccess::manageDeniedMessage());
+        abort_unless(ExpenseBudgetAccess::canView(), 403);
 
         $validated = $request->validate([
             'branch_id' => ['required', 'exists:branches,id'],
