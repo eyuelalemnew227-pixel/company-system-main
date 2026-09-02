@@ -2,8 +2,8 @@
 
 return [
     'manage_window' => [
-        'start_day' => 5,
-        'end_day' => 12,
+        'start_day' => 26,
+        'end_day' => 2,
     ],
 
     'permissions' => [

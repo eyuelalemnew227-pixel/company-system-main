@@ -152,14 +152,56 @@ class ExpenseBudgetAccess
         return $user->can(self::manageAnytimePermission());
     }
 
+    public static function getEthiopianDate(\Carbon\CarbonInterface $date): array
+    {
+        $gregorianYear = $date->year;
+        $gregorianMonth = $date->month;
+        $gregorianDay = $date->day;
+
+        $a = floor((14 - $gregorianMonth) / 12);
+        $y = $gregorianYear + 4800 - $a;
+        $m = $gregorianMonth + 12 * $a - 3;
+        $jdn = $gregorianDay +
+            floor((153 * $m + 2) / 5) +
+            365 * $y +
+            floor($y / 4) -
+            floor($y / 100) +
+            floor($y / 400) -
+            32045;
+
+        $r = ($jdn - 1723856) % 1461;
+        $n = ($r % 365) + floor($r / 1460);
+        
+        $ethiopianYear = 4 * floor(($jdn - 1723856) / 1461) + floor($r / 365) - floor($r / 1460);
+        $ethiopianMonth = floor($n / 30) + 1;
+        $ethiopianDay = ($n % 30) + 1;
+        
+        return [
+            'year' => (int) $ethiopianYear,
+            'month' => (int) $ethiopianMonth,
+            'day' => (int) $ethiopianDay
+        ];
+    }
+
     public static function isWithinManageWindow(?CarbonInterface $date = null): bool
     {
         $date ??= now();
-        $startDay = (int) config('expense_budget.manage_window.start_day', 5);
-        $endDay = (int) config('expense_budget.manage_window.end_day', 12);
-        $day = $date->day;
+        $startDay = (int) config('expense_budget.manage_window.start_day', 26);
+        $endDay = (int) config('expense_budget.manage_window.end_day', 2);
+        
+        $ethDate = self::getEthiopianDate($date);
+        $ethiopianDay = $ethDate['day'];
+        $ethiopianMonth = $ethDate['month'];
 
-        return $day >= $startDay && $day <= $endDay;
+        if ($ethiopianMonth === 13) {
+            return true;
+        }
+
+        if ($startDay > $endDay) {
+            return $ethiopianDay >= $startDay || $ethiopianDay <= $endDay;
+        }
+
+        return $ethiopianDay >= $startDay && $ethiopianDay <= $endDay;
     }
 
     public static function manageDeniedMessage(): string
@@ -167,10 +209,17 @@ class ExpenseBudgetAccess
         $user = auth()->user();
 
         if ($user?->can(self::manageWindowedPermission()) && ! $user->can(self::manageAnytimePermission())) {
-            $startDay = (int) config('expense_budget.manage_window.start_day', 5);
-            $endDay = (int) config('expense_budget.manage_window.end_day', 12);
+            $startDay = (int) config('expense_budget.manage_window.start_day', 26);
+            $endDay = (int) config('expense_budget.manage_window.end_day', 2);
+            
+            $suffix = match($endDay) {
+                1 => 'st',
+                2 => 'nd',
+                3 => 'rd',
+                default => 'th',
+            };
 
-            return "Expense budgets can only be managed from the {$startDay}th to the {$endDay}th of each month.";
+            return "Expense budgets can only be managed from the {$startDay}th to the {$endDay}{$suffix} of the next month in the Ethiopian Calendar.";
         }
 
         return 'You do not have permission to manage expense budgets.';
