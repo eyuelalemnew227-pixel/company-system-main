@@ -190,24 +190,9 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         return null;
     };
 
-    const selectedBranch = getAnswerForType('branch_lookup');
-    const selectedDepartment = getAnswerForType('department_lookup');
 
-    const filteredDepartments = React.useMemo(() => {
-        return departments || [];
-    }, [departments]);
 
-    const filteredEmployees = React.useMemo(() => {
-        if (!employees) return [];
-        let filtered = employees;
-        if (selectedBranch) {
-            filtered = filtered.filter(e => String(e.branch_id) === String(selectedBranch));
-        }
-        if (selectedDepartment) {
-            filtered = filtered.filter(e => String(e.department_id) === String(selectedDepartment));
-        }
-        return filtered;
-    }, [employees, selectedBranch, selectedDepartment]);
+
 
     const handleAnswerChange = (questionId: number, value: any) => {
         setData(current => ({
@@ -264,10 +249,35 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         return true;
     };
 
-    const renderInput = (question: any) => {
+    const renderInput = (section: any, question: any) => {
         const inputTypeResolver = question.input_type || question.inputType;
         const typeId = inputTypeResolver?.type_identifier || 'text'; // Fallback to text to prevent crash
         const answer = data.answers[question.id] !== undefined ? data.answers[question.id] : '';
+
+        const getAnswerForTypeInSection = (tId: string) => {
+            const matchQ = section?.questions?.find((q: any) =>
+                (q.input_type?.type_identifier === tId || q.inputType?.type_identifier === tId)
+            );
+            return matchQ ? data.answers[matchQ.id] : null;
+        };
+
+        const localBranch = getAnswerForTypeInSection('branch_lookup');
+        const localDept = getAnswerForTypeInSection('department_lookup');
+
+        let localFilteredDepartments = departments || [];
+        if (localBranch) {
+            localFilteredDepartments = localFilteredDepartments.filter(d =>
+                !d.branch_id || String(d.branch_id) === String(localBranch)
+            );
+        }
+
+        let localFilteredEmployees = employees || [];
+        if (localBranch) {
+            localFilteredEmployees = localFilteredEmployees.filter(e => String(e.branch_id) === String(localBranch));
+        }
+        if (localDept) {
+            localFilteredEmployees = localFilteredEmployees.filter(e => String(e.department_id) === String(localDept));
+        }
 
         switch (typeId) {
             case 'textarea':
@@ -329,7 +339,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
             case 'department_lookup':
                 return (
                     <SearchableSelect
-                        options={filteredDepartments}
+                        options={localFilteredDepartments}
                         value={answer}
                         onValueChange={(val) => handleAnswerChange(question.id, val)}
                         placeholder="Search departments..."
@@ -340,7 +350,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
             case 'employee_lookup':
                 return (
                     <SearchableSelect
-                        options={filteredEmployees}
+                        options={localFilteredEmployees}
                         value={answer}
                         onValueChange={(val) => handleAnswerChange(question.id, val)}
                         placeholder="Search employees..."
@@ -489,7 +499,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                                                     {Boolean(question.is_required) && <span className="text-red-500 ml-1" title="Required field">*</span>}
                                                 </Label>
                                                 <div className="pl-4 pt-2">
-                                                    {renderInput(question)}
+                                                    {renderInput(section, question)}
                                                     {(errors as any)[`answers.${question.id}`] && (
                                                         <p className="text-red-500 text-sm mt-2 flex items-center">
                                                             <span className="font-bold mr-1">Error:</span> {(errors as any)[`answers.${question.id}`]}
