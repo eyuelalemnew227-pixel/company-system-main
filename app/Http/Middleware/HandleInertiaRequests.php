@@ -64,6 +64,7 @@ class HandleInertiaRequests extends Middleware {
 				'canManageExpenseBudget' => $user
 					? ExpenseBudgetAccess::canManage($user)
 					: false,
+				'hasActiveExpenseBudgetPeriod' => \App\Models\ExpenseBudgetPeriod::where('status', 'active')->exists(),
 			],
 
 			'ziggy' => fn(): array => [

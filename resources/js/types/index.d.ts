@@ -5,6 +5,7 @@ export interface Auth {
 	user: User;
 	permissions: string[];
 	canManageExpenseBudget?: boolean;
+	hasActiveExpenseBudgetPeriod?: boolean;
 }
 
 export interface BreadcrumbItem {

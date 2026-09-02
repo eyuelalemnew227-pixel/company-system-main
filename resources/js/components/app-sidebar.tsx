@@ -297,7 +297,7 @@ const baseSections: NavSection[] = [
         label: 'Expense Budget',
         icon: FileText,
         items: [
-          { title: 'Add Expense Budget', href: '/budget/expense-budget/create', icon: Plus, permission: 'manage expense budget anytime|manage expense budget within time window' },
+          { title: 'Add Expense Budget', href: '/budget/expense-budget/create', icon: Plus, permission: 'view only own department expense budgets|view only own branch expense budgets|view all branches except HO expense budgets' },
           { title: 'View Expense Budget', href: '/budget/expense-budget', icon: List, permission: 'view only own department expense budgets|view only own branch expense budgets|view all branches except HO expense budgets' },
           { title: 'Expense Submission Tracker', href: '/budget/expense-budget/submission-tracker', icon: ClipboardCheck, permission: 'view only own department expense budgets|view only own branch expense budgets|view all branches except HO expense budgets' },
         ],
@@ -335,8 +335,21 @@ const footerNavItems: NavItem[] = [];
 export function AppSidebar() {
   const { props } = usePage<PageProps>();
   const externalGroups = buildExternalGroups(props.externalLinks as ExternalLinkSection[] | undefined);
-  const sections =
+  const rawSections =
     externalGroups.length > 0 ? [...baseSections, { label: 'Links', icon: ExternalLink, items: [], groups: externalGroups }] : baseSections;
+
+  const sections = rawSections.map((section) => ({
+    ...section,
+    groups: section.groups?.map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        if (item.title === 'Add Expense Budget') {
+          return props.auth?.hasActiveExpenseBudgetPeriod ?? false;
+        }
+        return true;
+      }),
+    })),
+  }));
 
   return (
     <Sidebar collapsible="icon" variant="inset">
