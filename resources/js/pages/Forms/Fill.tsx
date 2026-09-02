@@ -246,6 +246,24 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         return true;
     };
 
+    const isSectionVisible = (section: any) => {
+        if (!section.visibility_logic || !section.visibility_logic.target_local_id) return true;
+
+        const targetQ = allQuestionsMap[section.visibility_logic.target_local_id];
+        if (!targetQ) return true; // Fail open if target is deleted
+
+        const givenAnswer = data.answers[targetQ.id];
+        const requiredValue = section.visibility_logic.value;
+
+        if (section.visibility_logic.operator === 'equals') {
+            return givenAnswer == requiredValue;
+        } else if (section.visibility_logic.operator === 'not_equals') {
+            return givenAnswer != requiredValue;
+        }
+
+        return true;
+    };
+
     const renderInput = (question: any) => {
         const inputTypeResolver = question.input_type || question.inputType;
         const typeId = inputTypeResolver?.type_identifier || 'text'; // Fallback to text to prevent crash
@@ -455,7 +473,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                             <p className="text-lg text-gray-500 font-medium">This form has no content to fill in yet.</p>
                         </div>
                     ) : (
-                        formVersion.sections.map((section: any, idx: number) => (
+                        formVersion.sections.filter(isSectionVisible).map((section: any, idx: number) => (
                             <Card key={section.id} className="shadow-md border-amber-900/10 overflow-hidden">
                                 <div className="bg-amber-900/5 px-6 py-4 border-b border-amber-900/10">
                                     <h3 className="text-xl font-bold text-amber-900">{idx + 1}. {section.title}</h3>

@@ -274,6 +274,75 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
                                                         </div>
                                                     </CardHeader>
                                                     <CardContent className="pt-6 space-y-6">
+                                                        <div className="bg-muted/10 p-4 rounded border border-muted mb-4">
+                                                            <div className="flex items-center justify-between mb-3">
+                                                                <Label className="text-sm font-semibold text-amber-900 flex items-center">
+                                                                    <Waypoints className="w-4 h-4 mr-2" /> Section Visibility Logic
+                                                                </Label>
+                                                                <Switch
+                                                                    checked={!!section.visibility_logic}
+                                                                    onCheckedChange={(checked) => updateSection(sIndex, 'visibility_logic', checked ? { target_local_id: '', operator: 'equals', value: '' } : null)}
+                                                                />
+                                                            </div>
+                                                            {section.visibility_logic && (() => {
+                                                                const logicTargets = getAvailableLogicTargets(sIndex, -1);
+                                                                const selectedTarget = logicTargets.find(t => t._id === section.visibility_logic.target_local_id);
+
+                                                                return (
+                                                                    <div className="bg-amber-50/50 p-4 rounded-md border border-amber-900/10 space-y-4">
+                                                                        {logicTargets.length === 0 ? (
+                                                                            <p className="text-sm text-red-500">No previous multiple-choice questions found in previous sections. Add one above to use conditional logic.</p>
+                                                                        ) : (
+                                                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                                                <div className="space-y-1">
+                                                                                    <Label className="text-xs">If Question...</Label>
+                                                                                    <Select
+                                                                                        value={section.visibility_logic.target_local_id || ''}
+                                                                                        onValueChange={(val) => updateSection(sIndex, 'visibility_logic', { ...section.visibility_logic, target_local_id: val, value: '' })}
+                                                                                    >
+                                                                                        <SelectTrigger className="bg-white text-sm"><SelectValue placeholder="Select target" /></SelectTrigger>
+                                                                                        <SelectContent>
+                                                                                            {logicTargets.map(t => (
+                                                                                                <SelectItem key={t._id} value={t._id}>{t.label || 'Untitled Question'}</SelectItem>
+                                                                                            ))}
+                                                                                        </SelectContent>
+                                                                                    </Select>
+                                                                                </div>
+                                                                                <div className="space-y-1">
+                                                                                    <Label className="text-xs">Condition</Label>
+                                                                                    <Select
+                                                                                        value={section.visibility_logic.operator || 'equals'}
+                                                                                        onValueChange={(val) => updateSection(sIndex, 'visibility_logic', { ...section.visibility_logic, operator: val })}
+                                                                                    >
+                                                                                        <SelectTrigger className="bg-white text-sm"><SelectValue placeholder="Condition" /></SelectTrigger>
+                                                                                        <SelectContent>
+                                                                                            <SelectItem value="equals">Equals</SelectItem>
+                                                                                            <SelectItem value="not_equals">Does Not Equal</SelectItem>
+                                                                                        </SelectContent>
+                                                                                    </Select>
+                                                                                </div>
+                                                                                <div className="space-y-1">
+                                                                                    <Label className="text-xs">Value is...</Label>
+                                                                                    <Select
+                                                                                        value={section.visibility_logic.value || ''}
+                                                                                        onValueChange={(val) => updateSection(sIndex, 'visibility_logic', { ...section.visibility_logic, value: val })}
+                                                                                        disabled={!selectedTarget}
+                                                                                    >
+                                                                                        <SelectTrigger className="bg-white text-sm"><SelectValue placeholder="Option value" /></SelectTrigger>
+                                                                                        <SelectContent>
+                                                                                            {selectedTarget?.choices?.map((c: any) => (
+                                                                                                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                                                                                            ))}
+                                                                                            {!selectedTarget && <SelectItem value="none" disabled>Select target</SelectItem>}
+                                                                                        </SelectContent>
+                                                                                    </Select>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )
+                                                            })()}
+                                                        </div>
                                                         <Droppable droppableId={`questions-${sIndex}`} type="question">
                                                             {(provided) => (
                                                                 <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-6 bg-transparent min-h-[50px]">

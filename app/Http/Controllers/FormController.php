@@ -98,6 +98,7 @@ class FormController extends Controller
             'status' => 'nullable|in:draft,active,archived',
             'sections' => 'nullable|array',
             'sections.*.title' => 'required|string|max:255',
+            'sections.*.visibility_logic' => 'nullable|array',
             'sections.*.questions' => 'nullable|array',
             'sections.*.questions.*.label' => 'required|string',
             'sections.*.questions.*.form_input_type_id' => 'required|exists:form_input_types,id',
@@ -129,6 +130,7 @@ class FormController extends Controller
                         'form_version_id' => $version->id,
                         'title' => $sectionData['title'],
                         'order_index' => $sIndex,
+                        'visibility_logic' => $sectionData['visibility_logic'] ?? null,
                     ]);
 
                     if (!empty($sectionData['questions'])) {
@@ -245,6 +247,7 @@ class FormController extends Controller
             'status' => 'nullable|in:draft,active,archived',
             'sections' => 'nullable|array',
             'sections.*.title' => 'required|string|max:255',
+            'sections.*.visibility_logic' => 'nullable|array',
             'sections.*.questions' => 'nullable|array',
             'sections.*.questions.*.label' => 'required|string',
             'sections.*.questions.*.form_input_type_id' => 'required|exists:form_input_types,id',
@@ -279,6 +282,7 @@ class FormController extends Controller
                         'form_version_id' => $version->id,
                         'title' => $sectionData['title'],
                         'order_index' => $sIndex,
+                        'visibility_logic' => $sectionData['visibility_logic'] ?? null,
                     ]);
 
                     if (!empty($sectionData['questions'])) {
