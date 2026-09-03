@@ -84,6 +84,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Users Export - Must be before resource route to avoid conflict
     Route::get('users/export', [UserController::class, 'export'])->name('users.export');
+    Route::patch('users/{user}/toggle-status', [UserController::class, 'toggleStatus'])->name('users.toggle-status');
 
     // Users
     Route::resource('users', UserController::class)->except(['show']);

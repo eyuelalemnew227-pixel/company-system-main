@@ -22,12 +22,13 @@ const breadcrumbs: BreadcrumbItem[] = [
     },
 ];
 
-export default function Users({ users, branches, departments, roles, request }: { users: User, branches: Branch[], departments: Department[], roles: string[], request?: { search?: string, branch_id?: string, department_id?: string, role?: string } }) {
+export default function Users({ users, branches, departments, roles, request }: { users: User, branches: Branch[], departments: Department[], roles: string[], request?: { search?: string, branch_id?: string, department_id?: string, role?: string, status?: string } }) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
     const [search, setSearch] = useState<string>(request?.search ?? '');
     const [selectedBranch, setSelectedBranch] = useState<string>(request?.branch_id ?? 'all');
     const [selectedDepartment, setSelectedDepartment] = useState<string>(request?.department_id ?? 'all');
     const [selectedRole, setSelectedRole] = useState<string>(request?.role ?? 'all');
+    const [selectedStatus, setSelectedStatus] = useState<string>(request?.status ?? 'all');
     const { can } = usePermission();
 
     useEffect(() => {
@@ -54,6 +55,7 @@ export default function Users({ users, branches, departments, roles, request }: 
         if (search) params.search = search;
         if (value !== 'all') params.branch_id = value;
         if (selectedRole !== 'all') params.role = selectedRole;
+        if (selectedStatus !== 'all') params.status = selectedStatus;
         router.get('/users', params, { preserveState: true, replace: true });
     }
 
@@ -66,6 +68,7 @@ export default function Users({ users, branches, departments, roles, request }: 
         if (selectedBranch !== 'all') params.branch_id = selectedBranch;
         if (value !== 'all') params.department_id = value;
         if (selectedRole !== 'all') params.role = selectedRole;
+        if (selectedStatus !== 'all') params.status = selectedStatus;
         router.get('/users', params, { preserveState: true, replace: true });
     }
 
@@ -78,6 +81,20 @@ export default function Users({ users, branches, departments, roles, request }: 
         if (selectedBranch !== 'all') params.branch_id = selectedBranch;
         if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
         if (value !== 'all') params.role = value;
+        if (selectedStatus !== 'all') params.status = selectedStatus;
+        router.get('/users', params, { preserveState: true, replace: true });
+    }
+
+    function handleStatusChange(value: string) {
+        setSelectedStatus(value);
+
+        // Apply filter automatically
+        const params: any = {};
+        if (search) params.search = search;
+        if (selectedBranch !== 'all') params.branch_id = selectedBranch;
+        if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
+        if (selectedRole !== 'all') params.role = selectedRole;
+        if (value !== 'all') params.status = value;
         router.get('/users', params, { preserveState: true, replace: true });
     }
 
@@ -88,7 +105,17 @@ export default function Users({ users, branches, departments, roles, request }: 
         if (selectedBranch !== 'all') params.branch_id = selectedBranch;
         if (selectedDepartment !== 'all') params.department_id = selectedDepartment;
         if (selectedRole !== 'all') params.role = selectedRole;
+        if (selectedStatus !== 'all') params.status = selectedStatus;
         router.get('/users', params, { preserveState: true, replace: true });
+    }
+
+    function toggleUserStatus(id: number, currentStatus: boolean) {
+        const actionStr = currentStatus ? 'deactivate' : 'activate';
+        if (confirm(`Are you sure you want to ${actionStr} this user account?`)) {
+            router.patch(`/users/${id}/toggle-status`, {}, {
+                preserveScroll: true,
+            });
+        }
     }
 
     function deleteUser(id: number) {
@@ -173,7 +200,7 @@ export default function Users({ users, branches, departments, roles, request }: 
                                     </SelectContent>
                                 </Select>
                                 <Select value={selectedRole} onValueChange={handleRoleChange}>
-                                    <SelectTrigger className="w-[200px]">
+                                    <SelectTrigger className="w-[180px]">
                                         <SelectValue placeholder="Filter by Role" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -183,6 +210,16 @@ export default function Users({ users, branches, departments, roles, request }: 
                                                 {role}
                                             </SelectItem>
                                         ))}
+                                    </SelectContent>
+                                </Select>
+                                <Select value={selectedStatus} onValueChange={handleStatusChange}>
+                                    <SelectTrigger className="w-[150px]">
+                                        <SelectValue placeholder="Filter by Status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Status</SelectItem>
+                                        <SelectItem value="active">Active Only</SelectItem>
+                                        <SelectItem value="inactive">Inactive Only</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -198,6 +235,7 @@ export default function Users({ users, branches, departments, roles, request }: 
                                     <TableHead className="font-bold text-white">Employee Full Name</TableHead>
                                     <TableHead className="font-bold text-white">User Name</TableHead>
                                     <TableHead className="font-bold text-white">Email</TableHead>
+                                    <TableHead className="font-bold text-white">Status</TableHead>
                                     <TableHead className="font-bold text-white">Roles</TableHead>
                                     <TableHead className="font-bold text-white">Created At</TableHead>
                                     <TableHead className="font-bold text-white">Actions</TableHead>
@@ -214,6 +252,13 @@ export default function Users({ users, branches, departments, roles, request }: 
                                         </TableCell>
                                         <TableCell>{user.name}</TableCell>
                                         <TableCell>{user.email}</TableCell>
+                                        <TableCell>
+                                            {user.is_active ? (
+                                                <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white">Active</Badge>
+                                            ) : (
+                                                <Badge variant="destructive">Inactive</Badge>
+                                            )}
+                                        </TableCell>
                                         <TableCell className="flex flex-wrap items-center gap-2">
                                             {user.roles.map((role, index) => (
                                                 <Badge variant={'outline'} key={index}>
@@ -223,23 +268,34 @@ export default function Users({ users, branches, departments, roles, request }: 
                                         </TableCell>
                                         <TableCell>{user.created_at}</TableCell>
                                         <TableCell>
-                                            {can('update users') && (
-                                                <Link href={`/users/${user.id}/edit`}>
-                                                    <Button variant={'outline'} size={'sm'}>
-                                                        Edit
+                                            <div className="flex items-center gap-2">
+                                                {can('update users') && (
+                                                    <Link href={`/users/${user.id}/edit`}>
+                                                        <Button variant={'outline'} size={'sm'}>
+                                                            Edit
+                                                        </Button>
+                                                    </Link>
+                                                )}
+                                                {can('update users') && (
+                                                    <Button
+                                                        variant={user.is_active ? 'secondary' : 'default'}
+                                                        size={'sm'}
+                                                        className={!user.is_active ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
+                                                        onClick={() => toggleUserStatus(user.id, user.is_active)}
+                                                    >
+                                                        {user.is_active ? 'Deactivate' : 'Activate'}
                                                     </Button>
-                                                </Link>
-                                            )}
-                                            {can('delete users') && (
-                                                <Button
-                                                    className="m-2"
-                                                    variant={'destructive'}
-                                                    size={'sm'}
-                                                    onClick={() => deleteUser(user.id)}
-                                                >
-                                                    Delete
-                                                </Button>
-                                            )}
+                                                )}
+                                                {can('delete users') && (
+                                                    <Button
+                                                        variant={'destructive'}
+                                                        size={'sm'}
+                                                        onClick={() => deleteUser(user.id)}
+                                                    >
+                                                        Delete
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}

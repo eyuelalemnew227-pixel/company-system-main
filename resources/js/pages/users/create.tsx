@@ -37,6 +37,7 @@ export default function CreateUsers({
         name: '',
         email: '',
         password: '',
+        is_active: true as boolean,
         roles: [] as string[],
     });
 
@@ -173,6 +174,37 @@ export default function CreateUsers({
                                         className="mt-1.5"
                                     />
                                     <InputError message={errors.password} />
+                                </div>
+
+                                <div className="col-span-1 md:col-span-2 pt-1">
+                                    <label
+                                        htmlFor="is_active"
+                                        className={cn(
+                                            "flex cursor-pointer items-center gap-3 rounded-lg border p-3.5 transition-all select-none",
+                                            data.is_active
+                                                ? "border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-950/20"
+                                                : "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900"
+                                        )}
+                                    >
+                                        <Checkbox
+                                            id="is_active"
+                                            checked={data.is_active}
+                                            onCheckedChange={(checked) => setData('is_active', !!checked)}
+                                        />
+                                        <div>
+                                            <span className="font-semibold text-sm text-foreground flex items-center gap-2">
+                                                Active Account Status
+                                                {data.is_active ? (
+                                                    <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px]">Active</Badge>
+                                                ) : (
+                                                    <Badge variant="destructive" className="text-[10px]">Inactive</Badge>
+                                                )}
+                                            </span>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                By default, new users are active. Uncheck to disable user access to the system.
+                                            </p>
+                                        </div>
+                                    </label>
                                 </div>
                             </div>
 

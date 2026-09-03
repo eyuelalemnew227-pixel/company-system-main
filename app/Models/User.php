@@ -24,6 +24,7 @@ class User extends Authenticatable
 		'employee_id',
 		'name',
 		'email',
+		'is_active',
 		'password',
 		'phone_number',
 		'telegram_chat_id',
@@ -79,6 +80,7 @@ class User extends Authenticatable
 		return [
 			'email_verified_at' => 'datetime',
 			'password' => 'hashed',
+			'is_active' => 'boolean',
 			'is_paid_user' => 'boolean',
 			'sms_notifications_enabled' => 'boolean',
 		];

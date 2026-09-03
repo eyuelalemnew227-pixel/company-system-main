@@ -7,6 +7,7 @@ export interface SingleUser {
     employee_id?: number;
     name: string;
     email: string;
+    is_active: boolean;
     roles: string[];
     created_at: string;
     employee?: {

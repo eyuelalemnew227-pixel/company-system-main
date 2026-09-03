@@ -48,6 +48,14 @@ class UserController extends Controller {
             });
         }
 
+        if ($status = request('status')) {
+            if ($status === 'active') {
+                $query->where('is_active', true);
+            } elseif ($status === 'inactive') {
+                $query->where('is_active', false);
+            }
+        }
+
         $branches = Branch::with('departments')
             ->get()
             ->map(function ($branch) {
@@ -73,6 +81,7 @@ class UserController extends Controller {
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'is_active' => (bool)$user->is_active,
                 'created_at' => $user->created_at->format('d-m-Y'),
                 'roles' => $user->roles->pluck('name'),
                 'employee' => $user->employee ? [
@@ -87,7 +96,7 @@ class UserController extends Controller {
             'branches' => $branches,
             'departments' => $departments,
             'roles' => $roles,
-            'request' => request()->only(['search', 'branch_id', 'department_id', 'role']),
+            'request' => request()->only(['search', 'branch_id', 'department_id', 'role', 'status']),
         ]);
     }
 
@@ -126,6 +135,7 @@ class UserController extends Controller {
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:8',
+            'is_active' => 'nullable|boolean',
             'roles' => 'array',
             'roles.*' => 'string|exists:roles,name',
             'direct_permissions' => 'array',
@@ -136,6 +146,7 @@ class UserController extends Controller {
             'employee_id' => $request->employee_id,
             'name' => $request->name,
             'email' => $request->email,
+            'is_active' => $request->boolean('is_active', true),
             'password' => bcrypt($request->password),
         ]);
 
@@ -177,6 +188,7 @@ class UserController extends Controller {
                 'employee_id' => $user->employee_id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'is_active' => (bool)$user->is_active,
                 'roles' => $user->roles->pluck('name'),
                 'direct_permissions' => $user->getDirectPermissions()->pluck('name'),
                 'employee' => $user->employee ? [
@@ -203,6 +215,7 @@ class UserController extends Controller {
                 Rule::unique('users', 'email')->ignore($user->id),
             ],
             'password' => 'nullable|string|min:8',
+            'is_active' => 'nullable|boolean',
             'roles' => 'array',
             'roles.*' => 'string|exists:roles,name',
             'direct_permissions' => 'array',
@@ -213,7 +226,37 @@ class UserController extends Controller {
             'employee_id' => $request->employee_id,
             'name' => $request->name,
             'email' => $request->email,
+            'is_active' => $request->boolean('is_active', true),
         ];
+
+        // Only update password if it's provided
+        if ($request->filled('password')) {
+            $updateData['password'] = bcrypt($request->password);
+        }
+
+        $user->update($updateData);
+
+        if ($request->has('roles')) {
+            $user->syncRoles($request->input('roles', []));
+        } else {
+            $user->syncRoles([]);
+        }
+        if ($request->has('direct_permissions')) {
+            $user->syncPermissions($request->input('direct_permissions', []));
+        }
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
+        return to_route('users.index')->with('message', 'User Updated Successfully!');
+    }
+
+    public function toggleStatus(User $user) {
+        $user->update([
+            'is_active' => !$user->is_active,
+        ]);
+
+        $statusText = $user->is_active ? 'Activated' : 'Deactivated';
+        return back()->with('message', "User Account {$statusText} Successfully!");
+    }
 
         // Only update password if it's provided
         if ($request->filled('password')) {
