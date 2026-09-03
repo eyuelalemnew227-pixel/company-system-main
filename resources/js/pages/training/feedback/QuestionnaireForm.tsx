@@ -1,24 +1,39 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
+import { cn } from '@/lib/utils';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft, HelpCircle, Send, Star } from 'lucide-react';
+import { ArrowLeft, Check, ChevronsUpDown, HelpCircle, Send, Star } from 'lucide-react';
 import React from 'react';
 
 type Branch = { id: number; name: string };
+type Department = { id: number; name: string };
 type Schedule = { id: number; title: string; schedule_date: string };
+type UserOption = { id: number; name: string; branch_id?: string | null; department_id?: string | null };
 
 type PageProps = {
     schedules: Schedule[];
     branches: Branch[];
+    departments?: Department[];
+    users?: UserOption[];
     userBranch?: Branch | null;
+    userDepartment?: Department | null;
 };
 
-export default function QuestionnaireForm({ schedules = [], branches = [], userBranch }: PageProps) {
+export default function QuestionnaireForm({
+    schedules = [],
+    branches = [],
+    departments = [],
+    users = [],
+    userBranch,
+    userDepartment,
+}: PageProps) {
     React.useEffect(() => {
         // @ts-ignore
         if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
@@ -32,6 +47,7 @@ export default function QuestionnaireForm({ schedules = [], branches = [], userB
     const { data, setData, post, processing, errors } = useForm({
         training_schedule_id: schedules[0]?.id ? String(schedules[0].id) : '',
         branch_id: userBranch?.id ? String(userBranch.id) : '',
+        department_id: userDepartment?.id ? String(userDepartment.id) : '',
         trainee_name: '',
         q1_relevance: 5,
         q2_objective_clarity: 'Yes',
@@ -45,6 +61,15 @@ export default function QuestionnaireForm({ schedules = [], branches = [], userB
         q10_most_liked_aspects: '',
         q11_additional_comments: '',
     });
+
+    const [openDepartment, setOpenDepartment] = React.useState(false);
+    const [openTrainee, setOpenTrainee] = React.useState(false);
+    const [traineeQuery, setTraineeQuery] = React.useState('');
+
+    const filteredUsers = React.useMemo(() => {
+        if (!data.branch_id) return users;
+        return users.filter((u) => u.branch_id === String(data.branch_id));
+    }, [users, data.branch_id]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -108,7 +133,7 @@ export default function QuestionnaireForm({ schedules = [], branches = [], userB
                                 📋 የስልጠና እና የተሳታፊ መረጃ (Session & Trainee Info)
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <div className="space-y-1">
                                 <Label className="text-xs font-semibold">የስልጠና መርሃግብር (Schedule Session)</Label>
                                 <Select value={data.training_schedule_id} onValueChange={(val: string) => setData('training_schedule_id', val)}>
@@ -126,9 +151,18 @@ export default function QuestionnaireForm({ schedules = [], branches = [], userB
                             </div>
 
                             <div className="space-y-1">
-                                <Label className="text-xs font-semibold">ቅርንጫፍ (Branch)</Label>
-                                <Select value={data.branch_id} onValueChange={(val: string) => setData('branch_id', val)}>
-                                    <SelectTrigger className="h-9 text-xs bg-white dark:bg-slate-950">
+                                <Label className="text-xs font-semibold flex items-center justify-between">
+                                    <span>ቅርንጫፍ (Branch)</span>
+                                    {userBranch && <span className="text-[10px] font-normal text-slate-500">🔒 (Locked)</span>}
+                                </Label>
+                                <Select
+                                    disabled={!!userBranch}
+                                    value={data.branch_id}
+                                    onValueChange={(val: string) => {
+                                        setData('branch_id', val);
+                                    }}
+                                >
+                                    <SelectTrigger className="h-9 text-xs bg-white dark:bg-slate-950 disabled:opacity-80 disabled:bg-slate-100 dark:disabled:bg-slate-900">
                                         <SelectValue placeholder="Select Branch" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -139,14 +173,131 @@ export default function QuestionnaireForm({ schedules = [], branches = [], userB
                                 </Select>
                             </div>
 
+                            {/* Searchable Department */}
                             <div className="space-y-1">
-                                <Label className="text-xs font-semibold">የተሳታፊ ስም (Trainee Name - Optional)</Label>
-                                <Input
-                                    placeholder="Leave blank for logged-in user name"
-                                    value={data.trainee_name}
-                                    onChange={(e) => setData('trainee_name', e.target.value)}
-                                    className="h-9 text-xs bg-white dark:bg-slate-950"
-                                />
+                                <Label className="text-xs font-semibold">የሥራ ክፍል (Department)</Label>
+                                <Popover open={openDepartment} onOpenChange={setOpenDepartment}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openDepartment}
+                                            className="h-9 w-full justify-between bg-white dark:bg-slate-950 text-xs font-normal truncate"
+                                        >
+                                            <span className="truncate">
+                                                {data.department_id
+                                                    ? departments.find((d) => String(d.id) === String(data.department_id))?.name || 'Select Department'
+                                                    : 'Select Department'}
+                                            </span>
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[260px] p-0" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Search Department..." className="h-8 text-xs" />
+                                            <CommandList>
+                                                <CommandEmpty className="p-2 text-xs text-muted-foreground">No department found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    <CommandItem
+                                                        value="unspecified"
+                                                        onSelect={() => {
+                                                            setData('department_id', '');
+                                                            setOpenDepartment(false);
+                                                        }}
+                                                    >
+                                                        <Check className={cn('mr-2 h-4 w-4', !data.department_id ? 'opacity-100' : 'opacity-0')} />
+                                                        Unspecified
+                                                    </CommandItem>
+                                                    {departments.map((dep) => (
+                                                        <CommandItem
+                                                            key={dep.id}
+                                                            value={dep.name}
+                                                            onSelect={() => {
+                                                                setData('department_id', String(dep.id));
+                                                                setOpenDepartment(false);
+                                                            }}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    'mr-2 h-4 w-4',
+                                                                    String(data.department_id) === String(dep.id) ? 'opacity-100' : 'opacity-0'
+                                                                )}
+                                                            />
+                                                            {dep.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+
+                            {/* Trainee Name (Filtered by Branch) */}
+                            <div className="space-y-1">
+                                <Label className="text-xs font-semibold">የተሳታፊ ስም (Trainee Name)</Label>
+                                <Popover open={openTrainee} onOpenChange={setOpenTrainee}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={openTrainee}
+                                            className="h-9 w-full justify-between bg-white dark:bg-slate-950 text-xs font-normal truncate"
+                                        >
+                                            <span className="truncate">{data.trainee_name || 'Select or type trainee name...'}</span>
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[280px] p-0" align="start">
+                                        <Command>
+                                            <CommandInput
+                                                placeholder={data.branch_id ? "Search branch users..." : "Search all users..."}
+                                                className="h-8 text-xs"
+                                                value={traineeQuery}
+                                                onValueChange={(val) => setTraineeQuery(val)}
+                                            />
+                                            <CommandList>
+                                                <CommandEmpty className="p-2 text-xs text-muted-foreground">
+                                                    No matching user found.
+                                                </CommandEmpty>
+                                                {traineeQuery.trim() !== '' && (
+                                                    <CommandGroup heading="Custom Name">
+                                                        <CommandItem
+                                                            value={traineeQuery}
+                                                            onSelect={() => {
+                                                                setData('trainee_name', traineeQuery);
+                                                                setOpenTrainee(false);
+                                                            }}
+                                                        >
+                                                            <Check className="mr-2 h-4 w-4 opacity-0" />
+                                                            Use &quot;{traineeQuery}&quot;
+                                                        </CommandItem>
+                                                    </CommandGroup>
+                                                )}
+                                                <CommandGroup heading={data.branch_id ? `Branch Users (${filteredUsers.length})` : `All Users (${users.length})`}>
+                                                    {filteredUsers.map((u) => (
+                                                        <CommandItem
+                                                            key={u.id}
+                                                            value={u.name}
+                                                            onSelect={() => {
+                                                                setData('trainee_name', u.name);
+                                                                setOpenTrainee(false);
+                                                            }}
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    'mr-2 h-4 w-4',
+                                                                    data.trainee_name === u.name ? 'opacity-100' : 'opacity-0'
+                                                                )}
+                                                            />
+                                                            {u.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                         </CardContent>
                     </Card>

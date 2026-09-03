@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Training;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Models\Department;
+use App\Models\User;
 use App\Models\Training\TrainingFeedbackResponse;
 use App\Models\Training\TrainingSchedule;
 use Illuminate\Http\RedirectResponse;
@@ -26,7 +28,7 @@ class TrainingFeedbackController extends Controller
         ];
 
         if (\Illuminate\Support\Facades\Schema::hasTable('training_feedback_responses')) {
-            $query = TrainingFeedbackResponse::with(['schedule', 'user', 'branch']);
+            $query = TrainingFeedbackResponse::with(['schedule', 'user', 'branch', 'department']);
 
             $user = $request->user();
             if ($user && !$user->can('training.feedback.view') && !$user->can('training.feedback.manage') && $user->can('training.feedback.view_own')) {
@@ -86,11 +88,28 @@ class TrainingFeedbackController extends Controller
         $user = $request->user();
         $schedules = TrainingSchedule::orderBy('schedule_date', 'desc')->get();
         $branches = Branch::orderBy('name')->get();
+        $departments = Department::orderBy('name')->get();
+
+        $users = User::with(['employee'])
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get()
+            ->map(function ($u) {
+                return [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                    'branch_id' => $u->employee?->branch_id ? (string) $u->employee->branch_id : null,
+                    'department_id' => $u->employee?->department_id ? (string) $u->employee->department_id : null,
+                ];
+            });
 
         return Inertia::render('training/feedback/QuestionnaireForm', [
             'schedules' => $schedules,
             'branches' => $branches,
+            'departments' => $departments,
+            'users' => $users,
             'userBranch' => $user->employee ? $user->employee->branch : null,
+            'userDepartment' => $user->employee ? $user->employee->department : null,
         ]);
     }
 
@@ -101,6 +120,7 @@ class TrainingFeedbackController extends Controller
         $validated = $request->validate([
             'training_schedule_id' => 'nullable|exists:training_schedules,id',
             'branch_id' => 'nullable|exists:branches,id',
+            'department_id' => 'nullable|exists:departments,id',
             'trainee_name' => 'nullable|string|max:255',
             'q1_relevance' => 'required|integer|min:1|max:5',
             'q2_objective_clarity' => 'required|string',
@@ -118,6 +138,7 @@ class TrainingFeedbackController extends Controller
         $validated['user_id'] = $user->id;
         $validated['trainee_name'] = $validated['trainee_name'] ?: $user->name;
         $validated['branch_id'] = $validated['branch_id'] ?: ($user->employee ? $user->employee->branch_id : null);
+        $validated['department_id'] = $validated['department_id'] ?: ($user->employee ? $user->employee->department_id : null);
 
         TrainingFeedbackResponse::create($validated);
 

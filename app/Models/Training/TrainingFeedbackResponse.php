@@ -3,6 +3,7 @@
 namespace App\Models\Training;
 
 use App\Models\Branch;
+use App\Models\Department;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +15,7 @@ class TrainingFeedbackResponse extends Model
         'training_schedule_item_id',
         'user_id',
         'branch_id',
+        'department_id',
         'trainee_name',
         'q1_relevance',
         'q2_objective_clarity',
@@ -46,5 +48,10 @@ class TrainingFeedbackResponse extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class, 'branch_id');
+    }
+
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'department_id');
     }
 }
