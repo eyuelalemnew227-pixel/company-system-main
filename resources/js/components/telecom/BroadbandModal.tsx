@@ -102,7 +102,12 @@ export default function BroadbandModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent
+                className="max-w-2xl max-h-[90vh] overflow-y-auto"
+                onPointerDownOutside={(e) => e.preventDefault()}
+                onInteractOutside={(e) => e.preventDefault()}
+                onEscapeKeyDown={(e) => e.preventDefault()}
+            >
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-lg">
                         <Wifi className="h-5 w-5 text-purple-600" />

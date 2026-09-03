@@ -224,7 +224,11 @@ export default function ProvidersIndex({ providers = [], filters = {}, flash }: 
 
             {/* Add / Edit Dialog */}
             <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                <DialogContent>
+                <DialogContent
+                    onPointerDownOutside={(e) => e.preventDefault()}
+                    onInteractOutside={(e) => e.preventDefault()}
+                    onEscapeKeyDown={(e) => e.preventDefault()}
+                >
                     <DialogHeader>
                         <DialogTitle>{editingProvider ? 'Edit Telecom Provider' : 'Add Telecom Provider'}</DialogTitle>
                     </DialogHeader>

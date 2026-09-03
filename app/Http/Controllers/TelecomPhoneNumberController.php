@@ -58,6 +58,7 @@ class TelecomPhoneNumberController extends Controller
             'providers' => TelecomProvider::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'branches' => Branch::orderBy('name')->get(['id', 'name']),
             'departments' => Department::orderBy('name')->get(['id', 'name']),
+            'employees' => Employee::select('id', 'first_name', 'last_name', 'employee_code')->orderBy('first_name')->get(),
             'filters' => $request->only(['search', 'telecom_provider_id', 'service_type', 'status', 'assigned_type', 'branch_id', 'per_page']),
         ]);
     }
