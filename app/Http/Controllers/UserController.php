@@ -258,26 +258,6 @@ class UserController extends Controller {
         return back()->with('message', "User Account {$statusText} Successfully!");
     }
 
-        // Only update password if it's provided
-        if ($request->filled('password')) {
-            $updateData['password'] = bcrypt($request->password);
-        }
-
-        $user->update($updateData);
-
-        if ($request->has('roles')) {
-            $user->syncRoles($request->input('roles', []));
-        } else {
-            $user->syncRoles([]);
-        }
-        if ($request->has('direct_permissions')) {
-            $user->syncPermissions($request->input('direct_permissions', []));
-        }
-        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
-
-        return to_route('users.index')->with('message', 'User Updated Successfully!');
-    }
-
     public function destroy(User $user) {
         $user->delete();
         return to_route('users.index')->with('message', 'User Deleted Successfully!');
