@@ -363,6 +363,7 @@ class FormController extends Controller
                     return [
                         'title' => $section->title,
                         'order_index' => $section->order_index,
+                        'visibility_logic' => $section->visibility_logic,
                         'questions' => $section->questions->map(function ($question) {
                             return [
                                 '_id' => $question->local_id,
@@ -370,6 +371,7 @@ class FormController extends Controller
                                 'form_input_type_id' => $question->form_input_type_id,
                                 'is_required' => $question->is_required,
                                 'order_index' => $question->order_index,
+                                'default_value' => $question->default_value,
                                 'visibility_logic' => $question->visibility_logic,
                                 'choices' => $question->choices->map(function ($choice) {
                                     return [
@@ -428,6 +430,7 @@ class FormController extends Controller
                         'form_version_id' => $version->id,
                         'title' => $sectionData['title'],
                         'order_index' => $sectionData['order_index'] ?? $sIndex,
+                        'visibility_logic' => !empty($sectionData['visibility_logic']) ? $sectionData['visibility_logic'] : null,
                     ]);
 
                     if (!empty($sectionData['questions'])) {
@@ -439,6 +442,7 @@ class FormController extends Controller
                                 'is_required' => $questionData['is_required'] ?? false,
                                 'order_index' => $questionData['order_index'] ?? $qIndex,
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),
+                                'default_value' => $questionData['default_value'] ?? null,
                                 'visibility_logic' => !empty($questionData['visibility_logic']) ? $questionData['visibility_logic'] : null,
                             ]);
 
