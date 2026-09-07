@@ -203,6 +203,14 @@ export default function KaldisCommunicationPage({
     const [isAddStandardTopicOpen, setIsAddStandardTopicOpen] = useState(false);
     const [isSyncingTopics, setIsSyncingTopics] = useState(false);
 
+    const getRouteUrl = (name: string, fallback: string) => {
+        try {
+            return route(name);
+        } catch {
+            return fallback;
+        }
+    };
+
     const standardTopicForm = useForm({
         name: '',
         department: departments[0] || 'Operations',
@@ -211,7 +219,7 @@ export default function KaldisCommunicationPage({
 
     const handleAddStandardTopic = (e: React.FormEvent) => {
         e.preventDefault();
-        standardTopicForm.post(route('kaldis-communication.store-standard-topic'), {
+        standardTopicForm.post(getRouteUrl('kaldis-communication.store-standard-topic', '/kaldis-communication/standard-topics'), {
             onSuccess: () => {
                 toast.success(`Standard topic preset '${standardTopicForm.data.name}' added successfully!`);
                 setIsAddStandardTopicOpen(false);
@@ -225,7 +233,7 @@ export default function KaldisCommunicationPage({
 
     const handleDeleteStandardTopic = (name: string) => {
         if (confirm(`Remove standard topic preset '${name}'?`)) {
-            router.delete(route('kaldis-communication.delete-standard-topic'), {
+            router.delete(getRouteUrl('kaldis-communication.delete-standard-topic', '/kaldis-communication/standard-topics'), {
                 data: { name },
                 onSuccess: () => toast.success(`Standard topic preset '${name}' removed.`),
                 onError: () => toast.error('Failed to remove standard topic preset.'),
@@ -253,7 +261,7 @@ export default function KaldisCommunicationPage({
 
     const handleUpdateStandardTopic = (e: React.FormEvent) => {
         e.preventDefault();
-        editStandardTopicForm.put(route('kaldis-communication.update-standard-topic'), {
+        editStandardTopicForm.put(getRouteUrl('kaldis-communication.update-standard-topic', '/kaldis-communication/standard-topics'), {
             onSuccess: () => {
                 toast.success(`Standard topic preset '${editStandardTopicForm.data.name}' updated!`);
                 setIsEditStandardTopicOpen(false);
