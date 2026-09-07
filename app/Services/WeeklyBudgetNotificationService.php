@@ -11,29 +11,6 @@ use App\Models\WeeklyBudgetNotification;
 
 class WeeklyBudgetNotificationService
 {
-    public static function handleCreated(WeeklyBudget $budget): void
-    {
-        $budget->loadMissing(['department', 'branch']);
-        $deptName = $budget->department?->name ?? 'N/A';
-        $amountStr = number_format((float) $budget->amount, 2);
-
-        // Notify Department reviewers & creator
-        self::notifyDepartmentUsers(
-            $budget,
-            'budget.department',
-            "New Weekly Budget Request: #{$budget->id}",
-            "Created for {$deptName} — ETB {$amountStr}"
-        );
-
-        // Notify Finance users
-        self::notifyUsersByPermission(
-            $budget,
-            'view finance budgets',
-            'budget.finance',
-            "New Weekly Budget Submitted: #{$budget->id}",
-            "Department: {$deptName} — ETB {$amountStr}"
-        );
-    }
 
     public static function handleStatusChanges(WeeklyBudget $budget): void
     {
