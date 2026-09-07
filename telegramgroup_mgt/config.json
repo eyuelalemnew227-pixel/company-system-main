@@ -11,5 +11,22 @@
     },
     "ho_group_chat_id": -1004482619985,
     "operations_director_user_id": 0,
-    "database": "kaldis.db"
+    "database": "kaldis.db",
+    "anti_link_protection": false,
+    "auto_welcome": false,
+    "welcome_message": "Welcome {name} to {group}! Please follow group rules.",
+    "standard_topics": [
+        {"name": "Announcements", "department": "Operations", "emoji": "📢"},
+        {"name": "Operations", "department": "Operations", "emoji": "⚙️"},
+        {"name": "HR", "department": "HR", "emoji": "💼"},
+        {"name": "Finance", "department": "Finance", "emoji": "💰"},
+        {"name": "Supply Chain", "department": "Supply Chain", "emoji": "📦"},
+        {"name": "IT", "department": "IT", "emoji": "💻"},
+        {"name": "Maintenance", "department": "Maintenance", "emoji": "🔧"},
+        {"name": "F&B", "department": "F&B", "emoji": "☕"},
+        {"name": "T&D", "department": "T&D", "emoji": "🎓"},
+        {"name": "QA", "department": "QA", "emoji": "🛡️"},
+        {"name": "BI", "department": "BI", "emoji": "📊"},
+        {"name": "Logistics", "department": "Supply Chain", "emoji": "🚚"}
+    ]
 }

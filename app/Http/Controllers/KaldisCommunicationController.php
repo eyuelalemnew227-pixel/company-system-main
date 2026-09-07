@@ -142,7 +142,7 @@ class KaldisCommunicationController extends Controller
             'anti_link_protection' => !empty($data['anti_link_protection']),
             'auto_welcome' => !empty($data['auto_welcome']),
             'welcome_message' => $data['welcome_message'] ?? 'Welcome {name} to {group}! Please follow group rules.',
-            'standard_topics' => $data['standard_topics'] ?? [],
+            'standard_topics' => array_key_exists('standard_topics', $data) ? $data['standard_topics'] : null,
         ];
     }
 
@@ -261,21 +261,20 @@ class KaldisCommunicationController extends Controller
         $reg2 = (int) ($validated['region_2_chat_id'] ?? 0);
         $hoChat = (int) ($validated['ho_group_chat_id'] ?? 0);
 
-        $configData = [
-            'bot_token' => trim($validated['bot_token'] ?? ''),
-            'region_groups' => [
-                'Region 1' => $reg1,
-                'Region 2' => $reg2,
-            ],
-            'groups' => [
-                'Region 1' => $reg1,
-                'Region 2' => $reg2,
-                'Head Office' => $hoChat,
-            ],
-            'ho_group_chat_id' => $hoChat,
-            'operations_director_user_id' => (int) ($validated['operations_director_user_id'] ?? 0),
-            'database' => 'kaldis.db'
+        $configData = $this->readConfig();
+        $configData['bot_token'] = trim($validated['bot_token'] ?? '');
+        $configData['region_groups'] = [
+            'Region 1' => $reg1,
+            'Region 2' => $reg2,
         ];
+        $configData['groups'] = [
+            'Region 1' => $reg1,
+            'Region 2' => $reg2,
+            'Head Office' => $hoChat,
+        ];
+        $configData['ho_group_chat_id'] = $hoChat;
+        $configData['operations_director_user_id'] = (int) ($validated['operations_director_user_id'] ?? 0);
+        $configData['database'] = 'kaldis.db';
 
         file_put_contents($this->getConfigPath(), json_encode($configData, JSON_PRETTY_PRINT));
 
@@ -308,7 +307,7 @@ class KaldisCommunicationController extends Controller
     private function getStandardTopicMapping(): array
     {
         $config = $this->readConfig();
-        if (isset($config['standard_topics']) && is_array($config['standard_topics'])) {
+        if (is_array($config['standard_topics']) && count($config['standard_topics']) > 0) {
             return $config['standard_topics'];
         }
 
@@ -1622,8 +1621,8 @@ class KaldisCommunicationController extends Controller
         ]);
 
         $config = $this->readConfig();
-        $topics = $config['standard_topics'] ?? null;
-        if ($topics === null) {
+        $topics = $config['standard_topics'];
+        if (!is_array($topics) || count($topics) === 0) {
             $topics = $this->getStandardTopicMapping();
         }
 
@@ -1662,8 +1661,8 @@ class KaldisCommunicationController extends Controller
         ]);
 
         $config = $this->readConfig();
-        $topics = $config['standard_topics'] ?? null;
-        if ($topics === null) {
+        $topics = $config['standard_topics'];
+        if (!is_array($topics) || count($topics) === 0) {
             $topics = $this->getStandardTopicMapping();
         }
 
@@ -1713,8 +1712,8 @@ class KaldisCommunicationController extends Controller
         ]);
 
         $config = $this->readConfig();
-        $topics = $config['standard_topics'] ?? null;
-        if ($topics === null) {
+        $topics = $config['standard_topics'];
+        if (!is_array($topics) || count($topics) === 0) {
             $topics = $this->getStandardTopicMapping();
         }
 
