@@ -24,12 +24,39 @@ class KaldisCommunicationController extends Controller
         return base_path('telegramgroup_mgt/config.json');
     }
 
+    private function saveConfig(array $configData): bool
+    {
+        $configPath = $this->getConfigPath();
+        $dir = dirname($configPath);
+        if (!file_exists($dir)) {
+            @mkdir($dir, 0777, true);
+        }
+        @chmod($dir, 0777);
+        if (file_exists($configPath)) {
+            @chmod($configPath, 0666);
+        }
+
+        $json = json_encode($configData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        $bytesWritten = @file_put_contents($configPath, $json);
+
+        if ($bytesWritten === false) {
+            \Illuminate\Support\Facades\Log::error("KaldisCommunicationController: Failed to write config to {$configPath}. Check write permissions.");
+            return false;
+        }
+
+        return true;
+    }
+
     private function getPdo(): PDO
     {
         $dbPath = $this->getDbPath();
         $dir = dirname($dbPath);
         if (!file_exists($dir)) {
-            mkdir($dir, 0755, true);
+            @mkdir($dir, 0777, true);
+        }
+        @chmod($dir, 0777);
+        if (file_exists($dbPath)) {
+            @chmod($dbPath, 0666);
         }
 
         $pdo = new PDO('sqlite:' . $dbPath, null, null, [
@@ -297,7 +324,11 @@ class KaldisCommunicationController extends Controller
         $configData['operations_director_user_id'] = (int) ($validated['operations_director_user_id'] ?? 0);
         $configData['database'] = 'kaldis.db';
 
-        file_put_contents($this->getConfigPath(), json_encode($configData, JSON_PRETTY_PRINT));
+        if (!$this->saveConfig($configData)) {
+            return redirect()->back()->withErrors([
+                'config' => "Failed to save configuration. Check write permissions for 'telegramgroup_mgt/config.json' on server."
+            ]);
+        }
 
         // Auto-register Bot Commands with Telegram setMyCommands for all group chats
         if (!empty($configData['bot_token'])) {
@@ -345,7 +376,7 @@ class KaldisCommunicationController extends Controller
             ['name' => 'Logistics', 'department' => 'Supply Chain', 'emoji' => '🚚'],
         ];
 
-        if (!is_array($raw) || empty($raw)) {
+        if (!is_array($raw)) {
             return $defaults;
         }
 
@@ -1573,7 +1604,16 @@ class KaldisCommunicationController extends Controller
         $config['auto_welcome'] = $validated['auto_welcome'];
         $config['welcome_message'] = $validated['welcome_message'] ?? 'Welcome {name} to {group}! Please follow group rules.';
 
-        file_put_contents($this->getConfigPath(), json_encode($config, JSON_PRETTY_PRINT));
+        $config = $this->readConfig();
+        $config['anti_link_protection'] = $validated['anti_link_protection'];
+        $config['auto_welcome'] = $validated['auto_welcome'];
+        $config['welcome_message'] = $validated['welcome_message'] ?? 'Welcome {name} to {group}! Please follow group rules.';
+
+        if (!$this->saveConfig($config)) {
+            return redirect()->back()->withErrors([
+                'moderation' => "Failed to save moderation settings. Check write permissions for 'telegramgroup_mgt/config.json' on server."
+            ]);
+        }
 
         return redirect()->back()->with('success', 'Group moderation & welcome settings updated successfully.');
     }
@@ -1703,7 +1743,12 @@ class KaldisCommunicationController extends Controller
         $configPath = $this->getConfigPath();
         $rawConfig = file_exists($configPath) ? (json_decode(file_get_contents($configPath), true) ?: []) : [];
         $rawConfig['standard_topics'] = array_values($topics);
-        file_put_contents($configPath, json_encode($rawConfig, JSON_PRETTY_PRINT));
+        
+        if (!$this->saveConfig($rawConfig)) {
+            return redirect()->back()->withErrors([
+                'standard_topic' => "Failed to save configuration. Please check directory and file write permissions for 'telegramgroup_mgt/config.json' on server."
+            ]);
+        }
 
         if (!empty($rawConfig['bot_token'])) {
             try {
@@ -1766,7 +1811,12 @@ class KaldisCommunicationController extends Controller
         $configPath = $this->getConfigPath();
         $rawConfig = file_exists($configPath) ? (json_decode(file_get_contents($configPath), true) ?: []) : [];
         $rawConfig['standard_topics'] = array_values($topics);
-        file_put_contents($configPath, json_encode($rawConfig, JSON_PRETTY_PRINT));
+        
+        if (!$this->saveConfig($rawConfig)) {
+            return redirect()->back()->withErrors([
+                'standard_topic' => "Failed to save configuration. Please check directory and file write permissions for 'telegramgroup_mgt/config.json' on server."
+            ]);
+        }
 
         if (!empty($rawConfig['bot_token'])) {
             try {
@@ -1803,7 +1853,12 @@ class KaldisCommunicationController extends Controller
         $configPath = $this->getConfigPath();
         $rawConfig = file_exists($configPath) ? (json_decode(file_get_contents($configPath), true) ?: []) : [];
         $rawConfig['standard_topics'] = array_values($newTopics);
-        file_put_contents($configPath, json_encode($rawConfig, JSON_PRETTY_PRINT));
+        
+        if (!$this->saveConfig($rawConfig)) {
+            return redirect()->back()->withErrors([
+                'standard_topic' => "Failed to save configuration. Please check directory and file write permissions for 'telegramgroup_mgt/config.json' on server."
+            ]);
+        }
 
         if (!empty($rawConfig['bot_token'])) {
             try {

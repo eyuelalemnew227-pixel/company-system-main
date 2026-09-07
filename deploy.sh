@@ -23,8 +23,10 @@ npm run build
 
 # 5. Set proper permissions
 echo "Setting permissions..."
-chmod -R 755 storage bootstrap/cache
-chown -R www-data:www-data storage bootstrap/cache
+chmod -R 775 storage bootstrap/cache telegramgroup_mgt 2>/dev/null || chmod -R 755 storage bootstrap/cache telegramgroup_mgt
+chmod 666 telegramgroup_mgt/config.json 2>/dev/null || true
+chmod 666 telegramgroup_mgt/kaldis.db 2>/dev/null || true
+chown -R www-data:www-data storage bootstrap/cache telegramgroup_mgt 2>/dev/null || true
 
 # 6. Clear and cache configurations
 echo "Optimizing Laravel..."
