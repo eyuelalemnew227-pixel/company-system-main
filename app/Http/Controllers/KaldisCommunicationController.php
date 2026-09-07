@@ -249,6 +249,27 @@ class KaldisCommunicationController extends Controller
 
     public function updateConfig(Request $request): RedirectResponse
     {
+        $action = $request->input('action');
+        if ($action === 'add_standard_topic') {
+            return $this->storeStandardTopicPreset($request);
+        }
+        if ($action === 'update_standard_topic') {
+            return $this->updateStandardTopicPreset($request);
+        }
+        if ($action === 'delete_standard_topic') {
+            return $this->deleteStandardTopicPreset($request);
+        }
+        if ($action === 'clear_cache') {
+            try {
+                \Illuminate\Support\Facades\Artisan::call('route:clear');
+                \Illuminate\Support\Facades\Artisan::call('config:clear');
+                \Illuminate\Support\Facades\Artisan::call('view:clear');
+            } catch (\Throwable $e) {
+                // Ignore if console disabled
+            }
+            return redirect()->back()->with('success', 'Server route and app cache cleared successfully!');
+        }
+
         $validated = $request->validate([
             'bot_token' => ['nullable', 'string', 'max:255'],
             'region_1_chat_id' => ['nullable', 'numeric'],

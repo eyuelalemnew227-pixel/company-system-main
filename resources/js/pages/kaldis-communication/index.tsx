@@ -230,7 +230,12 @@ export default function KaldisCommunicationPage({
 
     const handleAddStandardTopic = (e: React.FormEvent) => {
         e.preventDefault();
-        standardTopicForm.post(getRouteUrl('kaldis-communication.store-standard-topic', '/kaldis-communication/standard-topics'), {
+        router.post(getRouteUrl('kaldis-communication.update-config', '/kaldis-communication/config'), {
+            action: 'add_standard_topic',
+            name: standardTopicForm.data.name,
+            department: standardTopicForm.data.department,
+            emoji: standardTopicForm.data.emoji,
+        }, {
             onSuccess: () => {
                 toast.success(`Standard topic preset '${standardTopicForm.data.name}' added successfully!`);
                 setIsAddStandardTopicOpen(false);
@@ -244,11 +249,12 @@ export default function KaldisCommunicationPage({
 
     const handleDeleteStandardTopic = (name: string) => {
         if (confirm(`Remove standard topic preset '${name}'?`)) {
-            router.post(getRouteUrl('kaldis-communication.delete-standard-topic', '/kaldis-communication/standard-topics/delete'), {
+            router.post(getRouteUrl('kaldis-communication.update-config', '/kaldis-communication/config'), {
+                action: 'delete_standard_topic',
                 name,
             }, {
                 onSuccess: () => toast.success(`Standard topic preset '${name}' removed.`),
-                onError: () => toast.error('Failed to remove standard topic preset.'),
+                onError: (errors: any) => toast.error(errors.standard_topic || 'Failed to remove standard topic preset.'),
             });
         }
     };
@@ -273,7 +279,13 @@ export default function KaldisCommunicationPage({
 
     const handleUpdateStandardTopic = (e: React.FormEvent) => {
         e.preventDefault();
-        editStandardTopicForm.post(getRouteUrl('kaldis-communication.update-standard-topic', '/kaldis-communication/standard-topics/update'), {
+        router.post(getRouteUrl('kaldis-communication.update-config', '/kaldis-communication/config'), {
+            action: 'update_standard_topic',
+            old_name: editStandardTopicForm.data.old_name,
+            name: editStandardTopicForm.data.name,
+            department: editStandardTopicForm.data.department,
+            emoji: editStandardTopicForm.data.emoji,
+        }, {
             onSuccess: () => {
                 toast.success(`Standard topic preset '${editStandardTopicForm.data.name}' updated!`);
                 setIsEditStandardTopicOpen(false);
@@ -281,6 +293,15 @@ export default function KaldisCommunicationPage({
             onError: (errors: any) => {
                 toast.error(errors.standard_topic || errors.name || 'Failed to update standard topic preset.');
             },
+        });
+    };
+
+    const handleClearServerCache = () => {
+        router.post(getRouteUrl('kaldis-communication.update-config', '/kaldis-communication/config'), {
+            action: 'clear_cache',
+        }, {
+            onSuccess: () => toast.success('Server cache cleared successfully!'),
+            onError: () => toast.error('Failed to clear server cache.'),
         });
     };
 
@@ -743,6 +764,16 @@ export default function KaldisCommunicationPage({
                         </Button>
                         {canManage && (
                             <>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleClearServerCache}
+                                    className="gap-1.5 border-neutral-300 dark:border-neutral-700"
+                                    title="Clear remote server route and app cache"
+                                >
+                                    <RefreshCw className="h-4 w-4 text-emerald-600" />
+                                    Clear Remote Cache
+                                </Button>
                                 <Button
                                     size="sm"
                                     onClick={() => handleSyncTopics(false)}
