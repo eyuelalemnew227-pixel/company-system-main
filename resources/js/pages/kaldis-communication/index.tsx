@@ -233,8 +233,9 @@ export default function KaldisCommunicationPage({
 
     const handleDeleteStandardTopic = (name: string) => {
         if (confirm(`Remove standard topic preset '${name}'?`)) {
-            router.delete(getRouteUrl('kaldis-communication.delete-standard-topic', '/kaldis-communication/standard-topics'), {
-                data: { name },
+            router.post(getRouteUrl('kaldis-communication.delete-standard-topic', '/kaldis-communication/standard-topics/delete'), {
+                name,
+            }, {
                 onSuccess: () => toast.success(`Standard topic preset '${name}' removed.`),
                 onError: () => toast.error('Failed to remove standard topic preset.'),
             });
@@ -261,7 +262,7 @@ export default function KaldisCommunicationPage({
 
     const handleUpdateStandardTopic = (e: React.FormEvent) => {
         e.preventDefault();
-        editStandardTopicForm.put(getRouteUrl('kaldis-communication.update-standard-topic', '/kaldis-communication/standard-topics'), {
+        editStandardTopicForm.post(getRouteUrl('kaldis-communication.update-standard-topic', '/kaldis-communication/standard-topics/update'), {
             onSuccess: () => {
                 toast.success(`Standard topic preset '${editStandardTopicForm.data.name}' updated!`);
                 setIsEditStandardTopicOpen(false);
