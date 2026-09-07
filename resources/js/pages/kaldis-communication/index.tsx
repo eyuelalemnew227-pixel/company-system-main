@@ -65,6 +65,8 @@ type SystemStats = {
     recorded_communications: number;
     forwarded_communications: number;
     responded_communications: number;
+    answered_communications?: number;
+    unanswered_communications?: number;
     total_users: number;
     total_bindings: number;
 };
@@ -80,8 +82,8 @@ const TOPIC_EMOJIS: Record<string, string> = {
     'F&B': '☕',
     'T&D': '🎓',
     'QA': '🛡️',
-    'Logistics & BI': '🚚',
-    'Suggestions & Improvements': '💡',
+    'BI': '📊',
+    'Logistics': '🚚',
 };
 
 type ConfigData = {
@@ -140,13 +142,33 @@ type CommunicationRecord = {
     updated_at: string;
 };
 
+type StandardTopicPreset = {
+    name: string;
+    department: string;
+    emoji: string;
+};
+
+const getPresets = (mapping: any): StandardTopicPreset[] => {
+    if (Array.isArray(mapping)) {
+        return mapping;
+    }
+    if (mapping && typeof mapping === 'object') {
+        return Object.entries(mapping).map(([name, department]) => ({
+            name,
+            department: department as string,
+            emoji: TOPIC_EMOJIS[name] || '📌',
+        }));
+    }
+    return [];
+};
+
 type Props = {
     stats: SystemStats;
     config: ConfigData;
     rosterUsers: RosterUser[];
     topicBindings: TopicBinding[];
     communications: CommunicationRecord[];
-    defaultTopicMapping: Record<string, string>;
+    defaultTopicMapping: StandardTopicPreset[] | Record<string, string>;
     departments: string[];
     branches: Array<{ id: number; name: string }>;
     systemUsers: Array<{ id: number; name: string; email: string; telegram_chat_id: string | null }>;
@@ -178,7 +200,38 @@ export default function KaldisCommunicationPage({
     // Dialog state
     const [isAddUserOpen, setIsAddUserOpen] = useState(false);
     const [isAddBindingOpen, setIsAddBindingOpen] = useState(false);
+    const [isAddStandardTopicOpen, setIsAddStandardTopicOpen] = useState(false);
     const [isSyncingTopics, setIsSyncingTopics] = useState(false);
+
+    const standardTopicForm = useForm({
+        name: '',
+        department: departments[0] || 'Operations',
+        emoji: '📢',
+    });
+
+    const handleAddStandardTopic = (e: React.FormEvent) => {
+        e.preventDefault();
+        standardTopicForm.post(route('kaldis-communication.store-standard-topic'), {
+            onSuccess: () => {
+                toast.success(`Standard topic preset '${standardTopicForm.data.name}' added successfully!`);
+                setIsAddStandardTopicOpen(false);
+                standardTopicForm.reset();
+            },
+            onError: (errors: any) => {
+                toast.error(errors.standard_topic || errors.name || 'Failed to add standard topic preset.');
+            },
+        });
+    };
+
+    const handleDeleteStandardTopic = (name: string) => {
+        if (confirm(`Remove standard topic preset '${name}'?`)) {
+            router.delete(route('kaldis-communication.delete-standard-topic'), {
+                data: { name },
+                onSuccess: () => toast.success(`Standard topic preset '${name}' removed.`),
+                onError: () => toast.error('Failed to remove standard topic preset.'),
+            });
+        }
+    };
 
     // Bulk Selection State
     const [selectedBindings, setSelectedBindings] = useState<string[]>([]);
@@ -239,6 +292,21 @@ export default function KaldisCommunicationPage({
         }
     };
 
+    const handlePurgeUnlisted = (deleteFromTelegram: boolean = false) => {
+        const msg = deleteFromTelegram
+            ? '⚠️ PURGE UNLISTED TOPICS:\nAre you sure you want to delete all topics from Telegram Groups AND System database that are NOT in the standard 12 topic list?'
+            : 'Unbind all unlisted topics from System database?';
+
+        if (confirm(msg)) {
+            router.post(route('kaldis-communication.purge-unlisted'), {
+                delete_from_telegram: deleteFromTelegram,
+            }, {
+                onSuccess: () => toast.success('Purged unlisted topics successfully!'),
+                onError: () => toast.error('Failed to purge unlisted topics.'),
+            });
+        }
+    };
+
     // Config form
     const configForm = useForm({
         bot_token: config.bot_token || '',
@@ -260,12 +328,34 @@ export default function KaldisCommunicationPage({
     });
 
     // Binding form
-    const bindingForm = useForm({
+    const bindingForm = useForm<{
+        group_key: string;
+        thread_id: string;
+        topic_name: string;
+        department: string;
+        emoji: string;
+        create_on_telegram: boolean;
+    }>({
         group_key: 'Region 1',
         thread_id: '',
         topic_name: 'Operations',
         department: 'Operations',
+        emoji: '⚙️',
+        create_on_telegram: true,
     });
+
+    const openAddBindingPreset = (topicName: string, dept: string, emoji: string, targetGroup?: string) => {
+        const groupKey = targetGroup || (topicSubTab === 'region2' ? 'Region 2' : topicSubTab === 'headOffice' ? 'Head Office' : 'Region 1');
+        bindingForm.setData({
+            group_key: groupKey,
+            thread_id: '',
+            topic_name: topicName,
+            department: dept,
+            emoji: emoji,
+            create_on_telegram: true,
+        });
+        setIsAddBindingOpen(true);
+    };
 
     // Edit Binding form
     const [isEditBindingOpen, setIsEditBindingOpen] = useState(false);
@@ -546,12 +636,14 @@ export default function KaldisCommunicationPage({
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'recorded':
-                return <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">Recorded</Badge>;
+                return <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">⏳ Unanswered (Recorded)</Badge>;
             case 'forwarded':
             case 'forwarded_to_ho':
-                return <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">Forwarded to HO</Badge>;
+                return <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">⏳ Unanswered (Forwarded HO)</Badge>;
             case 'responded':
-                return <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Responded</Badge>;
+            case 'closed':
+            case 'resolved':
+                return <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">✅ Answered (Responded)</Badge>;
             default:
                 return <Badge variant="outline">{status}</Badge>;
         }
@@ -634,13 +726,27 @@ export default function KaldisCommunicationPage({
                         </CardContent>
                     </Card>
 
-                    <Card className="border-neutral-200 dark:border-neutral-800">
+                    <Card className="border-neutral-200 dark:border-neutral-800 bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900">
                         <CardHeader className="p-4 pb-2">
-                            <CardDescription className="text-xs font-medium text-amber-600 dark:text-amber-400">Recorded</CardDescription>
-                            <CardTitle className="text-2xl font-bold text-amber-700 dark:text-amber-400">{stats.recorded_communications}</CardTitle>
+                            <CardDescription className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">✅ Answered Chats</CardDescription>
+                            <CardTitle className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
+                                {stats.answered_communications ?? stats.responded_communications}
+                            </CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 pt-0">
-                            <span className="text-xs text-neutral-400">Regional messages</span>
+                            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">HO Responded & Closed</span>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-neutral-200 dark:border-neutral-800 bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900">
+                        <CardHeader className="p-4 pb-2">
+                            <CardDescription className="text-xs font-semibold text-amber-700 dark:text-amber-300">⏳ Unanswered Chats</CardDescription>
+                            <CardTitle className="text-2xl font-bold text-amber-700 dark:text-amber-400">
+                                {stats.unanswered_communications ?? (stats.recorded_communications + stats.forwarded_communications)}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0">
+                            <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Pending HO Response</span>
                         </CardContent>
                     </Card>
 
@@ -651,16 +757,6 @@ export default function KaldisCommunicationPage({
                         </CardHeader>
                         <CardContent className="p-4 pt-0">
                             <span className="text-xs text-neutral-400">Sent to HO Dept</span>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border-neutral-200 dark:border-neutral-800">
-                        <CardHeader className="p-4 pb-2">
-                            <CardDescription className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Responded</CardDescription>
-                            <CardTitle className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">{stats.responded_communications}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0">
-                            <span className="text-xs text-neutral-400">HO Resolved</span>
                         </CardContent>
                     </Card>
 
@@ -680,7 +776,7 @@ export default function KaldisCommunicationPage({
                             <CardTitle className="text-2xl font-bold text-indigo-700 dark:text-indigo-400">{stats.total_bindings}</CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 pt-0">
-                            <span className="text-xs text-neutral-400">Mapped thread IDs</span>
+                            <span className="text-xs text-neutral-400">Group thread links</span>
                         </CardContent>
                     </Card>
                 </div>
@@ -765,9 +861,11 @@ export default function KaldisCommunicationPage({
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="all">All Statuses</SelectItem>
-                                                <SelectItem value="recorded">Recorded</SelectItem>
-                                                <SelectItem value="forwarded">Forwarded to HO</SelectItem>
-                                                <SelectItem value="responded">Responded</SelectItem>
+                                                <SelectItem value="answered">✅ Answered Chats</SelectItem>
+                                                <SelectItem value="unanswered">⏳ Unanswered Chats</SelectItem>
+                                                <SelectItem value="recorded">Recorded Only</SelectItem>
+                                                <SelectItem value="forwarded">Forwarded to HO Only</SelectItem>
+                                                <SelectItem value="responded">Responded Only</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -930,6 +1028,16 @@ export default function KaldisCommunicationPage({
                                                         <RefreshCw className="h-4 w-4" />
                                                         Force Sync with Emojis
                                                     </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => handlePurgeUnlisted(true)}
+                                                        className="gap-1.5 border-rose-500 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950"
+                                                        title="Remove all unlisted topics from Telegram groups & system database"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                        Purge Unlisted Topics
+                                                    </Button>
                                                     <Button size="sm" onClick={() => setIsAddBindingOpen(true)} className="gap-1.5">
                                                         <Plus className="h-4 w-4" />
                                                         Add Binding
@@ -1038,29 +1146,52 @@ export default function KaldisCommunicationPage({
                                     </Card>
 
                                     <Card>
-                                        <CardHeader>
-                                            <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                                                <Sparkles className="h-5 w-5 text-amber-500" />
-                                                Standard Topics & Emojis Scope
-                                            </CardTitle>
-                                            <CardDescription>
-                                                Standard proposal topics with official emojis & target HO departments.
-                                            </CardDescription>
+                                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                            <div>
+                                                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                                                    <Sparkles className="h-5 w-5 text-amber-500" />
+                                                    Standard Topics & Emojis Scope
+                                                </CardTitle>
+                                                <CardDescription>
+                                                    Standard proposal topics with official emojis & target HO departments.
+                                                </CardDescription>
+                                            </div>
+                                            {canManage && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-300"
+                                                    onClick={() => setIsAddStandardTopicOpen(true)}
+                                                >
+                                                    <Plus className="h-3.5 w-3.5" />
+                                                    Add Standard Topic
+                                                </Button>
+                                            )}
                                         </CardHeader>
-                                        <CardContent className="space-y-3 text-sm">
-                                            <div className="rounded-md border p-3 bg-neutral-50 dark:bg-neutral-900/50 space-y-2">
-                                                {Object.entries(defaultTopicMapping).map(([topic, dept]) => {
-                                                    const emoji = TOPIC_EMOJIS[topic] || '📌';
-                                                    return (
-                                                        <div key={topic} className="flex items-center justify-between text-xs py-1 border-b last:border-0 dark:border-neutral-800">
-                                                            <span className="font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
-                                                                <span>{emoji}</span>
-                                                                <span>{topic}</span>
-                                                            </span>
-                                                            <span className="font-semibold text-amber-600 dark:text-amber-400">➡️ {dept}</span>
+                                        <CardContent className="space-y-3 text-sm pt-2">
+                                            <div className="rounded-md border p-3 bg-neutral-50 dark:bg-neutral-900/50 space-y-2 max-h-[350px] overflow-y-auto">
+                                                {getPresets(defaultTopicMapping).map((preset) => (
+                                                    <div key={preset.name} className="flex items-center justify-between text-xs py-1.5 border-b last:border-0 dark:border-neutral-800">
+                                                        <span className="font-medium text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
+                                                            <span className="text-base">{preset.emoji}</span>
+                                                            <span>{preset.name}</span>
+                                                        </span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-semibold text-amber-600 dark:text-amber-400">➡️ {preset.department}</span>
+                                                            {canManage && (
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="ghost"
+                                                                    className="h-6 w-6 text-neutral-400 hover:text-rose-600"
+                                                                    title={`Remove preset ${preset.name}`}
+                                                                    onClick={() => handleDeleteStandardTopic(preset.name)}
+                                                                >
+                                                                    <Trash2 className="h-3 w-3" />
+                                                                </Button>
+                                                            )}
                                                         </div>
-                                                    );
-                                                })}
+                                                    </div>
+                                                ))}
                                             </div>
                                         </CardContent>
                                     </Card>
@@ -1687,15 +1818,50 @@ export default function KaldisCommunicationPage({
             <Dialog open={isAddBindingOpen} onOpenChange={setIsAddBindingOpen}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Bind Topic Thread to Department</DialogTitle>
+                        <DialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                            <Sparkles className="h-5 w-5 text-amber-500" />
+                            Add Topic Thread & Emoji Scope
+                        </DialogTitle>
                         <DialogDescription>
-                            Link a Telegram Topic Thread ID to its corresponding Head Office department.
+                            Add a Standard Topic or Custom Topic. Leave Thread ID empty to automatically create the forum topic on Telegram with the chosen Emoji!
                         </DialogDescription>
                     </DialogHeader>
 
                     <form onSubmit={handleAddBinding} className="space-y-4 py-2">
                         <div className="space-y-2">
-                            <Label htmlFor="group_key">Group</Label>
+                            <Label htmlFor="preset_topic">Standard Topic Preset (Optional)</Label>
+                            <Select
+                                value={getPresets(defaultTopicMapping).some(p => p.name === bindingForm.data.topic_name) ? bindingForm.data.topic_name : 'custom'}
+                                onValueChange={(val) => {
+                                    if (val !== 'custom') {
+                                        const preset = getPresets(defaultTopicMapping).find(p => p.name === val);
+                                        if (preset) {
+                                            bindingForm.setData({
+                                                ...bindingForm.data,
+                                                topic_name: preset.name,
+                                                department: preset.department,
+                                                emoji: preset.emoji,
+                                            });
+                                        }
+                                    }
+                                }}
+                            >
+                                <SelectTrigger className="bg-amber-50/50 dark:bg-amber-950/20 border-amber-200">
+                                    <SelectValue placeholder="Choose a Standard Topic preset..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="custom">✨ Custom Topic...</SelectItem>
+                                    {getPresets(defaultTopicMapping).map((preset) => (
+                                        <SelectItem key={preset.name} value={preset.name}>
+                                            {preset.emoji} {preset.name} (➡️ {preset.department})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="group_key">Target Telegram Group</Label>
                             <Select
                                 value={bindingForm.data.group_key}
                                 onValueChange={(val) => bindingForm.setData('group_key', val)}
@@ -1711,26 +1877,42 @@ export default function KaldisCommunicationPage({
                             </Select>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="thread_id">Topic Thread ID</Label>
-                            <Input
-                                id="thread_id"
-                                placeholder="e.g. 12"
-                                value={bindingForm.data.thread_id}
-                                onChange={(e) => bindingForm.setData('thread_id', e.target.value)}
-                                required
-                            />
+                        <div className="grid grid-cols-4 gap-2">
+                            <div className="col-span-1 space-y-2">
+                                <Label htmlFor="emoji">Emoji Scope</Label>
+                                <Input
+                                    id="emoji"
+                                    placeholder="📢"
+                                    value={bindingForm.data.emoji}
+                                    onChange={(e) => bindingForm.setData('emoji', e.target.value)}
+                                    className="text-center font-emoji text-lg"
+                                />
+                            </div>
+                            <div className="col-span-3 space-y-2">
+                                <Label htmlFor="topic_name">Topic Name</Label>
+                                <Input
+                                    id="topic_name"
+                                    placeholder="e.g. HR, IT, Operations"
+                                    value={bindingForm.data.topic_name}
+                                    onChange={(e) => bindingForm.setData('topic_name', e.target.value)}
+                                    required
+                                />
+                            </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="topic_name">Topic Name</Label>
-                            <Input
-                                id="topic_name"
-                                placeholder="e.g. HR"
-                                value={bindingForm.data.topic_name}
-                                onChange={(e) => bindingForm.setData('topic_name', e.target.value)}
-                                required
-                            />
+                        {/* Quick Emoji Buttons */}
+                        <div className="flex flex-wrap items-center gap-1.5 p-2 bg-neutral-50 dark:bg-neutral-900 rounded border text-xs">
+                            <span className="text-[10px] text-neutral-500 font-medium">Quick Emojis:</span>
+                            {['📢', '⚙️', '💼', '💰', '📦', '💻', '🔧', '☕', '🎓', '🛡️', '🚚', '💡', '📌', '🚀', '💬'].map((e) => (
+                                <button
+                                    key={e}
+                                    type="button"
+                                    onClick={() => bindingForm.setData('emoji', e)}
+                                    className={`h-6 w-6 rounded hover:bg-neutral-200 dark:hover:bg-neutral-800 text-sm flex items-center justify-center transition-colors ${bindingForm.data.emoji === e ? 'bg-amber-200 dark:bg-amber-900 ring-1 ring-amber-500' : ''}`}
+                                >
+                                    {e}
+                                </button>
+                            ))}
                         </div>
 
                         <div className="space-y-2">
@@ -1752,12 +1934,31 @@ export default function KaldisCommunicationPage({
                             </Select>
                         </div>
 
+                        <div className="space-y-2 pt-1 border-t dark:border-neutral-800">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="thread_id" className="text-xs font-semibold">
+                                    Telegram Topic Thread ID <span className="text-neutral-400 font-normal">(Optional)</span>
+                                </Label>
+                                <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-medium">✨ Auto-creates if blank</span>
+                            </div>
+                            <Input
+                                id="thread_id"
+                                placeholder="Leave blank to auto-create topic on Telegram, or enter existing ID (e.g. 12)"
+                                value={bindingForm.data.thread_id}
+                                onChange={(e) => bindingForm.setData('thread_id', e.target.value)}
+                            />
+                            <p className="text-[11px] text-neutral-500">
+                                If left blank, the bot will call Telegram API to create <b>{bindingForm.data.emoji || '📌'} {bindingForm.data.topic_name}</b> on the {bindingForm.data.group_key} Telegram group automatically.
+                            </p>
+                        </div>
+
                         <DialogFooter className="pt-2">
                             <Button type="button" variant="outline" onClick={() => setIsAddBindingOpen(false)}>
                                 Cancel
                             </Button>
-                            <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white" disabled={bindingForm.processing}>
-                                Save Binding
+                            <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white gap-1.5" disabled={bindingForm.processing}>
+                                <Zap className="h-4 w-4" />
+                                {!bindingForm.data.thread_id ? 'Auto-Create & Save Topic' : 'Save Binding'}
                             </Button>
                         </DialogFooter>
                     </form>
@@ -1951,6 +2152,89 @@ export default function KaldisCommunicationPage({
                             </Button>
                             <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white" disabled={editUserForm.processing}>
                                 Save Profile Changes
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal: Add Standard Topic Preset */}
+            <Dialog open={isAddStandardTopicOpen} onOpenChange={setIsAddStandardTopicOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Sparkles className="h-5 w-5 text-amber-500" />
+                            Add Standard Topic Preset
+                        </DialogTitle>
+                        <DialogDescription>
+                            Create a new Standard Topic preset with official emoji & target HO department.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleAddStandardTopic} className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="std_topic_name">Topic Name</Label>
+                            <Input
+                                id="std_topic_name"
+                                value={standardTopicForm.data.name}
+                                onChange={(e) => standardTopicForm.setData('name', e.target.value)}
+                                placeholder="e.g., Safety & Security"
+                                required
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="std_topic_dept">Target HO Department</Label>
+                            <Select
+                                value={standardTopicForm.data.department}
+                                onValueChange={(val) => standardTopicForm.setData('department', val)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Department" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {departments.map((dept) => (
+                                        <SelectItem key={dept} value={dept}>
+                                            {dept}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="std_topic_emoji">Official Emoji</Label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    id="std_topic_emoji"
+                                    value={standardTopicForm.data.emoji}
+                                    onChange={(e) => standardTopicForm.setData('emoji', e.target.value)}
+                                    placeholder="e.g., 🚨"
+                                    className="w-24 text-center text-lg"
+                                    maxLength={10}
+                                    required
+                                />
+                                <div className="flex gap-1.5 flex-wrap">
+                                    {['📢', '⚙️', '💼', '💰', '📦', '💻', '🔧', '☕', '🎓', '🛡️', '📊', '🚚', '🚨', '💡', '🌟'].map((em) => (
+                                        <button
+                                            key={em}
+                                            type="button"
+                                            onClick={() => standardTopicForm.setData('emoji', em)}
+                                            className="h-8 w-8 rounded border text-sm hover:bg-amber-100 dark:hover:bg-amber-900/50 flex items-center justify-center"
+                                        >
+                                            {em}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <DialogFooter className="pt-2">
+                            <Button type="button" variant="outline" onClick={() => setIsAddStandardTopicOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white" disabled={standardTopicForm.processing}>
+                                Save Preset
                             </Button>
                         </DialogFooter>
                     </form>

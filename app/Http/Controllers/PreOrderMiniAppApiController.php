@@ -80,7 +80,7 @@ class PreOrderMiniAppApiController extends Controller
             'phone_number' => ['required', 'string', 'max:50'],
             'collection_branch_id' => ['required', 'exists:branches,id'],
             'collection_day_id' => ['required', 'exists:collection_days,id'],
-            'payment_method' => ['required', 'string', 'max:100'],
+            'payment_method' => ['nullable', 'string', 'max:100'],
             'transaction_reference' => ['nullable', 'string', 'max:100', 'unique:pre_orders,transaction_reference'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:pre_order_products,id'],
@@ -88,6 +88,8 @@ class PreOrderMiniAppApiController extends Controller
             'payment_slip' => ['nullable', 'string'], // Base64 or uploaded file
             'chat_id' => ['nullable', 'string'],
         ]);
+
+        $validated['payment_method'] = !empty($validated['payment_method']) ? $validated['payment_method'] : 'CBE';
 
         try {
             DB::beginTransaction();

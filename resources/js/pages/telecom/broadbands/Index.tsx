@@ -8,10 +8,12 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/componen
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, router } from '@inertiajs/react';
-import { Download, Edit, Plus, Trash2, Wifi } from 'lucide-react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { ArrowLeftRight, Download, Edit, Plus, Trash2, Wifi } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -48,7 +50,8 @@ type PageProps = {
     broadbands: Paginated<Broadband>;
     providers: OptionItem[];
     branches: OptionItem[];
-    departments: OptionItem[];
+    departments?: OptionItem[];
+    transfers?: any[];
     filters: {
         search?: string;
         connection_type?: string;
@@ -59,7 +62,7 @@ type PageProps = {
     flash?: { success?: string; error?: string };
 };
 
-export default function BroadbandsIndex({ broadbands, providers = [], branches = [], filters = {}, flash }: PageProps) {
+export default function BroadbandsIndex({ broadbands, providers = [], branches = [], departments = [], transfers = [], filters = {}, flash }: PageProps) {
     const [search, setSearch] = useState(filters.search ?? '');
     const [typeFilter, setTypeFilter] = useState(filters.connection_type ?? 'all');
     const [providerFilter, setProviderFilter] = useState(filters.telecom_provider_id ?? 'all');
@@ -68,6 +71,14 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
 
     const [openAddModal, setOpenAddModal] = useState(false);
     const [editingRecord, setEditingRecord] = useState<BroadbandRecord | null>(null);
+    const [transferringItem, setTransferringItem] = useState<Broadband | null>(null);
+
+    const transferForm = useForm({
+        assigned_type: 'Branch',
+        branch_id: '',
+        department_id: '',
+        transfer_reason: '',
+    });
 
     const { can } = usePermission();
 
@@ -125,6 +136,11 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
                 {/* Unified Header Navigation */}
                 <TelecomHeaderNav
                     onOpenAddBroadbandModal={() => setOpenAddModal(true)}
+                    onOpenTransferModal={() => {
+                        if (broadbands.data.length > 0) {
+                            setTransferringItem(broadbands.data[0]);
+                        }
+                    }}
                 />
 
                 <Card>
@@ -257,6 +273,23 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
+                                                            title="Transfer Broadband / Voucher"
+                                                            className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                                                            onClick={() => {
+                                                                setTransferringItem(item);
+                                                                transferForm.setData({
+                                                                    assigned_type: 'Branch',
+                                                                    branch_id: item.branch?.id ? String(item.branch.id) : '',
+                                                                    department_id: item.department?.id ? String(item.department.id) : '',
+                                                                    transfer_reason: '',
+                                                                });
+                                                            }}
+                                                        >
+                                                            <ArrowLeftRight className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
                                                             title="Quick Edit"
                                                             onClick={() => setEditingRecord({
                                                                 id: item.id,
@@ -303,7 +336,151 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
                     </CardContent>
                     <TablePagination from={broadbands.from} to={broadbands.to} total={broadbands.total} links={broadbands.links} />
                 </Card>
+
+                {/* Recent Transfer Log Card */}
+                {transfers && transfers.length > 0 && (
+                    <Card className="border shadow-sm bg-card">
+                        <CardHeader className="py-3 bg-purple-50/50 dark:bg-purple-950/20 border-b">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2 text-purple-900 dark:text-purple-300">
+                                <ArrowLeftRight className="h-4 w-4 text-purple-600" />
+                                Recent Broadband & Voucher Transfer History Log
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/30 text-xs">
+                                        <TableHead>Broadband / Voucher Reference</TableHead>
+                                        <TableHead>Transferred To</TableHead>
+                                        <TableHead>Reason</TableHead>
+                                        <TableHead>Transferred By</TableHead>
+                                        <TableHead>Date & Time</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {transfers.map((tr: any) => (
+                                        <TableRow key={tr.id} className="text-xs">
+                                            <TableCell className="font-semibold text-purple-700 dark:text-purple-400">{tr.reference_number}</TableCell>
+                                            <TableCell>
+                                                {tr.to_branch ? `${tr.to_branch.name} (Branch)` :
+                                                 tr.to_department ? `${tr.to_department.name} (Department)` : 'Unassigned'}
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground max-w-xs truncate">{tr.transfer_reason || '-'}</TableCell>
+                                            <TableCell>{tr.transferred_by_user?.name || 'System User'}</TableCell>
+                                            <TableCell className="text-muted-foreground font-mono">{new Date(tr.created_at).toLocaleString()}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
+
+            {/* Transfer Broadband / Voucher Dialog */}
+            <Dialog open={!!transferringItem} onOpenChange={(val) => !val && setTransferringItem(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <ArrowLeftRight className="h-5 w-5 text-purple-600" />
+                            Transfer Broadband / Voucher
+                        </DialogTitle>
+                        <DialogDescription>
+                            Transfer broadband connection <code className="font-bold text-purple-600">{transferringItem?.connection_name}</code> to a new branch or department.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!transferringItem) return;
+                        transferForm.post(route('telecom.broadbands.transfer', transferringItem.id), {
+                            onSuccess: () => {
+                                toast.success('Broadband connection transferred successfully!');
+                                setTransferringItem(null);
+                                transferForm.reset();
+                            },
+                            onError: () => toast.error('Failed to transfer broadband connection.'),
+                        });
+                    }} className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label>Assignment Target Type</Label>
+                            <Select
+                                value={transferForm.data.assigned_type}
+                                onValueChange={(val) => transferForm.setData('assigned_type', val)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Target Type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Branch">Branch</SelectItem>
+                                    <SelectItem value="Department">Department</SelectItem>
+                                    <SelectItem value="Unassigned">Unassigned</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {transferForm.data.assigned_type === 'Branch' && (
+                            <div className="space-y-2">
+                                <Label>Target Branch</Label>
+                                <Select
+                                    value={transferForm.data.branch_id}
+                                    onValueChange={(val) => transferForm.setData('branch_id', val)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Branch" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {branches.map((b) => (
+                                            <SelectItem key={b.id} value={String(b.id)}>
+                                                {b.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        {transferForm.data.assigned_type === 'Department' && (
+                            <div className="space-y-2">
+                                <Label>Target Department</Label>
+                                <Select
+                                    value={transferForm.data.department_id}
+                                    onValueChange={(val) => transferForm.setData('department_id', val)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Department" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {(departments || []).map((d) => (
+                                            <SelectItem key={d.id} value={String(d.id)}>
+                                                {d.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                            <Label>Reason for Transfer (Optional)</Label>
+                            <Input
+                                value={transferForm.data.transfer_reason}
+                                onChange={(e) => transferForm.setData('transfer_reason', e.target.value)}
+                                placeholder="e.g. Branch relocation or router voucher reassignment"
+                            />
+                        </div>
+
+                        <DialogFooter className="pt-2">
+                            <Button type="button" variant="outline" onClick={() => setTransferringItem(null)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white" disabled={transferForm.processing}>
+                                Confirm Transfer
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
 
             {/* Quick Add / Edit Broadband Modal */}
             <BroadbandModal

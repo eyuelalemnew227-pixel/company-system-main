@@ -619,12 +619,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('kaldis-communication/register-commands', [\App\Http\Controllers\KaldisCommunicationController::class, 'registerCommands'])->name('kaldis-communication.register-commands');
     Route::post('kaldis-communication/set-webhook', [\App\Http\Controllers\KaldisCommunicationController::class, 'registerWebhook'])->name('kaldis-communication.set-webhook');
     Route::post('kaldis-communication/generate-invite-link', [\App\Http\Controllers\KaldisCommunicationController::class, 'generateInviteLink'])->name('kaldis-communication.generate-invite-link');
+    Route::post('kaldis-communication/purge-unlisted', [\App\Http\Controllers\KaldisCommunicationController::class, 'purgeUnlistedBindings'])->name('kaldis-communication.purge-unlisted');
+    Route::post('kaldis-communication/standard-topics', [\App\Http\Controllers\KaldisCommunicationController::class, 'storeStandardTopicPreset'])->name('kaldis-communication.store-standard-topic');
+    Route::delete('kaldis-communication/standard-topics', [\App\Http\Controllers\KaldisCommunicationController::class, 'deleteStandardTopicPreset'])->name('kaldis-communication.delete-standard-topic');
 
     // Telecom Management
     Route::middleware(['permission:view telecom management'])->prefix('telecom')->group(function () {
         Route::get('dashboard', [TelecomDashboardController::class, 'index'])->name('telecom.dashboard');
 
         Route::get('phone-numbers/export', [TelecomPhoneNumberController::class, 'export'])->name('telecom.phone-numbers.export');
+        Route::post('phone-numbers/{phoneNumber}/transfer', [TelecomPhoneNumberController::class, 'transfer'])->name('telecom.phone-numbers.transfer');
         Route::resource('phone-numbers', TelecomPhoneNumberController::class)->names([
             'index' => 'telecom.phone-numbers.index',
             'create' => 'telecom.phone-numbers.create',
@@ -635,6 +639,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ]);
 
         Route::get('broadbands/export', [TelecomBroadbandController::class, 'export'])->name('telecom.broadbands.export');
+        Route::post('broadbands/{broadband}/transfer', [TelecomBroadbandController::class, 'transfer'])->name('telecom.broadbands.transfer');
         Route::resource('broadbands', TelecomBroadbandController::class)->names([
             'index' => 'telecom.broadbands.index',
             'create' => 'telecom.broadbands.create',

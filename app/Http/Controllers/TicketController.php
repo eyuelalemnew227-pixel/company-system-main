@@ -116,7 +116,8 @@ class TicketController extends Controller
                 'fiscalYears' => FiscalYear::all(['id', 'name']),
                 'fiscalMonths' => FiscalMonth::all(['id', 'name', 'fiscal_year_id']),
                 'branches' => \App\Models\Branch::select('id', 'name')->orderBy('name')->get(),
-                'assignableUsers' => User::select('users.id', 'users.name', 'users.email', 'employees.department_id')
+                'assignableUsers' => User::where('users.is_active', true)
+                    ->select('users.id', 'users.name', 'users.email', 'employees.department_id')
                     ->leftJoin('employees', 'users.employee_id', '=', 'employees.id')
                     ->orderBy('users.name')
                     ->get()

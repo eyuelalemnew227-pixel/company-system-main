@@ -279,6 +279,7 @@ class TelegramBotService
         if (in_array($targetAudience, ['everything', 'all_users'], true)) {
             $userChatIds = User::whereNotNull('telegram_chat_id')
                 ->where('telegram_chat_id', '!=', '')
+                ->where('is_active', true)
                 ->pluck('telegram_chat_id')
                 ->toArray();
             $chatIds = array_merge($chatIds, $userChatIds);
@@ -288,6 +289,7 @@ class TelegramBotService
             $deptUserChatIds = User::query()
                 ->join('employees', 'users.employee_id', '=', 'employees.id')
                 ->where('employees.department_id', $departmentId)
+                ->where('users.is_active', true)
                 ->whereNotNull('users.telegram_chat_id')
                 ->where('users.telegram_chat_id', '!=', '')
                 ->pluck('users.telegram_chat_id')

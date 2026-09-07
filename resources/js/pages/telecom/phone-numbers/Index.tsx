@@ -9,8 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, router } from '@inertiajs/react';
-import { Download, Edit, Plus, Trash2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Head, Link, router, useForm } from '@inertiajs/react';
+import { ArrowLeftRight, Building, Building2, Download, Edit, Plus, Trash2, User } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -48,6 +50,7 @@ type PageProps = {
     branches: OptionItem[];
     departments: OptionItem[];
     employees?: EmployeeItem[];
+    transfers?: any[];
     filters: {
         search?: string;
         telecom_provider_id?: string;
@@ -65,6 +68,7 @@ export default function PhoneNumbersIndex({
     branches = [],
     departments = [],
     employees = [],
+    transfers = [],
     filters = {},
     flash,
 }: PageProps) {
@@ -76,6 +80,15 @@ export default function PhoneNumbersIndex({
 
     const [openAddModal, setOpenAddModal] = useState(false);
     const [editingRecord, setEditingRecord] = useState<PhoneNumberRecord | null>(null);
+    const [transferringItem, setTransferringItem] = useState<PhoneNumber | null>(null);
+
+    const transferForm = useForm({
+        assigned_type: 'Employee',
+        employee_id: '',
+        branch_id: '',
+        department_id: '',
+        transfer_reason: '',
+    });
 
     const { can } = usePermission();
 
@@ -97,35 +110,50 @@ export default function PhoneNumbersIndex({
     }
 
     function handleDelete(id: number, phone: string) {
-        if (!confirm(`Are you sure you want to delete phone line ${phone}?`)) return;
-        router.delete(`/telecom/phone-numbers/${id}`, {
-            preserveScroll: true,
-            onSuccess: () => toast.success('Phone line deleted successfully'),
-            onError: () => toast.error('Failed to delete phone line'),
-        });
+        if (confirm(`Are you sure you want to delete phone number "${phone}"?`)) {
+            router.delete(`/telecom/phone-numbers/${id}`, {
+                onSuccess: () => toast.success('Phone number deleted.'),
+                onError: () => toast.error('Failed to delete.'),
+            });
+        }
     }
 
     function getAssignedLabel(item: PhoneNumber) {
         if (item.assigned_type === 'Employee' && item.employee) {
-            return `${item.employee.first_name} ${item.employee.last_name}`;
+            return (
+                <div className="flex items-center gap-1.5 font-medium">
+                    <User className="h-3.5 w-3.5 text-blue-500" />
+                    <span>{item.employee.first_name} {item.employee.last_name}</span>
+                </div>
+            );
         }
         if (item.assigned_type === 'Branch' && item.branch) {
-            return `Branch: ${item.branch.name}`;
+            return (
+                <div className="flex items-center gap-1.5 font-medium">
+                    <Building className="h-3.5 w-3.5 text-amber-500" />
+                    <span>{item.branch.name}</span>
+                </div>
+            );
         }
         if (item.assigned_type === 'Department' && item.department) {
-            return `Dept: ${item.department.name}`;
+            return (
+                <div className="flex items-center gap-1.5 font-medium">
+                    <Building2 className="h-3.5 w-3.5 text-purple-500" />
+                    <span>{item.department.name}</span>
+                </div>
+            );
         }
-        return item.assigned_type;
+        return <span className="text-muted-foreground italic text-xs">Unassigned</span>;
     }
 
     function getStatusBadge(status: string) {
         switch (status) {
             case 'Active':
-                return <Badge className="bg-emerald-600 hover:bg-emerald-700">Active</Badge>;
-            case 'Suspended':
-                return <Badge variant="outline" className="text-amber-600 border-amber-600">Suspended</Badge>;
+                return <Badge className="bg-emerald-500 hover:bg-emerald-600">Active</Badge>;
             case 'Inactive':
                 return <Badge variant="secondary">Inactive</Badge>;
+            case 'Suspended':
+                return <Badge className="bg-amber-500 hover:bg-amber-600">Suspended</Badge>;
             case 'Cancelled':
                 return <Badge variant="destructive">Cancelled</Badge>;
             default:
@@ -146,6 +174,11 @@ export default function PhoneNumbersIndex({
                 {/* Unified Header Navigation */}
                 <TelecomHeaderNav
                     onOpenAddPhoneModal={() => setOpenAddModal(true)}
+                    onOpenTransferModal={() => {
+                        if (phoneNumbers.data.length > 0) {
+                            setTransferringItem(phoneNumbers.data[0]);
+                        }
+                    }}
                 />
 
                 <Card>
@@ -269,6 +302,24 @@ export default function PhoneNumbersIndex({
                                                         <Button
                                                             variant="ghost"
                                                             size="icon"
+                                                            title="Transfer SIM / Line"
+                                                            className="text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950"
+                                                            onClick={() => {
+                                                                setTransferringItem(item);
+                                                                transferForm.setData({
+                                                                    assigned_type: item.assigned_type || 'Employee',
+                                                                    employee_id: item.employee?.id ? String(item.employee.id) : '',
+                                                                    branch_id: item.branch?.id ? String(item.branch.id) : '',
+                                                                    department_id: item.department?.id ? String(item.department.id) : '',
+                                                                    transfer_reason: '',
+                                                                });
+                                                            }}
+                                                        >
+                                                            <ArrowLeftRight className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
                                                             title="Quick Edit"
                                                             onClick={() => setEditingRecord({
                                                                 id: item.id,
@@ -319,7 +370,174 @@ export default function PhoneNumbersIndex({
                     </CardContent>
                     <TablePagination from={phoneNumbers.from} to={phoneNumbers.to} total={phoneNumbers.total} links={phoneNumbers.links} />
                 </Card>
+
+                {/* Transfer History Log Card */}
+                {transfers && transfers.length > 0 && (
+                    <Card className="border shadow-sm bg-card">
+                        <CardHeader className="py-3 bg-amber-50/50 dark:bg-amber-950/20 border-b">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2 text-amber-900 dark:text-amber-300">
+                                <ArrowLeftRight className="h-4 w-4 text-amber-600" />
+                                Recent SIM Card & Line Transfer History Log
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/30 text-xs">
+                                        <TableHead>Line / SIM Reference</TableHead>
+                                        <TableHead>Transferred To</TableHead>
+                                        <TableHead>Reason</TableHead>
+                                        <TableHead>Transferred By</TableHead>
+                                        <TableHead>Date & Time</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {transfers.map((tr: any) => (
+                                        <TableRow key={tr.id} className="text-xs">
+                                            <TableCell className="font-semibold text-amber-700 dark:text-amber-400">{tr.reference_number}</TableCell>
+                                            <TableCell>
+                                                {tr.to_employee ? `${tr.to_employee.first_name} ${tr.to_employee.last_name} (Employee)` :
+                                                 tr.to_branch ? `${tr.to_branch.name} (Branch)` :
+                                                 tr.to_department ? `${tr.to_department.name} (Department)` : 'Unassigned'}
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground max-w-xs truncate">{tr.transfer_reason || '-'}</TableCell>
+                                            <TableCell>{tr.transferred_by_user?.name || 'System User'}</TableCell>
+                                            <TableCell className="text-muted-foreground font-mono">{new Date(tr.created_at).toLocaleString()}</TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
+
+            {/* Transfer SIM Card Dialog */}
+            <Dialog open={!!transferringItem} onOpenChange={(val) => !val && setTransferringItem(null)}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <ArrowLeftRight className="h-5 w-5 text-amber-600" />
+                            Transfer SIM Card / Line
+                        </DialogTitle>
+                        <DialogDescription>
+                            Transfer line <code className="font-bold text-amber-600">{transferringItem?.phone_number}</code> to a new employee, branch, or department.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!transferringItem) return;
+                        transferForm.post(route('telecom.phone-numbers.transfer', transferringItem.id), {
+                            onSuccess: () => {
+                                toast.success('SIM Card / Phone line transferred successfully!');
+                                setTransferringItem(null);
+                                transferForm.reset();
+                            },
+                            onError: () => toast.error('Failed to transfer line.'),
+                        });
+                    }} className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label>Assignment Category</Label>
+                            <Select
+                                value={transferForm.data.assigned_type}
+                                onValueChange={(val) => transferForm.setData('assigned_type', val)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Employee">Employee</SelectItem>
+                                    <SelectItem value="Branch">Branch</SelectItem>
+                                    <SelectItem value="Department">Department</SelectItem>
+                                    <SelectItem value="Unassigned">Unassigned</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {transferForm.data.assigned_type === 'Employee' && (
+                            <div className="space-y-2">
+                                <Label>Target Employee</Label>
+                                <Select
+                                    value={transferForm.data.employee_id}
+                                    onValueChange={(val) => transferForm.setData('employee_id', val)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Employee" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {(employees || []).map((emp) => (
+                                            <SelectItem key={emp.id} value={String(emp.id)}>
+                                                {emp.first_name} {emp.last_name} ({emp.employee_code})
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        {transferForm.data.assigned_type === 'Branch' && (
+                            <div className="space-y-2">
+                                <Label>Target Branch</Label>
+                                <Select
+                                    value={transferForm.data.branch_id}
+                                    onValueChange={(val) => transferForm.setData('branch_id', val)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Branch" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {branches.map((b) => (
+                                            <SelectItem key={b.id} value={String(b.id)}>
+                                                {b.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        {transferForm.data.assigned_type === 'Department' && (
+                            <div className="space-y-2">
+                                <Label>Target Department</Label>
+                                <Select
+                                    value={transferForm.data.department_id}
+                                    onValueChange={(val) => transferForm.setData('department_id', val)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Department" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {departments.map((d) => (
+                                            <SelectItem key={d.id} value={String(d.id)}>
+                                                {d.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                            <Label>Reason for Transfer (Optional)</Label>
+                            <Input
+                                value={transferForm.data.transfer_reason}
+                                onChange={(e) => transferForm.setData('transfer_reason', e.target.value)}
+                                placeholder="e.g. Employee reassignment or device swap"
+                            />
+                        </div>
+
+                        <DialogFooter className="pt-2">
+                            <Button type="button" variant="outline" onClick={() => setTransferringItem(null)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white" disabled={transferForm.processing}>
+                                Confirm Transfer
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
 
             {/* Quick Add / Edit Phone Number Modal */}
             <PhoneNumberModal

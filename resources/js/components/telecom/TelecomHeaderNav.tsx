@@ -1,19 +1,21 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Link, usePage } from '@inertiajs/react';
-import { Building2, LayoutDashboard, Phone, Plus, Signal, Wifi } from 'lucide-react';
+import { ArrowLeftRight, Building2, LayoutDashboard, Phone, Plus, Signal, Wifi } from 'lucide-react';
 import React from 'react';
 
 interface TelecomHeaderNavProps {
     totalMonthlySpend?: number;
     onOpenAddPhoneModal?: () => void;
     onOpenAddBroadbandModal?: () => void;
+    onOpenTransferModal?: () => void;
 }
 
 export default function TelecomHeaderNav({
     totalMonthlySpend,
     onOpenAddPhoneModal,
     onOpenAddBroadbandModal,
+    onOpenTransferModal,
 }: TelecomHeaderNavProps) {
     const { url } = usePage();
 
@@ -84,6 +86,12 @@ export default function TelecomHeaderNav({
                     {onOpenAddBroadbandModal && (
                         <Button size="sm" variant="outline" onClick={onOpenAddBroadbandModal} className="gap-1.5 border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-300 dark:hover:bg-purple-950">
                             <Plus className="h-4 w-4 text-purple-600" /> Quick Add Broadband
+                        </Button>
+                    )}
+
+                    {onOpenTransferModal && (
+                        <Button size="sm" onClick={onOpenTransferModal} className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-medium">
+                            <ArrowLeftRight className="h-4 w-4" /> Transfer SIM / Voucher
                         </Button>
                     )}
                 </div>

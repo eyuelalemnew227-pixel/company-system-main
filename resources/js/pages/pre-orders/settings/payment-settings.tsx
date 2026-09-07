@@ -100,13 +100,17 @@ export default function PaymentSettings({ paymentSettings, adminGroupChatId }: P
     };
 
     const handleSave = (id: number) => {
+        const setting = paymentSettings.find((s) => s.id === id);
         const data = {
+            payment_method: setting?.payment_method,
+            payment_type: (setting as any)?.payment_type || 'Bank',
+            validation_type: (setting as any)?.validation_type || 'Regex Validation',
             account_name: editForm.account_name.trim() || null,
             account_number: editForm.account_number.trim() || null,
             instructions: editForm.instructions.trim() || null,
             validation_pattern: editForm.validation_pattern.trim() || null,
             example: editForm.example.trim() || null,
-            is_active: editForm.is_active
+            is_active: editForm.is_active,
         };
 
         router.put(`/pre-order-payment-settings/${id}`, data, {
@@ -122,28 +126,35 @@ export default function PaymentSettings({ paymentSettings, adminGroupChatId }: P
             onError: (errors) => {
                 const message = Object.values(errors).flat()[0] || 'An error occurred';
                 toast.error(message);
-            }
+            },
         });
     };
 
     const handleToggleActive = (setting: PaymentSetting, newStatus: boolean) => {
-        router.put(`/pre-order-payment-settings/${setting.id}`, {
-            account_name: setting.account_name,
-            account_number: setting.account_number,
-            instructions: setting.instructions,
-            validation_pattern: setting.validation_pattern,
-            example: setting.example,
-            is_active: newStatus
-        }, {
-            preserveScroll: true,
-            onSuccess: () => {
-                toast.success(`${setting.payment_method} has been ${newStatus ? 'activated' : 'deactivated'}.`);
+        router.put(
+            `/pre-order-payment-settings/${setting.id}`,
+            {
+                payment_method: setting.payment_method,
+                payment_type: (setting as any).payment_type || 'Bank',
+                validation_type: (setting as any).validation_type || 'Regex Validation',
+                account_name: setting.account_name,
+                account_number: setting.account_number,
+                instructions: setting.instructions,
+                validation_pattern: setting.validation_pattern,
+                example: setting.example,
+                is_active: newStatus,
             },
-            onError: (errors) => {
-                const message = Object.values(errors).flat()[0] || 'An error occurred';
-                toast.error(message);
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success(`${setting.payment_method} has been ${newStatus ? 'activated' : 'deactivated'}.`);
+                },
+                onError: (errors) => {
+                    const message = Object.values(errors).flat()[0] || 'An error occurred';
+                    toast.error(message);
+                },
             }
-        });
+        );
     };
 
     return (

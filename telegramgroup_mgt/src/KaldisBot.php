@@ -31,8 +31,8 @@ final class TopicDefaults
         'F&B' => 'F&B',
         'T&D' => 'T&D',
         'QA' => 'QA',
-        'Logistics & BI' => 'Logistics & BI',
-        'Suggestions & Improvements' => 'Operations',
+        'BI' => 'BI',
+        'Logistics' => 'Logistics',
     ];
 }
 
@@ -115,8 +115,9 @@ final class Helpers
 
     public static function normalizeTopicName(string $topicName): string
     {
-        $normalized = preg_replace('/\s+/u', ' ', trim($topicName));
-        return $normalized ?? trim($topicName);
+        $clean = preg_replace('/[\x{1F600}-\x{1F64F}\x{1F300}-\x{1F5FF}\x{1F680}-\x{1F6FF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}]/u', '', $topicName);
+        $normalized = preg_replace('/\s+/u', ' ', trim($clean));
+        return strtolower($normalized ?: trim($topicName));
     }
 
     public static function parseCommandArguments(string $text): array
@@ -167,6 +168,10 @@ final class BotConfig
         public array $regionGroups = [],
         public array $regionCodes = [],
         public ?int $hoGroupChatId = null,
+        public bool $antiLinkProtection = false,
+        public bool $autoWelcome = false,
+        public string $welcomeMessage = 'Welcome {name} to {group}! Please follow group rules.',
+        public array $standardTopics = [],
     ) {
     }
 
@@ -185,14 +190,18 @@ final class BotConfig
         }
 
         return new self(
-            botToken: (string) $raw['bot_token'],
-            databasePath: (string) ($raw['database_path'] ?? 'kaldis.sqlite'),
+            botToken: (string) ($raw['bot_token'] ?? ''),
+            databasePath: (string) ($raw['database_path'] ?? ($raw['database'] ?? 'kaldis.db')),
             pollTimeout: (int) ($raw['poll_timeout'] ?? 25),
             pollIntervalSeconds: (float) ($raw['poll_interval_seconds'] ?? 1.0),
             operationsDirectorUserId: self::nullableInt($raw['operations_director_user_id'] ?? null),
             regionGroups: $regionGroups,
             regionCodes: $regionCodes,
-            hoGroupChatId: self::nullableInt($raw['ho_group_chat_id'] ?? null),
+            hoGroupChatId: self::nullableInt($raw['ho_group_chat_id'] ?? ($raw['groups']['Head Office'] ?? null)),
+            antiLinkProtection: !empty($raw['anti_link_protection']),
+            autoWelcome: !empty($raw['auto_welcome']),
+            welcomeMessage: (string) ($raw['welcome_message'] ?? 'Welcome {name} to {group}! Please follow group rules.'),
+            standardTopics: (array) ($raw['standard_topics'] ?? []),
         );
     }
 
@@ -1269,20 +1278,20 @@ final class KaldisBot
         $allBindings = $this->storage->getAllTopicBindings();
 
         $cmdMap = [
-            '/it' => 'IT',
-            '/hr' => 'HR',
-            '/finance' => 'Finance',
+            '/announcements' => 'Announcements',
             '/ops' => 'Operations',
             '/operations' => 'Operations',
+            '/hr' => 'HR',
+            '/finance' => 'Finance',
             '/supply' => 'Supply Chain',
             '/supplychain' => 'Supply Chain',
+            '/it' => 'IT',
             '/maintenance' => 'Maintenance',
             '/fb' => 'F&B',
             '/td' => 'T&D',
             '/qa' => 'QA',
-            '/logistics' => 'Logistics & BI',
-            '/suggestions' => 'Suggestions & Improvements',
-            '/announcements' => 'Announcements',
+            '/bi' => 'BI',
+            '/logistics' => 'Logistics',
         ];
 
         if (isset($cmdMap[$command])) {
@@ -1347,8 +1356,8 @@ final class KaldisBot
                 ['text' => '🛡️ QA', 'url' => $this->getTopicUrl($groupKey, 'QA', $chatId)],
             ],
             [
-                ['text' => '🚚 Logistics & BI', 'url' => $this->getTopicUrl($groupKey, 'Logistics & BI', $chatId)],
-                ['text' => '💡 Suggestions', 'url' => $this->getTopicUrl($groupKey, 'Suggestions & Improvements', $chatId)],
+                ['text' => '📊 BI', 'url' => $this->getTopicUrl($groupKey, 'BI', $chatId)],
+                ['text' => '🚚 Logistics', 'url' => $this->getTopicUrl($groupKey, 'Logistics', $chatId)],
             ],
         ];
 

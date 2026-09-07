@@ -23,9 +23,15 @@ interface DepartmentItem {
     name: string;
 }
 
+interface BranchItem {
+    id: number;
+    name: string;
+}
+
 interface Props {
     senderDepartment: string;
     departments: DepartmentItem[];
+    branches?: BranchItem[];
     linkedBranchesCount: number;
     linkedUsersCount: number;
 }
@@ -33,6 +39,7 @@ interface Props {
 export default function BroadcastAnnouncementsIndex({
     senderDepartment,
     departments,
+    branches = [],
     linkedBranchesCount,
     linkedUsersCount,
 }: Props) {
@@ -41,6 +48,7 @@ export default function BroadcastAnnouncementsIndex({
         message: '',
         target: 'all',
         department_id: '',
+        branch_id: '',
     });
 
     const activeDeptName =
@@ -184,7 +192,7 @@ export default function BroadcastAnnouncementsIndex({
                                 <Label className="font-semibold text-slate-800 dark:text-slate-200">
                                     Target Audience <span className="text-red-500">*</span>
                                 </Label>
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                                     <label
                                         className={`flex cursor-pointer flex-col rounded-lg border p-4 transition-all ${
                                             data.target === 'all'
@@ -222,9 +230,30 @@ export default function BroadcastAnnouncementsIndex({
                                                 onChange={(e) => setData('target', e.target.value)}
                                                 className="h-4 w-4 text-indigo-600"
                                             />
-                                            <span className="font-bold text-slate-900 dark:text-slate-100">Branch Channels Only</span>
+                                            <span className="font-bold text-slate-900 dark:text-slate-100">All Branch Channels</span>
                                         </div>
                                         <span className="mt-1 text-xs text-muted-foreground">Broadcast to official branch channels only</span>
+                                    </label>
+
+                                    <label
+                                        className={`flex cursor-pointer flex-col rounded-lg border p-4 transition-all ${
+                                            data.target === 'specific_branch'
+                                                ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-600 dark:border-indigo-500 dark:bg-indigo-950/40'
+                                                : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="radio"
+                                                name="target"
+                                                value="specific_branch"
+                                                checked={data.target === 'specific_branch'}
+                                                onChange={(e) => setData('target', e.target.value)}
+                                                className="h-4 w-4 text-indigo-600"
+                                            />
+                                            <span className="font-bold text-slate-900 dark:text-slate-100">Selected Branch Only</span>
+                                        </div>
+                                        <span className="mt-1 text-xs text-muted-foreground">Target a single specific branch channel</span>
                                     </label>
 
                                     <label
@@ -250,6 +279,25 @@ export default function BroadcastAnnouncementsIndex({
                                 </div>
                                 {errors.target && <p className="text-xs font-medium text-red-500">{errors.target}</p>}
                             </div>
+
+                            {/* Specific Branch Selector */}
+                            {data.target === 'specific_branch' && (
+                                <div className="space-y-2 rounded-lg border border-indigo-100 bg-indigo-50/40 p-4 dark:border-indigo-900/40 dark:bg-indigo-950/30">
+                                    <Label htmlFor="branch_id" className="font-semibold text-slate-800 dark:text-slate-200">
+                                        Select Target Branch <span className="text-red-500">*</span>
+                                    </Label>
+                                    <SearchableSelect
+                                        options={branches}
+                                        value={data.branch_id}
+                                        onValueChange={(val) => setData('branch_id', val)}
+                                        placeholder="Select branch to receive announcement..."
+                                        searchPlaceholder="Type to search branch..."
+                                        emptyText="No matching branch found"
+                                        className="h-11 w-full bg-white dark:bg-slate-900"
+                                    />
+                                    {errors.branch_id && <p className="text-xs font-medium text-red-500">{errors.branch_id}</p>}
+                                </div>
+                            )}
 
                             {/* Message */}
                             <div className="space-y-2">

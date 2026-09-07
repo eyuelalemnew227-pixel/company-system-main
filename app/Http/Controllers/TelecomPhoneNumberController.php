@@ -59,6 +59,11 @@ class TelecomPhoneNumberController extends Controller
             'branches' => Branch::orderBy('name')->get(['id', 'name']),
             'departments' => Department::orderBy('name')->get(['id', 'name']),
             'employees' => Employee::select('id', 'first_name', 'last_name', 'employee_code')->orderBy('first_name')->get(),
+            'transfers' => \App\Models\TelecomTransfer::where('telecom_type', 'phone')
+                ->with(['fromEmployee:id,first_name,last_name', 'toEmployee:id,first_name,last_name', 'fromBranch:id,name', 'toBranch:id,name', 'fromDepartment:id,name', 'toDepartment:id,name', 'transferredByUser:id,name'])
+                ->latest()
+                ->limit(30)
+                ->get(),
             'filters' => $request->only(['search', 'telecom_provider_id', 'service_type', 'status', 'assigned_type', 'branch_id', 'per_page']),
         ]);
     }
@@ -204,5 +209,39 @@ class TelecomPhoneNumberController extends Controller
         $response->headers->set('Content-Disposition', 'attachment; filename="company_phone_numbers_' . date('Y-m-d') . '.csv"');
 
         return $response;
+    }
+
+    public function transfer(Request $request, TelecomPhoneNumber $phoneNumber): RedirectResponse
+    {
+        $validated = $request->validate([
+            'assigned_type' => ['required', 'string', 'in:Employee,Branch,Department,Unassigned'],
+            'employee_id' => ['nullable', 'exists:employees,id'],
+            'branch_id' => ['nullable', 'exists:branches,id'],
+            'department_id' => ['nullable', 'exists:departments,id'],
+            'transfer_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        \App\Models\TelecomTransfer::create([
+            'telecom_type' => 'phone',
+            'item_id' => $phoneNumber->id,
+            'reference_number' => $phoneNumber->phone_number . ($phoneNumber->sim_card_number ? " (SIM: {$phoneNumber->sim_card_number})" : ''),
+            'from_employee_id' => $phoneNumber->employee_id,
+            'to_employee_id' => $validated['assigned_type'] === 'Employee' ? $validated['employee_id'] : null,
+            'from_branch_id' => $phoneNumber->branch_id,
+            'to_branch_id' => $validated['assigned_type'] === 'Branch' ? $validated['branch_id'] : null,
+            'from_department_id' => $phoneNumber->department_id,
+            'to_department_id' => $validated['assigned_type'] === 'Department' ? $validated['department_id'] : null,
+            'transfer_reason' => $validated['transfer_reason'] ?? null,
+            'transferred_by' => auth()->id(),
+        ]);
+
+        $phoneNumber->update([
+            'assigned_type' => $validated['assigned_type'],
+            'employee_id' => $validated['assigned_type'] === 'Employee' ? $validated['employee_id'] : null,
+            'branch_id' => $validated['assigned_type'] === 'Branch' ? $validated['branch_id'] : null,
+            'department_id' => $validated['assigned_type'] === 'Department' ? $validated['department_id'] : null,
+        ]);
+
+        return redirect()->back()->with('success', "SIM Card / Phone line {$phoneNumber->phone_number} transferred successfully!");
     }
 }

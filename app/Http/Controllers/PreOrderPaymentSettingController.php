@@ -42,8 +42,8 @@ class PreOrderPaymentSettingController extends Controller
             'account_name' => 'nullable|string|max:255',
             'account_number' => 'nullable|string|max:255',
             'instructions' => 'nullable|string|max:1000',
-            'payment_type' => 'required|string|max:255',
-            'validation_type' => 'required|string|max:255',
+            'payment_type' => 'nullable|string|max:255',
+            'validation_type' => 'nullable|string|max:255',
             'validation_pattern' => 'nullable|string|max:255',
             'example' => 'nullable|string|max:255',
             'reference_prefix' => 'nullable|string|max:255',
@@ -53,7 +53,10 @@ class PreOrderPaymentSettingController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        if ($validated['validation_type'] === 'Regex Validation' && !empty($validated['validation_pattern'])) {
+        $validated['payment_type'] = $validated['payment_type'] ?? 'Bank';
+        $validated['validation_type'] = $validated['validation_type'] ?? 'Regex Validation';
+
+        if (($validated['validation_type'] ?? '') === 'Regex Validation' && !empty($validated['validation_pattern'])) {
             $isValidPattern = @preg_match('/' . $validated['validation_pattern'] . '/', '') !== false;
             if (!$isValidPattern) {
                 return back()->withErrors(['validation_pattern' => 'The provided regex pattern is invalid.']);
@@ -62,18 +65,20 @@ class PreOrderPaymentSettingController extends Controller
 
         PreOrderPaymentSetting::create($validated);
 
+        Cache::forget('miniapp_init_data');
+
         return back()->with('success', 'Payment setting created successfully.');
     }
 
     public function update(Request $request, PreOrderPaymentSetting $preOrderPaymentSetting)
     {
         $validated = $request->validate([
-            'payment_method' => 'required|string|max:255|unique:pre_order_payment_settings,payment_method,' . $preOrderPaymentSetting->id,
+            'payment_method' => 'sometimes|required|string|max:255|unique:pre_order_payment_settings,payment_method,' . $preOrderPaymentSetting->id,
             'account_name' => 'nullable|string|max:255',
             'account_number' => 'nullable|string|max:255',
             'instructions' => 'nullable|string|max:1000',
-            'payment_type' => 'required|string|max:255',
-            'validation_type' => 'required|string|max:255',
+            'payment_type' => 'nullable|string|max:255',
+            'validation_type' => 'nullable|string|max:255',
             'validation_pattern' => 'nullable|string|max:255',
             'example' => 'nullable|string|max:255',
             'reference_prefix' => 'nullable|string|max:255',
@@ -83,7 +88,17 @@ class PreOrderPaymentSettingController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        if ($validated['validation_type'] === 'Regex Validation' && !empty($validated['validation_pattern'])) {
+        if (!isset($validated['payment_method'])) {
+            $validated['payment_method'] = $preOrderPaymentSetting->payment_method;
+        }
+        if (!isset($validated['payment_type'])) {
+            $validated['payment_type'] = $preOrderPaymentSetting->payment_type ?? 'Bank';
+        }
+        if (!isset($validated['validation_type'])) {
+            $validated['validation_type'] = $preOrderPaymentSetting->validation_type ?? 'Regex Validation';
+        }
+
+        if (($validated['validation_type'] ?? '') === 'Regex Validation' && !empty($validated['validation_pattern'])) {
             $isValidPattern = @preg_match('/' . $validated['validation_pattern'] . '/', '') !== false;
             if (!$isValidPattern) {
                 return back()->withErrors(['validation_pattern' => 'The provided regex pattern is invalid.']);

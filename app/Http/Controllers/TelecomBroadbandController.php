@@ -54,6 +54,11 @@ class TelecomBroadbandController extends Controller
             'providers' => TelecomProvider::where('is_active', true)->orderBy('name')->get(['id', 'name']),
             'branches' => Branch::orderBy('name')->get(['id', 'name']),
             'departments' => Department::orderBy('name')->get(['id', 'name']),
+            'transfers' => \App\Models\TelecomTransfer::where('telecom_type', 'broadband')
+                ->with(['fromBranch:id,name', 'toBranch:id,name', 'fromDepartment:id,name', 'toDepartment:id,name', 'transferredByUser:id,name'])
+                ->latest()
+                ->limit(30)
+                ->get(),
             'filters' => $request->only(['search', 'connection_type', 'telecom_provider_id', 'status', 'branch_id', 'per_page']),
         ]);
     }
@@ -191,5 +196,33 @@ class TelecomBroadbandController extends Controller
         $response->headers->set('Content-Disposition', 'attachment; filename="company_broadbands_wttx_' . date('Y-m-d') . '.csv"');
 
         return $response;
+    }
+
+    public function transfer(Request $request, TelecomBroadband $broadband): RedirectResponse
+    {
+        $validated = $request->validate([
+            'branch_id' => ['nullable', 'exists:branches,id'],
+            'department_id' => ['nullable', 'exists:departments,id'],
+            'transfer_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        \App\Models\TelecomTransfer::create([
+            'telecom_type' => 'broadband',
+            'item_id' => $broadband->id,
+            'reference_number' => $broadband->connection_name . ($broadband->account_number ? " (Account: {$broadband->account_number})" : ''),
+            'from_branch_id' => $broadband->branch_id,
+            'to_branch_id' => $validated['branch_id'] ?? null,
+            'from_department_id' => $broadband->department_id,
+            'to_department_id' => $validated['department_id'] ?? null,
+            'transfer_reason' => $validated['transfer_reason'] ?? null,
+            'transferred_by' => auth()->id(),
+        ]);
+
+        $broadband->update([
+            'branch_id' => $validated['branch_id'] ?? null,
+            'department_id' => $validated['department_id'] ?? null,
+        ]);
+
+        return redirect()->back()->with('success', "Broadband / Voucher connection '{$broadband->connection_name}' transferred successfully!");
     }
 }

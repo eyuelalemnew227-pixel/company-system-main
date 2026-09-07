@@ -278,8 +278,12 @@ class PreOrderController extends Controller
         $isWalkin = $orderType && $orderType->name === 'Walkin Customer';
         $isPaid = $isWalkin; // In store(), status isn't passed, it relies entirely on order type
 
-        $paymentSettings = PreOrderPaymentSetting::where('is_active', true)->get()->keyBy('payment_method');
-        $validMethods = $paymentSettings->keys()->toArray();
+        $allPaymentSettings = PreOrderPaymentSetting::all();
+        $paymentSettings = $allPaymentSettings->keyBy('payment_method');
+        $validMethods = $allPaymentSettings->pluck('payment_method')->toArray();
+        if (empty($validMethods)) {
+            $validMethods = ['CBE', 'Telebirr', 'Awash Bank', 'BOA', 'CBE Birr', 'Dashen Bank', 'Abyssinia Bank', 'Zemen Bank', 'Hibret Bank', 'Coopbank', 'NIB Bank'];
+        }
 
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:255'],
@@ -582,8 +586,12 @@ class PreOrderController extends Controller
 
         $oldStatus = $preOrder->status;
 
-        $paymentSettings = PreOrderPaymentSetting::where('is_active', true)->get()->keyBy('payment_method');
-        $validMethods = $paymentSettings->keys()->toArray();
+        $allPaymentSettings = PreOrderPaymentSetting::all();
+        $paymentSettings = $allPaymentSettings->keyBy('payment_method');
+        $validMethods = $allPaymentSettings->pluck('payment_method')->toArray();
+        if (empty($validMethods)) {
+            $validMethods = ['CBE', 'Telebirr', 'Awash Bank', 'BOA', 'CBE Birr', 'Dashen Bank', 'Abyssinia Bank', 'Zemen Bank', 'Hibret Bank', 'Coopbank', 'NIB Bank'];
+        }
         $isPaid = in_array($request->input('status'), ['Paid', 'Collected']);
 
         $validated = $request->validate([
