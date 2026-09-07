@@ -626,6 +626,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('kaldis-communication/standard-topics/delete', [\App\Http\Controllers\KaldisCommunicationController::class, 'deleteStandardTopicPreset'])->name('kaldis-communication.delete-standard-topic');
     Route::delete('kaldis-communication/standard-topics', [\App\Http\Controllers\KaldisCommunicationController::class, 'deleteStandardTopicPreset']);
     Route::get('kaldis-communication/standard-topics', fn() => redirect()->route('kaldis-communication.index'));
+    Route::get('kaldis-communication/standard-topics/update', fn() => redirect()->route('kaldis-communication.index'));
+    Route::get('kaldis-communication/standard-topics/delete', fn() => redirect()->route('kaldis-communication.index'));
 
     // Telecom Management
     Route::middleware(['permission:view telecom management'])->prefix('telecom')->group(function () {

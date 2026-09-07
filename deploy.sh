@@ -28,6 +28,9 @@ chown -R www-data:www-data storage bootstrap/cache
 
 # 6. Clear and cache configurations
 echo "Optimizing Laravel..."
+php artisan route:clear
+php artisan config:clear
+php artisan view:clear
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
