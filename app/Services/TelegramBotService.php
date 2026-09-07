@@ -1156,6 +1156,7 @@ class TelegramBotService
 
             $techs = User::select('users.id', 'users.name', 'users.email')
                 ->leftJoin('employees', 'users.employee_id', '=', 'employees.id')
+                ->where('users.is_active', true)
                 ->where(function ($q) use ($ticket) {
                     $q->where('employees.department_id', $ticket->department_id)
                         ->orWhereHas('roles', fn($rq) => $rq->whereIn('name', ['Ticket Technician', 'Technician', 'Staff']));
@@ -1165,7 +1166,7 @@ class TelegramBotService
                 ->get();
 
             if ($techs->isEmpty()) {
-                $techs = User::orderBy('name')->take(10)->get();
+                $techs = User::where('users.is_active', true)->orderBy('name')->take(10)->get();
             }
 
             $techBtns = [];

@@ -479,16 +479,17 @@ class TicketController extends Controller
             'fiscalMonth:id,name,fiscal_year_id',
         ]);
         $currentAssignment = $ticket->assignments()->where('is_current', true)->with('assignee')->first();
-        $staffOptions = User::where(function ($q) use ($ticket) {
-            $q->whereHas('employee', fn($sq) => $sq->where('department_id', $ticket->department_id))
-              ->orWhereHas('roles', fn($sq) => $sq->whereIn('name', ['Super Admin', 'Ticket Super Admin', 'IT Staff', 'Staff', 'Technician']));
-        })
-            ->select('id', 'name', 'email')
-            ->orderBy('name')
+        $staffOptions = User::where('users.is_active', true)
+            ->where(function ($q) use ($ticket) {
+                $q->whereHas('employee', fn($sq) => $sq->where('department_id', $ticket->department_id))
+                  ->orWhereHas('roles', fn($sq) => $sq->whereIn('name', ['Super Admin', 'Ticket Super Admin', 'IT Staff', 'Staff', 'Technician']));
+            })
+            ->select('users.id', 'users.name', 'users.email')
+            ->orderBy('users.name')
             ->get();
 
         if ($staffOptions->isEmpty()) {
-            $staffOptions = User::select('id', 'name', 'email')->orderBy('name')->get();
+            $staffOptions = User::where('users.is_active', true)->select('id', 'name', 'email')->orderBy('name')->get();
         }
 
         $user = $request->user();

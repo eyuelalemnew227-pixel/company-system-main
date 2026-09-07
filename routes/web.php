@@ -621,6 +621,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('kaldis-communication/generate-invite-link', [\App\Http\Controllers\KaldisCommunicationController::class, 'generateInviteLink'])->name('kaldis-communication.generate-invite-link');
     Route::post('kaldis-communication/purge-unlisted', [\App\Http\Controllers\KaldisCommunicationController::class, 'purgeUnlistedBindings'])->name('kaldis-communication.purge-unlisted');
     Route::post('kaldis-communication/standard-topics', [\App\Http\Controllers\KaldisCommunicationController::class, 'storeStandardTopicPreset'])->name('kaldis-communication.store-standard-topic');
+    Route::put('kaldis-communication/standard-topics', [\App\Http\Controllers\KaldisCommunicationController::class, 'updateStandardTopicPreset'])->name('kaldis-communication.update-standard-topic');
     Route::delete('kaldis-communication/standard-topics', [\App\Http\Controllers\KaldisCommunicationController::class, 'deleteStandardTopicPreset'])->name('kaldis-communication.delete-standard-topic');
 
     // Telecom Management

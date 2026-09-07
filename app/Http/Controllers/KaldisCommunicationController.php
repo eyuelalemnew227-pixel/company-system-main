@@ -308,7 +308,7 @@ class KaldisCommunicationController extends Controller
     private function getStandardTopicMapping(): array
     {
         $config = $this->readConfig();
-        if (!empty($config['standard_topics']) && is_array($config['standard_topics'])) {
+        if (isset($config['standard_topics']) && is_array($config['standard_topics'])) {
             return $config['standard_topics'];
         }
 
@@ -401,11 +401,15 @@ class KaldisCommunicationController extends Controller
                 if ($deleteFromTelegram && !empty($botToken)) {
                     $chatId = null;
                     if ($groupKey === 'Region 1') {
-                        $chatId = $config['region_groups']['Region 1'] ?? null;
+                        $chatId = $config['region_groups']['Region 1'] ?? ($config['groups']['Region 1'] ?? null);
                     } elseif ($groupKey === 'Region 2') {
-                        $chatId = $config['region_groups']['Region 2'] ?? null;
+                        $chatId = $config['region_groups']['Region 2'] ?? ($config['groups']['Region 2'] ?? null);
                     } elseif ($groupKey === 'Head Office' || str_starts_with($groupKey, 'ho:')) {
-                        $chatId = $config['ho_group_chat_id'] ?? null;
+                        if (str_starts_with($groupKey, 'ho:')) {
+                            $chatId = substr($groupKey, 3);
+                        } else {
+                            $chatId = $config['ho_group_chat_id'] ?? ($config['groups']['Head Office'] ?? null);
+                        }
                     }
 
                     if (!empty($chatId)) {
@@ -423,8 +427,9 @@ class KaldisCommunicationController extends Controller
                     }
                 }
 
-                $delStmt = $pdo->prepare('DELETE FROM topic_bindings WHERE group_key = :group_key AND thread_id = :thread_id');
-                $delStmt->execute([':group_key' => $groupKey, ':thread_id' => $threadId]);
+                $isHo = ($groupKey === 'Head Office' || str_starts_with($groupKey, 'ho:')) ? 1 : 0;
+                $delStmt = $pdo->prepare('DELETE FROM topic_bindings WHERE (group_key = :group_key OR (group_key LIKE "ho:%" AND :is_ho_1 = 1) OR (group_key = "Head Office" AND :is_ho_2 = 1)) AND thread_id = :thread_id');
+                $delStmt->execute([':group_key' => $groupKey, ':is_ho_1' => $isHo, ':is_ho_2' => $isHo, ':thread_id' => $threadId]);
                 $purgedCount++;
             }
         }
@@ -772,13 +777,20 @@ class KaldisCommunicationController extends Controller
         $config = $this->readConfig();
         $botToken = trim($config['bot_token'] ?? '');
 
+        $groupKey = $validated['group_key'];
+        $threadId = (int) $validated['thread_id'];
+
         $chatId = null;
-        if ($validated['group_key'] === 'Region 1') {
-            $chatId = $config['region_groups']['Region 1'] ?? null;
-        } elseif ($validated['group_key'] === 'Region 2') {
-            $chatId = $config['region_groups']['Region 2'] ?? null;
-        } elseif ($validated['group_key'] === 'Head Office') {
-            $chatId = $config['ho_group_chat_id'] ?? null;
+        if ($groupKey === 'Region 1') {
+            $chatId = $config['region_groups']['Region 1'] ?? ($config['groups']['Region 1'] ?? null);
+        } elseif ($groupKey === 'Region 2') {
+            $chatId = $config['region_groups']['Region 2'] ?? ($config['groups']['Region 2'] ?? null);
+        } elseif ($groupKey === 'Head Office' || str_starts_with($groupKey, 'ho:')) {
+            if (str_starts_with($groupKey, 'ho:')) {
+                $chatId = substr($groupKey, 3);
+            } else {
+                $chatId = $config['ho_group_chat_id'] ?? ($config['groups']['Head Office'] ?? null);
+            }
         }
 
         $telegramDeleted = false;
@@ -788,7 +800,7 @@ class KaldisCommunicationController extends Controller
             try {
                 $response = \Illuminate\Support\Facades\Http::withoutVerifying()->timeout(10)->post("https://api.telegram.org/bot{$botToken}/deleteForumTopic", [
                     'chat_id' => (int) $chatId,
-                    'message_thread_id' => (int) $validated['thread_id'],
+                    'message_thread_id' => $threadId,
                 ]);
                 $data = $response->json();
                 if ($data['ok'] ?? false) {
@@ -801,13 +813,16 @@ class KaldisCommunicationController extends Controller
             }
         }
 
-        $stmt = $pdo->prepare('DELETE FROM topic_bindings WHERE group_key = :group_key AND thread_id = :thread_id');
+        $isHo = ($groupKey === 'Head Office' || str_starts_with($groupKey, 'ho:')) ? 1 : 0;
+        $stmt = $pdo->prepare('DELETE FROM topic_bindings WHERE (group_key = :group_key OR (group_key LIKE "ho:%" AND :is_ho_1 = 1) OR (group_key = "Head Office" AND :is_ho_2 = 1)) AND thread_id = :thread_id');
         $stmt->execute([
-            ':group_key' => $validated['group_key'],
-            ':thread_id' => $validated['thread_id'],
+            ':group_key' => $groupKey,
+            ':is_ho_1' => $isHo,
+            ':is_ho_2' => $isHo,
+            ':thread_id' => $threadId,
         ]);
 
-        $msg = 'Topic binding removed from database.';
+        $msg = "Topic binding (Thread #{$threadId}) removed from system database.";
         if ($telegramDeleted) {
             $msg .= ' Forum topic was also deleted from Telegram group!';
         } elseif ($telegramError) {
@@ -1432,8 +1447,6 @@ class KaldisCommunicationController extends Controller
         $deletedCount = 0;
         $telegramDeletedCount = 0;
 
-        $stmt = $pdo->prepare('DELETE FROM topic_bindings WHERE group_key = :group_key AND thread_id = :thread_id');
-
         foreach ($validated['bindings'] as $item) {
             $groupKey = $item['group_key'];
             $threadId = (int) $item['thread_id'];
@@ -1445,7 +1458,11 @@ class KaldisCommunicationController extends Controller
                 } elseif ($groupKey === 'Region 2') {
                     $chatId = $config['region_groups']['Region 2'] ?? ($config['groups']['Region 2'] ?? null);
                 } elseif ($groupKey === 'Head Office' || str_starts_with($groupKey, 'ho:')) {
-                    $chatId = $config['ho_group_chat_id'] ?? ($config['groups']['Head Office'] ?? null);
+                    if (str_starts_with($groupKey, 'ho:')) {
+                        $chatId = substr($groupKey, 3);
+                    } else {
+                        $chatId = $config['ho_group_chat_id'] ?? ($config['groups']['Head Office'] ?? null);
+                    }
                 }
 
                 if (!empty($chatId)) {
@@ -1463,8 +1480,12 @@ class KaldisCommunicationController extends Controller
                 }
             }
 
+            $isHo = ($groupKey === 'Head Office' || str_starts_with($groupKey, 'ho:')) ? 1 : 0;
+            $stmt = $pdo->prepare('DELETE FROM topic_bindings WHERE (group_key = :group_key OR (group_key LIKE "ho:%" AND :is_ho_1 = 1) OR (group_key = "Head Office" AND :is_ho_2 = 1)) AND thread_id = :thread_id');
             $stmt->execute([
                 ':group_key' => $groupKey,
+                ':is_ho_1' => $isHo,
+                ':is_ho_2' => $isHo,
                 ':thread_id' => $threadId,
             ]);
             $deletedCount++;
@@ -1601,8 +1622,8 @@ class KaldisCommunicationController extends Controller
         ]);
 
         $config = $this->readConfig();
-        $topics = $config['standard_topics'] ?? [];
-        if (empty($topics)) {
+        $topics = $config['standard_topics'] ?? null;
+        if ($topics === null) {
             $topics = $this->getStandardTopicMapping();
         }
 
@@ -1621,7 +1642,7 @@ class KaldisCommunicationController extends Controller
             'emoji' => trim($validated['emoji']),
         ];
 
-        $config['standard_topics'] = $topics;
+        $config['standard_topics'] = array_values($topics);
         file_put_contents($this->getConfigPath(), json_encode($config, JSON_PRETTY_PRINT));
 
         if (!empty($config['bot_token'])) {
@@ -1631,6 +1652,60 @@ class KaldisCommunicationController extends Controller
         return redirect()->back()->with('success', "Standard topic preset '{$validated['name']}' added successfully!");
     }
 
+    public function updateStandardTopicPreset(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'old_name' => ['required', 'string'],
+            'name' => ['required', 'string', 'max:255'],
+            'department' => ['required', 'string', 'max:255'],
+            'emoji' => ['required', 'string', 'max:10'],
+        ]);
+
+        $config = $this->readConfig();
+        $topics = $config['standard_topics'] ?? null;
+        if ($topics === null) {
+            $topics = $this->getStandardTopicMapping();
+        }
+
+        $oldNorm = $this->normalizeTopicName($validated['old_name']);
+        $newNorm = $this->normalizeTopicName($validated['name']);
+
+        foreach ($topics as $t) {
+            if ($this->normalizeTopicName($t['name']) !== $oldNorm && $this->normalizeTopicName($t['name']) === $newNorm) {
+                return redirect()->back()->withErrors([
+                    'standard_topic' => "Standard topic preset '{$validated['name']}' already exists!"
+                ]);
+            }
+        }
+
+        $updated = false;
+        foreach ($topics as &$t) {
+            if ($this->normalizeTopicName($t['name']) === $oldNorm) {
+                $t['name'] = trim($validated['name']);
+                $t['department'] = trim($validated['department']);
+                $t['emoji'] = trim($validated['emoji']);
+                $updated = true;
+                break;
+            }
+        }
+        unset($t);
+
+        if (!$updated) {
+            return redirect()->back()->withErrors([
+                'standard_topic' => "Original topic '{$validated['old_name']}' not found!"
+            ]);
+        }
+
+        $config['standard_topics'] = array_values($topics);
+        file_put_contents($this->getConfigPath(), json_encode($config, JSON_PRETTY_PRINT));
+
+        if (!empty($config['bot_token'])) {
+            $this->registerCommandsToTelegram($config['bot_token']);
+        }
+
+        return redirect()->back()->with('success', "Standard topic preset '{$validated['name']}' updated successfully!");
+    }
+
     public function deleteStandardTopicPreset(Request $request): RedirectResponse
     {
         $validated = $request->validate([
@@ -1638,8 +1713,8 @@ class KaldisCommunicationController extends Controller
         ]);
 
         $config = $this->readConfig();
-        $topics = $config['standard_topics'] ?? [];
-        if (empty($topics)) {
+        $topics = $config['standard_topics'] ?? null;
+        if ($topics === null) {
             $topics = $this->getStandardTopicMapping();
         }
 

@@ -233,6 +233,37 @@ export default function KaldisCommunicationPage({
         }
     };
 
+    const [isEditStandardTopicOpen, setIsEditStandardTopicOpen] = useState(false);
+    const editStandardTopicForm = useForm({
+        old_name: '',
+        name: '',
+        department: departments[0] || 'Operations',
+        emoji: '📢',
+    });
+
+    const openEditStandardTopic = (preset: { name: string; department: string; emoji: string }) => {
+        editStandardTopicForm.setData({
+            old_name: preset.name,
+            name: preset.name,
+            department: preset.department,
+            emoji: preset.emoji || '📢',
+        });
+        setIsEditStandardTopicOpen(true);
+    };
+
+    const handleUpdateStandardTopic = (e: React.FormEvent) => {
+        e.preventDefault();
+        editStandardTopicForm.put(route('kaldis-communication.update-standard-topic'), {
+            onSuccess: () => {
+                toast.success(`Standard topic preset '${editStandardTopicForm.data.name}' updated!`);
+                setIsEditStandardTopicOpen(false);
+            },
+            onError: (errors: any) => {
+                toast.error(errors.standard_topic || errors.name || 'Failed to update standard topic preset.');
+            },
+        });
+    };
+
     // Bulk Selection State
     const [selectedBindings, setSelectedBindings] = useState<string[]>([]);
     const [topicSubTab, setTopicSubTab] = useState('region1');
@@ -1179,15 +1210,26 @@ export default function KaldisCommunicationPage({
                                                         <div className="flex items-center gap-2">
                                                             <span className="font-semibold text-amber-600 dark:text-amber-400">➡️ {preset.department}</span>
                                                             {canManage && (
-                                                                <Button
-                                                                    size="icon"
-                                                                    variant="ghost"
-                                                                    className="h-6 w-6 text-neutral-400 hover:text-rose-600"
-                                                                    title={`Remove preset ${preset.name}`}
-                                                                    onClick={() => handleDeleteStandardTopic(preset.name)}
-                                                                >
-                                                                    <Trash2 className="h-3 w-3" />
-                                                                </Button>
+                                                                <div className="flex items-center gap-0.5">
+                                                                    <Button
+                                                                        size="icon"
+                                                                        variant="ghost"
+                                                                        className="h-6 w-6 text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400"
+                                                                        title={`Edit preset ${preset.name}`}
+                                                                        onClick={() => openEditStandardTopic(preset)}
+                                                                    >
+                                                                        <Edit3 className="h-3 w-3" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="icon"
+                                                                        variant="ghost"
+                                                                        className="h-6 w-6 text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400"
+                                                                        title={`Remove preset ${preset.name}`}
+                                                                        onClick={() => handleDeleteStandardTopic(preset.name)}
+                                                                    >
+                                                                        <Trash2 className="h-3 w-3" />
+                                                                    </Button>
+                                                                </div>
                                                             )}
                                                         </div>
                                                     </div>
@@ -2235,6 +2277,89 @@ export default function KaldisCommunicationPage({
                             </Button>
                             <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white" disabled={standardTopicForm.processing}>
                                 Save Preset
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Modal: Edit Standard Topic Preset */}
+            <Dialog open={isEditStandardTopicOpen} onOpenChange={setIsEditStandardTopicOpen}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Edit3 className="h-5 w-5 text-amber-500" />
+                            Edit Standard Topic Preset
+                        </DialogTitle>
+                        <DialogDescription>
+                            Update standard topic name, target HO department, and official emoji.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleUpdateStandardTopic} className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="edit_std_topic_name">Topic Name</Label>
+                            <Input
+                                id="edit_std_topic_name"
+                                value={editStandardTopicForm.data.name}
+                                onChange={(e) => editStandardTopicForm.setData('name', e.target.value)}
+                                placeholder="e.g., Safety & Security"
+                                required
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="edit_std_topic_dept">Target HO Department</Label>
+                            <Select
+                                value={editStandardTopicForm.data.department}
+                                onValueChange={(val) => editStandardTopicForm.setData('department', val)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select Department" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {departments.map((dept) => (
+                                        <SelectItem key={dept} value={dept}>
+                                            {dept}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="edit_std_topic_emoji">Official Emoji</Label>
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    id="edit_std_topic_emoji"
+                                    value={editStandardTopicForm.data.emoji}
+                                    onChange={(e) => editStandardTopicForm.setData('emoji', e.target.value)}
+                                    placeholder="e.g., 🚨"
+                                    className="w-24 text-center text-lg"
+                                    maxLength={10}
+                                    required
+                                />
+                                <div className="flex gap-1.5 flex-wrap">
+                                    {['📢', '⚙️', '💼', '💰', '📦', '💻', '🔧', '☕', '🎓', '🛡️', '📊', '🚚', '🚨', '💡', '🌟'].map((em) => (
+                                        <button
+                                            key={em}
+                                            type="button"
+                                            onClick={() => editStandardTopicForm.setData('emoji', em)}
+                                            className="h-8 w-8 rounded border text-sm hover:bg-amber-100 dark:hover:bg-amber-900/50 flex items-center justify-center"
+                                        >
+                                            {em}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <DialogFooter className="pt-2">
+                            <Button type="button" variant="outline" onClick={() => setIsEditStandardTopicOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white" disabled={editStandardTopicForm.processing}>
+                                Save Changes
                             </Button>
                         </DialogFooter>
                     </form>
