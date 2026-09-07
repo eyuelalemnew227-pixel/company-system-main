@@ -70,6 +70,7 @@ type CreateProps = {
 		branch_id?: string;
 	};
 	setting: Setting;
+	canAddUrgentBudget: boolean;
 };
 
 function isHeadOfficeBranch(branch: BranchOption | null): boolean {
@@ -240,6 +241,7 @@ export default function CreateWeeklyBudget({
 	currentFiscalMonthId,
 	request,
 	setting,
+	canAddUrgentBudget,
 }: CreateProps) {
 	const { triggerPopup, PopupComponent } = usePopup();
 	const { data, setData, post, processing, errors, clearErrors, setError, transform } = useForm({
@@ -533,7 +535,7 @@ export default function CreateWeeklyBudget({
 											<SelectValue placeholder="Select request type" />
 										</SelectTrigger>
 										<SelectContent>
-											{setting.is_urgent_enabled && (
+											{setting.is_urgent_enabled && canAddUrgentBudget && (
 												<SelectItem value="urgent">Urgent</SelectItem>
 											)}
 											<SelectItem value="normal">Normal</SelectItem>

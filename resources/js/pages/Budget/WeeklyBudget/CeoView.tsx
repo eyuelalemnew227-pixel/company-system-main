@@ -115,6 +115,7 @@ type SplitMetric = {
 	label: string;
 	amount: number;
 	percent: number | null;
+	customNote?: ReactNode;
 	tone: 'orange' | 'teal' | 'neutral';
 };
 
@@ -170,6 +171,7 @@ function VolumeMetricBlock({
 					<div className={cn('mt-0.5 text-[13px] font-bold tabular-nums', leftTone.value)}>
 						{formatSummaryAmount(left.amount)}
 						{left.percent !== null && <span className="ml-1">({formatPercent2(left.percent)}%)</span>}
+						{left.customNote && <span className="ml-1">{left.customNote}</span>}
 					</div>
 				</div>
 				<div className="px-2">
@@ -180,6 +182,7 @@ function VolumeMetricBlock({
 					<div className={cn('mt-0.5 text-[13px] font-bold tabular-nums', rightTone.value)}>
 						{formatSummaryAmount(right.amount)}
 						{right.percent !== null && <span className="ml-1">({formatPercent2(right.percent)}%)</span>}
+						{right.customNote && <span className="ml-1">{right.customNote}</span>}
 					</div>
 				</div>
 			</div>
@@ -605,6 +608,35 @@ export default function WeeklyBudgetCeoView({
 
 	const bankBalance = useMemo(() => computeCurrentBalance(balancesForSelectedWeek), [balancesForSelectedWeek]);
 	const weeklyBalance = estimatedSales + bankBalance;
+
+	const foreignBalances = useMemo(() => {
+		let usdOriginal = 0;
+		let usdConverted = 0;
+		let eurOriginal = 0;
+		let eurConverted = 0;
+
+		balancesForSelectedWeek.forEach((balance: any) => {
+			const currency = balance.bank?.currency;
+			const amount = parseFloat(balance.amount) || 0;
+			const rate = parseFloat(balance.exchange_rate) || 1;
+			
+			if (currency === 'USD') {
+				usdOriginal += amount;
+				usdConverted += amount * rate;
+			} else if (currency === 'EUR') {
+				eurOriginal += amount;
+				eurConverted += amount * rate;
+			}
+		});
+
+		return {
+			usdOriginal,
+			usdConverted,
+			eurOriginal,
+			eurConverted,
+			totalConverted: usdConverted + eurConverted
+		};
+	}, [balancesForSelectedWeek]);
 
 	const weekBalanceDetailId = useMemo(() => {
 		return balancesForSelectedWeek[0]?.id ?? null;
@@ -1301,6 +1333,28 @@ export default function WeeklyBudgetCeoView({
 										tone: 'neutral',
 									}}
 								/>
+
+								<div className="mt-4">
+									<div className="mb-2.5 h-px w-full bg-slate-200 dark:bg-slate-700" />
+									<VolumeMetricBlock
+										title="Foreign Balance"
+										amount={foreignBalances.totalConverted}
+										left={{
+											label: 'USD Account',
+											amount: foreignBalances.usdConverted,
+											percent: null,
+											customNote: <span>(${formatSummaryAmount(foreignBalances.usdOriginal)})</span>,
+											tone: 'neutral',
+										}}
+										right={{
+											label: 'EUR Account',
+											amount: foreignBalances.eurConverted,
+											percent: null,
+											customNote: <span>(€{formatSummaryAmount(foreignBalances.eurOriginal)})</span>,
+											tone: 'neutral',
+										}}
+									/>
+								</div>
 
 								<div className="mt-4">
 									<div className="mb-2.5 h-px w-full bg-slate-200 dark:bg-slate-700" />

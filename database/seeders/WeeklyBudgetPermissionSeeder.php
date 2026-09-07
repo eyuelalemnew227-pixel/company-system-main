@@ -15,6 +15,7 @@ class WeeklyBudgetPermissionSeeder extends Seeder
             'manage weekly budgets',
             'manage weekly budgets admin',
             'manage weekly budget periods',
+            'add urgent budget',
         ];
 
         foreach ($permissions as $permName) {

@@ -350,6 +350,7 @@ class WeeklyBudgetController extends Controller
             'currentFiscalMonthId' => $currentFiscalMonth?->id,
             'request' => request()->only(['department_id', 'branch_id']),
             'setting' => $setting,
+            'canAddUrgentBudget' => auth()->user()->can('add urgent budget'),
         ]);
     }
 
@@ -384,6 +385,10 @@ class WeeklyBudgetController extends Controller
 
         if ($validated['request_type'] === 'urgent' && !$setting->is_urgent_enabled) {
             return back()->withErrors(['request_type' => 'Urgent requests are currently disabled system-wide.'])->withInput();
+        }
+
+        if ($validated['request_type'] === 'urgent' && !auth()->user()->can('add urgent budget')) {
+            return back()->withErrors(['request_type' => 'You do not have permission to submit an urgent budget request.'])->withInput();
         }
 
         $department = Department::findOrFail($validated['department_id']);
