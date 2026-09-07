@@ -150,7 +150,11 @@ type StandardTopicPreset = {
 
 const getPresets = (mapping: any): StandardTopicPreset[] => {
     if (Array.isArray(mapping)) {
-        return mapping;
+        return mapping.map((item: any) => ({
+            name: typeof item === 'string' ? item : item?.name || '',
+            department: typeof item === 'object' ? item?.department || 'Operations' : 'Operations',
+            emoji: typeof item === 'object' ? item?.emoji || TOPIC_EMOJIS[item?.name] || '📌' : TOPIC_EMOJIS[item] || '📌',
+        })).filter(p => p.name.length > 0);
     }
     if (mapping && typeof mapping === 'object') {
         return Object.entries(mapping).map(([name, department]) => ({
@@ -160,6 +164,13 @@ const getPresets = (mapping: any): StandardTopicPreset[] => {
         }));
     }
     return [];
+};
+
+const getTopicEmoji = (topicName: string, mapping: any): string => {
+    const presets = getPresets(mapping);
+    const found = presets.find(p => p.name.toLowerCase() === topicName.toLowerCase());
+    if (found && found.emoji) return found.emoji;
+    return TOPIC_EMOJIS[topicName] || '📌';
 };
 
 type Props = {
@@ -1118,7 +1129,7 @@ export default function KaldisCommunicationPage({
                                                             filteredBindings.map((b) => {
                                                                 const bindingKey = `${b.group_key}:${b.thread_id}`;
                                                                 const isSelected = selectedBindings.includes(bindingKey);
-                                                                const emoji = TOPIC_EMOJIS[b.topic_name] || '📌';
+                                                                const emoji = getTopicEmoji(b.topic_name, defaultTopicMapping);
                                                                 return (
                                                                     <TableRow key={bindingKey} className={isSelected ? 'bg-amber-50/60 dark:bg-amber-950/30' : ''}>
                                                                         {canManage && (

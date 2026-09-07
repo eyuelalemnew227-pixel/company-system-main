@@ -307,11 +307,9 @@ class KaldisCommunicationController extends Controller
     private function getStandardTopicMapping(): array
     {
         $config = $this->readConfig();
-        if (is_array($config['standard_topics']) && count($config['standard_topics']) > 0) {
-            return $config['standard_topics'];
-        }
+        $raw = $config['standard_topics'];
 
-        return [
+        $defaults = [
             ['name' => 'Announcements', 'department' => 'Operations', 'emoji' => '📢'],
             ['name' => 'Operations', 'department' => 'Operations', 'emoji' => '⚙️'],
             ['name' => 'HR', 'department' => 'HR', 'emoji' => '💼'],
@@ -325,6 +323,49 @@ class KaldisCommunicationController extends Controller
             ['name' => 'BI', 'department' => 'BI', 'emoji' => '📊'],
             ['name' => 'Logistics', 'department' => 'Supply Chain', 'emoji' => '🚚'],
         ];
+
+        if (!is_array($raw) || empty($raw)) {
+            return $defaults;
+        }
+
+        $result = [];
+        foreach ($raw as $key => $val) {
+            if (is_array($val) && isset($val['name'])) {
+                $result[] = [
+                    'name' => trim((string) $val['name']),
+                    'department' => trim((string) ($val['department'] ?? 'Operations')),
+                    'emoji' => trim((string) ($val['emoji'] ?? '📌')),
+                ];
+            } elseif (is_string($key) && is_string($val)) {
+                $result[] = [
+                    'name' => trim($key),
+                    'department' => trim($val),
+                    'emoji' => $this->getDefaultEmojiForTopic($key),
+                ];
+            }
+        }
+
+        return !empty($result) ? $result : $defaults;
+    }
+
+    private function getDefaultEmojiForTopic(string $name): string
+    {
+        $norm = $this->normalizeTopicName($name);
+        return match (true) {
+            str_contains($norm, 'announce') => '📢',
+            str_contains($norm, 'operation') => '⚙️',
+            str_contains($norm, 'hr') || str_contains($norm, 'human') => '💼',
+            str_contains($norm, 'finance') || str_contains($norm, 'budget') => '💰',
+            str_contains($norm, 'supply') || str_contains($norm, 'chain') => '📦',
+            str_contains($norm, 'it') || str_contains($norm, 'tech') => '💻',
+            str_contains($norm, 'maint') || str_contains($norm, 'repair') => '🔧',
+            str_contains($norm, 'f&b') || str_contains($norm, 'food') => '☕',
+            str_contains($norm, 't&d') || str_contains($norm, 'train') => '🎓',
+            str_contains($norm, 'qa') || str_contains($norm, 'quality') => '🛡️',
+            str_contains($norm, 'bi') || str_contains($norm, 'analytics') => '📊',
+            str_contains($norm, 'logistic') => '🚚',
+            default => '📌',
+        };
     }
 
     private function registerCommandsToTelegram(string $botToken, ?string &$error = null): bool
@@ -1620,15 +1661,12 @@ class KaldisCommunicationController extends Controller
             'emoji' => ['required', 'string', 'max:10'],
         ]);
 
-        $config = $this->readConfig();
-        $topics = $config['standard_topics'];
-        if (!is_array($topics) || count($topics) === 0) {
-            $topics = $this->getStandardTopicMapping();
-        }
-
+        $topics = $this->getStandardTopicMapping();
         $normName = $this->normalizeTopicName($validated['name']);
+
         foreach ($topics as $t) {
-            if ($this->normalizeTopicName($t['name']) === $normName) {
+            $tName = is_array($t) ? ($t['name'] ?? '') : (is_string($t) ? $t : '');
+            if ($this->normalizeTopicName($tName) === $normName) {
                 return redirect()->back()->withErrors([
                     'standard_topic' => "Standard topic preset '{$validated['name']}' already exists!"
                 ]);
@@ -1641,11 +1679,17 @@ class KaldisCommunicationController extends Controller
             'emoji' => trim($validated['emoji']),
         ];
 
-        $config['standard_topics'] = array_values($topics);
-        file_put_contents($this->getConfigPath(), json_encode($config, JSON_PRETTY_PRINT));
+        $configPath = $this->getConfigPath();
+        $rawConfig = file_exists($configPath) ? (json_decode(file_get_contents($configPath), true) ?: []) : [];
+        $rawConfig['standard_topics'] = array_values($topics);
+        file_put_contents($configPath, json_encode($rawConfig, JSON_PRETTY_PRINT));
 
-        if (!empty($config['bot_token'])) {
-            $this->registerCommandsToTelegram($config['bot_token']);
+        if (!empty($rawConfig['bot_token'])) {
+            try {
+                $this->registerCommandsToTelegram($rawConfig['bot_token']);
+            } catch (\Throwable $e) {
+                // Ignore telegram error during config save
+            }
         }
 
         return redirect()->back()->with('success', "Standard topic preset '{$validated['name']}' added successfully!");
@@ -1654,35 +1698,38 @@ class KaldisCommunicationController extends Controller
     public function updateStandardTopicPreset(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'old_name' => ['required', 'string'],
+            'old_name' => ['nullable', 'string'],
             'name' => ['required', 'string', 'max:255'],
             'department' => ['required', 'string', 'max:255'],
             'emoji' => ['required', 'string', 'max:10'],
         ]);
 
-        $config = $this->readConfig();
-        $topics = $config['standard_topics'];
-        if (!is_array($topics) || count($topics) === 0) {
-            $topics = $this->getStandardTopicMapping();
-        }
+        $oldName = !empty($validated['old_name']) ? $validated['old_name'] : $validated['name'];
+        $topics = $this->getStandardTopicMapping();
 
-        $oldNorm = $this->normalizeTopicName($validated['old_name']);
+        $oldNorm = $this->normalizeTopicName($oldName);
         $newNorm = $this->normalizeTopicName($validated['name']);
 
-        foreach ($topics as $t) {
-            if ($this->normalizeTopicName($t['name']) !== $oldNorm && $this->normalizeTopicName($t['name']) === $newNorm) {
-                return redirect()->back()->withErrors([
-                    'standard_topic' => "Standard topic preset '{$validated['name']}' already exists!"
-                ]);
+        if ($oldNorm !== $newNorm) {
+            foreach ($topics as $t) {
+                $tName = is_array($t) ? ($t['name'] ?? '') : (is_string($t) ? $t : '');
+                if ($this->normalizeTopicName($tName) === $newNorm) {
+                    return redirect()->back()->withErrors([
+                        'standard_topic' => "Standard topic preset '{$validated['name']}' already exists!"
+                    ]);
+                }
             }
         }
 
         $updated = false;
         foreach ($topics as &$t) {
-            if ($this->normalizeTopicName($t['name']) === $oldNorm) {
-                $t['name'] = trim($validated['name']);
-                $t['department'] = trim($validated['department']);
-                $t['emoji'] = trim($validated['emoji']);
+            $tName = is_array($t) ? ($t['name'] ?? '') : (is_string($t) ? $t : '');
+            if ($this->normalizeTopicName($tName) === $oldNorm) {
+                $t = [
+                    'name' => trim($validated['name']),
+                    'department' => trim($validated['department']),
+                    'emoji' => trim($validated['emoji']),
+                ];
                 $updated = true;
                 break;
             }
@@ -1691,15 +1738,21 @@ class KaldisCommunicationController extends Controller
 
         if (!$updated) {
             return redirect()->back()->withErrors([
-                'standard_topic' => "Original topic '{$validated['old_name']}' not found!"
+                'standard_topic' => "Original topic '{$oldName}' not found!"
             ]);
         }
 
-        $config['standard_topics'] = array_values($topics);
-        file_put_contents($this->getConfigPath(), json_encode($config, JSON_PRETTY_PRINT));
+        $configPath = $this->getConfigPath();
+        $rawConfig = file_exists($configPath) ? (json_decode(file_get_contents($configPath), true) ?: []) : [];
+        $rawConfig['standard_topics'] = array_values($topics);
+        file_put_contents($configPath, json_encode($rawConfig, JSON_PRETTY_PRINT));
 
-        if (!empty($config['bot_token'])) {
-            $this->registerCommandsToTelegram($config['bot_token']);
+        if (!empty($rawConfig['bot_token'])) {
+            try {
+                $this->registerCommandsToTelegram($rawConfig['bot_token']);
+            } catch (\Throwable $e) {
+                // Ignore telegram error during config save
+            }
         }
 
         return redirect()->back()->with('success', "Standard topic preset '{$validated['name']}' updated successfully!");
@@ -1711,20 +1764,32 @@ class KaldisCommunicationController extends Controller
             'name' => ['required', 'string'],
         ]);
 
-        $config = $this->readConfig();
-        $topics = $config['standard_topics'];
-        if (!is_array($topics) || count($topics) === 0) {
-            $topics = $this->getStandardTopicMapping();
+        $topics = $this->getStandardTopicMapping();
+        $normName = $this->normalizeTopicName($validated['name']);
+
+        $newTopics = [];
+        foreach ($topics as $t) {
+            $tName = is_array($t) ? ($t['name'] ?? '') : (is_string($t) ? $t : '');
+            if ($this->normalizeTopicName($tName) !== $normName) {
+                $newTopics[] = is_array($t) ? $t : [
+                    'name' => $tName,
+                    'department' => 'Operations',
+                    'emoji' => '📌'
+                ];
+            }
         }
 
-        $normName = $this->normalizeTopicName($validated['name']);
-        $newTopics = array_values(array_filter($topics, fn($t) => $this->normalizeTopicName($t['name']) !== $normName));
+        $configPath = $this->getConfigPath();
+        $rawConfig = file_exists($configPath) ? (json_decode(file_get_contents($configPath), true) ?: []) : [];
+        $rawConfig['standard_topics'] = array_values($newTopics);
+        file_put_contents($configPath, json_encode($rawConfig, JSON_PRETTY_PRINT));
 
-        $config['standard_topics'] = $newTopics;
-        file_put_contents($this->getConfigPath(), json_encode($config, JSON_PRETTY_PRINT));
-
-        if (!empty($config['bot_token'])) {
-            $this->registerCommandsToTelegram($config['bot_token']);
+        if (!empty($rawConfig['bot_token'])) {
+            try {
+                $this->registerCommandsToTelegram($rawConfig['bot_token']);
+            } catch (\Throwable $e) {
+                // Ignore telegram error during config save
+            }
         }
 
         return redirect()->back()->with('success', "Standard topic preset '{$validated['name']}' removed!");

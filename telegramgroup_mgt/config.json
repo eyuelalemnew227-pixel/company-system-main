@@ -16,17 +16,65 @@
     "auto_welcome": false,
     "welcome_message": "Welcome {name} to {group}! Please follow group rules.",
     "standard_topics": [
-        {"name": "Announcements", "department": "Operations", "emoji": "📢"},
-        {"name": "Operations", "department": "Operations", "emoji": "⚙️"},
-        {"name": "HR", "department": "HR", "emoji": "💼"},
-        {"name": "Finance", "department": "Finance", "emoji": "💰"},
-        {"name": "Supply Chain", "department": "Supply Chain", "emoji": "📦"},
-        {"name": "IT", "department": "IT", "emoji": "💻"},
-        {"name": "Maintenance", "department": "Maintenance", "emoji": "🔧"},
-        {"name": "F&B", "department": "F&B", "emoji": "☕"},
-        {"name": "T&D", "department": "T&D", "emoji": "🎓"},
-        {"name": "QA", "department": "QA", "emoji": "🛡️"},
-        {"name": "BI", "department": "BI", "emoji": "📊"},
-        {"name": "Logistics", "department": "Supply Chain", "emoji": "🚚"}
+        {
+            "name": "Announcements",
+            "department": "Operations",
+            "emoji": "\ud83d\udce2"
+        },
+        {
+            "name": "Operations",
+            "department": "Operations",
+            "emoji": "\u2699\ufe0f"
+        },
+        {
+            "name": "HR",
+            "department": "HR",
+            "emoji": "\ud83d\udcbc"
+        },
+        {
+            "name": "Finance",
+            "department": "Finance",
+            "emoji": "\ud83d\udcb0"
+        },
+        {
+            "name": "Supply Chain",
+            "department": "Supply Chain",
+            "emoji": "\ud83d\udce6"
+        },
+        {
+            "name": "IT",
+            "department": "IT",
+            "emoji": "\ud83d\udcbb"
+        },
+        {
+            "name": "Maintenance",
+            "department": "Maintenance",
+            "emoji": "\ud83d\udd27"
+        },
+        {
+            "name": "F&B",
+            "department": "F&B",
+            "emoji": "\u2615"
+        },
+        {
+            "name": "T&D",
+            "department": "T&D",
+            "emoji": "\ud83c\udf93"
+        },
+        {
+            "name": "QA",
+            "department": "QA",
+            "emoji": "\ud83d\udee1\ufe0f"
+        },
+        {
+            "name": "BI",
+            "department": "BI",
+            "emoji": "\ud83d\udcca"
+        },
+        {
+            "name": "BIt",
+            "department": "Bar Tender",
+            "emoji": "\ud83d\udce2"
+        }
     ]
 }
