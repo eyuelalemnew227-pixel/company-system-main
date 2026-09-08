@@ -239,6 +239,7 @@ function statusBadge(status: string, _variant: 'finance' | 'ceo' | 'department')
 		rejected: 'bg-red-50 text-red-700 border-red-200',
 		paid: 'bg-blue-50 text-blue-700 border-blue-200',
 		'on-hold': 'bg-orange-50 text-orange-700 border-orange-200',
+		transferred: 'bg-purple-50 text-purple-700 border-purple-200',
 	};
 	return (
 		<span

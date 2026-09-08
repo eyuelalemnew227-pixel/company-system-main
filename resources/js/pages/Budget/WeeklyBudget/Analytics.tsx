@@ -97,6 +97,7 @@ function statusBadge(status: string) {
 		'on-hold': 'bg-purple-50 text-purple-600 border-purple-200',
 		on_hold: 'bg-purple-50 text-purple-600 border-purple-200',
 		onhold: 'bg-purple-50 text-purple-600 border-purple-200',
+		transferred: 'bg-purple-50 text-purple-700 border-purple-200',
 	};
 	const cls = colorMap[status?.toLowerCase()] ?? 'bg-slate-50 text-slate-600 border-slate-200';
 	const label = status ? status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ') : '—';

@@ -953,8 +953,8 @@ class WeeklyBudgetController extends Controller
             }
         }
 
-        if ($weeklyBudget->status_department !== WeeklyBudgetStatusDepartment::Approved) {
-            return back()->withErrors(['status_finance' => 'Finance Status change only allowed if Department Status is Approved.']);
+        if (!in_array($weeklyBudget->status_department, [WeeklyBudgetStatusDepartment::Approved, WeeklyBudgetStatusDepartment::Transferred])) {
+            return back()->withErrors(['status_finance' => 'Finance Status change only allowed if Department Status is Approved or Transferred.']);
         }
 
         $currentFinanceStatus = $weeklyBudget->status_finance->value;
@@ -986,6 +986,11 @@ class WeeklyBudgetController extends Controller
             if (array_key_exists('description', $validated)) {
                 $updateData['description'] = $validated['description'];
             }
+        }
+
+        // Auto-sync Department status if Finance changes to Transferred
+        if ($newFinanceStatus === WeeklyBudgetStatusFinance::Transferred->value) {
+            $updateData['status_department'] = WeeklyBudgetStatusDepartment::Transferred->value;
         }
 
         $oldValues = $this->activityLogger->attributes($weeklyBudget);
@@ -1020,7 +1025,7 @@ class WeeklyBudgetController extends Controller
         $budgets = WeeklyBudget::whereIn('id', $validated['ids'])->get();
 
         foreach ($budgets as $budget) {
-            if ($budget->status_department !== WeeklyBudgetStatusDepartment::Approved) {
+            if (!in_array($budget->status_department, [WeeklyBudgetStatusDepartment::Approved, WeeklyBudgetStatusDepartment::Transferred])) {
                 continue;
             }
             if ($budget->status_ceo === WeeklyBudgetStatusCeo::Approved && in_array($validated['status_finance'], [WeeklyBudgetStatusFinance::OnHold->value, WeeklyBudgetStatusFinance::Pending->value])) {
@@ -1030,8 +1035,13 @@ class WeeklyBudgetController extends Controller
                 continue;
             }
 
+            $updateData = ['status_finance' => $validated['status_finance']];
+            if ($validated['status_finance'] === WeeklyBudgetStatusFinance::Transferred->value) {
+                $updateData['status_department'] = WeeklyBudgetStatusDepartment::Transferred->value;
+            }
+
             $oldValues = $this->activityLogger->attributes($budget);
-            $budget->update(['status_finance' => $validated['status_finance']]);
+            $budget->update($updateData);
             $this->activityLogger->logChanges(
                 $budget,
                 $oldValues,

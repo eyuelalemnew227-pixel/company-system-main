@@ -106,7 +106,7 @@ function stripCommas(value: string): string {
 type FinanceEditMode = 'full' | 'mark-paid' | 'revert-paid';
 
 function getFinanceEditMode(item: WeeklyBudgetRow, canManageFinance: boolean, canOverridePaid: boolean): FinanceEditMode | null {
-	if (!canManageFinance || item.status_department !== 'approved') {
+	if (!canManageFinance || !['approved', 'transferred'].includes(item.status_department)) {
 		return null;
 	}
 
@@ -151,6 +151,7 @@ function statusBadge(status: string, variant: 'finance' | 'ceo' | 'department') 
 		rejected: 'bg-red-50 text-red-700 border-red-200',
 		paid: 'bg-blue-50 text-blue-700 border-blue-200',
 		'on-hold': 'bg-orange-50 text-orange-700 border-orange-200',
+		transferred: 'bg-purple-50 text-purple-700 border-purple-200',
 	};
 
 	return (
@@ -505,7 +506,7 @@ export default function WeeklyBudgetFinance({
 		selectedPaymentType !== 'all';
 
 	const allSelectableIds = useMemo(() => {
-		return items.data.filter((item) => item.status_department === 'approved' && item.status_finance !== 'paid').map((item) => item.id);
+		return items.data.filter((item) => ['approved', 'transferred'].includes(item.status_department) && item.status_finance !== 'paid').map((item) => item.id);
 	}, [items.data]);
 
 	const isAllSelected = allSelectableIds.length > 0 && allSelectableIds.every((id) => selectedIds.includes(id));
@@ -1052,7 +1053,7 @@ export default function WeeklyBudgetFinance({
 													<Checkbox
 														checked={selectedIds.includes(item.id)}
 														onCheckedChange={() => toggleSelectRow(item.id)}
-														disabled={item.status_department !== 'approved' || item.status_finance === 'paid'}
+														disabled={!['approved', 'transferred'].includes(item.status_department) || item.status_finance === 'paid'}
 													/>
 												</TableCell>
 											)}
