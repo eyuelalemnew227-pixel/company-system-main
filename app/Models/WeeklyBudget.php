@@ -42,6 +42,7 @@ class WeeklyBudget extends Model
         'created_by',
         'payment_category_id',
         'payment_type_id',
+        'transferred_to',
     ];
 
     protected $casts = [

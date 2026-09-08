@@ -991,6 +991,10 @@ class WeeklyBudgetController extends Controller
         // Auto-sync Department status if Finance changes to Transferred
         if ($newFinanceStatus === WeeklyBudgetStatusFinance::Transferred->value) {
             $updateData['status_department'] = WeeklyBudgetStatusDepartment::Transferred->value;
+            if ($weeklyBudget->transferred_to === null) {
+                $nextWeek = $weeklyBudget->week_number + 1;
+                $updateData['transferred_to'] = $nextWeek > 53 ? 1 : $nextWeek;
+            }
         }
 
         $oldValues = $this->activityLogger->attributes($weeklyBudget);
@@ -1038,6 +1042,10 @@ class WeeklyBudgetController extends Controller
             $updateData = ['status_finance' => $validated['status_finance']];
             if ($validated['status_finance'] === WeeklyBudgetStatusFinance::Transferred->value) {
                 $updateData['status_department'] = WeeklyBudgetStatusDepartment::Transferred->value;
+                if ($budget->transferred_to === null) {
+                    $nextWeek = $budget->week_number + 1;
+                    $updateData['transferred_to'] = $nextWeek > 53 ? 1 : $nextWeek;
+                }
             }
 
             $oldValues = $this->activityLogger->attributes($budget);
@@ -1483,9 +1491,33 @@ class WeeklyBudgetController extends Controller
             'fiscalMonth',
         ]);
 
-        // Permanently filter to where both are approved
-        $query->where('status_finance', WeeklyBudgetStatusFinance::Approved->value)
-            ->where('status_department', WeeklyBudgetStatusDepartment::Approved->value);
+        $applyWeekFilter = function ($q) use ($weekFilter) {
+            $q->where('status_finance', WeeklyBudgetStatusFinance::Approved->value);
+
+            if ($weekFilter && $weekFilter !== 'all') {
+                $selectedWeekNumber = WeeklyBudget::where('week_start_date', $weekFilter)->value('week_number');
+                if (!$selectedWeekNumber) {
+                    $selectedWeekNumber = \Carbon\Carbon::parse($weekFilter)->weekOfYear;
+                }
+
+                $q->where(function ($sub) use ($weekFilter, $selectedWeekNumber) {
+                    $sub->where(function ($q1) use ($weekFilter) {
+                        $q1->where('status_department', WeeklyBudgetStatusDepartment::Approved->value)
+                           ->where('week_start_date', $weekFilter);
+                    })->orWhere(function ($q2) use ($selectedWeekNumber) {
+                        $q2->where('status_department', WeeklyBudgetStatusDepartment::Transferred->value)
+                           ->where('transferred_to', $selectedWeekNumber);
+                    });
+                });
+            } else {
+                $q->whereIn('status_department', [
+                    WeeklyBudgetStatusDepartment::Approved->value,
+                    WeeklyBudgetStatusDepartment::Transferred->value,
+                ]);
+            }
+        };
+
+        $applyWeekFilter($query);
 
         $query
             ->when(request('budget_id'), fn($q, $v) => $q->where('id', $v))
@@ -1494,7 +1526,6 @@ class WeeklyBudgetController extends Controller
             ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
             ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
-            ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->where('week_start_date', $weekFilter))
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
 
@@ -1506,11 +1537,10 @@ class WeeklyBudgetController extends Controller
             : null;
 
         $weekScopedQuery = WeeklyBudget::query()
-            ->where('status_finance', WeeklyBudgetStatusFinance::Approved->value)
-            ->where('status_department', WeeklyBudgetStatusDepartment::Approved->value)
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
-            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
-            ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->where('week_start_date', $weekFilter));
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter));
+
+        $applyWeekFilter($weekScopedQuery);
 
         $departmentRows = (clone $weekScopedQuery)
             ->leftJoin('departments', 'weekly_budgets.department_id', '=', 'departments.id')
@@ -1731,9 +1761,9 @@ class WeeklyBudgetController extends Controller
         if ($validated['status_ceo'] === WeeklyBudgetStatusCeo::Approved->value) {
             if (
                 $weeklyBudget->status_finance !== WeeklyBudgetStatusFinance::Approved ||
-                $weeklyBudget->status_department !== WeeklyBudgetStatusDepartment::Approved
+                !in_array($weeklyBudget->status_department, [WeeklyBudgetStatusDepartment::Approved, WeeklyBudgetStatusDepartment::Transferred])
             ) {
-                return back()->withErrors(['status_ceo' => 'Can only change to Approved if both Finance and Department Status are Approved.']);
+                return back()->withErrors(['status_ceo' => 'Can only change to Approved if Finance is Approved and Department is Approved or Transferred.']);
             }
         }
 
@@ -1771,7 +1801,7 @@ class WeeklyBudgetController extends Controller
             if ($validated['status_ceo'] === WeeklyBudgetStatusCeo::Approved->value) {
                 if (
                     $budget->status_finance !== WeeklyBudgetStatusFinance::Approved ||
-                    $budget->status_department !== WeeklyBudgetStatusDepartment::Approved
+                    !in_array($budget->status_department, [WeeklyBudgetStatusDepartment::Approved, WeeklyBudgetStatusDepartment::Transferred])
                 ) {
                     continue;
                 }

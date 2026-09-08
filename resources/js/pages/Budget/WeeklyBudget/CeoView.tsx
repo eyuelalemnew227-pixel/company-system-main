@@ -1544,7 +1544,7 @@ export default function WeeklyBudgetCeoView({
 									<TableBody>
 										{items.data.map((item) => {
 											const isEditable = canManageCeo && item.status_finance !== 'paid';
-											const bothApproved = item.status_finance === 'approved' && item.status_department === 'approved';
+											const bothApproved = item.status_finance === 'approved' && (item.status_department === 'approved' || item.status_department === 'transferred');
 											const isSavingStatus = savingStatusId === item.id;
 
 											return (
