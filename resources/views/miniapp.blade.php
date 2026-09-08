@@ -521,9 +521,27 @@ function getBeans(step) {
     return h + '</div>';
 }
 
+function hasSources() { return Array.isArray(dbSources) && dbSources.length > 0; }
+
 function updateProgress() {
+    var hasSrc = hasSources();
     var segs = document.querySelectorAll('.prog-seg-item'), label = document.getElementById('progLabel'), names = [t('step_1'),t('step_2'),t('step_3'),t('step_4'),t('step_5'),t('step_6'),t('step_7'),t('step_8')];
-    for (var i = 0; i < segs.length; i++) { var sn = i + 1; segs[i].classList.remove('done', 'active'); if (sn < S.step) segs[i].classList.add('done'); else if (sn === S.step) segs[i].classList.add('active'); }
+    for (var i = 0; i < segs.length; i++) {
+        var sn = i + 1;
+        segs[i].classList.remove('done', 'active');
+        if (!hasSrc && sn === 7) {
+            segs[i].style.display = 'none';
+            continue;
+        } else {
+            segs[i].style.display = '';
+        }
+        if (!hasSrc && sn === 8 && S.step === 8) {
+            segs[i].classList.add('active');
+            continue;
+        }
+        if (sn < S.step) segs[i].classList.add('done');
+        else if (sn === S.step) segs[i].classList.add('active');
+    }
     if (label) { if (S.step >= 1 && S.step <= 8) { label.textContent = names[S.step - 1]; label.style.opacity = '1'; } else { label.textContent = ''; label.style.opacity = '0'; } }
 }
 
@@ -539,7 +557,7 @@ function validate(s) {
     if (s === 4 && !S.holiday) { toast(t('error_select_date'), 'error'); return false; }
     if (s === 5 && !S.payment) { toast(t('error_select_payment'), 'error'); return false; }
     if (s === 6) { if (!S.paySlip) { toast(t('error_slip'), 'error'); return false; } if (!S.termsOk) { toast(t('error_terms'), 'error'); return false; } }
-    if (s === 7 && !S.hearAbout) { toast(t('error_select_source'), 'error'); return false; }
+    if (s === 7 && hasSources() && !S.hearAbout) { toast(t('error_select_source'), 'error'); return false; }
     return true;
 }
 
@@ -553,11 +571,19 @@ function nextStep() {
     if (S.step === 3 && branches.length === 1) { S.branch = branches[0]; }
     if (S.step === 4 && holidays.length === 1) { S.holiday = holidays[0]; }
     if (S.step === 5 && payMethods.length === 1) { S.payment = payMethods[0]; }
+    if (S.step === 7 && !hasSources()) { S.step = 8; }
     render();
     S.busy = false;
 }
 
-function prevStep() { haptic('light'); if (S.step > 0) { S.step--; render(); } else if (tg && tg.close) tg.close(); }
+function prevStep() {
+    haptic('light');
+    if (S.step > 0) {
+        S.step--;
+        if (S.step === 7 && !hasSources()) { S.step = 6; }
+        render();
+    } else if (tg && tg.close) tg.close();
+}
 
 function setupBack() {
     if (tg && tg.BackButton) {
@@ -632,7 +658,10 @@ function render() {
     if (headerTitleEl) headerTitleEl.textContent = t('title');
 
     updateAlertText(); updateAlert(); updateProgress();
-    document.getElementById('stepText').innerText = (S.step > 0 && S.step < 9) ? (S.step + '/8') : '1/8';
+    var totalMax = hasSources() ? 8 : 7;
+    var displayCur = S.step;
+    if (!hasSources() && S.step === 8) displayCur = 7;
+    document.getElementById('stepText').innerText = (S.step > 0 && S.step < 9) ? (displayCur + '/' + totalMax) : ('1/' + totalMax);
     document.getElementById('backBtn').classList.toggle('hidden', S.step <= 0 || S.step >= 9);
     document.getElementById('backBtn').innerText = t('back');
     if (S.step >= 9) { setFoot(false); } else { setFoot(true); document.getElementById('nextBtn').innerText = S.step === 8 ? t('place_order') : t('next'); }
@@ -1005,7 +1034,13 @@ function renderSummary() {
 function buildReceipt(opts) {
     var tot = opts.tot, fn = opts.fn, hd = opts.hd, slip = opts.slip;
     var phoneDisplay = fmtPhoneDisplay(S.phone);
-    var h = '<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"><div class="bg-gradient-to-r from-[#3E2723] to-[#5D4037] p-3 flex items-center justify-between"><img src="/logokaldis.png" class="h-6" alt="Logo"><div class="text-right"><p class="text-[7px] text-amber-200/80 font-bold tracking-widest uppercase">'+t('order_number')+'</p><p class="text-xs font-mono font-bold text-white tracking-wider">'+(S.orderNum||'')+'</p></div></div><div class="p-3 space-y-2"><div class="grid grid-cols-2 gap-2"><div class="bg-gray-50 rounded-lg p-2"><p class="text-[7px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">\uD83D\uDC64 '+t('summary_customer')+'</p><p class="text-[11px] font-bold text-gray-800 leading-snug">'+fn+'</p><p class="text-[11px] font-bold font-mono text-gray-800 tracking-wide">'+phoneDisplay+'</p></div><div class="bg-gray-50 rounded-lg p-2"><p class="text-[7px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">\uD83D\uDCCD '+t('summary_pickup')+'</p><p class="text-[11px] font-bold text-gray-800 leading-snug">'+(S.branch?S.branch.name:'')+'</p><div class="flex items-center gap-1 mt-0.5 flex-wrap"><span class="text-[9px] text-gray-500">'+(S.holiday?S.holiday.name:'')+'</span>'+(hd?'<span class="bg-amber-100 text-amber-800 px-1 py-0.5 rounded text-[7px] font-bold">'+hd+'</span>':'')+'</div></div></div><hr class="rc-div"><div class="grid grid-cols-2 gap-2"><div class="bg-gray-50 rounded-lg p-2"><p class="text-[7px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">\uD83D\uDCB3 '+t('summary_payment')+'</p><p class="text-[11px] font-bold text-gray-800">'+(S.payment?S.payment.name:'')+'</p>'+(S.payment&&S.payment.account_number?'<p class="text-[9px] font-mono text-gray-500 mt-0.5">'+S.payment.account_number+'</p>':'')+'</div><div class="bg-gray-50 rounded-lg p-2"><p class="text-[7px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">\uD83D\uDCE2 '+t('summary_source')+'</p><p class="text-[11px] font-bold text-gray-800">'+(S.hearAbout?srcLbl(S.hearAbout):'')+'</p>'+(S.payRef?'<p class="text-[8px] text-gray-400 mt-1">'+t('summary_ref')+': <span class="font-mono text-gray-600">'+S.payRef+'</span></p>':'')+'</div></div><hr class="rc-div"><div><p class="text-[7px] uppercase font-bold text-gray-400 tracking-wider mb-1.5">\uD83D\uDECD '+t('summary_items')+'</p>';
+    var sourceBox = '';
+    if (hasSources()) {
+        sourceBox = '<div class="bg-gray-50 rounded-lg p-2"><p class="text-[7px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">\uD83D\uDCE2 '+t('summary_source')+'</p><p class="text-[11px] font-bold text-gray-800">'+(S.hearAbout?srcLbl(S.hearAbout):'-')+'</p>'+(S.payRef?'<p class="text-[8px] text-gray-400 mt-1">'+t('summary_ref')+': <span class="font-mono text-gray-600">'+S.payRef+'</span></p>':'')+'</div>';
+    } else {
+        sourceBox = '<div class="bg-gray-50 rounded-lg p-2"><p class="text-[7px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">\uD83D\uDD16 '+t('summary_ref')+'</p><p class="text-[11px] font-mono font-bold text-gray-800">'+(S.payRef?S.payRef:'N/A')+'</p></div>';
+    }
+    var h = '<div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"><div class="bg-gradient-to-r from-[#3E2723] to-[#5D4037] p-3 flex items-center justify-between"><img src="/logokaldis.png" class="h-6" alt="Logo"><div class="text-right"><p class="text-[7px] text-amber-200/80 font-bold tracking-widest uppercase">'+t('order_number')+'</p><p class="text-xs font-mono font-bold text-white tracking-wider">'+(S.orderNum||'')+'</p></div></div><div class="p-3 space-y-2"><div class="grid grid-cols-2 gap-2"><div class="bg-gray-50 rounded-lg p-2"><p class="text-[7px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">\uD83D\uDC64 '+t('summary_customer')+'</p><p class="text-[11px] font-bold text-gray-800 leading-snug">'+fn+'</p><p class="text-[11px] font-bold font-mono text-gray-800 tracking-wide">'+phoneDisplay+'</p></div><div class="bg-gray-50 rounded-lg p-2"><p class="text-[7px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">\uD83D\uDCCD '+t('summary_pickup')+'</p><p class="text-[11px] font-bold text-gray-800 leading-snug">'+(S.branch?S.branch.name:'')+'</p><div class="flex items-center gap-1 mt-0.5 flex-wrap"><span class="text-[9px] text-gray-500">'+(S.holiday?S.holiday.name:'')+'</span>'+(hd?'<span class="bg-amber-100 text-amber-800 px-1 py-0.5 rounded text-[7px] font-bold">'+hd+'</span>':'')+'</div></div></div><hr class="rc-div"><div class="grid grid-cols-2 gap-2"><div class="bg-gray-50 rounded-lg p-2"><p class="text-[7px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">\uD83D\uDCB3 '+t('summary_payment')+'</p><p class="text-[11px] font-bold text-gray-800">'+(S.payment?S.payment.name:'')+'</p>'+(S.payment&&S.payment.account_number?'<p class="text-[9px] font-mono text-gray-500 mt-0.5">'+S.payment.account_number+'</p>':'')+'</div>'+sourceBox+'</div><hr class="rc-div"><div><p class="text-[7px] uppercase font-bold text-gray-400 tracking-wider mb-1.5">\uD83D\uDECD '+t('summary_items')+'</p>';
     for (var i = 0; i < S.cart.length; i++) { var it = S.cart[i], p = products.find(function(x) { return x.id === it.product_id; }); if (!p) continue; h += '<div class="flex justify-between items-center text-[10px] mb-1"><div class="flex-1 pr-2"><p class="font-bold text-gray-800">'+p.product_name+'</p><p class="text-[8px] text-gray-400">\u00D7'+it.quantity+' @ '+parseFloat(p.unit_price).toLocaleString()+' ETB</p></div><span class="font-bold text-gray-800 font-mono text-[10px]">'+(parseFloat(p.unit_price)*it.quantity).toLocaleString()+'</span></div>'; }
     h += '</div>';
     if (slip && S.paySlipPrev) {
@@ -1168,7 +1203,7 @@ async function submitOrder() {
             payment_method: S.payment ? S.payment.name : 'CBE',
             transaction_reference: S.payRef,
             payment_slip: S.paySlip,
-            source: S.hearAbout ? S.hearAbout : 'Unknown',
+            source: (S.hearAbout && hasSources()) ? S.hearAbout : (hasSources() ? 'Direct' : 'Telegram Bot'),
             items: cartData,
             chat_id: S.chatId
         };
