@@ -26,7 +26,11 @@ class PreOrderProductController extends Controller
         }
 
         $perPage = (int) $request->query('per_page', 15);
-        $products = $query->orderByDesc('id')->paginate($perPage)->withQueryString();
+        $products = $query
+            ->orderByDesc('has_discount')
+            ->orderBy('product_name', 'asc')
+            ->paginate($perPage)
+            ->withQueryString();
 
         return Inertia::render('settings/pre-order-products/Index', [
             'products' => $products,
@@ -57,7 +61,10 @@ class PreOrderProductController extends Controller
             'unit_price' => ['required', 'numeric', 'min:0'],
             'walkin_price' => ['required', 'numeric', 'min:0'],
             'status' => ['required', 'in:Active,Inactive'],
+            'has_discount' => ['nullable', 'boolean'],
         ]);
+
+        $validated['has_discount'] = $request->boolean('has_discount');
 
         PreOrderProduct::create($validated);
 
@@ -95,7 +102,10 @@ class PreOrderProductController extends Controller
             'unit_price' => ['required', 'numeric', 'min:0'],
             'walkin_price' => ['required', 'numeric', 'min:0'],
             'status' => ['required', 'in:Active,Inactive'],
+            'has_discount' => ['nullable', 'boolean'],
         ]);
+
+        $validated['has_discount'] = $request->boolean('has_discount');
 
         // Permission Checks
         if ($validated['unit_price'] != $preOrderProduct->unit_price) {

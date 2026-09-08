@@ -876,9 +876,16 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                             {order.items && order.items.length > 0 ? (
                                                 <div className="text-xs">
                                                     {order.items.map((item: any, idx: number) => (
-                                                        <span key={idx}>
-                                                            {item.product?.product_name || 'Unknown'} ({item.quantity})
-                                                            {idx < order.items!.length - 1 && ', '}
+                                                        <span key={idx} className="inline-flex items-center gap-1 mr-1">
+                                                            {item.product?.product_name || 'Unknown'}
+                                                            {item.product?.has_discount && (
+                                                                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                                                    <svg className="w-2 h-2 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                                                        <path fillRule="evenodd" d="M17.707 9.293l-7-7A.997.997 0 0010 2H4a2 2 0 00-2 2v6c0 .266.105.52.293.707l7 7a1 1 0 001.414 0l7-7a1 1 0 000-1.414zM6.5 8a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" clipRule="evenodd" />
+                                                                    </svg>
+                                                                </span>
+                                                            )}
+                                                            ({item.quantity}){idx < order.items!.length - 1 && ', '}
                                                         </span>
                                                     ))}
                                                 </div>

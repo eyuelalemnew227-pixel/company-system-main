@@ -146,8 +146,9 @@ class PreOrderCostController extends Controller
         $holidayId = $request->query('holiday_id');
 
         $products = PreOrderProduct::where('status', 'Active')
-            ->orderBy('product_name')
-            ->get(['id', 'product_name', 'unit_price']);
+            ->orderByDesc('has_discount')
+            ->orderBy('product_name', 'asc')
+            ->get(['id', 'product_name', 'unit_price', 'has_discount']);
 
         // If holiday specified, attach existing cost_per_unit for each product
         if ($holidayId) {

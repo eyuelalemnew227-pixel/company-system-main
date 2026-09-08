@@ -147,10 +147,19 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 		return orderType?.name === 'Walkin Customer';
 	}, [data.order_type_id, orderTypes]);
 
+	const sortedProducts = useMemo(() => {
+		return [...products].sort((a, b) => {
+			const aDisc = a.has_discount ? 1 : 0;
+			const bDisc = b.has_discount ? 1 : 0;
+			if (bDisc !== aDisc) return bDisc - aDisc;
+			return (a.product_name || '').localeCompare(b.product_name || '');
+		});
+	}, [products]);
+
 	// Calculate totals in real-time
 	const calculations = useMemo(() => {
 		let totalAmount = 0;
-		const itemDetails = products.map((product) => {
+		const itemDetails = sortedProducts.map((product) => {
 			const quantity = productQuantities[product.id] || 0;
 
 			// Use walkin_price if order type is walkin, otherwise use unit_price
@@ -163,6 +172,7 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 			return {
 				productId: product.id,
 				productName: product.product_name,
+				hasDiscount: product.has_discount ?? false,
 				unitPrice,
 				quantity,
 				subtotal,
@@ -170,7 +180,7 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 		});
 
 		return { itemDetails, totalAmount };
-	}, [products, productQuantities, isWalkinCustomer]);
+	}, [sortedProducts, productQuantities, isWalkinCustomer]);
 
 	const { flash } = usePage<SharedData>().props;
 
@@ -457,7 +467,21 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 									) : (
 										calculations.itemDetails.map((item) => (
 											<TableRow key={item.productId}>
-												<TableCell className="font-medium">{item.productName}</TableCell>
+												<TableCell className="font-medium">
+													{item.hasDiscount ? (
+														<div className="inline-flex items-center gap-1.5">
+															<span>{item.productName}</span>
+															<span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+																<svg className="w-2.5 h-2.5 shrink-0 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+																	<path fillRule="evenodd" d="M17.707 9.293l-7-7A.997.997 0 0010 2H4a2 2 0 00-2 2v6c0 .266.105.52.293.707l7 7a1 1 0 001.414 0l7-7a1 1 0 000-1.414zM6.5 8a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" clipRule="evenodd" />
+																</svg>
+																<span>Discounted</span>
+															</span>
+														</div>
+													) : (
+														<span>{item.productName}</span>
+													)}
+												</TableCell>
 												<TableCell>ETB {item.unitPrice.toFixed(2)}</TableCell>
 												<TableCell>
 													<Input

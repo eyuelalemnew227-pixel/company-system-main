@@ -445,6 +445,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::resource('pre-order-payment-settings', \App\Http\Controllers\PreOrderPaymentSettingController::class)->only(['index', 'store', 'update']);
         });
 
+        // Pre-Order Targets (KPI Tracking)
+        Route::middleware('permission:manage pre-order targets')->group(function () {
+            Route::get('pre-order-targets', [PreOrderTargetController::class, 'index'])->name('pre-order-targets.index');
+            Route::post('pre-order-targets', [PreOrderTargetController::class, 'store'])->name('pre-order-targets.store');
+            Route::put('pre-order-targets/{preOrderTarget}', [PreOrderTargetController::class, 'update'])->name('pre-order-targets.update');
+            Route::delete('pre-order-targets/{preOrderTarget}', [PreOrderTargetController::class, 'destroy'])->name('pre-order-targets.destroy');
+        });
+
         // Cost Management
         Route::middleware('permission:manage pre-order costs')->prefix('pre-orders/costs')->group(function () {
             Route::get('categories', [\App\Http\Controllers\PreOrderCostCategoryController::class, 'index'])->name('pre-order-costs.categories.index');

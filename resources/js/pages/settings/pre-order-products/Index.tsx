@@ -58,6 +58,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
         unit_price: '',
         walkin_price: '',
         status: 'Active' as 'Active' | 'Inactive',
+        has_discount: false as boolean,
     });
 
     const editForm = useForm({
@@ -65,6 +66,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
         unit_price: '',
         walkin_price: '',
         status: 'Active' as 'Active' | 'Inactive',
+        has_discount: false as boolean,
     });
 
     const handleSearch = () => {
@@ -101,6 +103,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
             unit_price: product.unit_price,
             walkin_price: product.walkin_price,
             status: product.status,
+            has_discount: product.has_discount ?? false,
         });
         setIsEditOpen(true);
     };
@@ -159,14 +162,28 @@ export default function Index({ products, filters, userPermissions }: Props) {
                             <TableBody>
                                 {products.data.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={4} className="text-center text-muted-foreground">
+                                        <TableCell colSpan={5} className="text-center text-muted-foreground">
                                             No products found. Click "Add Product" to create one.
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     products.data.map((product) => (
                                         <TableRow key={product.id}>
-                                            <TableCell className="font-medium">{product.product_name}</TableCell>
+                                            <TableCell className="font-medium">
+                                                {product.has_discount ? (
+                                                    <div className="inline-flex items-center gap-1.5">
+                                                        <span>{product.product_name}</span>
+                                                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                                            <svg className="w-2.5 h-2.5 shrink-0 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fillRule="evenodd" d="M17.707 9.293l-7-7A.997.997 0 0010 2H4a2 2 0 00-2 2v6c0 .266.105.52.293.707l7 7a1 1 0 001.414 0l7-7a1 1 0 000-1.414zM6.5 8a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" clipRule="evenodd" />
+                                                            </svg>
+                                                            <span>Discounted</span>
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <span>{product.product_name}</span>
+                                                )}
+                                            </TableCell>
                                             <TableCell>{product.unit_price} ETB</TableCell>
                                             <TableCell>{product.walkin_price} ETB</TableCell>
                                             <TableCell>
@@ -270,6 +287,19 @@ export default function Index({ products, filters, userPermissions }: Props) {
                                 <InputError message={createForm.errors.status} />
                             </div>
 
+                            <div className="flex items-center gap-2 pt-1">
+                                <input
+                                    id="has_discount"
+                                    type="checkbox"
+                                    checked={createForm.data.has_discount}
+                                    onChange={(e) => createForm.setData('has_discount', e.target.checked)}
+                                    className="h-4 w-4 rounded border-gray-300 text-rose-600 accent-rose-600 cursor-pointer"
+                                />
+                                <Label htmlFor="has_discount" className="cursor-pointer select-none">
+                                    Apply Discount
+                                </Label>
+                            </div>
+
                             <DialogFooter>
                                 <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
                                     Cancel
@@ -348,6 +378,19 @@ export default function Index({ products, filters, userPermissions }: Props) {
                                     </SelectContent>
                                 </Select>
                                 <InputError message={editForm.errors.status} />
+                            </div>
+
+                            <div className="flex items-center gap-2 pt-1">
+                                <input
+                                    id="edit_has_discount"
+                                    type="checkbox"
+                                    checked={editForm.data.has_discount}
+                                    onChange={(e) => editForm.setData('has_discount', e.target.checked)}
+                                    className="h-4 w-4 rounded border-gray-300 text-rose-600 accent-rose-600 cursor-pointer"
+                                />
+                                <Label htmlFor="edit_has_discount" className="cursor-pointer select-none">
+                                    Apply Discount
+                                </Label>
                             </div>
 
                             <DialogFooter>

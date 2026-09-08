@@ -37,7 +37,7 @@ class PreOrderController extends Controller
                 'creator',
                 'updater',
                 'items:id,pre_order_id,pre_order_product_id,quantity',
-                'items.product:id,product_name',
+                'items.product:id,product_name,has_discount',
             ]);
 
         if (!auth()->user()->can('view all pre-orders')) {
@@ -243,7 +243,10 @@ class PreOrderController extends Controller
         $branches = Branch::where('is_pre_order_branch', true)->orderBy('name', 'asc')->get(['id', 'name']);
         $collectionDays = CollectionDay::where('status', 'Active')->orderBy('display_order')->get(['id', 'name']);
         $orderTypes = OrderType::where('status', 'Active')->get(['id', 'name']);
-        $products = PreOrderProduct::where('status', 'Active')->orderBy('product_name')->get(['id', 'product_name', 'unit_price', 'walkin_price']);
+        $products = PreOrderProduct::where('status', 'Active')
+            ->orderByDesc('has_discount')
+            ->orderBy('product_name', 'asc')
+            ->get(['id', 'product_name', 'unit_price', 'walkin_price', 'has_discount']);
 
         return Inertia::render('pre-orders/create', [
             'branches' => $branches,
@@ -514,7 +517,10 @@ class PreOrderController extends Controller
         $branches = Branch::where('is_pre_order_branch', true)->orderBy('name', 'asc')->get(['id', 'name']);
         $collectionDays = CollectionDay::where('status', 'Active')->orderBy('display_order')->get(['id', 'name']);
         $orderTypes = OrderType::where('status', 'Active')->get(['id', 'name']);
-        $products = PreOrderProduct::where('status', 'Active')->orderBy('product_name')->get(['id', 'product_name', 'unit_price', 'walkin_price']);
+        $products = PreOrderProduct::where('status', 'Active')
+            ->orderByDesc('has_discount')
+            ->orderBy('product_name', 'asc')
+            ->get(['id', 'product_name', 'unit_price', 'walkin_price', 'has_discount']);
 
         // Check if the current user is the one who created this order
         $isRegisteringUser = $preOrder->created_by === auth()->id();

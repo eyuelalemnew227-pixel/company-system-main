@@ -77,7 +77,7 @@ class PreOrderDashboardController extends Controller
         // Products: Filter by all except product_id
         $productsQuery = PreOrderProduct::whereHas('preOrderItems.preOrder', function ($q) use ($filters) {
             $this->applyFilters($q, array_diff_key($filters, ['product_id' => '']));
-        })->orderBy('product_name')->get(['id', 'product_name']);
+        })->orderByDesc('has_discount')->orderBy('product_name')->get(['id', 'product_name', 'has_discount']);
 
         // Statuses: Get statuses present in current filtered data (excluding status filter)
         $statusQuery = PreOrder::query();

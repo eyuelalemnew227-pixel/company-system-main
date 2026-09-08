@@ -4,9 +4,11 @@ export interface PreOrderProduct {
     unit_price: string;
     walkin_price: string;
     status: 'Active' | 'Inactive';
+    has_discount: boolean;
     created_at: string;
     updated_at: string;
 }
+
 
 export interface OrderType {
     id: number;

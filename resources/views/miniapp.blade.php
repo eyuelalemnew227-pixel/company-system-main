@@ -1,7 +1,7 @@
 <?php
 $holidays = \App\Models\CollectionDay::where('status', 'Active')->orderBy('display_order')->get(['id', 'name', 'date'])->toArray();
 
-$products = \App\Models\PreOrderProduct::where('status', 'Active')->orderBy('id')->get(['id', 'product_name', 'unit_price', 'walkin_price', 'image', 'description'])->toArray();
+$products = \App\Models\PreOrderProduct::where('status', 'Active')->orderByDesc('has_discount')->orderBy('product_name', 'asc')->get(['id', 'product_name', 'unit_price', 'walkin_price', 'image', 'description', 'has_discount'])->toArray();
 $baseUrl = config('app.url') . '/';
 array_walk($products, function(&$p) use ($baseUrl) {
     if (!empty($p['image']) && strpos($p['image'], 'http') === false) {

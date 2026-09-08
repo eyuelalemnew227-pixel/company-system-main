@@ -14,11 +14,13 @@ class PreOrderProduct extends Model
         'unit_price',
         'walkin_price',
         'status',
+        'has_discount',
     ];
 
     protected $casts = [
         'unit_price' => 'decimal:2',
         'walkin_price' => 'decimal:2',
+        'has_discount' => 'boolean',
     ];
 
     public function preOrderItems()
