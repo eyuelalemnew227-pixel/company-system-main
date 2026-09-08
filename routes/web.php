@@ -428,6 +428,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Pre-Order Customers
         Route::get('pre-orders/customers', [\App\Http\Controllers\PreOrderCustomerController::class, 'index'])->name('pre-orders.customers.index');
         Route::get('pre-orders/customers/export', [\App\Http\Controllers\PreOrderCustomerController::class, 'export'])->name('pre-orders.customers.export');
+        Route::get('pre-orders/customers/{phone}/orders', [\App\Http\Controllers\PreOrderCustomerController::class, 'orders'])->name('pre-orders.customers.orders');
 
         // Broadcast Announcements
         Route::get('pre-orders/broadcasts', [\App\Http\Controllers\PreOrderBroadcastController::class, 'index'])->name('pre-orders.broadcasts.index');

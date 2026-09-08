@@ -3,6 +3,7 @@
 use App\Http\Controllers\CollectionDayController;
 use App\Http\Controllers\OrderTypeController;
 use App\Http\Controllers\PreOrderProductController;
+use App\Http\Controllers\SocialMediaSourceController;
 use App\Http\Controllers\Settings\PasswordController;
 use App\Http\Controllers\Settings\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -30,8 +31,12 @@ Route::middleware('auth')->group(function () {
         Route::resource('settings/pre-order-products', PreOrderProductController::class)->names('pre-order-products');
     });
 
-    Route::middleware('permission:view order types')->group(function () {
+    Route::middleware('permission:view order types|view pre-orders|view pre-order products|manage pre-order payment settings')->group(function () {
+        Route::patch('settings/order-types/{orderType}/toggle-status', [OrderTypeController::class, 'toggleStatus'])->name('order-types.toggle-status');
         Route::resource('settings/order-types', OrderTypeController::class)->names('order-types');
+
+        Route::patch('settings/social-media-sources/{socialMediaSource}/toggle-status', [SocialMediaSourceController::class, 'toggleStatus'])->name('social-media-sources.toggle-status');
+        Route::resource('settings/social-media-sources', SocialMediaSourceController::class)->names('social-media-sources');
     });
 
     Route::middleware('permission:view collection days')->group(function () {

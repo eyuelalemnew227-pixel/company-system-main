@@ -22,6 +22,8 @@ $paymentMethods = \App\Models\PreOrderPaymentSetting::where('is_active', true)->
     ];
 })->toArray();
 
+$socialMediaSources = \App\Models\SocialMediaSource::where('is_active', true)->orderBy('display_order')->orderBy('name')->get(['id', 'name'])->toArray();
+
 $bot = \App\Models\TelegramBot::whereIn('slug', ['pre_order', 'pre-order', 'pre-order-bot'])->first();
 $maintenanceMode = $bot ? !$bot->is_active : false;
 
@@ -435,12 +437,18 @@ var holidays = <?= json_encode($holidays) ?>.map(function(h){ return Object.assi
 var products = <?= json_encode($products) ?>.map(function(p){ return Object.assign({}, p, {id: String(p.id)}); });
 var branches = <?= json_encode($branches) ?>.map(function(b){ return Object.assign({}, b, {id: String(b.id)}); });
 var payMethods = <?= json_encode($paymentMethods) ?>.map(function(p){ return Object.assign({}, p, {id: String(p.id)}); });
+var dbSources = <?= json_encode($orderTypes ?? []) ?>;
 var TR = <?= json_encode($translations) ?>;
 
 function t(k) { try { return (TR[S.lang] && TR[S.lang][k]) ? TR[S.lang][k] : (TR.en[k] || k); } catch(e) { return TR.en[k] || k; } }
 function haptic(ty) { try { if (tg && tg.HapticFeedback) { if (ty === 'ok') tg.HapticFeedback.notificationOccurred('success'); else if (ty === 'err') tg.HapticFeedback.notificationOccurred('error'); else if (ty === 'med') tg.HapticFeedback.impactOccurred('medium'); else if (ty === 'light') tg.HapticFeedback.impactOccurred('light'); else if (ty === 'heavy') tg.HapticFeedback.impactOccurred('heavy'); else tg.HapticFeedback.selectionChanged(); } } catch(e) {} }
 function fmtDate(d) { if (!d) return ''; return new Date(d).toLocaleDateString(S.lang === 'am' ? 'am-ET' : 'en-US', {month: 'short', day: 'numeric'}); }
-function srcLbl(id) { return {sms: t('source_sms'), telegram: 'Telegram', instagram: t('source_instagram'), tiktok: 'TikTok'}[id] || id; }
+function srcLbl(id) {
+    var staticMap = {sms: t('source_sms'), telegram: 'Telegram', instagram: t('source_instagram'), tiktok: 'TikTok', facebook: 'Facebook', walkin: 'Walkin Customer'};
+    if (staticMap[id]) return staticMap[id];
+    var dbItem = dbSources.find(function(x) { return String(x.id) === String(id) || x.name.toLowerCase() === String(id).toLowerCase(); });
+    return dbItem ? dbItem.name : id;
+}
 function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 function fmtPhoneDisplay(digits) {
@@ -789,12 +797,17 @@ function renderProds() {
     var inner = '<div class="flex flex-col h-full overflow-hidden"><div class="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-2 mb-2">';
     for (var i = 0; i < products.length; i++) {
         var p = products[i], ic = S.cart.find(function(x) { return x.product_id === p.id; }), pr = parseFloat(p.unit_price), act = '';
+        var isDiscounted = p.has_discount === true || p.has_discount === 1 || p.has_discount === '1';
+        var discTag = isDiscounted ? '<span class="inline-flex items-center gap-0.5 bg-gradient-to-r from-red-600 to-amber-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-sm uppercase tracking-wider shrink-0">🏷️ Discount</span>' : '';
+        var origPrice = (isDiscounted && p.walkin_price && parseFloat(p.walkin_price) > pr) ? '<span class="line-through text-gray-400 text-[10px] mr-1">'+parseFloat(p.walkin_price).toLocaleString()+'</span>' : '';
+
         if (ic) { var sub = pr * ic.quantity; act = '<div class="flex items-center justify-between mt-0.5"><span class="text-[9px] text-gray-500 font-mono">'+ic.quantity+' x '+pr.toLocaleString()+' = <b class="text-[#5D4037]">'+sub.toLocaleString()+'</b> '+t('etb')+'</span></div><div class="flex items-center gap-1 mt-1"><button onclick="upd(\''+p.id+'\',-1)" class="qty-b bg-gray-200 text-[#5D4037]">\u2212</button><span class="text-xs font-bold text-[#5D4037] w-6 text-center tabular-nums">'+ic.quantity+'</span><button onclick="upd(\''+p.id+'\',1)" class="qty-b bg-[#5D4037] text-white">+</button></div>'; }
-        else { act = '<div class="flex items-center justify-between mt-1"><span class="text-xs font-bold text-[#5D4037]">'+pr.toLocaleString()+' '+t('etb')+'</span><button onclick="addP(\''+p.id+'\')" class="btn-pri text-[10px] py-1.5 px-4 rounded-lg active:scale-95 shadow-sm" style="min-height:auto">'+t('add')+'</button></div>'; }
+        else { act = '<div class="flex items-center justify-between mt-1"><div>'+origPrice+'<span class="text-xs font-bold text-[#5D4037]">'+pr.toLocaleString()+' '+t('etb')+'</span></div><button onclick="addP(\''+p.id+'\')" class="btn-pri text-[10px] py-1.5 px-4 rounded-lg active:scale-95 shadow-sm" style="min-height:auto">'+t('add')+'</button></div>'; }
         var imgSrc = p.image || '';
         var imgHTML = imgSrc ? '<img src="'+imgSrc+'" loading="lazy" onerror="this.src=\'https://via.placeholder.com/150?text=K\'">' : '<div class="w-full h-full flex items-center justify-center text-2xl">\uD83C\uDF82</div>';
         var tapHint = imgSrc ? '<div class="zoom-hint">\uD83D\uDD0D '+t('tap_enlarge')+'</div>' : '';
-        inner += '<div class="card p-0 flex flex-col overflow-hidden '+(ic?'sel-card ring-2 ring-amber-400/50':'')+'"><div class="flex gap-2.5 p-2.5 bg-white"><div class="p-img" '+(imgSrc ? 'onclick="viewFullImg(\''+imgSrc.replace(/'/g,"\\'")+'\',\''+esc(p.product_name).replace(/'/g,"\\'")+'\')"' : '')+'>'+imgHTML+tapHint+(ic?'<div class="absolute top-1 left-1 bg-green-500 text-white text-[8px] font-bold w-5 h-5 rounded-full shadow flex items-center justify-center z-10">\u2713</div>':'')+'</div><div class="flex-1 min-w-0 flex flex-col justify-between"><div><h3 class="font-bold text-xs text-gray-800 leading-tight">'+p.product_name+'</h3>'+(p.description?'<p class="text-[9px] text-gray-400 mt-0.5 leading-snug line-clamp-1">'+p.description+'</p>':'')+'</div><div>'+act+'</div></div></div></div>';
+        var discBadgeOnImg = isDiscounted ? '<div class="absolute top-1 right-1 bg-red-600 text-white text-[7px] font-black px-1 py-0.5 rounded shadow z-10 uppercase tracking-tighter">OFFER</div>' : '';
+        inner += '<div class="card p-0 flex flex-col overflow-hidden '+(ic?'sel-card ring-2 ring-amber-400/50':'')+'"><div class="flex gap-2.5 p-2.5 bg-white"><div class="p-img" '+(imgSrc ? 'onclick="viewFullImg(\''+imgSrc.replace(/'/g,"\\'")+'\',\''+esc(p.product_name).replace(/'/g,"\\'")+'\')"' : '')+'>'+imgHTML+tapHint+(ic?'<div class="absolute top-1 left-1 bg-green-500 text-white text-[8px] font-bold w-5 h-5 rounded-full shadow flex items-center justify-center z-10">\u2713</div>':'')+discBadgeOnImg+'</div><div class="flex-1 min-w-0 flex flex-col justify-between"><div><div class="flex items-center justify-between gap-1 mb-0.5"><h3 class="font-bold text-xs text-gray-800 leading-tight truncate flex-1">'+p.product_name+'</h3>'+discTag+'</div>'+(p.description?'<p class="text-[9px] text-gray-400 mt-0.5 leading-snug line-clamp-1">'+p.description+'</p>':'')+'</div><div>'+act+'</div></div></div></div>';
     }
     inner += '</div><div class="cart-bar rounded-xl shrink-0"><div class="flex justify-between items-center"><div class="flex items-center gap-1.5"><span class="text-[10px] font-bold text-gray-500">'+t('your_cart')+'</span><span class="text-[10px] font-bold text-[#5D4037] bg-amber-100 px-1.5 py-0.5 rounded-full">'+S.cart.reduce(function(s,it){return s+it.quantity;},0)+'</span></div><span class="text-sm font-extrabold text-[#5D4037]">'+tot.toLocaleString()+' <span class="text-[10px] text-gray-500 font-medium">'+t('etb')+'</span></span></div></div></div>';
     m.innerHTML = pageWrap(2, inner);
@@ -947,9 +960,37 @@ function clearImg() { haptic('light'); S.paySlip = null; S.paySlipPrev = null; S
 function renderSource() {
     var m = document.getElementById('content');
     m.className = 'app-main';
-    var src = [{id:'sms',lbl:t('source_sms'),ic:'M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z',c:'bg-green-100 text-green-600'},{id:'telegram',lbl:'Telegram',ic:'M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.75-.33 1.4.18 1.16 1.28l-2.75 14.05c-.19.97-.74 1.13-1.43.71L12.6 17.3l-2.18 2.1c-.24.25-.44.46-.91.46z',c:'bg-sky-100 text-sky-500'},{id:'instagram',lbl:t('source_instagram'),ic:'M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.012-3.584.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z',c:'bg-pink-100 text-pink-500'},{id:'tiktok',lbl:'TikTok',ic:'M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z',c:'bg-gray-100 text-gray-800'}];
+    var defaultIcons = {
+        sms: {ic:'M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z', c:'bg-green-100 text-green-600'},
+        telegram: {ic:'M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.75-.33 1.4.18 1.16 1.28l-2.75 14.05c-.19.97-.74 1.13-1.43.71L12.6 17.3l-2.18 2.1c-.24.25-.44.46-.91.46z', c:'bg-sky-100 text-sky-500'},
+        instagram: {ic:'M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.012-3.584.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z', c:'bg-pink-100 text-pink-500'},
+        tiktok: {ic:'M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-5.2 1.74 2.89 2.89 0 012.31-4.64 2.93 2.93 0 01.88.13V9.4a6.84 6.84 0 00-1-.05A6.33 6.33 0 005 20.1a6.34 6.34 0 0010.86-4.43v-7a8.16 8.16 0 004.77 1.52v-3.4a4.85 4.85 0 01-1-.1z', c:'bg-gray-100 text-gray-800'},
+        facebook: {ic:'M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H7.5v-3H10V9.5C10 7.01 11.49 5.65 13.75 5.65c1.08 0 2.21.19 2.21.19v2.44h-1.25c-1.23 0-1.61.77-1.61 1.56V12h2.77l-.44 3h-2.33v6.8c4.56-.93 8-4.96 8-9.8z', c:'bg-blue-100 text-blue-600'}
+    };
+
+    var src = [];
+    if (dbSources && dbSources.length > 0) {
+        src = dbSources.map(function(item) {
+            var key = String(item.name).toLowerCase();
+            var iconData = defaultIcons[key] || {ic:'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-6h2v6zm0-8h-2V7h2v2z', c:'bg-amber-100 text-amber-800'};
+            return {
+                id: item.name,
+                lbl: item.name,
+                ic: iconData.ic,
+                c: iconData.c
+            };
+        });
+    } else {
+        src = [
+            {id:'sms',lbl:t('source_sms'),ic:defaultIcons.sms.ic,c:defaultIcons.sms.c},
+            {id:'telegram',lbl:'Telegram',ic:defaultIcons.telegram.ic,c:defaultIcons.telegram.c},
+            {id:'instagram',lbl:t('source_instagram'),ic:defaultIcons.instagram.ic,c:defaultIcons.instagram.c},
+            {id:'tiktok',lbl:'TikTok',ic:defaultIcons.tiktok.ic,c:defaultIcons.tiktok.c}
+        ];
+    }
+
     var inner = '<div class="flex flex-col justify-between h-full overflow-hidden py-1"><h2 class="text-xs font-bold flex items-center gap-1 mb-2 shrink-0">\uD83D\uDCE2 '+t('hear_about')+'</h2><div class="space-y-2 my-auto">';
-    for (var i = 0; i < src.length; i++) { var s = src[i], sel = S.hearAbout === s.id; inner += '<div onclick="S.hearAbout=\''+s.id+'\';haptic(\'med\');render()" class="card p-3 cursor-pointer flex items-center gap-3 active:scale-[.98] transition-all '+(sel?'sel-card shadow-md ring-2 ring-amber-400/50':'')+'"><div class="w-9 h-9 rounded-lg '+s.c+' flex items-center justify-center shrink-0 shadow-sm border border-white/50"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="'+s.ic+'"/></svg></div><span class="text-xs font-bold text-gray-800 flex-1">'+s.lbl+'</span><div class="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 '+(sel?'bg-[#5D4037] border-[#5D4037] shadow-sm':'border-gray-300')+'">'+(sel?'<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':'')+'</div></div>'; }
+    for (var i = 0; i < src.length; i++) { var s = src[i], sel = S.hearAbout === s.id; inner += '<div onclick="S.hearAbout=\''+esc(s.id).replace(/'/g,"\\'")+'\';haptic(\'med\');render()" class="card p-3 cursor-pointer flex items-center gap-3 active:scale-[.98] transition-all '+(sel?'sel-card shadow-md ring-2 ring-amber-400/50':'')+'"><div class="w-9 h-9 rounded-lg '+s.c+' flex items-center justify-center shrink-0 shadow-sm border border-white/50"><svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="'+s.ic+'"/></svg></div><span class="text-xs font-bold text-gray-800 flex-1">'+esc(s.lbl)+'</span><div class="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 '+(sel?'bg-[#5D4037] border-[#5D4037] shadow-sm':'border-gray-300')+'">'+(sel?'<svg class="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':'')+'</div></div>'; }
     inner += '</div></div>'; m.innerHTML = pageWrap(7, inner);
 }
 
@@ -1126,6 +1167,7 @@ async function submitOrder() {
             payment_method: S.payment ? S.payment.name : 'CBE',
             transaction_reference: S.payRef,
             payment_slip: S.paySlip,
+            source: S.hearAbout ? S.hearAbout : 'Unknown',
             items: cartData,
             chat_id: S.chatId
         };

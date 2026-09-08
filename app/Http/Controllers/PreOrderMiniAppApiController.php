@@ -9,6 +9,7 @@ use App\Models\PreOrder;
 use App\Models\PreOrderItem;
 use App\Models\PreOrderPaymentSetting;
 use App\Models\PreOrderProduct;
+use App\Models\SocialMediaSource;
 use App\Models\TelegramSettings;
 use App\Services\TelegramBotService;
 use Illuminate\Http\JsonResponse;
@@ -54,6 +55,11 @@ class PreOrderMiniAppApiController extends Controller
                         ];
                     });
 
+                $sources = SocialMediaSource::where('is_active', true)
+                    ->orderBy('display_order')
+                    ->orderBy('name')
+                    ->get(['id', 'name']);
+
                 return [
                     'success' => true,
                     'maintenance_mode' => $maintenanceMode,
@@ -62,6 +68,7 @@ class PreOrderMiniAppApiController extends Controller
                     'products' => $products,
                     'branches' => $branches,
                     'payment_methods' => $paymentMethods,
+                    'sources' => $sources,
                 ];
             });
 
@@ -83,6 +90,7 @@ class PreOrderMiniAppApiController extends Controller
             'collection_day_id' => ['required', 'exists:collection_days,id'],
             'payment_method' => ['nullable', 'string', 'max:100'],
             'transaction_reference' => ['nullable', 'string', 'max:100', 'unique:pre_orders,transaction_reference'],
+            'source' => ['nullable', 'string', 'max:100'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:pre_order_products,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
@@ -187,6 +195,7 @@ class PreOrderMiniAppApiController extends Controller
                 'collection_day_id' => $validated['collection_day_id'],
                 'holiday_id' => CollectionDay::find($validated['collection_day_id'])?->holiday_id,
                 'order_type_id' => $orderType->id,
+                'source' => $validated['source'] ?? 'Telegram Bot',
                 'total_amount' => $totalAmount,
                 'payment_method' => $validated['payment_method'],
                 'transaction_reference' => $txRef,

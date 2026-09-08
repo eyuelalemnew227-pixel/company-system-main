@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\OrderType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -48,6 +49,7 @@ class OrderTypeController extends Controller
         ]);
 
         OrderType::create($validated);
+        Cache::forget('miniapp_init_data');
 
         return redirect()->route('order-types.index')
             ->with('success', 'Order type created successfully.');
@@ -68,14 +70,26 @@ class OrderTypeController extends Controller
         ]);
 
         $orderType->update($validated);
+        Cache::forget('miniapp_init_data');
 
         return redirect()->route('order-types.index')
             ->with('success', 'Order type updated successfully.');
     }
 
+    public function toggleStatus(OrderType $orderType): RedirectResponse
+    {
+        $newStatus = $orderType->status === 'Active' ? 'Inactive' : 'Active';
+        $orderType->update(['status' => $newStatus]);
+        Cache::forget('miniapp_init_data');
+
+        return redirect()->back()
+            ->with('success', "Order type source '{$orderType->name}' is now {$newStatus}.");
+    }
+
     public function destroy(OrderType $orderType): RedirectResponse
     {
         $orderType->delete();
+        Cache::forget('miniapp_init_data');
 
         return redirect()->route('order-types.index')
             ->with('success', 'Order type deleted successfully.');

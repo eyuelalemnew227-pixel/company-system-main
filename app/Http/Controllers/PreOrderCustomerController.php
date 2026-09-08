@@ -56,12 +56,49 @@ class PreOrderCustomerController extends Controller
             return $cust;
         });
 
+        // Filter by tier if requested
+        $tier = $request->query('tier', 'all');
+        if ($tier === 'active') {
+            $filtered = $customers->getCollection()->filter(fn($c) => ($c->order_count ?? 0) > 0)->values();
+            $customers->setCollection($filtered);
+        } elseif ($tier === 'vip') {
+            $filtered = $customers->getCollection()->filter(fn($c) => ($c->total_spent ?? 0) >= 3000 || ($c->order_count ?? 0) >= 3)->values();
+            $customers->setCollection($filtered);
+        }
+
+        // Calculate Top Customers across all pre-orders
+        $topCustomersRaw = PreOrder::whereNotNull('phone_number')
+            ->where('phone_number', '!=', '')
+            ->selectRaw('phone_number, MAX(CONCAT(COALESCE(first_name,""), " ", COALESCE(father_name,""))) as full_name, COUNT(*) as order_count, SUM(total_amount) as total_spent, MAX(created_at) as last_order_date')
+            ->groupBy('phone_number')
+            ->orderByDesc('total_spent')
+            ->limit(5)
+            ->get();
+
+        $topCustomers = $topCustomersRaw->map(function ($item, $index) {
+            $tgCust = TelegramCustomer::where('phone_number', $item->phone_number)->first();
+            $fullName = trim($item->full_name);
+            if (empty($fullName) && $tgCust) {
+                $fullName = trim(($tgCust->first_name ?? '') . ' ' . ($tgCust->last_name ?? ''));
+            }
+            return [
+                'rank' => $index + 1,
+                'full_name' => !empty($fullName) ? $fullName : 'Valued Customer',
+                'phone_number' => $item->phone_number,
+                'username' => $tgCust?->username,
+                'order_count' => (int)$item->order_count,
+                'total_spent' => (float)$item->total_spent,
+                'last_order_date' => $item->last_order_date,
+            ];
+        });
+
         $totalCustomers = TelegramCustomer::count();
         $totalTelegramOrders = PreOrder::where('order_number', 'like', 'ORD-%')->count();
         $totalTelegramRevenue = PreOrder::where('order_number', 'like', 'ORD-%')->whereIn('status', ['Paid', 'Collected'])->sum('total_amount');
 
         return Inertia::render('pre-orders/customers/index', [
             'customers' => $customers,
+            'top_customers' => $topCustomers,
             'stats' => [
                 'total_customers' => $totalCustomers,
                 'total_orders' => $totalTelegramOrders,
@@ -70,7 +107,28 @@ class PreOrderCustomerController extends Controller
             'filters' => [
                 'search' => $request->query('search'),
                 'per_page' => $request->query('per_page'),
+                'tier' => $tier,
             ],
+        ]);
+    }
+
+    public function orders(Request $request, string $phone): \Illuminate\Http\JsonResponse
+    {
+        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
+        
+        $orders = PreOrder::with(['collectionBranch:id,name', 'collectionDay:id,name', 'items.product:id,product_name'])
+            ->where(function ($q) use ($phone, $cleanPhone) {
+                $q->where('phone_number', $phone)
+                    ->orWhere('phone_number', '+' . $cleanPhone)
+                    ->orWhere('phone_number', 'like', "%{$cleanPhone}%");
+            })
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'orders' => $orders,
         ]);
     }
 
