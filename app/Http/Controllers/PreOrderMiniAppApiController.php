@@ -172,18 +172,8 @@ class PreOrderMiniAppApiController extends Controller
             }
             $formattedPhone = '+251' . $rawPhone;
 
-            // Scrap / extract transaction reference from slip text if reference was left blank
-            $txRef = $validated['transaction_reference'] ?? null;
-            if (empty($txRef) && !empty($paymentSlipPath) && file_exists(public_path($paymentSlipPath))) {
-                $rawContent = @file_get_contents(public_path($paymentSlipPath));
-                if ($rawContent) {
-                    if (preg_match('/(FT|ET)[0-9A-Z]{8,14}/i', $rawContent, $m)) {
-                        $txRef = strtoupper($m[0]);
-                    } elseif (preg_match('/(?:Txn|Ref|Transaction|Id|No)[:\s#]*([A-Z0-9]{10,16})/i', $rawContent, $m)) {
-                        $txRef = strtoupper($m[1]);
-                    }
-                }
-            }
+            // Use transaction reference explicitly submitted by user, or null if left blank
+            $txRef = !empty($validated['transaction_reference']) ? trim($validated['transaction_reference']) : null;
 
             $preOrder = PreOrder::create([
                 'order_number' => $orderNumber,
