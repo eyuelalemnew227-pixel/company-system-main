@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import TablePagination from '@/components/table-pagination';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Pre-Orders', href: '/pre-orders' },
@@ -32,6 +33,9 @@ type Props = {
     customers: {
         data: CustomerRow[];
         total: number;
+        from?: number;
+        to?: number;
+        links?: Array<{ url: string | null; label: string; active: boolean }>;
     };
     stats: {
         total_customers: number;
@@ -40,14 +44,21 @@ type Props = {
     };
     filters: {
         search?: string;
+        per_page?: string;
     };
 };
 
 export default function PreOrderCustomersPage({ customers, stats, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
+    const [perPage, setPerPage] = useState(filters.per_page || '15');
 
-    const handleSearch = () => {
-        router.get('/pre-orders/customers', { search: search || undefined }, { preserveState: true, replace: true });
+    const handleSearch = (newPerPage?: string) => {
+        const targetPerPage = newPerPage !== undefined ? newPerPage : perPage;
+        router.get(
+            '/pre-orders/customers',
+            { search: search || undefined, per_page: targetPerPage },
+            { preserveState: true, replace: true }
+        );
     };
 
     const handleExport = () => {
@@ -118,8 +129,8 @@ export default function PreOrderCustomersPage({ customers, stats, filters }: Pro
                 {/* Search */}
                 <Card>
                     <CardContent className="p-4">
-                        <div className="flex gap-4">
-                            <div className="relative flex-1">
+                        <div className="flex flex-col sm:flex-row gap-4 items-center">
+                            <div className="relative flex-1 w-full">
                                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     placeholder="Search by customer name, username, phone, or chat ID..."
@@ -129,7 +140,24 @@ export default function PreOrderCustomersPage({ customers, stats, filters }: Pro
                                     onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                                 />
                             </div>
-                            <Button onClick={handleSearch} variant="secondary">Search</Button>
+                            <div className="flex items-center gap-2 w-full sm:w-auto">
+                                <select
+                                    value={perPage}
+                                    onChange={(e) => {
+                                        setPerPage(e.target.value);
+                                        handleSearch(e.target.value);
+                                    }}
+                                    className="h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring dark:bg-slate-900"
+                                >
+                                    <option value="15">15 per page</option>
+                                    <option value="25">25 per page</option>
+                                    <option value="50">50 per page</option>
+                                    <option value="100">100 per page</option>
+                                    <option value="500">500 per page</option>
+                                    <option value="1000">Show All (1000)</option>
+                                </select>
+                                <Button onClick={() => handleSearch()} variant="secondary">Search</Button>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -192,6 +220,12 @@ export default function PreOrderCustomersPage({ customers, stats, filters }: Pro
                             </TableBody>
                         </Table>
                     </CardContent>
+                    <TablePagination
+                        from={customers.from}
+                        to={customers.to}
+                        total={customers.total}
+                        links={customers.links}
+                    />
                 </Card>
 
             </div>
