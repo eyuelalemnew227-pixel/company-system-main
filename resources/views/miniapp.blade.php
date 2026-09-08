@@ -437,7 +437,7 @@ var holidays = <?= json_encode($holidays) ?>.map(function(h){ return Object.assi
 var products = <?= json_encode($products) ?>.map(function(p){ return Object.assign({}, p, {id: String(p.id)}); });
 var branches = <?= json_encode($branches) ?>.map(function(b){ return Object.assign({}, b, {id: String(b.id)}); });
 var payMethods = <?= json_encode($paymentMethods) ?>.map(function(p){ return Object.assign({}, p, {id: String(p.id)}); });
-var dbSources = <?= json_encode($orderTypes ?? []) ?>;
+var dbSources = <?= json_encode($socialMediaSources ?? []) ?>;
 var TR = <?= json_encode($translations) ?>;
 
 function t(k) { try { return (TR[S.lang] && TR[S.lang][k]) ? TR[S.lang][k] : (TR.en[k] || k); } catch(e) { return TR.en[k] || k; } }
@@ -970,9 +970,9 @@ function renderSource() {
     };
 
     var src = [];
-    if (dbSources && dbSources.length > 0) {
+    if (typeof dbSources !== 'undefined' && Array.isArray(dbSources)) {
         src = dbSources.map(function(item) {
-            var key = String(item.name).toLowerCase();
+            var key = String(item.name).toLowerCase().trim();
             var iconData = defaultIcons[key] || {ic:'M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-6h2v6zm0-8h-2V7h2v2z', c:'bg-amber-100 text-amber-800'};
             return {
                 id: item.name,

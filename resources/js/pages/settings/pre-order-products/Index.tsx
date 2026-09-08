@@ -156,8 +156,8 @@ export default function Index({ products, filters, userPermissions }: Props) {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Product Name</TableHead>
-                                    <TableHead>Pre-Order Price</TableHead>
-                                    <TableHead>Original Price (MiniApp)</TableHead>
+                                    <TableHead>Discounted Price</TableHead>
+                                    <TableHead>Regular Price</TableHead>
                                     <TableHead>Walk-in Price</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
@@ -248,7 +248,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="unit_price">Pre-Order Price (ETB)</Label>
+                                <Label htmlFor="unit_price">Discounted Price (ETB)</Label>
                                 <Input
                                     id="unit_price"
                                     type="number"
@@ -262,7 +262,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="original_price">Original Price (ETB) <span className="text-xs text-muted-foreground font-normal">(Shown with strikethrough in MiniApp)</span></Label>
+                                <Label htmlFor="original_price">Regular Price (ETB) <span className="text-xs text-muted-foreground font-normal">(Original price shown with strikethrough in MiniApp)</span></Label>
                                 <Input
                                     id="original_price"
                                     type="number"
@@ -351,7 +351,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="edit_unit_price">Pre-Order Price (ETB)</Label>
+                                <Label htmlFor="edit_unit_price">Discounted Price (ETB)</Label>
                                 <Input
                                     id="edit_unit_price"
                                     type="number"
@@ -367,7 +367,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="edit_original_price">Original Price (ETB) <span className="text-xs text-muted-foreground font-normal">(Shown with strikethrough in MiniApp)</span></Label>
+                                <Label htmlFor="edit_original_price">Regular Price (ETB) <span className="text-xs text-muted-foreground font-normal">(Original price shown with strikethrough in MiniApp)</span></Label>
                                 <Input
                                     id="edit_original_price"
                                     type="number"
