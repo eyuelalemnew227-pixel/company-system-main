@@ -34,7 +34,7 @@ class PreOrderMiniAppApiController extends Controller
                 $products = PreOrderProduct::where('status', 'Active')
                     ->orderByDesc('has_discount')
                     ->orderBy('product_name', 'asc')
-                    ->get(['id', 'product_name', 'unit_price', 'walkin_price', 'description', 'has_discount']);
+                    ->get(['id', 'product_name', 'unit_price', 'original_price', 'walkin_price', 'description', 'has_discount']);
 
                 $branches = Branch::where('status', 'active')
                     ->where('is_pre_order_branch', true)

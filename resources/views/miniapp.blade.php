@@ -1,7 +1,7 @@
 <?php
 $holidays = \App\Models\CollectionDay::where('status', 'Active')->orderBy('display_order')->get(['id', 'name', 'date'])->toArray();
 
-$products = \App\Models\PreOrderProduct::where('status', 'Active')->orderByDesc('has_discount')->orderBy('product_name', 'asc')->get(['id', 'product_name', 'unit_price', 'walkin_price', 'image', 'description', 'has_discount'])->toArray();
+$products = \App\Models\PreOrderProduct::where('status', 'Active')->orderByDesc('has_discount')->orderBy('product_name', 'asc')->get(['id', 'product_name', 'unit_price', 'original_price', 'walkin_price', 'image', 'description', 'has_discount'])->toArray();
 $baseUrl = config('app.url') . '/';
 array_walk($products, function(&$p) use ($baseUrl) {
     if (!empty($p['image']) && strpos($p['image'], 'http') === false) {
@@ -799,7 +799,8 @@ function renderProds() {
         var p = products[i], ic = S.cart.find(function(x) { return x.product_id === p.id; }), pr = parseFloat(p.unit_price), act = '';
         var isDiscounted = p.has_discount === true || p.has_discount === 1 || p.has_discount === '1';
         var discTag = isDiscounted ? '<span class="inline-flex items-center gap-0.5 bg-gradient-to-r from-red-600 to-amber-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-sm uppercase tracking-wider shrink-0">🏷️ Discount</span>' : '';
-        var origPrice = (isDiscounted && p.walkin_price && parseFloat(p.walkin_price) > pr) ? '<span class="line-through text-gray-400 text-[10px] mr-1">'+parseFloat(p.walkin_price).toLocaleString()+'</span>' : '';
+        var rawOrigPrice = p.original_price ? parseFloat(p.original_price) : (p.walkin_price ? parseFloat(p.walkin_price) : null);
+        var origPrice = (isDiscounted && rawOrigPrice && rawOrigPrice > pr) ? '<span class="line-through text-gray-400 text-[10px] mr-1">'+rawOrigPrice.toLocaleString()+'</span>' : '';
 
         if (ic) { var sub = pr * ic.quantity; act = '<div class="flex items-center justify-between mt-0.5"><span class="text-[9px] text-gray-500 font-mono">'+ic.quantity+' x '+pr.toLocaleString()+' = <b class="text-[#5D4037]">'+sub.toLocaleString()+'</b> '+t('etb')+'</span></div><div class="flex items-center gap-1 mt-1"><button onclick="upd(\''+p.id+'\',-1)" class="qty-b bg-gray-200 text-[#5D4037]">\u2212</button><span class="text-xs font-bold text-[#5D4037] w-6 text-center tabular-nums">'+ic.quantity+'</span><button onclick="upd(\''+p.id+'\',1)" class="qty-b bg-[#5D4037] text-white">+</button></div>'; }
         else { act = '<div class="flex items-center justify-between mt-1"><div>'+origPrice+'<span class="text-xs font-bold text-[#5D4037]">'+pr.toLocaleString()+' '+t('etb')+'</span></div><button onclick="addP(\''+p.id+'\')" class="btn-pri text-[10px] py-1.5 px-4 rounded-lg active:scale-95 shadow-sm" style="min-height:auto">'+t('add')+'</button></div>'; }

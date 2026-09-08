@@ -12,6 +12,7 @@ class PreOrderProduct extends Model
     protected $fillable = [
         'product_name',
         'unit_price',
+        'original_price',
         'walkin_price',
         'status',
         'has_discount',
@@ -19,6 +20,7 @@ class PreOrderProduct extends Model
 
     protected $casts = [
         'unit_price' => 'decimal:2',
+        'original_price' => 'decimal:2',
         'walkin_price' => 'decimal:2',
         'has_discount' => 'boolean',
     ];

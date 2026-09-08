@@ -56,6 +56,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
     const createForm = useForm({
         product_name: '',
         unit_price: '',
+        original_price: '',
         walkin_price: '',
         status: 'Active' as 'Active' | 'Inactive',
         has_discount: false as boolean,
@@ -64,6 +65,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
     const editForm = useForm({
         product_name: '',
         unit_price: '',
+        original_price: '',
         walkin_price: '',
         status: 'Active' as 'Active' | 'Inactive',
         has_discount: false as boolean,
@@ -101,6 +103,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
         editForm.setData({
             product_name: product.product_name,
             unit_price: product.unit_price,
+            original_price: product.original_price ?? '',
             walkin_price: product.walkin_price,
             status: product.status,
             has_discount: product.has_discount ?? false,
@@ -153,7 +156,8 @@ export default function Index({ products, filters, userPermissions }: Props) {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Product Name</TableHead>
-                                    <TableHead>Regular Price</TableHead>
+                                    <TableHead>Pre-Order Price</TableHead>
+                                    <TableHead>Original Price (MiniApp)</TableHead>
                                     <TableHead>Walk-in Price</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>
@@ -162,7 +166,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
                             <TableBody>
                                 {products.data.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                                        <TableCell colSpan={6} className="text-center text-muted-foreground">
                                             No products found. Click "Add Product" to create one.
                                         </TableCell>
                                     </TableRow>
@@ -184,7 +188,8 @@ export default function Index({ products, filters, userPermissions }: Props) {
                                                     <span>{product.product_name}</span>
                                                 )}
                                             </TableCell>
-                                            <TableCell>{product.unit_price} ETB</TableCell>
+                                            <TableCell className="font-semibold text-emerald-700 dark:text-emerald-400">{product.unit_price} ETB</TableCell>
+                                            <TableCell className="font-mono text-muted-foreground">{product.original_price ? `${product.original_price} ETB` : '-'}</TableCell>
                                             <TableCell>{product.walkin_price} ETB</TableCell>
                                             <TableCell>
                                                 <span
@@ -243,7 +248,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="unit_price">Regular Price (ETB)</Label>
+                                <Label htmlFor="unit_price">Pre-Order Price (ETB)</Label>
                                 <Input
                                     id="unit_price"
                                     type="number"
@@ -254,6 +259,20 @@ export default function Index({ products, filters, userPermissions }: Props) {
                                     required
                                 />
                                 <InputError message={createForm.errors.unit_price} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="original_price">Original Price (ETB) <span className="text-xs text-muted-foreground font-normal">(Shown with strikethrough in MiniApp)</span></Label>
+                                <Input
+                                    id="original_price"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="e.g. 1500"
+                                    value={createForm.data.original_price}
+                                    onChange={(e) => createForm.setData('original_price', e.target.value)}
+                                />
+                                <InputError message={createForm.errors.original_price} />
                             </div>
 
                             <div className="grid gap-2">
@@ -332,7 +351,7 @@ export default function Index({ products, filters, userPermissions }: Props) {
                             </div>
 
                             <div className="grid gap-2">
-                                <Label htmlFor="edit_unit_price">Regular Price (ETB)</Label>
+                                <Label htmlFor="edit_unit_price">Pre-Order Price (ETB)</Label>
                                 <Input
                                     id="edit_unit_price"
                                     type="number"
@@ -345,6 +364,20 @@ export default function Index({ products, filters, userPermissions }: Props) {
                                     className={!userPermissions.includes('update pre-order product regular price') ? 'bg-muted' : ''}
                                 />
                                 <InputError message={editForm.errors.unit_price} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="edit_original_price">Original Price (ETB) <span className="text-xs text-muted-foreground font-normal">(Shown with strikethrough in MiniApp)</span></Label>
+                                <Input
+                                    id="edit_original_price"
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="e.g. 1500"
+                                    value={editForm.data.original_price}
+                                    onChange={(e) => editForm.setData('original_price', e.target.value)}
+                                />
+                                <InputError message={editForm.errors.original_price} />
                             </div>
 
                             <div className="grid gap-2">

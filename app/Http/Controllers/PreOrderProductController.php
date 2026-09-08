@@ -59,6 +59,7 @@ class PreOrderProductController extends Controller
         $validated = $request->validate([
             'product_name' => ['required', 'string', 'max:255'],
             'unit_price' => ['required', 'numeric', 'min:0'],
+            'original_price' => ['nullable', 'numeric', 'min:0'],
             'walkin_price' => ['required', 'numeric', 'min:0'],
             'status' => ['required', 'in:Active,Inactive'],
             'has_discount' => ['nullable', 'boolean'],
@@ -100,6 +101,7 @@ class PreOrderProductController extends Controller
         $validated = $request->validate([
             'product_name' => ['required', 'string', 'max:255'],
             'unit_price' => ['required', 'numeric', 'min:0'],
+            'original_price' => ['nullable', 'numeric', 'min:0'],
             'walkin_price' => ['required', 'numeric', 'min:0'],
             'status' => ['required', 'in:Active,Inactive'],
             'has_discount' => ['nullable', 'boolean'],
