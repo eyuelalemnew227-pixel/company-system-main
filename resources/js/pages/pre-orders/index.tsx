@@ -803,12 +803,16 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                                         <SortIcon field="phone_number" />
                                     </div>
                                 </TableHead>
-                                 <TableHead>Order Type</TableHead>
+                                <TableHead>Order Type</TableHead>
                                 <TableHead>Payment Method</TableHead>
+                                <TableHead>Voucher Code</TableHead>
+                                <TableHead>Txn Ref</TableHead>
+                                <TableHead>Payment Slip</TableHead>
                                 <TableHead>Collection Branch</TableHead>
                                 <TableHead>Registering Branch</TableHead>
                                 <TableHead>Collection Day</TableHead>
                                 <TableHead>Product(s)</TableHead>
+                                <TableHead>Status</TableHead>
                                 <TableHead
                                     className="cursor-pointer hover:bg-muted/50"
                                     onClick={() => handleSort('total_amount')}
@@ -824,7 +828,7 @@ export default function Index({ preOrders, branches, collectionDays, holidays, o
                         <TableBody>
                             {preOrders.data.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={canViewAllOrders ? 12 : 11} className="text-center text-muted-foreground">
+                                    <TableCell colSpan={canViewAllOrders ? 16 : 15} className="text-center text-muted-foreground">
                                         No pre-orders found. Click "New Pre-Order" to create one.
                                     </TableCell>
                                 </TableRow>
