@@ -341,7 +341,8 @@ class FormController extends Controller
                         $q2->orderBy('order_index')->with([
                             'choices' => function ($q3) {
                                 $q3->orderBy('order_index');
-                            }
+                            },
+                            'inputType'
                         ]);
                     }
                 ]);
@@ -373,6 +374,7 @@ class FormController extends Controller
                                 '_id' => $question->local_id,
                                 'label' => $question->label,
                                 'form_input_type_id' => $question->form_input_type_id,
+                                'type_identifier' => $question->inputType->type_identifier ?? null,
                                 'is_required' => $question->is_required,
                                 'order_index' => $question->order_index,
                                 'default_value' => $question->default_value,
@@ -442,7 +444,7 @@ class FormController extends Controller
                         foreach ($sectionData['questions'] as $qIndex => $questionData) {
                             $question = FormQuestion::create([
                                 'form_section_id' => $section->id,
-                                'form_input_type_id' => $questionData['form_input_type_id'],
+                                'form_input_type_id' => $this->resolveInputTypeId($questionData),
                                 'label' => $questionData['label'],
                                 'is_required' => $questionData['is_required'] ?? false,
                                 'order_index' => $questionData['order_index'] ?? $qIndex,
@@ -514,7 +516,7 @@ class FormController extends Controller
                         foreach ($sectionData['questions'] as $qIndex => $questionData) {
                             $question = FormQuestion::create([
                                 'form_section_id' => $section->id,
-                                'form_input_type_id' => $questionData['form_input_type_id'],
+                                'form_input_type_id' => $this->resolveInputTypeId($questionData),
                                 'label' => $questionData['label'],
                                 'is_required' => $questionData['is_required'] ?? false,
                                 'order_index' => $questionData['order_index'] ?? $qIndex,
@@ -551,5 +553,37 @@ class FormController extends Controller
         $form->delete();
 
         return redirect()->route('forms.index')->with('success', 'Form and all associated historical data permanently wiped.');
+    }
+
+    private function resolveInputTypeId(array $questionData): int
+    {
+        // 1. If explicit type_identifier provided in JSON
+        if (!empty($questionData['type_identifier'])) {
+            $id = \App\Models\FormInputType::where('type_identifier', $questionData['type_identifier'])->value('id');
+            if ($id) return (int) $id;
+        }
+
+        // 2. If form_input_type_id exists in this database
+        if (!empty($questionData['form_input_type_id'])) {
+            $exists = \App\Models\FormInputType::where('id', $questionData['form_input_type_id'])->exists();
+            if ($exists) {
+                return (int) $questionData['form_input_type_id'];
+            }
+
+            // Map well-known IDs across environments if IDs diverged or were not migrated yet
+            $knownIdentifiers = [
+                15 => 'employee_attendance_roster',
+                16 => 'employee_evaluation_grid',
+                17 => 'title',
+            ];
+            $targetIdentifier = $knownIdentifiers[(int) $questionData['form_input_type_id']] ?? null;
+            if ($targetIdentifier) {
+                $id = \App\Models\FormInputType::where('type_identifier', $targetIdentifier)->value('id');
+                if ($id) return (int) $id;
+            }
+        }
+
+        // 3. Fallback to text (type 1)
+        return (int) (\App\Models\FormInputType::where('type_identifier', 'text')->value('id') ?? 1);
     }
 }

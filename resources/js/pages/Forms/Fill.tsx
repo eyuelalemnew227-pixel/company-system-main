@@ -453,12 +453,8 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                                                                     className="data-[state=checked]:bg-amber-600 data-[state=checked]:text-white h-6 w-6 rounded border-zinc-300"
                                                                 />
                                                             </div>
-                                                            <div className="flex flex-col min-w-0 flex-1">
+                                                            <div className="flex flex-col min-w-0 flex-1 justify-center">
                                                                 <span className="font-bold text-gray-900 truncate tracking-tight text-[15px]">{emp.name}</span>
-                                                                <span className="text-xs font-semibold uppercase text-amber-700/80 mt-1 flex items-center">
-                                                                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5"></div>
-                                                                    {group.name}
-                                                                </span>
                                                             </div>
                                                         </label>
                                                     );
