@@ -251,8 +251,13 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 			onSuccess: () => {
 				// Flash success handled by global listener or this page if it redirects back
 			},
-			onError: () => {
-				toast.error('Unable to create the order. Please review the information and try again.');
+			onError: (errs) => {
+				const errorMessages = Object.values(errs).flat().filter(Boolean);
+				if (errorMessages.length > 0) {
+					toast.error(String(errorMessages[0]));
+				} else {
+					toast.error('Unable to create the order. Please review the information and try again.');
+				}
 			},
 		});
 	};
@@ -263,6 +268,12 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 
 			<div className="container mx-auto space-y-6 p-6">
 				<Heading title="New Pre-Order" description="Register a new customer pre-order" />
+
+				{errors.error && (
+					<div className="rounded-lg border border-destructive bg-destructive/10 p-4">
+						<p className="text-sm font-medium text-destructive">{errors.error}</p>
+					</div>
+				)}
 
 				{errors.duplicate && (
 					<div className="rounded-lg border border-destructive bg-destructive/10 p-4">
@@ -326,8 +337,14 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 										id="phone_number"
 										value={data.phone_number}
 										onChange={(e) => {
-											// Only allow digits, up to 9 characters
-											const value = e.target.value.replace(/\D/g, '');
+											// Only allow digits, up to 9 characters, auto-strip leading +251 or 0
+											let value = e.target.value.replace(/\D/g, '');
+											if (value.startsWith('251')) {
+												value = value.substring(3);
+											}
+											if (value.startsWith('0')) {
+												value = value.substring(1);
+											}
 											if (value.length <= 9) {
 												setData('phone_number', value);
 											}
@@ -346,6 +363,15 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 					{/* Order Details Section */}
 					<div className="space-y-4 rounded-lg border p-6">
 						<h3 className="text-lg font-semibold">Order Details</h3>
+
+						{collectionDays.length === 0 && (
+							<div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">
+								<p className="text-sm font-semibold">⚠️ Notice: No active collection days available</p>
+								<p className="text-xs text-amber-800 mt-1">
+									There are currently no active collection days configured in the system. An administrator must activate at least one collection day in settings before new pre-orders can be created.
+								</p>
+							</div>
+						)}
 
 						{/* Order Type + Voucher Code (walkin only) row */}
 						<div className={`grid gap-4 ${isWalkinCustomer ? 'md:grid-cols-2' : 'md:grid-cols-1 md:max-w-sm'}`}>
@@ -368,6 +394,8 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 									</SelectContent>
 								</Select>
 								<InputError message={errors.order_type_id} />
+								<InputError message={errors.payment_method} />
+								<InputError message={errors.transaction_reference} />
 							</div>
 
 							{/* Voucher Code — walkin only */}
@@ -409,11 +437,17 @@ export default function Create({ branches, collectionDays, orderTypes, products,
 										<SelectValue placeholder="Select collection day" />
 									</SelectTrigger>
 									<SelectContent>
-										{collectionDays.map((day) => (
-											<SelectItem key={day.id} value={day.id.toString()}>
-												{day.name}
-											</SelectItem>
-										))}
+										{collectionDays.length === 0 ? (
+											<div className="p-2 text-xs text-muted-foreground text-center">
+												No active collection days found
+											</div>
+										) : (
+											collectionDays.map((day) => (
+												<SelectItem key={day.id} value={day.id.toString()}>
+													{day.name}
+												</SelectItem>
+											))
+										)}
 									</SelectContent>
 								</Select>
 								<InputError message={errors.collection_day_id} />

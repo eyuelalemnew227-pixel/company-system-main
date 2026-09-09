@@ -454,7 +454,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                                                                 />
                                                             </div>
                                                             <div className="flex flex-col min-w-0 flex-1 justify-center">
-                                                                <span className="font-bold text-gray-900 truncate tracking-tight text-[15px]">{emp.name}</span>
+                                                                <span className="font-bold text-gray-900 break-words whitespace-normal tracking-tight text-[15px]">{emp.name}</span>
                                                             </div>
                                                         </label>
                                                     );

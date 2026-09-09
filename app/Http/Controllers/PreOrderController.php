@@ -303,7 +303,7 @@ class PreOrderController extends Controller
             'late_payment' => ['nullable', 'boolean'],
             'chat_id' => ['nullable', 'string'],
             'payment_method' => [
-                Rule::requiredIf($isPaid),
+                Rule::requiredIf($isPaid && !$request->input('voucher_code')),
                 'nullable',
                 'string',
                 Rule::in($validMethods),
@@ -383,7 +383,7 @@ class PreOrderController extends Controller
                 'transaction_reference' => $validated['transaction_reference'] ?? null,
                 'status' => $status,
                 'late_payment' => ($validated['late_payment'] ?? false) && $user->can('mark pre-order late payment') ? true : false,
-                'payment_method' => $validated['payment_method'] ?? null,
+                'payment_method' => $validated['payment_method'] ?? ($isWalkin ? ($request->input('voucher_code') ? 'Voucher' : 'Cash') : null),
                 'total_amount' => $totalAmount,
                 'registering_branch_id' => auth()->user()?->employee?->branch_id,
                 'chat_id' => $validated['chat_id'] ?? null,
