@@ -513,6 +513,7 @@ export default function WeeklyBudgetCeoView({
 	const canManageCeo = can('manage ceo budgets');
 
 	// ── Filter state ────────────────────────────────────────────────────────
+	const [activeTab, setActiveTab] = useState<'analytics' | 'transferred' | 'approved_not_paid' | 'paid'>('analytics');
 	const [selectedRequestType, setSelectedRequestType] = useState<string>(request?.request_type ?? 'all');
 	const [selectedStatusCeo, setSelectedStatusCeo] = useState<string>(request?.status_ceo ?? 'all');
 	const [selectedBranch, setSelectedBranch] = useState<string>(request?.branch_id ?? 'all');
@@ -620,7 +621,7 @@ export default function WeeklyBudgetCeoView({
 			const currency = balance.bank?.currency;
 			const amount = parseFloat(balance.amount) || 0;
 			const rate = parseFloat(balance.exchange_rate) || 1;
-			
+
 			if (currency === 'USD') {
 				usdOriginal += amount;
 				usdConverted += amount * rate;
@@ -909,14 +910,14 @@ export default function WeeklyBudgetCeoView({
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Weekly Budgets - CEO View" />
 			<CollapseSidebarOnMount />
-			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl px-4 pt-0 pb-4">
+			<div className="flex h-full flex-1 flex-col gap-1 overflow-x-auto rounded-xl px-4 pt-0 pb-4">
 				<Card className="py-0">
-					<CardHeader className="px-6 pt-2 pb-3">
+					<CardHeader className="px-6 pt-2 pb-1">
 						<CardTitle className="flex items-center gap-2">
 							<Filter className="size-4 text-muted-foreground" /> Filters
 						</CardTitle>
-						<div className="pt-2">
-							<div className="flex flex-wrap items-center gap-2 w-full px-4 py-3">
+						<div className="pt-0">
+							<div className="flex flex-wrap items-center gap-2 w-full px-4 py-1">
 								<div className="w-auto">
 									<Popover open={openDepartmentFilter} onOpenChange={setOpenDepartmentFilter}>
 										<PopoverTrigger asChild>
@@ -930,7 +931,7 @@ export default function WeeklyBudgetCeoView({
 												<ChevronsUpDown className="ml-0.5 w-3 h-3 shrink-0 opacity-50" />
 											</Button>
 										</PopoverTrigger>
-										<PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+										<PopoverContent className="min-w-[var(--radix-popover-trigger-width)] w-auto p-0" align="start">
 											<Command>
 												<CommandInput placeholder="Search departments..." />
 												<CommandList className="max-h-60">
@@ -1012,7 +1013,7 @@ export default function WeeklyBudgetCeoView({
 												<ChevronsUpDown className="ml-0.5 w-3 h-3 shrink-0 opacity-50" />
 											</Button>
 										</PopoverTrigger>
-										<PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+										<PopoverContent className="min-w-[var(--radix-popover-trigger-width)] w-auto p-0" align="start">
 											<Command>
 												<CommandInput placeholder="Search branches..." />
 												<CommandList className="max-h-60">
@@ -1205,7 +1206,7 @@ export default function WeeklyBudgetCeoView({
 												<ChevronsUpDown className="ml-0.5 w-3 h-3 shrink-0 opacity-50" />
 											</Button>
 										</PopoverTrigger>
-										<PopoverContent className="w-[260px] p-0" align="start">
+										<PopoverContent className="min-w-[260px] w-auto p-0" align="start">
 											<Command>
 												<CommandInput placeholder="Search payment types..." />
 												<CommandList className="max-h-60">
@@ -1278,363 +1279,410 @@ export default function WeeklyBudgetCeoView({
 					</CardHeader>
 				</Card>
 
-				<div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-					<div className="xl:col-span-1">
-						<Card className="h-full gap-0 bg-white py-0 shadow-md dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600">
-							<CardContent className="flex h-full flex-col px-6 py-5">
-								<VolumeMetricBlock
-									title="Weekly Balance"
-									amount={weeklyBalance}
-									action={
-										<>
-											<Button
-												type="button"
-												size="sm"
-												variant="outline"
-												disabled={weeklyBalance === 0}
-												className="h-7 rounded-md border-blue-100 bg-blue-50 px-2.5 text-xs font-medium text-blue-700 shadow-none hover:bg-blue-100 hover:text-blue-800 disabled:opacity-50 disabled:pointer-events-none dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200 dark:hover:bg-blue-900/60"
-												onClick={openWeekBalanceDetails}
-											>
-												See Details
-											</Button>
-											<Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-												<DialogContent className="!max-w-[95vw] !w-[90vw] xl:!w-[1200px] max-h-[90vh] overflow-hidden flex flex-col p-6">
-													<DialogHeader className="shrink-0">
-														<div className="flex items-center justify-between">
-															<DialogTitle>Bank Balance Details</DialogTitle>
-														</div>
-													</DialogHeader>
-													<div className="flex-1 overflow-y-auto min-h-0 pr-2">
-														<WeekBalanceDialogContent 
-															balances={balancesForSelectedWeek} 
-															estimatedSales={estimatedSales}
-															bankBalance={bankBalance}
-															weeklyBalance={weeklyBalance}
-														/>
-													</div>
-													<div className="flex justify-end shrink-0 mt-4">
-														<DialogClose asChild>
-															<Button variant="outline">Close</Button>
-														</DialogClose>
-													</div>
-												</DialogContent>
-											</Dialog>
-										</>
-									}
-									left={{
-										label: 'Estimated Sales',
-										amount: estimatedSales,
-										percent: weeklyBalance > 0 ? estimatedShareOfBalance : null,
-										tone: 'neutral',
-									}}
-									right={{
-										label: 'Bank Balance',
-										amount: bankBalance,
-										percent: weeklyBalance > 0 ? bankShareOfBalance : null,
-										tone: 'neutral',
-									}}
-								/>
+				{/* Tab Navigation */}
+				<div className="relative mt-0 pt-0 overflow-visible">
+					{/* Solid Line underneath */}
+					<div className="absolute bottom-0 left-0 right-0 h-[3px] bg-[#5f738a] dark:bg-slate-400 z-0"></div>
 
-								<div className="mt-4">
-									<div className="mb-2.5 h-px w-full bg-slate-200 dark:bg-slate-700" />
-									<VolumeMetricBlock
-										title="Foreign Balance"
-										amount={foreignBalances.totalConverted}
-										left={{
-											label: 'USD Account',
-											amount: foreignBalances.usdConverted,
-											percent: null,
-											customNote: <span>(${formatSummaryAmount(foreignBalances.usdOriginal)})</span>,
-											tone: 'neutral',
-										}}
-										right={{
-											label: 'EUR Account',
-											amount: foreignBalances.eurConverted,
-											percent: null,
-											customNote: <span>(€{formatSummaryAmount(foreignBalances.eurOriginal)})</span>,
-											tone: 'neutral',
-										}}
-									/>
-								</div>
+					<div className="relative flex items-end pl-8 z-10">
+						{[
+							{ id: 'analytics', label: 'Analytics' },
+							{ id: 'transferred', label: 'Transferred Budgets' },
+							{ id: 'approved_not_paid', label: 'CEO Approved, Not Paid' },
+							{ id: 'paid', label: 'Paid' },
+						].map((tab, index) => {
+							const isActive = activeTab === tab.id;
+							const zIndex = isActive ? 40 : 30 - index;
 
-								<div className="mt-4">
-									<div className="mb-2.5 h-px w-full bg-slate-200 dark:bg-slate-700" />
-									<VolumeMetricBlock
-										title="Requested Amount"
-										amount={totalRequested}
-										amountNote={
-											requestedShareOfBalance !== null ? (
-												<span className="text-sm font-bold text-slate-900 dark:text-slate-50">
-													({formatPercent2(requestedShareOfBalance)}% of Balance)
-												</span>
-											) : undefined
-										}
-										left={{
-											label: 'Urgent',
-											amount: urgentRequested,
-											percent: totalRequested > 0 ? urgentShareOfRequested : null,
-											tone: 'orange',
-										}}
-										right={{
-											label: 'Normal',
-											amount: normalRequested,
-											percent: totalRequested > 0 ? normalShareOfRequested : null,
-											tone: 'teal',
-										}}
-									/>
-								</div>
-
-								<div className="mt-6">
-									{departmentShareRows.length === 0 ? (
-										<div className="py-6 text-center text-sm text-slate-500">
-											No requests for the selected week.
-										</div>
-									) : (
-										<div>
-											<div className="mb-2 flex items-end gap-1.5">
-												<Checkbox
-													checked={isAllChartDepartmentsSelected}
-													onCheckedChange={handleToggleAllChartDepartments}
-													aria-label="Select all departments"
-													className="shrink-0 mb-[1px] border-2 border-slate-400 dark:border-slate-500"
-												/>
-												<div className="flex min-w-0 flex-1 items-center gap-1.5">
-													<span className="min-w-0 flex-1 text-xs font-bold text-slate-700 dark:text-slate-300">
-														Select All
-													</span>
-													<span className="w-[6.25rem] shrink-0 text-right text-[11px] font-bold text-slate-900 dark:text-slate-50">
-														Amount
-													</span>
-													<span className="w-[3.75rem] shrink-0 text-right text-[11px] font-bold whitespace-nowrap text-slate-900 dark:text-slate-50">
-														% Bal
-													</span>
-												</div>
-											</div>
-											<div className="space-y-4">
-												{departmentShareRows.map((row) => {
-													const key = String(row.department_id ?? 'none');
-													const isChecked = checkedChartDepartments[key] !== false;
-													const urgentWidth = Math.max(row.urgentPercentOfTotal, 0);
-													const normalWidth = Math.max(row.normalPercentOfTotal, 0);
-
-													return (
-														<div
-															key={`${key}-${row.department}`}
-															className={cn('flex items-start gap-1.5', !isChecked && 'opacity-45')}
-														>
-															<Checkbox
-																checked={isChecked}
-																onCheckedChange={(checked) => handleChartDepartmentToggle(key, checked === true)}
-																aria-label={`Filter table by ${row.department}`}
-																className="mt-[1.35rem] shrink-0 border-2 border-slate-400 dark:border-slate-500"
-															/>
-															<div className="min-w-0 flex-1">
-																<div
-																	className="mb-1 truncate text-xs font-medium text-slate-500 dark:text-slate-400"
-																	title={row.department}
-																>
-																	{row.department}
-																</div>
-																<div className="flex items-center gap-1.5">
-																	<div className="flex h-5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-																		{urgentWidth > 0 && (
-																			<div
-																				className="h-full shrink-0 bg-orange-500"
-																				style={{ width: `${urgentWidth}%` }}
-																				title={`Urgent ${formatSummaryAmount(row.urgent_amount)}`}
-																			/>
-																		)}
-																		{normalWidth > 0 && (
-																			<div
-																				className="h-full shrink-0 bg-[#134e4a] dark:bg-teal-400"
-																				style={{ width: `${normalWidth}%` }}
-																				title={`Normal ${formatSummaryAmount(row.normal_amount)}`}
-																			/>
-																		)}
-																	</div>
-																	<span className="w-[6.25rem] shrink-0 text-right text-sm font-bold leading-5 tabular-nums text-slate-900 dark:text-slate-100">
-																		{formatSummaryAmount(row.amount)}
-																	</span>
-																	<span className="w-[3.75rem] shrink-0 text-right text-sm font-bold leading-5 tabular-nums text-slate-900 dark:text-slate-50">
-																		{formatPercent2(row.percent)}%
-																	</span>
-																</div>
-															</div>
-														</div>
-													);
-												})}
-											</div>
-										</div>
+							return (
+								<button
+									key={tab.id}
+									onClick={() => setActiveTab(tab.id as any)}
+									className={cn(
+										"relative px-7 py-2.5 text-[12px] font-bold tracking-wider uppercase transition-colors group outline-none -mr-3",
+										isActive ? "text-white dark:text-slate-900" : "text-[#5f738a] hover:text-[#4b5b6d] dark:text-slate-300 dark:hover:text-white"
 									)}
-								</div>
-							</CardContent>
-						</Card>
-					</div>
-
-					<div className="min-w-0 xl:col-span-2">
-						<Card className="gap-2 py-0 border-2 border-slate-300 dark:border-slate-600">
-							<CardHeader className="px-6 py-3">
-								<div className="flex items-center justify-between gap-3">
-									<CardTitle>Weekly Budgets</CardTitle>
-									<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
-										📥 Export CSV
-									</Button>
-								</div>
-								<div className="mt-3 flex items-center gap-4">
-									<span className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter Status:</span>
-									<div className="flex items-center gap-6">
-										{['all', 'pending', 'approved', 'rejected'].map((status) => (
-											<label key={status} className="flex items-center gap-2 cursor-pointer">
-												<Checkbox
-													checked={selectedStatusCeo === status}
-													onCheckedChange={(checked) => {
-														const newStatus = checked ? status : 'all';
-														setSelectedStatusCeo(newStatus);
-														applyFilters({ status_ceo: newStatus });
-													}}
-												/>
-												<span className="text-sm capitalize text-slate-700 dark:text-slate-300">{status}</span>
-											</label>
-										))}
-									</div>
-								</div>
-								{canManageCeo && (
-									<div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border bg-slate-50 px-3 py-2 dark:bg-slate-900">
-										<span className="text-sm font-medium">Bulk Action ({selectedIds.length} selected):</span>
-										<Select value={bulkStatus} onValueChange={setBulkStatus}>
-											<SelectTrigger className="w-[180px] bg-white dark:bg-slate-800">
-												<SelectValue placeholder="Select Status" />
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="pending">Pending</SelectItem>
-												<SelectItem value="approved">Approved</SelectItem>
-												<SelectItem value="rejected">Rejected</SelectItem>
-												<SelectItem value="on-hold">On Hold</SelectItem>
-											</SelectContent>
-										</Select>
-										<Button onClick={handleBulkUpdate} disabled={selectedIds.length === 0 || !bulkStatus}>
-											Apply Bulk Status
-										</Button>
-									</div>
-								)}
-							</CardHeader>
-							<CardContent className="px-6 pb-4">
-								<Table>
-									<TableHeader className="bg-slate-500 dark:bg-slate-700">
-										<TableRow>
-											{canManageCeo && (
-												<TableHead className="w-12 text-center text-white">
-													<Checkbox
-														checked={isAllSelected ? true : isSomeSelected ? 'indeterminate' : false}
-														onCheckedChange={toggleSelectAll}
-														disabled={allSelectableIds.length === 0}
-														aria-label="Select all"
-														className="border-white data-[state=checked]:bg-white data-[state=checked]:text-slate-900"
-													/>
-												</TableHead>
-											)}
-											<TableHead className="font-bold text-white">Department</TableHead>
-											<TableHead className="font-bold text-white">Branch</TableHead>
-											<TableHead className="font-bold text-white">Request Type</TableHead>
-											<TableHead className="w-0 whitespace-nowrap font-bold text-white">Status (CEO)</TableHead>
-											<TableHead className="font-bold text-white">Description</TableHead>
-											<TableHead className="font-bold text-white">Amount</TableHead>
-										</TableRow>
-									</TableHeader>
-									<TableBody>
-										{items.data.map((item) => {
-											const isEditable = canManageCeo && item.status_finance !== 'paid';
-											const bothApproved = item.status_finance === 'approved' && (item.status_department === 'approved' || item.status_department === 'transferred');
-											const isSavingStatus = savingStatusId === item.id;
-
-											return (
-												<TableRow key={item.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
-													{canManageCeo && (
-														<TableCell className="text-center">
-															<Checkbox
-																checked={selectedIds.includes(item.id)}
-																onCheckedChange={() => toggleSelectRow(item.id)}
-																disabled={item.status_finance === 'paid'}
-															/>
-														</TableCell>
-													)}
-													<TableCell>{item.department ?? '-'}</TableCell>
-													<TableCell>{item.branch ?? '-'}</TableCell>
-													<TableCell>{requestTypeBadge(item.request_type)}</TableCell>
-
-													<TableCell className="w-0 whitespace-nowrap">
-														{canManageCeo ? (
-															<Select
-																value={item.status_ceo}
-																onValueChange={(status) => updateCeoStatus(item, status)}
-																disabled={!isEditable || isSavingStatus}
-															>
-																<SelectTrigger
-																	className={cn(
-																		'h-7 w-full min-w-0 rounded-full border px-2 text-[11px] font-bold shadow-sm',
-																		statusColorClass(item.status_ceo),
-																	)}
-																>
-																	<SelectValue />
-																</SelectTrigger>
-																<SelectContent>
-																	{statusCeos.map((status) => {
-																		const cannotApprove = status === 'approved' && !bothApproved;
-																		return (
-																			<SelectItem
-																				key={status}
-																				value={status}
-																				disabled={cannotApprove}
-																				className={cn(
-																					'my-0.5 rounded-full text-[11px] font-bold',
-																					statusColorClass(status),
-																					'focus:bg-inherit focus:text-inherit',
-																				)}
-																			>
-																				{statusLabel(status)}
-																			</SelectItem>
-																		);
-																	})}
-																</SelectContent>
-															</Select>
-														) : (
-															statusBadge(item.status_ceo, 'ceo')
-														)}
-													</TableCell>
-
-													<TableCell className="whitespace-normal">
-														<div className="max-w-xs text-sm text-slate-600 dark:text-slate-300">
-															{item.description || '-'}
-														</div>
-													</TableCell>
-
-													<TableCell className="whitespace-nowrap">{formatCurrency(item.amount)}</TableCell>
-												</TableRow>
-											);
-										})}
-									</TableBody>
-									<TableFooter>
-										<TableRow className="bg-slate-200 dark:bg-slate-700">
-											{canManageCeo && <TableCell />}
-											<TableCell colSpan={5} className="text-right font-bold">
-												Total
-											</TableCell>
-											<TableCell className="whitespace-nowrap font-bold">{formatCurrency(visibleTotal)}</TableCell>
-										</TableRow>
-									</TableFooter>
-								</Table>
-
-								<div className="mt-4">
-									{items.data.length > 0 ? (
-										<TablePagination total={items.total} from={items.from} to={items.to} links={items.links} />
-									) : (
-										<div className="flex w-full items-center justify-center py-8 text-slate-500">No content found.</div>
-									)}
-								</div>
-							</CardContent>
-						</Card>
+									style={{ zIndex }}
+								>
+									<div
+										className={cn(
+											"absolute inset-0 -top-1 origin-bottom [transform:perspective(100px)_rotateX(20deg)] rounded-t-[10px] -z-10 transition-all",
+											isActive
+												? "bg-[#5f738a] dark:bg-slate-400 shadow-none"
+												: "bg-[#eaedf1] dark:bg-slate-800 shadow-[0_-2px_8px_rgba(0,0,0,0.15)] dark:shadow-[0_-2px_10px_rgba(0,0,0,0.5)]"
+										)}
+									></div>
+									{tab.label}
+								</button>
+							);
+						})}
 					</div>
 				</div>
+
+				{activeTab === 'analytics' ? (
+					<div className="grid grid-cols-1 gap-4 mt-2 xl:grid-cols-3">
+						<div className="xl:col-span-1">
+							<Card className="h-full gap-0 bg-white py-0 shadow-md dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600">
+								<CardContent className="flex h-full flex-col px-6 py-5">
+									<VolumeMetricBlock
+										title="Weekly Balance"
+										amount={weeklyBalance}
+										action={
+											<>
+												<Button
+													type="button"
+													size="sm"
+													variant="outline"
+													disabled={weeklyBalance === 0}
+													className="h-7 rounded-md border-blue-100 bg-blue-50 px-2.5 text-xs font-medium text-blue-700 shadow-none hover:bg-blue-100 hover:text-blue-800 disabled:opacity-50 disabled:pointer-events-none dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-200 dark:hover:bg-blue-900/60"
+													onClick={openWeekBalanceDetails}
+												>
+													See Details
+												</Button>
+												<Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+													<DialogContent className="!max-w-[95vw] !w-[90vw] xl:!w-[1200px] max-h-[90vh] overflow-hidden flex flex-col p-6">
+														<DialogHeader className="shrink-0">
+															<div className="flex items-center justify-between">
+																<DialogTitle>Bank Balance Details</DialogTitle>
+															</div>
+														</DialogHeader>
+														<div className="flex-1 overflow-y-auto min-h-0 pr-2">
+															<WeekBalanceDialogContent
+																balances={balancesForSelectedWeek}
+																estimatedSales={estimatedSales}
+																bankBalance={bankBalance}
+																weeklyBalance={weeklyBalance}
+															/>
+														</div>
+														<div className="flex justify-end shrink-0 mt-4">
+															<DialogClose asChild>
+																<Button variant="outline">Close</Button>
+															</DialogClose>
+														</div>
+													</DialogContent>
+												</Dialog>
+											</>
+										}
+										left={{
+											label: 'Estimated Sales',
+											amount: estimatedSales,
+											percent: weeklyBalance > 0 ? estimatedShareOfBalance : null,
+											tone: 'neutral',
+										}}
+										right={{
+											label: 'Bank Balance',
+											amount: bankBalance,
+											percent: weeklyBalance > 0 ? bankShareOfBalance : null,
+											tone: 'neutral',
+										}}
+									/>
+
+									<div className="mt-4">
+										<div className="mb-2.5 h-px w-full bg-slate-200 dark:bg-slate-700" />
+										<VolumeMetricBlock
+											title="Foreign Balance"
+											amount={foreignBalances.totalConverted}
+											left={{
+												label: 'USD Account',
+												amount: foreignBalances.usdConverted,
+												percent: null,
+												customNote: <span>(${formatSummaryAmount(foreignBalances.usdOriginal)})</span>,
+												tone: 'neutral',
+											}}
+											right={{
+												label: 'EUR Account',
+												amount: foreignBalances.eurConverted,
+												percent: null,
+												customNote: <span>(€{formatSummaryAmount(foreignBalances.eurOriginal)})</span>,
+												tone: 'neutral',
+											}}
+										/>
+									</div>
+
+									<div className="mt-4">
+										<div className="mb-2.5 h-px w-full bg-slate-200 dark:bg-slate-700" />
+										<VolumeMetricBlock
+											title="Requested Amount"
+											amount={totalRequested}
+											amountNote={
+												requestedShareOfBalance !== null ? (
+													<span className="text-sm font-bold text-slate-900 dark:text-slate-50">
+														({formatPercent2(requestedShareOfBalance)}% of Balance)
+													</span>
+												) : undefined
+											}
+											left={{
+												label: 'Urgent',
+												amount: urgentRequested,
+												percent: totalRequested > 0 ? urgentShareOfRequested : null,
+												tone: 'orange',
+											}}
+											right={{
+												label: 'Normal',
+												amount: normalRequested,
+												percent: totalRequested > 0 ? normalShareOfRequested : null,
+												tone: 'teal',
+											}}
+										/>
+									</div>
+
+									<div className="mt-6">
+										{departmentShareRows.length === 0 ? (
+											<div className="py-6 text-center text-sm text-slate-500">
+												No requests for the selected week.
+											</div>
+										) : (
+											<div>
+												<div className="mb-2 flex items-end gap-1.5">
+													<Checkbox
+														checked={isAllChartDepartmentsSelected}
+														onCheckedChange={handleToggleAllChartDepartments}
+														aria-label="Select all departments"
+														className="shrink-0 mb-[1px] border-2 border-slate-400 dark:border-slate-500"
+													/>
+													<div className="flex min-w-0 flex-1 items-center gap-1.5">
+														<span className="min-w-0 flex-1 text-xs font-bold text-slate-700 dark:text-slate-300">
+															Select All
+														</span>
+														<span className="w-[6.25rem] shrink-0 text-right text-[11px] font-bold text-slate-900 dark:text-slate-50">
+															Amount
+														</span>
+														<span className="w-[3.75rem] shrink-0 text-right text-[11px] font-bold whitespace-nowrap text-slate-900 dark:text-slate-50">
+															% Bal
+														</span>
+													</div>
+												</div>
+												<div className="space-y-4">
+													{departmentShareRows.map((row) => {
+														const key = String(row.department_id ?? 'none');
+														const isChecked = checkedChartDepartments[key] !== false;
+														const urgentWidth = Math.max(row.urgentPercentOfTotal, 0);
+														const normalWidth = Math.max(row.normalPercentOfTotal, 0);
+
+														return (
+															<div
+																key={`${key}-${row.department}`}
+																className={cn('flex items-start gap-1.5', !isChecked && 'opacity-45')}
+															>
+																<Checkbox
+																	checked={isChecked}
+																	onCheckedChange={(checked) => handleChartDepartmentToggle(key, checked === true)}
+																	aria-label={`Filter table by ${row.department}`}
+																	className="mt-[1.35rem] shrink-0 border-2 border-slate-400 dark:border-slate-500"
+																/>
+																<div className="min-w-0 flex-1">
+																	<div
+																		className="mb-1 truncate text-xs font-medium text-slate-500 dark:text-slate-400"
+																		title={row.department}
+																	>
+																		{row.department}
+																	</div>
+																	<div className="flex items-center gap-1.5">
+																		<div className="flex h-5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+																			{urgentWidth > 0 && (
+																				<div
+																					className="h-full shrink-0 bg-orange-500"
+																					style={{ width: `${urgentWidth}%` }}
+																					title={`Urgent ${formatSummaryAmount(row.urgent_amount)}`}
+																				/>
+																			)}
+																			{normalWidth > 0 && (
+																				<div
+																					className="h-full shrink-0 bg-[#134e4a] dark:bg-teal-400"
+																					style={{ width: `${normalWidth}%` }}
+																					title={`Normal ${formatSummaryAmount(row.normal_amount)}`}
+																				/>
+																			)}
+																		</div>
+																		<span className="w-[6.25rem] shrink-0 text-right text-sm font-bold leading-5 tabular-nums text-slate-900 dark:text-slate-100">
+																			{formatSummaryAmount(row.amount)}
+																		</span>
+																		<span className="w-[3.75rem] shrink-0 text-right text-sm font-bold leading-5 tabular-nums text-slate-900 dark:text-slate-50">
+																			{formatPercent2(row.percent)}%
+																		</span>
+																	</div>
+																</div>
+															</div>
+														);
+													})}
+												</div>
+											</div>
+										)}
+									</div>
+								</CardContent>
+							</Card>
+						</div>
+
+						<div className="min-w-0 xl:col-span-2">
+							<Card className="gap-2 py-0 border-2 border-slate-300 dark:border-slate-600">
+								<CardHeader className="px-6 py-3">
+									<div className="flex items-center justify-between gap-3">
+										<CardTitle>Weekly Budgets</CardTitle>
+										<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
+											📥 Export CSV
+										</Button>
+									</div>
+									<div className="mt-3 flex items-center gap-4">
+										<span className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter Status:</span>
+										<div className="flex items-center gap-6">
+											{['all', 'pending', 'approved', 'rejected'].map((status) => (
+												<label key={status} className="flex items-center gap-2 cursor-pointer">
+													<Checkbox
+														checked={selectedStatusCeo === status}
+														onCheckedChange={(checked) => {
+															const newStatus = checked ? status : 'all';
+															setSelectedStatusCeo(newStatus);
+															applyFilters({ status_ceo: newStatus });
+														}}
+													/>
+													<span className="text-sm capitalize text-slate-700 dark:text-slate-300">{status}</span>
+												</label>
+											))}
+										</div>
+									</div>
+									{canManageCeo && (
+										<div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border bg-slate-50 px-3 py-2 dark:bg-slate-900">
+											<span className="text-sm font-medium">Bulk Action ({selectedIds.length} selected):</span>
+											<Select value={bulkStatus} onValueChange={setBulkStatus}>
+												<SelectTrigger className="w-[180px] bg-white dark:bg-slate-800">
+													<SelectValue placeholder="Select Status" />
+												</SelectTrigger>
+												<SelectContent>
+													<SelectItem value="pending">Pending</SelectItem>
+													<SelectItem value="approved">Approved</SelectItem>
+													<SelectItem value="rejected">Rejected</SelectItem>
+													<SelectItem value="on-hold">On Hold</SelectItem>
+												</SelectContent>
+											</Select>
+											<Button onClick={handleBulkUpdate} disabled={selectedIds.length === 0 || !bulkStatus}>
+												Apply Bulk Status
+											</Button>
+										</div>
+									)}
+								</CardHeader>
+								<CardContent className="px-6 pb-4">
+									<Table>
+										<TableHeader className="bg-slate-500 dark:bg-slate-700">
+											<TableRow>
+												{canManageCeo && (
+													<TableHead className="w-12 text-center text-white">
+														<Checkbox
+															checked={isAllSelected ? true : isSomeSelected ? 'indeterminate' : false}
+															onCheckedChange={toggleSelectAll}
+															disabled={allSelectableIds.length === 0}
+															aria-label="Select all"
+															className="border-white data-[state=checked]:bg-white data-[state=checked]:text-slate-900"
+														/>
+													</TableHead>
+												)}
+												<TableHead className="font-bold text-white">Department</TableHead>
+												<TableHead className="font-bold text-white">Branch</TableHead>
+												<TableHead className="font-bold text-white">Request Type</TableHead>
+												<TableHead className="w-0 whitespace-nowrap font-bold text-white">Status (CEO)</TableHead>
+												<TableHead className="font-bold text-white">Description</TableHead>
+												<TableHead className="font-bold text-white">Amount</TableHead>
+											</TableRow>
+										</TableHeader>
+										<TableBody>
+											{items.data.map((item) => {
+												const isEditable = canManageCeo && item.status_finance !== 'paid';
+												const bothApproved = item.status_finance === 'approved' && (item.status_department === 'approved' || item.status_department === 'transferred');
+												const isSavingStatus = savingStatusId === item.id;
+
+												return (
+													<TableRow key={item.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
+														{canManageCeo && (
+															<TableCell className="text-center">
+																<Checkbox
+																	checked={selectedIds.includes(item.id)}
+																	onCheckedChange={() => toggleSelectRow(item.id)}
+																	disabled={item.status_finance === 'paid'}
+																/>
+															</TableCell>
+														)}
+														<TableCell>{item.department ?? '-'}</TableCell>
+														<TableCell>{item.branch ?? '-'}</TableCell>
+														<TableCell>{requestTypeBadge(item.request_type)}</TableCell>
+
+														<TableCell className="w-0 whitespace-nowrap">
+															{canManageCeo ? (
+																<Select
+																	value={item.status_ceo}
+																	onValueChange={(status) => updateCeoStatus(item, status)}
+																	disabled={!isEditable || isSavingStatus}
+																>
+																	<SelectTrigger
+																		className={cn(
+																			'h-7 w-full min-w-0 rounded-full border px-2 text-[11px] font-bold shadow-sm',
+																			statusColorClass(item.status_ceo),
+																		)}
+																	>
+																		<SelectValue />
+																	</SelectTrigger>
+																	<SelectContent>
+																		{statusCeos.map((status) => {
+																			const cannotApprove = status === 'approved' && !bothApproved;
+																			return (
+																				<SelectItem
+																					key={status}
+																					value={status}
+																					disabled={cannotApprove}
+																					className={cn(
+																						'my-0.5 rounded-full text-[11px] font-bold',
+																						statusColorClass(status),
+																						'focus:bg-inherit focus:text-inherit',
+																					)}
+																				>
+																					{statusLabel(status)}
+																				</SelectItem>
+																			);
+																		})}
+																	</SelectContent>
+																</Select>
+															) : (
+																statusBadge(item.status_ceo, 'ceo')
+															)}
+														</TableCell>
+
+														<TableCell className="whitespace-normal">
+															<div className="max-w-xs text-sm text-slate-600 dark:text-slate-300">
+																{item.description || '-'}
+															</div>
+														</TableCell>
+
+														<TableCell className="whitespace-nowrap">{formatCurrency(item.amount)}</TableCell>
+													</TableRow>
+												);
+											})}
+										</TableBody>
+										<TableFooter>
+											<TableRow className="bg-slate-200 dark:bg-slate-700">
+												{canManageCeo && <TableCell />}
+												<TableCell colSpan={5} className="text-right font-bold">
+													Total
+												</TableCell>
+												<TableCell className="whitespace-nowrap font-bold">{formatCurrency(visibleTotal)}</TableCell>
+											</TableRow>
+										</TableFooter>
+									</Table>
+
+									<div className="mt-4">
+										{items.data.length > 0 ? (
+											<TablePagination total={items.total} from={items.from} to={items.to} links={items.links} />
+										) : (
+											<div className="flex w-full items-center justify-center py-8 text-slate-500">No content found.</div>
+										)}
+									</div>
+								</CardContent>
+							</Card>
+						</div>
+					</div>
+				) : (
+					<div className="mt-4 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700 py-24 text-slate-500 dark:text-slate-400">
+						<span className="text-lg font-bold">Coming Soon</span>
+						<p className="mt-1 text-sm">This section is currently under development.</p>
+					</div>
+				)}
 			</div>
 
 			<PopupComponent />
