@@ -1,6 +1,6 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm, Link } from '@inertiajs/react';
+import { Head, useForm, Link, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
-import { Trash2, Plus, GripVertical, Settings, Waypoints, Star, SlidersHorizontal } from 'lucide-react';
+import { MultiSelect } from '@/components/ui/multi-select';
+import { Trash2, Plus, GripVertical, Settings, Waypoints, Star, SlidersHorizontal, Heading } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import React from 'react';
@@ -131,11 +132,27 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
         const newSections = [...data.sections];
         newSections[sIndex].questions[qIndex] = { ...newSections[sIndex].questions[qIndex], [field]: value };
 
-        const isSelectType = inputTypes.find(t => t.id == value)?.type_identifier.includes('select');
-        if (field === 'form_input_type_id' && isSelectType && (!newSections[sIndex].questions[qIndex].choices || newSections[sIndex].questions[qIndex].choices.length === 0)) {
-            newSections[sIndex].questions[qIndex].choices = [{ _id: generateId(), label: 'Option 1', value: 'option_1' }];
-        } else if (field === 'form_input_type_id' && !isSelectType) {
-            newSections[sIndex].questions[qIndex].choices = [];
+        const matchedType = inputTypes.find(t => t.id == value);
+        const isSelectType = matchedType?.type_identifier.includes('select');
+        const isTitle = matchedType?.type_identifier === 'title';
+
+        if (field === 'form_input_type_id') {
+            if (isTitle) {
+                newSections[sIndex].questions[qIndex].is_required = false;
+                newSections[sIndex].questions[qIndex].choices = [];
+            } else if (isSelectType && (!newSections[sIndex].questions[qIndex].choices || newSections[sIndex].questions[qIndex].choices.length === 0)) {
+                newSections[sIndex].questions[qIndex].choices = [{ _id: generateId(), label: 'Option 1', value: 'option_1' }];
+            } else if (!isSelectType) {
+                newSections[sIndex].questions[qIndex].choices = [];
+            }
+
+            if (matchedType?.type_identifier !== 'employee_evaluation_grid' && newSections[sIndex].questions[qIndex].visibility_logic?.has_sub_questions) {
+                newSections[sIndex].questions[qIndex].visibility_logic = {
+                    ...newSections[sIndex].questions[qIndex].visibility_logic,
+                    has_sub_questions: false,
+                    sub_questions: []
+                };
+            }
         }
 
         setData('sections', newSections);
@@ -166,6 +183,41 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
         setData('sections', newSections);
     };
 
+    const addSubQuestion = (sIndex: number, qIndex: number) => {
+        const newSections = [...data.sections];
+        if (!newSections[sIndex].questions[qIndex].visibility_logic) {
+            newSections[sIndex].questions[qIndex].visibility_logic = {};
+        }
+        if (!newSections[sIndex].questions[qIndex].visibility_logic.sub_questions) {
+            newSections[sIndex].questions[qIndex].visibility_logic.sub_questions = [];
+        }
+        newSections[sIndex].questions[qIndex].visibility_logic.sub_questions.push({
+            id: generateId(),
+            label: `Sub-Question ${newSections[sIndex].questions[qIndex].visibility_logic.sub_questions.length + 1}`
+        });
+        setData('sections', newSections);
+    };
+
+    const removeSubQuestion = (sIndex: number, qIndex: number, sqIndex: number) => {
+        const newSections = [...data.sections];
+        if (newSections[sIndex].questions[qIndex].visibility_logic?.sub_questions) {
+            newSections[sIndex].questions[qIndex].visibility_logic.sub_questions.splice(sqIndex, 1);
+        }
+        setData('sections', newSections);
+    };
+
+    const updateSubQuestion = (sIndex: number, qIndex: number, sqIndex: number, field: string, value: any) => {
+        const newSections = [...data.sections];
+        if (newSections[sIndex].questions[qIndex].visibility_logic?.sub_questions) {
+            const tempLogic = { ...newSections[sIndex].questions[qIndex].visibility_logic };
+            const tempSubQs = [...tempLogic.sub_questions];
+            tempSubQs[sqIndex] = { ...tempSubQs[sqIndex], [field]: value };
+            tempLogic.sub_questions = tempSubQs;
+            newSections[sIndex].questions[qIndex].visibility_logic = tempLogic;
+        }
+        setData('sections', newSections);
+    };
+
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -175,29 +227,37 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
             sections: data.sections.map((s: any, sIdx: number) => ({
                 title: s.title,
                 order_index: sIdx, // Reassert index based on drag order
-                questions: s.questions.map((q: any, qIdx: number) => ({
-                    _id: q._id,
-                    label: q.label,
-                    form_input_type_id: q.form_input_type_id,
-                    is_required: q.is_required,
-                    order_index: qIdx, // Reassert index based on drag order
-                    visibility_logic: q.visibility_logic || null,
-                    choices: q.choices?.map((c: any, cIdx: number) => ({
-                        label: c.label,
-                        value: c.value,
-                        order_index: cIdx
-                    }))
-                }))
+                questions: s.questions.map((q: any, qIdx: number) => {
+                    const qType = inputTypes.find(t => t.id == q.form_input_type_id);
+                    const isTitle = qType?.type_identifier === 'title';
+                    const isEvalGrid = qType?.type_identifier === 'employee_evaluation_grid';
+                    const defaultLabel = isTitle ? 'Untitled Title' : (isEvalGrid && q.visibility_logic?.has_sub_questions ? 'Grid Evaluation Matrix' : 'Untitled Question');
+                    return {
+                        _id: q._id,
+                        label: q.label || defaultLabel,
+                        form_input_type_id: q.form_input_type_id,
+                        is_required: isTitle ? false : Boolean(q.is_required),
+                        order_index: qIdx, // Reassert index based on drag order
+                        visibility_logic: q.visibility_logic || null,
+                        department_targets: isTitle ? null : (q.department_targets || null),
+                        choices: q.choices?.map((c: any, cIdx: number) => ({
+                            label: c.label,
+                            value: c.value,
+                            order_index: cIdx
+                        }))
+                    };
+                })
             }))
         };
 
-        put(route('forms.update', form.id));
+        router.put(route('forms.update', form.id), cleanPayload);
     };
 
     const getIconForType = (identifier: string) => {
         switch (identifier) {
             case 'rating_stars': return <Star className="h-4 w-4" />;
             case 'rating_slider': return <SlidersHorizontal className="h-4 w-4" />;
+            case 'title': return <Heading className="h-4 w-4 text-amber-700" strokeWidth={2} />;
             default: return null;
         }
     };
@@ -353,7 +413,8 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
                                                                     ) : (
                                                                         section.questions.map((question: any, qIndex: number) => {
                                                                             const selectedTypeIdentifier = inputTypes.find(t => t.id == question.form_input_type_id)?.type_identifier;
-                                                                            const isSelectType = selectedTypeIdentifier?.includes('select');
+                                                                            const isTitle = selectedTypeIdentifier === 'title';
+                                                                            const isSelectType = selectedTypeIdentifier?.includes('select') || selectedTypeIdentifier === 'employee_evaluation_grid';
                                                                             const isBranch = selectedTypeIdentifier === 'branch_lookup';
                                                                             const isDepartment = selectedTypeIdentifier === 'department_lookup';
                                                                             return (
@@ -376,11 +437,119 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
                                                                                                     </Button>
                                                                                                 </div>
 
-                                                                                                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-1 pr-8">
-                                                                                                    <div className="md:col-span-8 space-y-2">
-                                                                                                        <Label>Question Text</Label>
-                                                                                                        <Input value={question.label} onChange={e => updateQuestion(sIndex, qIndex, 'label', e.target.value)} placeholder="e.g. Is the table clean?" required />
+                                                                                                {isTitle && (
+                                                                                                    <div className="mb-2">
+                                                                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-900 border border-amber-300">
+                                                                                                            <Heading className="w-3.5 h-3.5 mr-1 text-amber-700" />
+                                                                                                            Title / Section Label (Display Only)
+                                                                                                        </span>
                                                                                                     </div>
+                                                                                                )}
+
+                                                                                                {!isTitle && (
+                                                                                                    <div className="mt-4 flex flex-col space-y-3">
+                                                                                                        <div className="flex items-center space-x-2">
+                                                                                                            <Checkbox id={`req-${sIndex}-${qIndex}`} checked={question.is_required} onCheckedChange={(checked) => updateQuestion(sIndex, qIndex, 'is_required', checked)} />
+                                                                                                            <Label htmlFor={`req-${sIndex}-${qIndex}`} className="text-sm font-normal">Require an answer</Label>
+                                                                                                        </div>
+
+                                                                                                        {selectedTypeIdentifier === 'employee_evaluation_grid' && (
+                                                                                                            <div className="flex flex-col space-y-3 bg-amber-50 p-3 rounded border border-amber-200">
+                                                                                                                <div className="flex items-start space-x-2">
+                                                                                                                    <Checkbox
+                                                                                                                        id={`has-sub-${sIndex}-${qIndex}`}
+                                                                                                                        checked={question.visibility_logic?.has_sub_questions || false}
+                                                                                                                        onCheckedChange={(checked) => {
+                                                                                                                            const vLogic = { ...(question.visibility_logic || {}), has_sub_questions: checked };
+                                                                                                                            if (checked && (!vLogic.sub_questions || vLogic.sub_questions.length === 0)) {
+                                                                                                                                vLogic.sub_questions = [{ label: '', id: generateId() }];
+                                                                                                                            }
+                                                                                                                            updateQuestion(sIndex, qIndex, 'visibility_logic', vLogic);
+                                                                                                                        }}
+                                                                                                                    />
+                                                                                                                    <div className="grid gap-1.5 leading-none">
+                                                                                                                        <Label htmlFor={`has-sub-${sIndex}-${qIndex}`} className="text-sm font-semibold text-amber-900">Has Sub-Questions</Label>
+                                                                                                                        <p className="text-xs text-amber-700">Dynamically suppress this question's label and generate independent sub-questions utilizing a shared Option set (Matrix Arrays, Grids).</p>
+                                                                                                                    </div>
+                                                                                                                </div>
+                                                                                                                <div className="flex items-start space-x-2">
+                                                                                                                    <Checkbox
+                                                                                                                        id={`manual-${sIndex}-${qIndex}`}
+                                                                                                                        checked={question.visibility_logic?.allow_manual_selection || false}
+                                                                                                                        onCheckedChange={(checked) => updateQuestion(sIndex, qIndex, 'visibility_logic', { ...(question.visibility_logic || {}), allow_manual_selection: checked })}
+                                                                                                                    />
+                                                                                                                    <div className="grid gap-1.5 leading-none">
+                                                                                                                        <Label htmlFor={`manual-${sIndex}-${qIndex}`} className="text-sm font-semibold text-amber-900">Allow Manual Employee Pre-selection</Label>
+                                                                                                                        <p className="text-xs text-amber-700">If checked, evaluators must manually select which subset of the attended employees to load into the evaluation grid table.</p>
+                                                                                                                    </div>
+                                                                                                                </div>
+                                                                                                                <div className="flex items-start space-x-2">
+                                                                                                                    <Checkbox
+                                                                                                                        id={`remark-${sIndex}-${qIndex}`}
+                                                                                                                        checked={question.visibility_logic?.has_remark_field ?? true}
+                                                                                                                        onCheckedChange={(checked) => updateQuestion(sIndex, qIndex, 'visibility_logic', { ...(question.visibility_logic || {}), has_remark_field: checked })}
+                                                                                                                    />
+                                                                                                                    <div className="grid gap-1.5 leading-none">
+                                                                                                                        <Label htmlFor={`remark-${sIndex}-${qIndex}`} className="text-sm font-semibold text-amber-900">Show Remark Field</Label>
+                                                                                                                        <p className="text-xs text-amber-700">Display a text input column for optional remarks per employee.</p>
+                                                                                                                    </div>
+                                                                                                                </div>
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                )}
+
+                                                                                                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-4 pr-8">
+                                                                                                    {isTitle ? (
+                                                                                                        <div className="md:col-span-8 space-y-2">
+                                                                                                            <Label className="font-semibold text-amber-900 flex items-center">
+                                                                                                                <Heading className="w-4 h-4 mr-1.5 text-amber-700" /> Title / Label Text
+                                                                                                            </Label>
+                                                                                                            <Input
+                                                                                                                value={question.label}
+                                                                                                                onChange={e => updateQuestion(sIndex, qIndex, 'label', e.target.value)}
+                                                                                                                placeholder="e.g. 2.1 CLEANLINESS OF BARISTA & COUNTER AREA"
+                                                                                                                className="font-bold text-base bg-white border-amber-200 focus-visible:ring-amber-500"
+                                                                                                                required
+                                                                                                            />
+                                                                                                            <p className="text-xs text-muted-foreground">This title / label will be displayed directly on the form without asking for an answer.</p>
+                                                                                                        </div>
+                                                                                                    ) : !(selectedTypeIdentifier === 'employee_evaluation_grid' && question.visibility_logic?.has_sub_questions) ? (
+                                                                                                        <div className="md:col-span-8 space-y-2">
+                                                                                                            <Label>Question Text</Label>
+                                                                                                            <Input value={question.label} onChange={e => updateQuestion(sIndex, qIndex, 'label', e.target.value)} placeholder="e.g. Is the table clean?" required />
+                                                                                                        </div>
+                                                                                                    ) : (
+                                                                                                        <div className="md:col-span-8 space-y-3 p-3 bg-slate-50/50 border rounded-md border-dashed">
+                                                                                                            <Label>Sub-Questions</Label>
+                                                                                                            {question.visibility_logic?.sub_questions && question.visibility_logic.sub_questions.map((sq: any, sqIndex: number) => (
+                                                                                                                <div key={sq.id || sqIndex} className="flex flex-col space-y-1 mb-2">
+                                                                                                                    <div className="flex items-center space-x-2">
+                                                                                                                        <span className="text-xs text-muted-foreground font-semibold w-4">{sqIndex + 1}.</span>
+                                                                                                                        <Input
+                                                                                                                            value={sq.label}
+                                                                                                                            onChange={(e) => updateSubQuestion(sIndex, qIndex, sqIndex, 'label', e.target.value)}
+                                                                                                                            placeholder="e.g. Cleanliness, Vision..."
+                                                                                                                            className="flex-1 h-8 text-sm bg-white"
+                                                                                                                            required
+                                                                                                                        />
+                                                                                                                        <Button type="button" variant="ghost" size="icon" onClick={() => removeSubQuestion(sIndex, qIndex, sqIndex)} className="h-8 w-8 text-muted-foreground hover:text-red-500">
+                                                                                                                            <Trash2 className="h-4 w-4" />
+                                                                                                                        </Button>
+                                                                                                                    </div>
+                                                                                                                </div>
+                                                                                                            ))}
+                                                                                                            <Button
+                                                                                                                type="button"
+                                                                                                                 variant="outline"
+                                                                                                                size="sm"
+                                                                                                                onClick={() => addSubQuestion(sIndex, qIndex)}
+                                                                                                                className="h-7 text-xs font-medium text-blue-600 border-blue-200 hover:bg-blue-50 mt-2"
+                                                                                                            >
+                                                                                                                <Plus className="h-3 w-3 mr-1" /> Add Sub-Question
+                                                                                                            </Button>
+                                                                                                        </div>
+                                                                                                    )}
                                                                                                     <div className="md:col-span-4 space-y-2">
                                                                                                         <Label>Input Type</Label>
                                                                                                         <Select onValueChange={(val) => updateQuestion(sIndex, qIndex, 'form_input_type_id', Number(val))} value={String(question.form_input_type_id)}>
@@ -396,10 +565,18 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
                                                                                                     </div>
                                                                                                 </div>
 
-                                                                                                <div className="mt-4 flex items-center space-x-2">
-                                                                                                    <Checkbox id={`req-${sIndex}-${qIndex}`} checked={question.is_required} onCheckedChange={(checked) => updateQuestion(sIndex, qIndex, 'is_required', checked)} />
-                                                                                                    <Label htmlFor={`req-${sIndex}-${qIndex}`} className="text-sm font-normal">Require an answer</Label>
-                                                                                                </div>
+                                                                                                {!isTitle && !isBranch && !isDepartment && selectedTypeIdentifier !== 'employee_attendance_roster' && selectedTypeIdentifier !== 'employee_lookup' && (
+                                                                                                    <div className="mt-4 pt-3 border-t">
+                                                                                                        <Label className="text-xs font-semibold uppercase text-muted-foreground mb-3 block">Target Responsible Departments</Label>
+                                                                                                        <MultiSelect
+                                                                                                            options={departments.map((dept: any) => ({ value: String(dept.id), label: dept.name }))}
+                                                                                                            selected={question.department_targets || []}
+                                                                                                            onChange={(val) => updateQuestion(sIndex, qIndex, 'department_targets', val)}
+                                                                                                            placeholder="Select responsible departments..."
+                                                                                                        />
+                                                                                                        <p className="text-xs text-muted-foreground mt-2">If selected, this question's score inherently routes ONLY to active employees in these departments globally per form submission.</p>
+                                                                                                    </div>
+                                                                                                )}
 
                                                                                                 {isSelectType && (
                                                                                                     <div className="mt-4 pt-3 border-t space-y-3">

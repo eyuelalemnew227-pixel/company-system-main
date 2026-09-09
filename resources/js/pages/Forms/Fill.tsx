@@ -7,11 +7,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import SignatureCanvas from 'react-signature-canvas';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Star, MapPin } from 'lucide-react';
-import React from 'react';
-
+import { MultiSelect } from '@/components/ui/multi-select';
+import { Star, MapPin, ChevronRight } from 'lucide-react';
+import React, { useMemo, useEffect, useState, useRef } from 'react';
 const GeoLocationPicker = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
     const [loading, setLoading] = React.useState(false);
     const [error, setError] = React.useState('');
@@ -175,7 +176,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         });
     }
 
-    const { data, setData, post, put, processing, errors } = useForm({
+    const { data, setData, post, put, processing, errors, transform } = useForm({
         answers: initialAnswers as Record<number, any>
     });
 
@@ -206,6 +207,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
+
         if (submission) {
             put(`/submissions/${submission.id}`);
         } else {
@@ -280,6 +282,8 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         }
 
         switch (typeId) {
+            case 'title':
+                return null;
             case 'textarea':
                 return (
                     <Textarea
@@ -357,6 +361,123 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                         emptyText="No employees found for the selected criteria"
                     />
                 );
+            case 'employee_attendance_roster':
+                const rosterArr = Array.isArray(answer) ? answer : [];
+
+                // Group employees by department
+                const groupedEmployees = useMemo(() => {
+                    const groups: Record<string, any[]> = {};
+                    const unassigned: any[] = [];
+                    localFilteredEmployees.forEach(emp => {
+                        const deptId = String(emp.department_id || '');
+                        if (deptId && deptId !== 'null') {
+                            if (!groups[deptId]) groups[deptId] = [];
+                            groups[deptId].push(emp);
+                        } else {
+                            unassigned.push(emp);
+                        }
+                    });
+
+                    // Convert dict into array mapped with department names for structured rendering
+                    const structuredGroups = Object.entries(groups).map(([deptId, emps]) => {
+                        const dept = departments?.find((d: any) => String(d.id) === deptId);
+                        return {
+                            id: deptId,
+                            name: dept?.name || 'Unknown Department',
+                            employees: emps
+                        };
+                    });
+
+                    // Always show unassigned last if it has any employees
+                    if (unassigned.length > 0) {
+                        structuredGroups.push({
+                            id: 'unassigned',
+                            name: 'Unassigned employees',
+                            employees: unassigned
+                        });
+                    }
+
+                    return structuredGroups;
+                }, [localFilteredEmployees, departments]);
+
+                return (
+                    <div className="bg-white border rounded-xl shadow-sm overflow-hidden p-6 gap-6 flex flex-col mb-4">
+                        {!localBranch ? (
+                            <div className="text-center py-8">
+                                <p className="text-muted-foreground font-medium text-lg">Please select a Branch (in this section) to load the Attendance Roster.</p>
+                            </div>
+                        ) : localFilteredEmployees.length === 0 ? (
+                            <div className="text-center py-8">
+                                <p className="text-red-500 font-medium">No employees found for this location.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                {groupedEmployees.map((group) => {
+                                    const selectedCount = group.employees.filter((emp: any) => rosterArr.includes(String(emp.id))).length;
+                                    const totalCount = group.employees.length;
+                                    const isComplete = selectedCount > 0;
+
+                                    return (
+                                        <details key={group.id} open className="group border border-gray-200 rounded-lg overflow-hidden bg-gray-50/50">
+                                            <summary className="flex justify-between items-center bg-gray-100/80 px-4 py-3 border-b border-gray-200 cursor-pointer hover:bg-gray-200/50 transition-colors list-none select-none [&::-webkit-details-marker]:hidden">
+                                                <div className="flex items-center space-x-2">
+                                                    <ChevronRight className="w-5 h-5 text-gray-500 transition-transform duration-200 group-open:rotate-90" />
+                                                    <h3 className="font-bold text-gray-800 text-base">{group.name}</h3>
+                                                </div>
+                                                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shadow-sm ${isComplete ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-red-50 text-red-600 border border-red-200 animate-pulse'}`}>
+                                                    {selectedCount} / {totalCount} Selected {isComplete ? '' : '(Unselected)'}
+                                                </span>
+                                            </summary>
+                                            <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 bg-white">
+                                                {group.employees.map((emp: any) => {
+                                                    const isPresent = rosterArr.includes(String(emp.id));
+                                                    return (
+                                                        <label
+                                                            key={emp.id}
+                                                            className={`flex animate-in fade-in zoom-in duration-300 items-start p-4 rounded-lg border-2 cursor-pointer transition-all ${isPresent
+                                                                ? 'bg-amber-50 border-amber-500 shadow-md ring-1 ring-amber-500/20'
+                                                                : 'bg-white border-gray-100 hover:border-amber-200 hover:bg-gray-50'
+                                                                }`}
+                                                        >
+                                                            <div className="flex-shrink-0 pt-1 border border-zinc-200 dark:border-zinc-800 bg-white rounded flex items-center justify-center p-1 mr-4 shadow-sm w-fit">
+                                                                <Checkbox
+                                                                    id={`emp-${emp.id}`}
+                                                                    checked={isPresent}
+                                                                    onCheckedChange={(checked: boolean | string) => {
+                                                                        const newVal = String(emp.id);
+                                                                        const newArr = checked
+                                                                            ? [...rosterArr, newVal]
+                                                                            : rosterArr.filter((v: any) => v !== newVal);
+                                                                        handleAnswerChange(question.id, newArr);
+                                                                    }}
+                                                                    className="data-[state=checked]:bg-amber-600 data-[state=checked]:text-white h-6 w-6 rounded border-zinc-300"
+                                                                />
+                                                            </div>
+                                                            <div className="flex flex-col min-w-0 flex-1">
+                                                                <span className="font-bold text-gray-900 truncate tracking-tight text-[15px]">{emp.name}</span>
+                                                                <span className="text-xs font-semibold uppercase text-amber-700/80 mt-1 flex items-center">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mr-1.5"></div>
+                                                                    {group.name}
+                                                                </span>
+                                                            </div>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        </details>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        {localBranch && localFilteredEmployees.length > 0 && (
+                            <div className="flex justify-end pt-4 border-t border-gray-200 items-center mt-2">
+                                <span className={`text-sm font-semibold px-3 py-1.5 rounded-full shadow-sm border ${rosterArr.length > 0 ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-red-50 text-red-600 border-red-200"}`}>
+                                    Total: {rosterArr.length} / {localFilteredEmployees.length} Present
+                                </span>
+                            </div>
+                        )}
+                    </div>
+                );
             case 'select_one':
                 // Optional chaining fallback array for safety
                 const choices = question.choices || [];
@@ -396,6 +517,199 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                 } else {
                     return <p className="text-sm text-red-500 italic">No options defined for this question.</p>;
                 }
+            case 'employee_evaluation_grid':
+                const evalChoices = question.choices || [];
+                const evalTargets = question.department_targets || [];
+                const allowManualSelection = question.visibility_logic?.allow_manual_selection === true;
+                const hasSubQuestions = question.visibility_logic?.has_sub_questions === true;
+                const subQuestions = question.visibility_logic?.sub_questions || [];
+
+                let globalRosterMatch = section?.questions?.find((q: any) =>
+                    (q.input_type?.type_identifier === 'employee_attendance_roster' || q.inputType?.type_identifier === 'employee_attendance_roster')
+                );
+
+                if (!globalRosterMatch) {
+                    formVersion.sections?.forEach((s: any) => {
+                        if (!globalRosterMatch) {
+                            globalRosterMatch = s.questions?.find((q: any) =>
+                                (q.input_type?.type_identifier === 'employee_attendance_roster' || q.inputType?.type_identifier === 'employee_attendance_roster')
+                            );
+                        }
+                    });
+                }
+
+                const localRosterVal = globalRosterMatch ? (data.answers[globalRosterMatch.id] || []) : [];
+                const localRosterArray = Array.isArray(localRosterVal) ? localRosterVal : [];
+
+                if (localRosterArray.length === 0) {
+                    return <p className="text-sm text-gray-500 italic border p-3 rounded-md bg-gray-50">Check an Attendance Roster first to populate this grid.</p>;
+                }
+
+                if (hasSubQuestions && subQuestions.length === 0) {
+                    return <p className="text-sm text-amber-500 italic border p-3 rounded-md bg-amber-50">No Sub-Questions configured. Please edit the form and add sub-questions.</p>;
+                }
+
+                if (evalChoices.length === 0) {
+                    return <p className="text-sm text-amber-500 italic border p-3 rounded-md bg-amber-50">No Options configured. Please edit the form and add choices.</p>;
+                }
+
+                const targetedEmps = localRosterArray.map(empIdStr => employees?.find(e => String(e.id) === empIdStr)).filter(emp => {
+                    if (!emp) return false;
+                    return evalTargets.length === 0 || evalTargets.includes(String(emp.department_id));
+                });
+
+                if (targetedEmps.length === 0) {
+                    return <p className="text-sm text-gray-500 italic border p-3 rounded-md bg-gray-50">No active employees matching the targeted departments are checked in.</p>;
+                }
+
+                const manualSelectionStateKey = `${question.id}_manual_selection`;
+                const manualSelectedIds = Array.isArray(data.answers[manualSelectionStateKey]) ? data.answers[manualSelectionStateKey] : [];
+
+                let displayedEmps = targetedEmps;
+                if (allowManualSelection) {
+                    displayedEmps = targetedEmps.filter(e => e && manualSelectedIds.includes(String(e.id)));
+                }
+
+                const gridAnsState = data.answers[question.id] || {};
+                const hasRemarkField = question.visibility_logic?.has_remark_field ?? true;
+
+                const handleGridChange = (empId: string, choiceId: string, val: string) => {
+                    const currentEmpState = gridAnsState[empId] || {};
+                    handleAnswerChange(question.id, {
+                        ...gridAnsState,
+                        [empId]: {
+                            ...currentEmpState,
+                            [choiceId]: val
+                        }
+                    });
+                };
+
+                return (
+                    <div className="flex flex-col space-y-4">
+                        {allowManualSelection && (
+                            <div className="w-full max-w-xl bg-white border border-amber-200 shadow-sm p-4 rounded-lg">
+                                <Label className="text-xs uppercase text-amber-900 font-bold tracking-wider mb-2 block">1. Select Target Employees</Label>
+                                <MultiSelect
+                                    options={targetedEmps.map(emp => ({ value: String(emp!.id), label: emp!.name }))}
+                                    onChange={(val) => handleAnswerChange(manualSelectionStateKey, val)}
+                                    selected={manualSelectedIds}
+                                    placeholder="Search and select employees..."
+                                    className="bg-white"
+                                />
+                                <p className="text-[11px] text-amber-700 mt-2 font-medium">Only the selected employees will appear in the evaluation matrix below.</p>
+                            </div>
+                        )}
+
+                        {displayedEmps.length > 0 ? (
+                            <div className="w-full overflow-x-auto rounded-md border mt-2 shadow-[0_0_0_1px_rgba(0,0,0,0.05)]">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-[#1c2c4c] text-white border-b uppercase text-xs">
+                                        <tr>
+                                            <th className="px-4 py-3 font-semibold whitespace-nowrap sticky left-0 z-10 border-r bg-[#1c2c4c]">Employee Name</th>
+                                            {hasSubQuestions ? (
+                                                subQuestions.map((sq: any) => (
+                                                    <th key={sq.id || sq.label} className="px-4 py-3 font-semibold text-center whitespace-nowrap border-l border-[#2c3e60] leading-snug">{sq.label}</th>
+                                                ))
+                                            ) : (
+                                                <th className="px-4 py-3 font-semibold text-center whitespace-nowrap border-l border-[#2c3e60] leading-snug">Evaluation</th>
+                                            )}
+                                            {hasRemarkField && <th className="px-4 py-3 font-semibold border-l border-[#2c3e60]">Remark / Note</th>}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y bg-white">
+                                        {displayedEmps.map((emp: any) => {
+                                            const empIdStr = String(emp.id);
+                                            const empData = gridAnsState[empIdStr] || {};
+                                            return (
+                                                <tr key={empIdStr} className="hover:bg-slate-50 transition-colors">
+                                                    <td className="px-4 py-3 font-medium text-slate-700 whitespace-nowrap bg-white sticky left-0 z-10 border-r shadow-[1px_0_0_0_#e5e7eb]">{emp.name}</td>
+
+                                                    {hasSubQuestions ? (
+                                                        subQuestions.map((sq: any) => (
+                                                            <td key={sq.id || sq.label} className="px-4 py-3 text-center border-l align-middle min-w-[120px]">
+                                                                <div className="flex items-center justify-center space-x-3">
+                                                                    {evalChoices.map((c: any) => (
+                                                                        <label key={c.id} className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded border border-transparent hover:border-gray-200 transition-colors">
+                                                                            <input
+                                                                                type="radio"
+                                                                                name={`grid-${question.id}-${empIdStr}-${sq.id || sq.label}`}
+                                                                                value={c.value}
+                                                                                checked={empData[sq.id || sq.label] === c.value}
+                                                                                onChange={() => handleGridChange(empIdStr, sq.id || sq.label, c.value)}
+                                                                                className="h-4 w-4 focus:ring-primary border-gray-300 cursor-pointer text-[#1c2c4c]"
+                                                                            />
+                                                                            <span className="text-xs font-semibold text-gray-700">{c.label}</span>
+                                                                        </label>
+                                                                    ))}
+                                                                </div>
+                                                            </td>
+                                                        ))
+                                                    ) : (
+                                                        <td className="px-4 py-3 text-center border-l align-middle min-w-[120px]">
+                                                            <div className="flex items-center justify-center space-x-4">
+                                                                {evalChoices.map((c: any) => (
+                                                                    <label key={c.id} className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded border border-transparent hover:border-gray-200 transition-colors">
+                                                                        <input
+                                                                            type="radio"
+                                                                            name={`grid-${question.id}-${empIdStr}-single`}
+                                                                            value={c.value}
+                                                                            checked={empData['single'] === c.value}
+                                                                            onChange={() => handleGridChange(empIdStr, 'single', c.value)}
+                                                                            className="h-4.5 w-4.5 focus:ring-primary border-gray-300 cursor-pointer text-[#1c2c4c]"
+                                                                        />
+                                                                        <span className="text-sm font-semibold text-gray-700">{c.label}</span>
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        </td>
+                                                    )}
+
+                                                    {hasRemarkField && (
+                                                        <td className="px-4 py-2 min-w-[150px] border-l">
+                                                            <Input
+                                                                type="text"
+                                                                value={empData.remark || ''}
+                                                                onChange={(e) => handleGridChange(empIdStr, 'remark', e.target.value)}
+                                                                placeholder="Note..."
+                                                                className="w-full h-8 text-xs bg-white"
+                                                            />
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <div className="text-sm text-gray-400 italic p-4 text-center border rounded-md bg-gray-50/50">
+                                {allowManualSelection ? "Please carefully select the target employees using the dropdown menu." : "No relevant employees to display for this evaluation matrix."}
+                            </div>
+                        )}
+                    </div>
+                );
+            case 'select_multiple':
+                const multiChoices = question.choices || [];
+                const currentAnsArray = Array.isArray(answer) ? answer : [];
+                return (
+                    <div className="flex flex-col space-y-3">
+                        {multiChoices.length > 0 ? multiChoices.map((choice: any) => (
+                            <label key={choice.id} className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors w-fit">
+                                <Checkbox
+                                    checked={currentAnsArray.includes(choice.value)}
+                                    onCheckedChange={(checked) => {
+                                        const newArr = checked
+                                            ? [...currentAnsArray, choice.value]
+                                            : currentAnsArray.filter((v: any) => v !== choice.value);
+                                        handleAnswerChange(question.id, newArr);
+                                    }}
+                                    className="data-[state=checked]:bg-amber-600 data-[state=checked]:text-white h-5 w-5 rounded border-zinc-300"
+                                />
+                                <span className="text-base font-medium leading-none">{choice.label}</span>
+                            </label>
+                        )) : <p className="text-sm text-red-500 italic">No options defined for this question.</p>}
+                    </div>
+                );
             case 'number':
                 return <Input type="number" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} disabled={!!question.default_value} className="max-w-xl bg-white" />;
             case 'date':
@@ -489,26 +803,51 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                                     <h3 className="text-xl font-bold text-amber-900">{idx + 1}. {section.title}</h3>
                                 </div>
                                 <CardContent className="p-8 space-y-10 bg-white">
-                                    {!section.questions || section.questions.length === 0 ? (
-                                        <p className="text-muted-foreground italic">No questions in this section.</p>
-                                    ) : (
-                                        section.questions.filter(isQuestionVisible).map((question: any, qIdx: number) => (
-                                            <div key={question.id} className="space-y-4 pb-8 border-b border-gray-100 last:border-0 last:pb-0">
-                                                <Label className="text-lg font-semibold text-gray-900">
-                                                    {qIdx + 1}. {question.label}
-                                                    {Boolean(question.is_required) && <span className="text-red-500 ml-1" title="Required field">*</span>}
-                                                </Label>
-                                                <div className="pl-4 pt-2">
-                                                    {renderInput(section, question)}
-                                                    {(errors as any)[`answers.${question.id}`] && (
-                                                        <p className="text-red-500 text-sm mt-2 flex items-center">
-                                                            <span className="font-bold mr-1">Error:</span> {(errors as any)[`answers.${question.id}`]}
-                                                        </p>
-                                                    )}
+                                    {(() => {
+                                        const visibleQuestions = (section.questions || []).filter(isQuestionVisible);
+                                        if (visibleQuestions.length === 0) {
+                                            return <p className="text-muted-foreground italic">No questions in this section.</p>;
+                                        }
+
+                                        let qCounter = 0;
+                                        return visibleQuestions.map((question: any) => {
+                                            const inputTypeResolver = question.input_type || question.inputType;
+                                            const isTitle = (inputTypeResolver?.type_identifier || '') === 'title';
+                                            if (!isTitle) {
+                                                qCounter++;
+                                            }
+
+                                            if (isTitle) {
+                                                return (
+                                                    <div key={question.id} className="pt-4 pb-2 border-b-2 border-amber-800/20">
+                                                        <div className="flex items-center space-x-2.5">
+                                                            <span className="w-1.5 h-6 bg-amber-700 rounded-full inline-block shrink-0"></span>
+                                                            <h4 className="text-lg font-bold text-amber-950 tracking-tight">
+                                                                {question.label}
+                                                            </h4>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            return (
+                                                <div key={question.id} className="space-y-4 pb-8 border-b border-gray-100 last:border-0 last:pb-0">
+                                                    <Label className="text-lg font-semibold text-gray-900">
+                                                        {qCounter}. {question.label}
+                                                        {Boolean(question.is_required) && <span className="text-red-500 ml-1" title="Required field">*</span>}
+                                                    </Label>
+                                                    <div className="pl-4 pt-2">
+                                                        {renderInput(section, question)}
+                                                        {(errors as any)[`answers.${question.id}`] && (
+                                                            <p className="text-red-500 text-sm mt-2 flex items-center">
+                                                                <span className="font-bold mr-1">Error:</span> {(errors as any)[`answers.${question.id}`]}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        ))
-                                    )}
+                                            );
+                                        });
+                                    })()}
                                 </CardContent>
                             </Card>
                         ))

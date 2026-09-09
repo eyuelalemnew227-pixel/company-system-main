@@ -108,6 +108,7 @@ class FormController extends Controller
             'sections.*.questions.*.choices.*.value' => 'nullable|string',
             'sections.*.questions.*._id' => 'nullable|string',
             'sections.*.questions.*.visibility_logic' => 'nullable|array',
+            'sections.*.questions.*.department_targets' => 'nullable|array',
         ]);
 
         DB::transaction(function () use ($validated) {
@@ -143,6 +144,7 @@ class FormController extends Controller
                                 'order_index' => $qIndex,
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),
                                 'visibility_logic' => !empty($questionData['visibility_logic']) ? $questionData['visibility_logic'] : null,
+                                'department_targets' => !empty($questionData['department_targets']) ? $questionData['department_targets'] : null,
                             ]);
 
                             if (!empty($questionData['choices'])) {
@@ -257,6 +259,7 @@ class FormController extends Controller
             'sections.*.questions.*.choices.*.value' => 'nullable|string',
             'sections.*.questions.*._id' => 'nullable|string',
             'sections.*.questions.*.visibility_logic' => 'nullable|array',
+            'sections.*.questions.*.department_targets' => 'nullable|array',
             'sections.*.questions.*.default_value' => 'nullable|string',
         ]);
 
@@ -295,6 +298,7 @@ class FormController extends Controller
                                 'order_index' => $qIndex,
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),
                                 'visibility_logic' => !empty($questionData['visibility_logic']) ? $questionData['visibility_logic'] : null,
+                                'department_targets' => !empty($questionData['department_targets']) ? $questionData['department_targets'] : null,
                                 'default_value' => $questionData['default_value'] ?? null,
                             ]);
 
@@ -372,6 +376,7 @@ class FormController extends Controller
                                 'is_required' => $question->is_required,
                                 'order_index' => $question->order_index,
                                 'default_value' => $question->default_value,
+                                'department_targets' => $question->department_targets,
                                 'visibility_logic' => $question->visibility_logic,
                                 'choices' => $question->choices->map(function ($choice) {
                                     return [
@@ -443,6 +448,7 @@ class FormController extends Controller
                                 'order_index' => $questionData['order_index'] ?? $qIndex,
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),
                                 'default_value' => $questionData['default_value'] ?? null,
+                                'department_targets' => !empty($questionData['department_targets']) ? $questionData['department_targets'] : null,
                                 'visibility_logic' => !empty($questionData['visibility_logic']) ? $questionData['visibility_logic'] : null,
                             ]);
 
@@ -514,6 +520,7 @@ class FormController extends Controller
                                 'order_index' => $questionData['order_index'] ?? $qIndex,
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),
                                 'visibility_logic' => !empty($questionData['visibility_logic']) ? $questionData['visibility_logic'] : null,
+                                'department_targets' => !empty($questionData['department_targets']) ? $questionData['department_targets'] : null,
                             ]);
 
                             if (!empty($questionData['choices'])) {

@@ -8,6 +8,99 @@ use Inertia\Inertia;
 
 class FormSubmissionAdminController extends Controller
 {
+    private function _calculateEmployeeScores($submission, $employeesCollection)
+    {
+        $rosterAnswer = $submission->answers->first(function ($a) {
+            return ($a->question->inputType->type_identifier ?? '') === 'employee_attendance_roster';
+        });
+
+        $yesAnswers = 0;
+        $totalBoolQuestions = 0;
+        $employeeScoresMatrix = [];
+        $presentEmployeeIds = [];
+
+        if ($rosterAnswer && $rosterAnswer->value_text) {
+            $decoded = json_decode($rosterAnswer->value_text, true);
+            if (is_array($decoded)) {
+                $presentEmployeeIds = $decoded;
+            }
+        }
+
+        foreach ($presentEmployeeIds as $empId) {
+            $emp = $employeesCollection->firstWhere('id', (int) $empId);
+            if ($emp) {
+                $employeeScoresMatrix[$empId] = [
+                    'id' => $emp->id,
+                    'name' => trim($emp->first_name . ' ' . $emp->last_name) ?: $emp->employee_code,
+                    'department_id' => $emp->department_id,
+                    'total_points' => 0,
+                    'earned_points' => 0,
+                    'percentage' => null,
+                ];
+            }
+        }
+
+        foreach ($submission->answers as $ans) {
+            $qType = $ans->question->inputType->type_identifier ?? 'text';
+            if ($qType === 'select_one' && ($ans->value_text === '0' || $ans->value_text === '1')) {
+                $totalBoolQuestions++;
+                $isYes = ($ans->value_text === '1');
+                if ($isYes) {
+                    $yesAnswers++;
+                }
+
+                $targetDepts = $ans->question->department_targets ?? [];
+
+                foreach ($employeeScoresMatrix as $empId => &$empScore) {
+                    if (empty($targetDepts) || in_array((string) $empScore['department_id'], $targetDepts, true)) {
+                        $empScore['total_points']++;
+                        if ($isYes) {
+                            $empScore['earned_points']++;
+                        }
+                    }
+                }
+            }
+
+            // Employee Evaluation Grid Scoring Map Integration
+            if ($qType === 'employee_evaluation_grid') {
+                $targets = $ans->targeted_employees;
+                if (is_string($targets)) {
+                    $targets = json_decode($targets, true);
+                }
+                if (!is_array($targets)) {
+                    $targets = [];
+                }
+
+                $numVal = is_numeric($ans->value_text) ? (float) $ans->value_text : 0;
+
+                foreach ($targets as $empIdStr) {
+                    $empIdNum = (int) $empIdStr;
+                    if (isset($employeeScoresMatrix[$empIdNum])) {
+                        if ($numVal > 0) {
+                            $employeeScoresMatrix[$empIdNum]['earned_points'] += $numVal;
+                        }
+
+                        // We increment total_points checking max option value ideally, but let's assume
+                        // every evaluation token answered expects a ceiling.
+                        // If value was '0' or '1' strictly, total is always 1 per token.
+                        $employeeScoresMatrix[$empIdNum]['total_points'] += max(1, $numVal);
+                    }
+                }
+            }
+        }
+
+        foreach ($employeeScoresMatrix as $empId => &$empScore) {
+            if ($empScore['total_points'] > 0) {
+                $empScore['percentage'] = round(($empScore['earned_points'] / $empScore['total_points']) * 100, 1);
+            }
+        }
+
+        $submission->calculated_score = $totalBoolQuestions > 0 ? round(($yesAnswers / $totalBoolQuestions) * 100, 1) : null;
+        $submission->employee_scores = array_values($employeeScoresMatrix);
+
+        return $submission;
+    }
+
     /**
      * List all form directories globally.
      */
@@ -50,19 +143,9 @@ class FormSubmissionAdminController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $submissions->each(function ($sub) {
-            $yesAnswers = 0;
-            $totalBoolQuestions = 0;
-            foreach ($sub->answers as $ans) {
-                $qType = $ans->question->inputType->type_identifier ?? 'text';
-                if ($qType === 'select_one' && ($ans->value_text === '0' || $ans->value_text === '1')) {
-                    $totalBoolQuestions++;
-                    if ($ans->value_text === '1') {
-                        $yesAnswers++;
-                    }
-                }
-            }
-            $sub->calculated_score = $totalBoolQuestions > 0 ? round(($yesAnswers / $totalBoolQuestions) * 100, 1) : null;
+        $fullEmployeesCollection = \App\Models\Employee::get();
+        $submissions->each(function ($sub) use ($fullEmployeesCollection) {
+            $this->_calculateEmployeeScores($sub, $fullEmployeesCollection);
         });
 
         $branches = \App\Models\Branch::pluck('name', 'id')->toArray();
@@ -132,7 +215,9 @@ class FormSubmissionAdminController extends Controller
             'user',
             'formVersion.form',
             'formVersion.sections.questions.inputType',
-            'answers.question.inputType'
+            'formVersion.sections.questions.choices',
+            'answers.question.inputType',
+            'answers.question.choices'
         ])->findOrFail($submissionId);
 
         $user = auth()->user();
@@ -151,18 +236,8 @@ class FormSubmissionAdminController extends Controller
             ];
         });
 
-        $yesAnswers = 0;
-        $totalBoolQuestions = 0;
-        foreach ($submission->answers as $ans) {
-            $qType = $ans->question->inputType->type_identifier ?? 'text';
-            if ($qType === 'select_one' && ($ans->value_text === '0' || $ans->value_text === '1')) {
-                $totalBoolQuestions++;
-                if ($ans->value_text === '1') {
-                    $yesAnswers++;
-                }
-            }
-        }
-        $submission->calculated_score = $totalBoolQuestions > 0 ? round(($yesAnswers / $totalBoolQuestions) * 100, 1) : null;
+        $fullEmployeesCollection = \App\Models\Employee::get();
+        $this->_calculateEmployeeScores($submission, $fullEmployeesCollection);
 
         return Inertia::render('Forms/Submissions/Show', [
             'form' => $submission->formVersion->form, // Keep old prop structure to limit UI rewrites
@@ -247,21 +322,51 @@ class FormSubmissionAdminController extends Controller
             $submission->answers()->delete();
 
             foreach ($validated['answers'] as $questionId => $answerValue) {
-                $boolVal = null;
-                if (is_bool($answerValue)) {
-                    $boolVal = $answerValue;
-                } else if (in_array(strtolower((string) $answerValue), ['yes', 'true', '1'], true)) {
-                    $boolVal = true;
-                } else if (in_array(strtolower((string) $answerValue), ['no', 'false', '0'], true)) {
-                    $boolVal = false;
+                // To fetch the question type safely for matrix targeting we can query it directly here (or eager load it above)
+                $questionForTypeCheck = \App\Models\FormQuestion::with('inputType')->find($questionId);
+                $tId = $questionForTypeCheck->inputType->type_identifier ?? '';
+
+                if ($tId === 'title') {
+                    continue;
                 }
 
-                \App\Models\FormSubmissionAnswer::create([
-                    'form_submission_id' => $submission->id,
-                    'form_question_id' => $questionId,
-                    'value_text' => is_bool($answerValue) ? ($answerValue ? 'yes' : 'no') : (is_array($answerValue) ? json_encode($answerValue) : (string) $answerValue),
-                    'value_boolean' => $boolVal,
-                ]);
+                if ($tId === 'employee_evaluation_grid' && is_array($answerValue)) {
+                    foreach ($answerValue as $empIdStr => $evals) {
+                        if (!is_array($evals))
+                            continue;
+                        $empId = [(string) $empIdStr];
+
+                        foreach ($evals as $subQLabel => $val) {
+                            if ($subQLabel === 'remark')
+                                continue;
+
+                            \App\Models\FormSubmissionAnswer::create([
+                                'form_submission_id' => $submission->id,
+                                'form_question_id' => $questionId,
+                                'sub_question_identifier' => $subQLabel === 'single' ? null : $subQLabel,
+                                'value_text' => (string) $val,
+                                'value_boolean' => null,
+                                'targeted_employees' => $empId,
+                            ]);
+                        }
+                    }
+                } else {
+                    $boolVal = null;
+                    if (is_bool($answerValue)) {
+                        $boolVal = $answerValue;
+                    } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['yes', 'true', '1'], true)) {
+                        $boolVal = true;
+                    } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['no', 'false', '0'], true)) {
+                        $boolVal = false;
+                    }
+
+                    \App\Models\FormSubmissionAnswer::create([
+                        'form_submission_id' => $submission->id,
+                        'form_question_id' => $questionId,
+                        'value_text' => is_bool($answerValue) ? ($answerValue ? 'yes' : 'no') : (is_array($answerValue) ? json_encode($answerValue) : (string) $answerValue),
+                        'value_boolean' => $boolVal,
+                    ]);
+                }
             }
         });
 
@@ -337,6 +442,9 @@ class FormSubmissionAdminController extends Controller
 
         $headersMap = [];
         foreach ($allQuestions as $q) {
+            if (($q->inputType->type_identifier ?? '') === 'title') {
+                continue;
+            }
             if ($q->local_id && !isset($headersMap[$q->local_id])) {
                 $headersMap[$q->local_id] = [
                     'label' => $q->label,

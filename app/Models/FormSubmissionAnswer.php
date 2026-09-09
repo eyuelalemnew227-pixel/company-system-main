@@ -9,7 +9,11 @@ class FormSubmissionAnswer extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['form_submission_id', 'form_question_id', 'value_text', 'value_boolean'];
+    protected $fillable = ['form_submission_id', 'form_question_id', 'value_text', 'value_boolean', 'targeted_employees'];
+
+    protected $casts = [
+        'targeted_employees' => 'array',
+    ];
 
     public function submission()
     {
