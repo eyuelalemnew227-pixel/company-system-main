@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { type BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
 import { Head, router, usePage } from '@inertiajs/react';
-import { Check, ChevronsUpDown, Filter, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Filter, Loader2, X } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { usePopup } from '@/hooks/use-popup';
 
@@ -513,7 +513,8 @@ export default function WeeklyBudgetCeoView({
 	const canManageCeo = can('manage ceo budgets');
 
 	// ── Filter state ────────────────────────────────────────────────────────
-	const [activeTab, setActiveTab] = useState<'analytics' | 'transferred' | 'approved_not_paid' | 'paid'>('analytics');
+	const [activeTab, setActiveTab] = useState<'analytics' | 'transferred' | 'approved_not_paid' | 'paid'>(request?.tab ?? 'analytics');
+	const [isLoadingTab, setIsLoadingTab] = useState(false);
 	const [selectedRequestType, setSelectedRequestType] = useState<string>(request?.request_type ?? 'all');
 	const [selectedStatusCeo, setSelectedStatusCeo] = useState<string>(request?.status_ceo ?? 'all');
 	const [selectedBranch, setSelectedBranch] = useState<string>(request?.branch_id ?? 'all');
@@ -691,12 +692,13 @@ export default function WeeklyBudgetCeoView({
 
 	function applyFilters(
 		overrides: Record<string, string> = {},
-		visitOptions: { only?: string[]; preserveScroll?: boolean } = {},
+		visitOptions: { only?: string[]; preserveScroll?: boolean; onFinish?: () => void } = {},
 	) {
 		const params: Record<string, string> = {
 			fiscal_year_id: selectedFiscalYear,
 			fiscal_month_id: selectedFiscalMonth,
 		};
+		if (activeTab !== 'analytics') params.tab = activeTab;
 		if (selectedRequestType !== 'all') params.request_type = selectedRequestType;
 		if (selectedStatusCeo !== 'all') params.status_ceo = selectedStatusCeo;
 		if (selectedBranch !== 'all') params.branch_id = selectedBranch;
@@ -718,6 +720,7 @@ export default function WeeklyBudgetCeoView({
 			preserveState: true,
 			replace: true,
 			preserveScroll: visitOptions.preserveScroll ?? true,
+			onFinish: visitOptions.onFinish,
 			...(visitOptions.only ? { only: visitOptions.only } : {}),
 		});
 	}
@@ -1297,7 +1300,12 @@ export default function WeeklyBudgetCeoView({
 							return (
 								<button
 									key={tab.id}
-									onClick={() => setActiveTab(tab.id as any)}
+									onClick={() => {
+										if (activeTab === tab.id) return;
+										setIsLoadingTab(true);
+										setActiveTab(tab.id as any);
+										applyFilters({ tab: tab.id }, { onFinish: () => setIsLoadingTab(false) });
+									}}
 									className={cn(
 										"relative px-7 py-2.5 text-[12px] font-bold tracking-wider uppercase transition-colors group outline-none -mr-3",
 										isActive ? "text-white dark:text-slate-900" : "text-[#5f738a] hover:text-[#4b5b6d] dark:text-slate-300 dark:hover:text-white"
@@ -1319,7 +1327,12 @@ export default function WeeklyBudgetCeoView({
 					</div>
 				</div>
 
-				{activeTab === 'analytics' ? (
+				{isLoadingTab ? (
+					<div className="mt-8 flex flex-col items-center justify-center py-24 text-slate-500">
+						<Loader2 className="h-10 w-10 animate-spin" />
+						<p className="mt-4 text-sm font-medium">Loading data...</p>
+					</div>
+				) : activeTab === 'analytics' ? (
 					<div className="grid grid-cols-1 gap-4 mt-2 xl:grid-cols-3">
 						<div className="xl:col-span-1">
 							<Card className="h-full gap-0 bg-white py-0 shadow-md dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600">
@@ -1676,6 +1689,83 @@ export default function WeeklyBudgetCeoView({
 								</CardContent>
 							</Card>
 						</div>
+					</div>
+				) : activeTab === 'transferred' ? (
+					<div className="mt-4">
+						<Card className="gap-2 py-0 border-2 border-slate-300 dark:border-slate-600">
+							<CardHeader className="px-6 py-3">
+								<div className="flex items-center justify-between gap-3">
+									<CardTitle>Transferred Budgets</CardTitle>
+									<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
+										📥 Export CSV
+									</Button>
+								</div>
+							</CardHeader>
+							<CardContent className="px-6 pb-4">
+								<Table>
+									<TableHeader className="bg-slate-500 dark:bg-slate-700">
+										<TableRow>
+											<TableHead className="font-bold text-white">Department</TableHead>
+											<TableHead className="font-bold text-white">Branch</TableHead>
+											<TableHead className="font-bold text-white">Request Type</TableHead>
+											<TableHead className="whitespace-nowrap font-bold text-white">Requested On</TableHead>
+											<TableHead className="whitespace-nowrap font-bold text-white">Since Requested</TableHead>
+											<TableHead className="font-bold text-white">Description</TableHead>
+											<TableHead className="font-bold text-white">Amount</TableHead>
+										</TableRow>
+									</TableHeader>
+									<TableBody>
+										{items.data.map((item) => {
+											let sinceRequested = 0;
+											if (item.transferred_to && item.week_number) {
+												if (item.transferred_to >= item.week_number) {
+													sinceRequested = item.transferred_to - item.week_number;
+												} else {
+													sinceRequested = (53 - item.week_number) + item.transferred_to;
+												}
+											}
+
+											return (
+												<TableRow key={item.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
+													<TableCell>{item.department ?? '-'}</TableCell>
+													<TableCell>{item.branch ?? '-'}</TableCell>
+													<TableCell>{requestTypeBadge(item.request_type)}</TableCell>
+													<TableCell className="whitespace-nowrap">
+														{item.week_start_date ? new Date(item.week_start_date).toLocaleDateString() : '-'}
+														<div className="text-xs text-slate-500">Week {item.week_number}</div>
+													</TableCell>
+													<TableCell className="whitespace-nowrap font-medium">
+														{sinceRequested} {sinceRequested === 1 ? 'week' : 'weeks'}
+													</TableCell>
+													<TableCell className="whitespace-normal">
+														<div className="max-w-xs text-sm text-slate-600 dark:text-slate-300">
+															{item.description || '-'}
+														</div>
+													</TableCell>
+													<TableCell className="whitespace-nowrap">{formatCurrency(item.amount)}</TableCell>
+												</TableRow>
+											);
+										})}
+									</TableBody>
+									<TableFooter>
+										<TableRow className="bg-slate-200 dark:bg-slate-700">
+											<TableCell colSpan={6} className="text-right font-bold">
+												Total
+											</TableCell>
+											<TableCell className="whitespace-nowrap font-bold">{formatCurrency(visibleTotal)}</TableCell>
+										</TableRow>
+									</TableFooter>
+								</Table>
+
+								<div className="mt-4">
+									{items.data.length > 0 ? (
+										<TablePagination total={items.total} from={items.from} to={items.to} links={items.links} />
+									) : (
+										<div className="flex w-full items-center justify-center py-8 text-slate-500">No transferred budgets found.</div>
+									)}
+								</div>
+							</CardContent>
+						</Card>
 					</div>
 				) : (
 					<div className="mt-4 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700 py-24 text-slate-500 dark:text-slate-400">

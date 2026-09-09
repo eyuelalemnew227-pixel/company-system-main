@@ -1491,29 +1491,42 @@ class WeeklyBudgetController extends Controller
             'fiscalMonth',
         ]);
 
-        $applyWeekFilter = function ($q) use ($weekFilter) {
-            $q->where('status_finance', WeeklyBudgetStatusFinance::Approved->value);
+        $activeTab = request('tab', 'analytics');
 
-            if ($weekFilter && $weekFilter !== 'all') {
-                $selectedWeekNumber = WeeklyBudget::where('week_start_date', $weekFilter)->value('week_number');
-                if (!$selectedWeekNumber) {
-                    $selectedWeekNumber = \Carbon\Carbon::parse($weekFilter)->weekOfYear;
+        $applyWeekFilter = function ($q) use ($weekFilter, $activeTab) {
+            if ($activeTab === 'transferred') {
+                $q->where('status_department', WeeklyBudgetStatusDepartment::Transferred->value);
+                if ($weekFilter && $weekFilter !== 'all') {
+                    $selectedWeekNumber = WeeklyBudget::where('week_start_date', $weekFilter)->value('week_number');
+                    if (!$selectedWeekNumber) {
+                        $selectedWeekNumber = \Carbon\Carbon::parse($weekFilter)->weekOfYear;
+                    }
+                    $q->where('transferred_to', $selectedWeekNumber);
                 }
-
-                $q->where(function ($sub) use ($weekFilter, $selectedWeekNumber) {
-                    $sub->where(function ($q1) use ($weekFilter) {
-                        $q1->where('status_department', WeeklyBudgetStatusDepartment::Approved->value)
-                           ->where('week_start_date', $weekFilter);
-                    })->orWhere(function ($q2) use ($selectedWeekNumber) {
-                        $q2->where('status_department', WeeklyBudgetStatusDepartment::Transferred->value)
-                           ->where('transferred_to', $selectedWeekNumber);
-                    });
-                });
             } else {
-                $q->whereIn('status_department', [
-                    WeeklyBudgetStatusDepartment::Approved->value,
-                    WeeklyBudgetStatusDepartment::Transferred->value,
-                ]);
+                $q->where('status_finance', WeeklyBudgetStatusFinance::Approved->value);
+
+                if ($weekFilter && $weekFilter !== 'all') {
+                    $selectedWeekNumber = WeeklyBudget::where('week_start_date', $weekFilter)->value('week_number');
+                    if (!$selectedWeekNumber) {
+                        $selectedWeekNumber = \Carbon\Carbon::parse($weekFilter)->weekOfYear;
+                    }
+
+                    $q->where(function ($sub) use ($weekFilter, $selectedWeekNumber) {
+                        $sub->where(function ($q1) use ($weekFilter) {
+                            $q1->where('status_department', WeeklyBudgetStatusDepartment::Approved->value)
+                               ->where('week_start_date', $weekFilter);
+                        })->orWhere(function ($q2) use ($selectedWeekNumber) {
+                            $q2->where('status_department', WeeklyBudgetStatusDepartment::Transferred->value)
+                               ->where('transferred_to', $selectedWeekNumber);
+                        });
+                    });
+                } else {
+                    $q->whereIn('status_department', [
+                        WeeklyBudgetStatusDepartment::Approved->value,
+                        WeeklyBudgetStatusDepartment::Transferred->value,
+                    ]);
+                }
             }
         };
 
@@ -1586,6 +1599,7 @@ class WeeklyBudgetController extends Controller
                 'fiscal_year' => $wb->fiscalYear?->name,
                 'fiscal_month' => $wb->fiscalMonth?->name,
                 'week_number' => $wb->week_number,
+                'transferred_to' => $wb->transferred_to,
                 'week_start_date' => $wb->week_start_date?->toDateString(),
                 'week_end_date' => $wb->week_end_date?->toDateString(),
                 'request_type' => $wb->request_type?->value,
