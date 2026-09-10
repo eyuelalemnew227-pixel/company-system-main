@@ -1767,6 +1767,82 @@ export default function WeeklyBudgetCeoView({
 							</CardContent>
 						</Card>
 					</div>
+				) : activeTab === 'approved_not_paid' ? (
+					<div className="mt-4">
+						<Card className="gap-2 py-0 border-2 border-slate-300 dark:border-slate-600">
+							<CardHeader className="px-6 py-3">
+								<div className="flex items-center justify-between gap-3">
+									<CardTitle>CEO Approved, Not Paid</CardTitle>
+									<Button onClick={exportCsv} className="bg-green-600 text-white hover:bg-green-700">
+										📥 Export CSV
+									</Button>
+								</div>
+							</CardHeader>
+							<CardContent className="px-6 pb-4">
+								<Table>
+									<TableHeader className="bg-slate-500 dark:bg-slate-700">
+										<TableRow>
+											<TableHead className="font-bold text-white">Department</TableHead>
+											<TableHead className="font-bold text-white">Branch</TableHead>
+											<TableHead className="font-bold text-white">Request Type</TableHead>
+											<TableHead className="whitespace-nowrap font-bold text-white">Approved On</TableHead>
+											<TableHead className="whitespace-nowrap font-bold text-white">Since Approved</TableHead>
+											<TableHead className="font-bold text-white">Description</TableHead>
+											<TableHead className="font-bold text-white">Amount</TableHead>
+										</TableRow>
+									</TableHeader>
+									<TableBody>
+										{items.data.map((item) => {
+											let sinceApproved = 0;
+											if (item.ceo_approved_at) {
+												const approvedDate = new Date(item.ceo_approved_at);
+												const today = new Date();
+												const diffTime = Math.abs(today.getTime() - approvedDate.getTime());
+												const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+												sinceApproved = Math.floor(diffDays / 7);
+											}
+
+											return (
+												<TableRow key={item.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
+													<TableCell>{item.department ?? '-'}</TableCell>
+													<TableCell>{item.branch ?? '-'}</TableCell>
+													<TableCell>{requestTypeBadge(item.request_type)}</TableCell>
+													<TableCell className="whitespace-nowrap">
+														{item.ceo_approved_at ? new Date(item.ceo_approved_at).toLocaleDateString() : '-'}
+													</TableCell>
+													<TableCell className="whitespace-nowrap font-medium">
+														{sinceApproved} {sinceApproved === 1 ? 'week' : 'weeks'}
+													</TableCell>
+													<TableCell className="whitespace-normal">
+														<div className="max-w-xs text-sm text-slate-600 dark:text-slate-300">
+															{item.description || '-'}
+														</div>
+													</TableCell>
+													<TableCell className="whitespace-nowrap">{formatCurrency(item.amount)}</TableCell>
+												</TableRow>
+											);
+										})}
+									</TableBody>
+									<TableFooter>
+										<TableRow className="bg-slate-200 dark:bg-slate-700">
+											<TableCell colSpan={6} className="text-right font-bold">
+												Total
+											</TableCell>
+											<TableCell className="whitespace-nowrap font-bold">{formatCurrency(visibleTotal)}</TableCell>
+										</TableRow>
+									</TableFooter>
+								</Table>
+
+								<div className="mt-4">
+									{items.data.length > 0 ? (
+										<TablePagination total={items.total} from={items.from} to={items.to} links={items.links} />
+									) : (
+										<div className="flex w-full items-center justify-center py-8 text-slate-500">No approved, unpaid budgets found.</div>
+									)}
+								</div>
+							</CardContent>
+						</Card>
+					</div>
 				) : (
 					<div className="mt-4 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-700 py-24 text-slate-500 dark:text-slate-400">
 						<span className="text-lg font-bold">Coming Soon</span>

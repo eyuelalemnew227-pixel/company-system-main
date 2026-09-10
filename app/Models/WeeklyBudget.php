@@ -43,6 +43,7 @@ class WeeklyBudget extends Model
         'payment_category_id',
         'payment_type_id',
         'transferred_to',
+        'ceo_approved_at',
     ];
 
     protected $casts = [
@@ -53,6 +54,7 @@ class WeeklyBudget extends Model
         'amount'         => 'decimal:2',
         'week_start_date' => 'date',
         'week_end_date'   => 'date',
+        'ceo_approved_at' => 'datetime',
     ];
 
     public function branch(): BelongsTo

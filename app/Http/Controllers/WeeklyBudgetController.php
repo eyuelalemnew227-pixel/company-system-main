@@ -1503,6 +1503,9 @@ class WeeklyBudgetController extends Controller
                     }
                     $q->where('transferred_to', $selectedWeekNumber);
                 }
+            } elseif ($activeTab === 'approved_not_paid') {
+                $q->where('status_ceo', WeeklyBudgetStatusCeo::Approved->value)
+                  ->where('status_finance', WeeklyBudgetStatusFinance::Approved->value);
             } else {
                 $q->where('status_finance', WeeklyBudgetStatusFinance::Approved->value);
 
@@ -1600,6 +1603,7 @@ class WeeklyBudgetController extends Controller
                 'fiscal_month' => $wb->fiscalMonth?->name,
                 'week_number' => $wb->week_number,
                 'transferred_to' => $wb->transferred_to,
+                'ceo_approved_at' => $wb->ceo_approved_at?->toDateString(),
                 'week_start_date' => $wb->week_start_date?->toDateString(),
                 'week_end_date' => $wb->week_end_date?->toDateString(),
                 'request_type' => $wb->request_type?->value,
@@ -1626,6 +1630,7 @@ class WeeklyBudgetController extends Controller
 
         $filters = request()->only([
             'budget_id',
+            'tab',
             'request_type',
             'status_ceo',
             'branch_id',
@@ -1784,6 +1789,7 @@ class WeeklyBudgetController extends Controller
         $oldValues = $this->activityLogger->attributes($weeklyBudget);
         $weeklyBudget->update([
             'status_ceo' => $validated['status_ceo'],
+            'ceo_approved_at' => $validated['status_ceo'] === WeeklyBudgetStatusCeo::Approved->value ? now() : null,
         ]);
         $this->activityLogger->logChanges(
             $weeklyBudget,
@@ -1822,7 +1828,10 @@ class WeeklyBudgetController extends Controller
             }
 
             $oldValues = $this->activityLogger->attributes($budget);
-            $budget->update(['status_ceo' => $validated['status_ceo']]);
+            $budget->update([
+                'status_ceo' => $validated['status_ceo'],
+                'ceo_approved_at' => $validated['status_ceo'] === WeeklyBudgetStatusCeo::Approved->value ? now() : null,
+            ]);
             $this->activityLogger->logChanges(
                 $budget,
                 $oldValues,
