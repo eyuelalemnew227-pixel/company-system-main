@@ -36,12 +36,18 @@ class TelegramConfigController extends Controller
         $departments = \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']);
         $branches = Branch::whereNotNull('telegram_chat_id')->where('telegram_chat_id', '!=', '')->orderBy('name')->get(['id', 'name']);
 
+        $broadcastHistory = \App\Models\TelegramBroadcastHistory::with(['sender:id,name', 'department:id,name', 'branch:id,name'])
+            ->orderByDesc('created_at')
+            ->take(50)
+            ->get();
+
         return Inertia::render('broadcast-announcements/index', [
             'senderDepartment' => $senderDept,
             'departments' => $departments,
             'branches' => $branches,
             'linkedBranchesCount' => $linkedBranchesCount,
             'linkedUsersCount' => $linkedUsersCount,
+            'broadcastHistory' => $broadcastHistory,
         ]);
     }
 

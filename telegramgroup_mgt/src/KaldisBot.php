@@ -517,10 +517,11 @@ final class SQLiteStorage
 
     public function getTopicBinding(string $groupKey, int $threadId): ?TopicBinding
     {
+        $altKey = str_starts_with($groupKey, 'region:') ? substr($groupKey, 7) : ('region:' . $groupKey);
         $stmt = $this->pdo->prepare(
-            'SELECT * FROM topic_bindings WHERE group_key = :group_key AND thread_id = :thread_id'
+            'SELECT * FROM topic_bindings WHERE (group_key = :group_key OR group_key = :alt_key) AND thread_id = :thread_id'
         );
-        $stmt->execute([':group_key' => $groupKey, ':thread_id' => $threadId]);
+        $stmt->execute([':group_key' => $groupKey, ':alt_key' => $altKey, ':thread_id' => $threadId]);
         $row = $stmt->fetch();
         return $row === false ? null : $this->hydrateBinding($row);
     }
@@ -1000,6 +1001,28 @@ final class KaldisBot
             }
         }
 
+        // Handle Private Bot Commands
+        if ($chatType === 'private' && str_starts_with($text, '/')) {
+            $tokens = Helpers::parseCommandArguments($text);
+            if ($tokens !== []) {
+                $this->handlePrivateCommand($message, $tokens, $senderId, $senderName);
+                return;
+            }
+        }
+
+        // Handle Group Commands (/bind_topic and topic jump commands)
+        if (str_starts_with($text, '/')) {
+            $tokens = Helpers::parseCommandArguments($text);
+            $command = strtolower($tokens[0] ?? '');
+            if ($command === '/bind_topic') {
+                $this->handleBindTopicCommand($message, $tokens, $chatId, $threadId);
+                return;
+            } elseif (in_array($command, ['/topics', '/announcements', '/ops', '/operations', '/hr', '/finance', '/supply', '/supplychain', '/it', '/maintenance', '/fb', '/td', '/qa', '/bi', '/logistics'], true)) {
+                $this->handleTopicJumpCommand($command, $chatId, $threadId);
+                return;
+            }
+        }
+
         if ($threadId === null) {
             return;
         }
@@ -1046,12 +1069,17 @@ final class KaldisBot
             return;
         }
 
-        if ($senderProfile === null || !in_array($senderProfile->role, [Roles::REGIONAL_MANAGER, Roles::OPERATIONS_DIRECTOR], true)) {
-            $this->client->answerCallbackQuery($callbackId, 'Only a regional manager can forward this.');
+        $isAuthorized = $senderProfile !== null && (
+            in_array($senderProfile->role, [Roles::REGIONAL_MANAGER, Roles::OPERATIONS_DIRECTOR], true)
+            || $senderProfile->canForward
+        );
+
+        if (!$isAuthorized) {
+            $this->client->answerCallbackQuery($callbackId, 'Only a Regional Manager or Operation Head can forward this.');
             return;
         }
 
-        if ($senderProfile->role === Roles::REGIONAL_MANAGER && $senderProfile->region !== $record->region) {
+        if ($senderProfile->role === Roles::REGIONAL_MANAGER && !empty($senderProfile->region) && $senderProfile->region !== $record->region) {
             $this->client->answerCallbackQuery($callbackId, 'This reference belongs to a different region.');
             return;
         }
@@ -1375,25 +1403,42 @@ final class KaldisBot
         $region = $binding->groupKey;
         $userProfile = $senderId !== null ? $this->storage->getUser($senderId) : null;
 
-        // Allow Regional Manager or Director to reply directly & resolve locally without forwarding to HO
+        // Only Regional Manager or Operation Head (Operations Director) can reply with text to resolve requests locally
         if (isset($message['reply_to_message'])) {
             $repliedMsgId = (int) ($message['reply_to_message']['message_id'] ?? 0);
             $record = $this->storage->findCommunicationBySourceMessage($chatId, $repliedMsgId, $threadId);
 
             if ($record !== null) {
-                $isManager = $userProfile !== null && in_array($userProfile->role, [Roles::REGIONAL_MANAGER, Roles::OPERATIONS_DIRECTOR], true);
-                if ($isManager || $senderId > 0) {
+                $isAuthorized = $userProfile !== null && (
+                    in_array($userProfile->role, [Roles::REGIONAL_MANAGER, Roles::OPERATIONS_DIRECTOR], true)
+                    || $userProfile->canForward
+                );
+
+                if ($userProfile !== null && $userProfile->role === Roles::REGIONAL_MANAGER && !empty($userProfile->region) && $userProfile->region !== $record->region) {
+                    $isAuthorized = false;
+                }
+
+                $replyText = trim((string) ($message['text'] ?? $message['caption'] ?? ''));
+
+                if ($isAuthorized && $replyText !== '') {
                     $record->status = 'resolved';
                     $record->regionalManagerUserId = $senderId;
                     $this->storage->updateCommunication($record);
 
+                    $roleTitle = ($userProfile?->role === Roles::OPERATIONS_DIRECTOR) ? 'Operation Head' : 'Regional Manager';
+
                     $this->client->sendMessage(
                         $chatId,
-                        "✅ <b>Reference {$record->referenceNo} Resolved</b>\nRegional Manager @{$senderName} answered this request locally without forwarding to HO.",
+                        "✅ <b>Reference {$record->referenceNo} Resolved</b>\n" .
+                        "<b>Answered by:</b> {$roleTitle} @{$senderName}\n" .
+                        "<b>Response:</b> " . htmlspecialchars($replyText, ENT_QUOTES, 'UTF-8'),
                         $threadId
                     );
                     return;
                 }
+
+                // Do not create new reference numbers when replying to an existing communication message
+                return;
             }
         }
 

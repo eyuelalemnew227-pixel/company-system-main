@@ -2,7 +2,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
-import { Star, Download, Search, Filter, Trash2, MessageSquare, ThumbsUp, Truck, Coffee, UserCheck } from 'lucide-react';
+import { Star, Download, Search, Filter, Trash2, MessageSquare, ThumbsUp, Truck, Coffee, UserCheck, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 type FeedbackRow = {
     id: number;
     chat_id: string | null;
+    customer_name: string;
     branch: { id: number; name: string } | null;
     delivery_rating: number | null;
     torta_rating: number | null;
@@ -220,6 +221,7 @@ export default function CustomerFeedbackPage({ feedbacks, branches, stats, filte
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Date & Time</TableHead>
+                                    <TableHead>Customer</TableHead>
                                     <TableHead>Branch</TableHead>
                                     <TableHead>Delivery Speed</TableHead>
                                     <TableHead>Torta Quality</TableHead>
@@ -231,7 +233,7 @@ export default function CustomerFeedbackPage({ feedbacks, branches, stats, filte
                             <TableBody>
                                 {feedbacks.data.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                                             No customer feedback records found.
                                         </TableCell>
                                     </TableRow>
@@ -240,6 +242,14 @@ export default function CustomerFeedbackPage({ feedbacks, branches, stats, filte
                                         <TableRow key={fb.id}>
                                             <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                                                 {new Date(fb.created_at).toLocaleString()}
+                                            </TableCell>
+                                            <TableCell className="font-semibold text-slate-900 dark:text-slate-100">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                                        <User className="h-3.5 w-3.5" />
+                                                    </div>
+                                                    <span>{fb.customer_name}</span>
+                                                </div>
                                             </TableCell>
                                             <TableCell className="font-medium">
                                                 {fb.branch?.name || 'General / Unknown'}

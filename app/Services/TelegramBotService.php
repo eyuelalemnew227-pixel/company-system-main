@@ -313,6 +313,29 @@ class TelegramBotService
             }
         }
 
+        try {
+            $sender->loadMissing(['employee.department']);
+            $dept = $departmentId ? Department::find($departmentId) : ($sender->employee?->department ?? null);
+            $deptName = $dept?->name ?? 'Company Management';
+            $branchObj = $branchId ? Branch::find($branchId) : null;
+
+            \App\Models\TelegramBroadcastHistory::create([
+                'sender_id' => $sender->id,
+                'sender_name' => $sender->name,
+                'department_id' => $dept?->id,
+                'department_name' => $deptName,
+                'branch_id' => $branchObj?->id,
+                'branch_name' => $branchObj?->name,
+                'target_audience' => $targetAudience,
+                'title' => $title,
+                'message' => $message,
+                'recipients_count' => count($chatIds),
+                'sent_count' => $sentCount,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error("Failed to record TelegramBroadcastHistory: " . $e->getMessage());
+        }
+
         return $sentCount;
     }
 

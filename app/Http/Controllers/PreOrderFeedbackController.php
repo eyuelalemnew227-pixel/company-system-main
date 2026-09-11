@@ -14,7 +14,7 @@ class PreOrderFeedbackController extends Controller
 {
     public function index(Request $request): Response
     {
-        $query = PreOrderFeedback::query()->with('branch:id,name');
+        $query = PreOrderFeedback::query()->with(['branch:id,name', 'customer']);
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -22,6 +22,12 @@ class PreOrderFeedbackController extends Controller
                     ->orWhere('written_feedback', 'like', "%{$search}%")
                     ->orWhereHas('branch', function ($bq) use ($search) {
                         $bq->where('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('customer', function ($cq) use ($search) {
+                        $cq->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere('username', 'like', "%{$search}%")
+                            ->orWhere('phone_number', 'like', "%{$search}%");
                     });
             });
         }
@@ -91,7 +97,7 @@ class PreOrderFeedbackController extends Controller
 
     public function export(Request $request): StreamedResponse
     {
-        $query = PreOrderFeedback::query()->with('branch:id,name');
+        $query = PreOrderFeedback::query()->with(['branch:id,name', 'customer']);
 
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
@@ -99,6 +105,12 @@ class PreOrderFeedbackController extends Controller
                     ->orWhere('written_feedback', 'like', "%{$search}%")
                     ->orWhereHas('branch', function ($bq) use ($search) {
                         $bq->where('name', 'like', "%{$search}%");
+                    })
+                    ->orWhereHas('customer', function ($cq) use ($search) {
+                        $cq->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                            ->orWhere('username', 'like', "%{$search}%")
+                            ->orWhere('phone_number', 'like', "%{$search}%");
                     });
             });
         }
@@ -111,11 +123,12 @@ class PreOrderFeedbackController extends Controller
 
         $response = new StreamedResponse(function () use ($feedbacks) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['ID', 'Chat ID', 'Branch', 'Delivery Rating', 'Torta Rating', 'Service Rating', 'Written Feedback', 'Date']);
+            fputcsv($handle, ['ID', 'Customer Name', 'Chat ID', 'Branch', 'Delivery Rating', 'Torta Rating', 'Service Rating', 'Written Feedback', 'Date']);
 
             foreach ($feedbacks as $fb) {
                 fputcsv($handle, [
                     $fb->id,
+                    $fb->customer_name,
                     $fb->chat_id,
                     $fb->branch->name ?? 'N/A',
                     $fb->delivery_rating ?? 'N/A',
