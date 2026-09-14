@@ -1878,7 +1878,15 @@ export default function KaldisCommunicationPage({
                             <Label htmlFor="role">Role</Label>
                             <Select
                                 value={userForm.data.role}
-                                onValueChange={(val) => userForm.setData('role', val)}
+                                onValueChange={(val) => {
+                                    userForm.setData({
+                                        ...userForm.data,
+                                        role: val,
+                                        branch_name: val === 'branch_manager' ? userForm.data.branch_name : '',
+                                        department: val === 'department_head' ? userForm.data.department : '',
+                                        region: (val === 'branch_manager' || val === 'regional_manager') ? (userForm.data.region || 'Region 1') : '',
+                                    });
+                                }}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select Role" />
@@ -2199,7 +2207,15 @@ export default function KaldisCommunicationPage({
                             <Label htmlFor="edit_usr_role">Role</Label>
                             <Select
                                 value={editUserForm.data.role}
-                                onValueChange={(val) => editUserForm.setData('role', val)}
+                                onValueChange={(val) => {
+                                    editUserForm.setData({
+                                        ...editUserForm.data,
+                                        role: val,
+                                        branch_name: val === 'branch_manager' ? editUserForm.data.branch_name : '',
+                                        department: val === 'department_head' ? editUserForm.data.department : '',
+                                        region: (val === 'branch_manager' || val === 'regional_manager') ? (editUserForm.data.region || 'Region 1') : '',
+                                    });
+                                }}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Select Role" />
@@ -2213,48 +2229,53 @@ export default function KaldisCommunicationPage({
                             </Select>
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="edit_usr_region">Region</Label>
-                            <Select
-                                value={editUserForm.data.region}
-                                onValueChange={(val) => editUserForm.setData('region', val)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Region" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Region 1">Region 1</SelectItem>
-                                    <SelectItem value="Region 2">Region 2</SelectItem>
-                                    <SelectItem value="Head Office">Head Office</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
+                        {(editUserForm.data.role === 'branch_manager' || editUserForm.data.role === 'regional_manager') && (
+                            <div className="space-y-2">
+                                <Label htmlFor="edit_usr_region">Region</Label>
+                                <Select
+                                    value={editUserForm.data.region}
+                                    onValueChange={(val) => editUserForm.setData('region', val)}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Region" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Region 1">Region 1</SelectItem>
+                                        <SelectItem value="Region 2">Region 2</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
 
-                        <div className="space-y-2">
-                            <Label htmlFor="edit_usr_branch">Branch Name</Label>
-                            <SearchableSelect
-                                options={branchOptions}
-                                value={editUserForm.data.branch_name}
-                                onValueChange={(val) => editUserForm.setData('branch_name', val)}
-                                placeholder="Select Branch (if Branch Manager)"
-                                searchPlaceholder="Search branch..."
-                                emptyText="No branch found."
-                                className="w-full"
-                            />
-                        </div>
+                        {editUserForm.data.role === 'branch_manager' && (
+                            <div className="space-y-2">
+                                <Label htmlFor="edit_usr_branch">Branch Name</Label>
+                                <SearchableSelect
+                                    options={branchOptions}
+                                    value={editUserForm.data.branch_name}
+                                    onValueChange={(val) => editUserForm.setData('branch_name', val)}
+                                    placeholder="Select Branch"
+                                    searchPlaceholder="Search branch..."
+                                    emptyText="No branch found."
+                                    className="w-full"
+                                />
+                            </div>
+                        )}
 
-                        <div className="space-y-2">
-                            <Label htmlFor="edit_usr_dept">HO Department</Label>
-                            <SearchableSelect
-                                options={departmentOptions}
-                                value={editUserForm.data.department}
-                                onValueChange={(val) => editUserForm.setData('department', val)}
-                                placeholder="Select Department (if HO)"
-                                searchPlaceholder="Search department..."
-                                emptyText="No department found."
-                                className="w-full"
-                            />
-                        </div>
+                        {editUserForm.data.role === 'department_head' && (
+                            <div className="space-y-2">
+                                <Label htmlFor="edit_usr_dept">HO Department</Label>
+                                <SearchableSelect
+                                    options={departmentOptions}
+                                    value={editUserForm.data.department}
+                                    onValueChange={(val) => editUserForm.setData('department', val)}
+                                    placeholder="Select Department"
+                                    searchPlaceholder="Search department..."
+                                    emptyText="No department found."
+                                    className="w-full"
+                                />
+                            </div>
+                        )}
 
                         <div className="flex items-center space-x-2 pt-1">
                             <input

@@ -41,7 +41,7 @@ export function SearchableSelect({
 
     const stringValue = value !== undefined && value !== null ? String(value) : '';
 
-    const selectedOption = options.find((opt) => String(opt.id) === stringValue);
+    const selectedOption = options.find((opt) => String(opt.id) === stringValue || opt.name === stringValue);
 
     let displayLabel = placeholder;
     if (allowAll && (stringValue === allValue || stringValue === '')) {
@@ -64,7 +64,11 @@ export function SearchableSelect({
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[240px] p-0" align="start">
+            <PopoverContent
+                className="w-[var(--radix-popover-trigger-width)] min-w-[240px] p-0 z-[100]"
+                align="start"
+                onOpenAutoFocus={(e) => e.preventDefault()}
+            >
                 <Command>
                     <CommandInput placeholder={searchPlaceholder} />
                     <CommandList>
@@ -72,7 +76,7 @@ export function SearchableSelect({
                         <CommandGroup>
                             {allowAll && (
                                 <CommandItem
-                                    value={`__all__ ${allLabel}`}
+                                    value={allLabel}
                                     onSelect={() => {
                                         onValueChange(allValue);
                                         setOpen(false);
@@ -89,11 +93,11 @@ export function SearchableSelect({
                             )}
                             {options.map((opt) => {
                                 const optIdStr = String(opt.id);
-                                const isSelected = stringValue === optIdStr;
+                                const isSelected = stringValue === optIdStr || stringValue === opt.name;
                                 return (
                                     <CommandItem
                                         key={opt.id}
-                                        value={`${optIdStr} ${opt.name}`}
+                                        value={opt.name}
                                         onSelect={() => {
                                             onValueChange(optIdStr);
                                             setOpen(false);
