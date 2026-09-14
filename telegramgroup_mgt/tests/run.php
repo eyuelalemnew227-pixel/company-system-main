@@ -134,6 +134,27 @@ function runStorageTests(): void
     assertTrue($fetched !== null, 'Communication was not stored.');
     assertSameValue('Kaldis Bole', $fetched->branchName, 'Communication branch mismatch.');
 
+    $prevBranch = $storage->getPreviousBranchForUser(10);
+    assertSameValue('Kaldis Bole', $prevBranch, 'getPreviousBranchForUser failed.');
+
+    $recordUnassigned = new CommunicationRecord(
+        referenceNo: 'KALDIS-R1-20260810-002',
+        region: 'Region 1',
+        branchName: 'Unassigned',
+        topicName: 'HR',
+        department: 'HR',
+        sourceChatId: -1001,
+        sourceMessageId: 56,
+        sourceThreadId: 101,
+        senderUserId: 10,
+        senderDisplayName: 'A Manager',
+    );
+    $storage->insertCommunication($recordUnassigned);
+    $updatedCount = $storage->updateCommunicationsBranchForUser(10, 'Kaldis Sarbet');
+    assertSameValue(1, $updatedCount, 'updateCommunicationsBranchForUser count mismatch.');
+    $fetchedUpdated = $storage->getCommunication('KALDIS-R1-20260810-002');
+    assertSameValue('Kaldis Sarbet', $fetchedUpdated->branchName, 'Updated branch mismatch.');
+
     // Admin storage methods tests
     $allUsers = $storage->getAllUsers();
     assertTrue(count($allUsers) === 1, 'getAllUsers count mismatch.');
@@ -142,8 +163,8 @@ function runStorageTests(): void
     assertTrue(count($allBindings) === 1, 'getAllTopicBindings count mismatch.');
 
     $stats = $storage->getSystemStats();
-    assertSameValue(1, $stats['total_communications'], 'Stats total communications mismatch.');
-    assertSameValue(1, $stats['recorded_communications'], 'Stats recorded communications mismatch.');
+    assertSameValue(2, $stats['total_communications'], 'Stats total communications mismatch.');
+    assertSameValue(2, $stats['recorded_communications'], 'Stats recorded communications mismatch.');
     assertSameValue(1, $stats['total_users'], 'Stats total users mismatch.');
     assertSameValue(1, $stats['total_bindings'], 'Stats total bindings mismatch.');
 

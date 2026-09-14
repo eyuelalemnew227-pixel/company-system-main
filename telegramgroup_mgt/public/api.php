@@ -162,6 +162,9 @@ try {
             );
 
             $storage->upsertUser($profile);
+            if ($profile->branchName !== null && trim($profile->branchName) !== '') {
+                $storage->updateCommunicationsBranchForUser($profile->telegramUserId, $profile->branchName);
+            }
             echo json_encode(['success' => true]);
             break;
 

@@ -604,6 +604,35 @@ final class SQLiteStorage
         $stmt->execute($this->recordToParams($record));
     }
 
+    public function getPreviousBranchForUser(int $telegramUserId): ?string
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT branch_name FROM communications
+             WHERE sender_user_id = :uid AND branch_name IS NOT NULL AND branch_name != '' AND branch_name != 'Unassigned'
+             ORDER BY updated_at DESC LIMIT 1"
+        );
+        $stmt->execute([':uid' => $telegramUserId]);
+        $row = $stmt->fetch();
+        return $row === false ? null : (string) $row['branch_name'];
+    }
+
+    public function updateCommunicationsBranchForUser(int $telegramUserId, ?string $branchName): int
+    {
+        if ($branchName === null || trim($branchName) === '') {
+            return 0;
+        }
+        $stmt = $this->pdo->prepare(
+            "UPDATE communications SET branch_name = :branch_name, updated_at = :updated_at
+             WHERE sender_user_id = :sender_user_id AND (branch_name IS NULL OR branch_name = '' OR branch_name = 'Unassigned')"
+        );
+        $stmt->execute([
+            ':branch_name' => trim($branchName),
+            ':updated_at' => Helpers::utcNow(),
+            ':sender_user_id' => $telegramUserId,
+        ]);
+        return $stmt->rowCount();
+    }
+
     public function getCommunication(string $referenceNo): ?CommunicationRecord
     {
         $stmt = $this->pdo->prepare('SELECT * FROM communications WHERE reference_no = :reference_no');
@@ -1096,6 +1125,14 @@ final class KaldisBot
             return;
         }
 
+        if ($record->branchName === null || $record->branchName === '' || $record->branchName === 'Unassigned') {
+            $resolvedBranch = $this->resolveUserBranch($record->senderUserId, $record->senderDisplayName, null);
+            if ($resolvedBranch !== null) {
+                $record->branchName = $resolvedBranch;
+                $this->storage->updateCommunication($record);
+            }
+        }
+
         $summaryText = sprintf(
             "Reference %s\nRegion: %s\nBranch: %s\nTopic: %s\nDepartment: %s",
             $record->referenceNo,
@@ -1426,7 +1463,7 @@ final class KaldisBot
             }
         }
 
-        $branchName = $userProfile?->branchName;
+        $branchName = $this->resolveUserBranch($senderId, $senderName, $userProfile?->branchName);
 
         $this->createOrGetReference(
             chatId: $chatId,
@@ -1510,6 +1547,94 @@ final class KaldisBot
         ];
 
         $this->client->sendMessage($chatId, $text, $threadId, $replyMarkup);
+    }
+
+    public function resolveUserBranch(?int $senderId, string $senderName, ?string $existingBranch = null): ?string
+    {
+        if ($existingBranch !== null && trim($existingBranch) !== '' && strcasecmp(trim($existingBranch), 'Unassigned') !== 0) {
+            return trim($existingBranch);
+        }
+
+        $resolved = $this->findBranchInMainDb($senderId, $senderName);
+
+        if ($resolved === null && $senderId !== null && $senderId > 0) {
+            $resolved = $this->storage->getPreviousBranchForUser($senderId);
+        }
+
+        if ($resolved !== null && $senderId !== null && $senderId > 0) {
+            $profile = $this->storage->getUser($senderId);
+            if ($profile !== null && (empty($profile->branchName) || $profile->branchName === 'Unassigned')) {
+                $profile->branchName = $resolved;
+                $this->storage->upsertUser($profile);
+            }
+            $this->storage->updateCommunicationsBranchForUser($senderId, $resolved);
+        }
+
+        return $resolved;
+    }
+
+    private function findBranchInMainDb(?int $senderId, string $senderName): ?string
+    {
+        try {
+            $envPath = __DIR__ . '/../../.env';
+            if (!file_exists($envPath)) {
+                return null;
+            }
+            $envContent = file_get_contents($envPath);
+            if ($envContent === false) {
+                return null;
+            }
+
+            $host = '127.0.0.1';
+            $port = '3306';
+            $db = 'company_system';
+            $user = 'root';
+            $pass = '';
+
+            if (preg_match('/^DB_HOST=(.*)$/m', $envContent, $m)) $host = trim(trim($m[1]), "\"'\r\n");
+            if (preg_match('/^DB_PORT=(.*)$/m', $envContent, $m)) $port = trim(trim($m[1]), "\"'\r\n");
+            if (preg_match('/^DB_DATABASE=(.*)$/m', $envContent, $m)) $db = trim(trim($m[1]), "\"'\r\n");
+            if (preg_match('/^DB_USERNAME=(.*)$/m', $envContent, $m)) $user = trim(trim($m[1]), "\"'\r\n");
+            if (preg_match('/^DB_PASSWORD=(.*)$/m', $envContent, $m)) $pass = trim(trim($m[1]), "\"'\r\n");
+
+            $dsn = "mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4";
+            $pdo = new \PDO($dsn, $user, $pass, [
+                \PDO::ATTR_ERRMODE => \PDO::ERRMODE_SILENT,
+                \PDO::ATTR_TIMEOUT => 2,
+            ]);
+
+            if ($senderId !== null && $senderId > 0) {
+                $stmt = $pdo->prepare(
+                    'SELECT b.name FROM users u
+                     JOIN employees e ON u.employee_id = e.id
+                     JOIN branches b ON e.branch_id = b.id
+                     WHERE u.telegram_chat_id = :tid AND b.name IS NOT NULL AND b.name != "" LIMIT 1'
+                );
+                $stmt->execute([':tid' => (string) $senderId]);
+                $branch = $stmt->fetchColumn();
+                if ($branch && is_string($branch) && trim($branch) !== '') {
+                    return trim($branch);
+                }
+            }
+
+            if ($senderName !== '') {
+                $stmt = $pdo->prepare(
+                    'SELECT b.name FROM users u
+                     JOIN employees e ON u.employee_id = e.id
+                     JOIN branches b ON e.branch_id = b.id
+                     WHERE u.name LIKE :name AND b.name IS NOT NULL AND b.name != "" LIMIT 1'
+                );
+                $stmt->execute([':name' => '%' . trim($senderName) . '%']);
+                $branch = $stmt->fetchColumn();
+                if ($branch && is_string($branch) && trim($branch) !== '') {
+                    return trim($branch);
+                }
+            }
+        } catch (\Throwable $e) {
+            // Silent fallback
+        }
+
+        return null;
     }
 
     /** @param array<string, mixed> $message */

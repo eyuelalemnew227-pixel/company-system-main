@@ -966,6 +966,18 @@ class KaldisCommunicationController extends Controller
             ':updated_at' => $now,
         ]);
 
+        if (!empty($validated['branch_name'])) {
+            $updateCommsStmt = $pdo->prepare(
+                "UPDATE communications SET branch_name = :branch_name, updated_at = :updated_at
+                 WHERE sender_user_id = :sender_user_id AND (branch_name IS NULL OR branch_name = '' OR branch_name = 'Unassigned')"
+            );
+            $updateCommsStmt->execute([
+                ':branch_name' => trim($validated['branch_name']),
+                ':updated_at' => $now,
+                ':sender_user_id' => (int) $validated['telegram_user_id'],
+            ]);
+        }
+
         // Auto-generate Telegram group invite link
         $config = $this->readConfig();
         $botToken = trim($config['bot_token'] ?? '');
