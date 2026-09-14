@@ -38,10 +38,13 @@ export function SearchableSelect({
     disabled = false,
 }: SearchableSelectProps) {
     const [open, setOpen] = React.useState(false);
+    const [search, setSearch] = React.useState('');
 
     const stringValue = value !== undefined && value !== null ? String(value) : '';
 
-    const selectedOption = options.find((opt) => String(opt.id) === stringValue || opt.name === stringValue);
+    const selectedOption = options.find(
+        (opt) => String(opt.id) === stringValue || opt.name === stringValue
+    );
 
     let displayLabel = placeholder;
     if (allowAll && (stringValue === allValue || stringValue === '')) {
@@ -50,15 +53,39 @@ export function SearchableSelect({
         displayLabel = selectedOption.name;
     }
 
+    const filteredOptions = React.useMemo(() => {
+        if (!search.trim()) return options;
+        const q = search.toLowerCase().trim();
+        return options.filter(
+            (opt) => opt.name.toLowerCase().includes(q) || String(opt.id).toLowerCase().includes(q)
+        );
+    }, [options, search]);
+
+    const handleSelect = (selectedVal: string) => {
+        onValueChange(selectedVal);
+        setOpen(false);
+        setSearch('');
+    };
+
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover
+            open={open}
+            onOpenChange={(newOpen) => {
+                setOpen(newOpen);
+                if (!newOpen) setSearch('');
+            }}
+            modal={true}
+        >
             <PopoverTrigger asChild>
                 <Button
                     variant="outline"
                     role="combobox"
                     aria-expanded={open}
                     disabled={disabled}
-                    className={cn('justify-between font-normal text-left bg-white dark:bg-zinc-900 border-input text-foreground', className)}
+                    className={cn(
+                        'justify-between font-normal text-left bg-white dark:bg-zinc-900 border-input text-foreground',
+                        className
+                    )}
                 >
                     <span className="truncate">{displayLabel}</span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -67,20 +94,22 @@ export function SearchableSelect({
             <PopoverContent
                 className="w-[var(--radix-popover-trigger-width)] min-w-[240px] p-0 z-[100]"
                 align="start"
-                onOpenAutoFocus={(e) => e.preventDefault()}
             >
-                <Command>
-                    <CommandInput placeholder={searchPlaceholder} />
+                <Command shouldFilter={false}>
+                    <CommandInput
+                        placeholder={searchPlaceholder}
+                        value={search}
+                        onValueChange={setSearch}
+                    />
                     <CommandList>
-                        <CommandEmpty>{emptyText}</CommandEmpty>
+                        {filteredOptions.length === 0 && !allowAll && (
+                            <CommandEmpty>{emptyText}</CommandEmpty>
+                        )}
                         <CommandGroup>
                             {allowAll && (
                                 <CommandItem
                                     value={allLabel}
-                                    onSelect={() => {
-                                        onValueChange(allValue);
-                                        setOpen(false);
-                                    }}
+                                    onSelect={() => handleSelect(allValue)}
                                 >
                                     <Check
                                         className={cn(
@@ -91,17 +120,14 @@ export function SearchableSelect({
                                     {allLabel}
                                 </CommandItem>
                             )}
-                            {options.map((opt) => {
+                            {filteredOptions.map((opt) => {
                                 const optIdStr = String(opt.id);
                                 const isSelected = stringValue === optIdStr || stringValue === opt.name;
                                 return (
                                     <CommandItem
                                         key={opt.id}
                                         value={opt.name}
-                                        onSelect={() => {
-                                            onValueChange(optIdStr);
-                                            setOpen(false);
-                                        }}
+                                        onSelect={() => handleSelect(opt.name)}
                                     >
                                         <Check className={cn('mr-2 h-4 w-4', isSelected ? 'opacity-100' : 'opacity-0')} />
                                         {opt.name}
