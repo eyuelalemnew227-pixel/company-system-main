@@ -132,7 +132,7 @@ class WeeklyBudgetController extends Controller
             ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
             ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
-            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all' && empty($weekFilter), fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->whereDate('week_start_date', $weekFilter));
 
         $this->applyDepartmentScope($query);
@@ -266,7 +266,7 @@ class WeeklyBudgetController extends Controller
             ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
             ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
-            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all' && empty($weekFilter), fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->whereDate('week_start_date', $weekFilter));
 
         $this->applyDepartmentScope($query);
@@ -665,7 +665,7 @@ class WeeklyBudgetController extends Controller
             ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
             ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
-            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all' && empty($weekFilter), fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->whereDate('week_start_date', $weekFilter))
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
@@ -810,7 +810,7 @@ class WeeklyBudgetController extends Controller
             ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
             ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
-            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all' && empty($weekFilter), fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->whereDate('week_start_date', $weekFilter))
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
@@ -971,6 +971,7 @@ class WeeklyBudgetController extends Controller
 
         $updateData = [
             'status_finance' => $validated['status_finance'],
+            'paid_at' => $validated['status_finance'] === WeeklyBudgetStatusFinance::Paid->value ? now() : null,
             'payment_category_id' => array_key_exists('payment_category_id', $validated) ? $validated['payment_category_id'] : $weeklyBudget->payment_category_id,
             'payment_type_id' => array_key_exists('payment_type_id', $validated) ? $validated['payment_type_id'] : $weeklyBudget->payment_type_id,
         ];
@@ -1039,7 +1040,10 @@ class WeeklyBudgetController extends Controller
                 continue;
             }
 
-            $updateData = ['status_finance' => $validated['status_finance']];
+            $updateData = [
+                'status_finance' => $validated['status_finance'],
+                'paid_at' => $validated['status_finance'] === WeeklyBudgetStatusFinance::Paid->value ? now() : null,
+            ];
             if ($validated['status_finance'] === WeeklyBudgetStatusFinance::Transferred->value) {
                 $updateData['status_department'] = WeeklyBudgetStatusDepartment::Transferred->value;
                 if ($budget->transferred_to === null) {
@@ -1084,6 +1088,7 @@ class WeeklyBudgetController extends Controller
         $oldValues = $this->activityLogger->attributes($budget);
         $budget->update([
             'status_finance' => $validated['status_finance'],
+            'paid_at' => null,
         ]);
         $this->activityLogger->logChanges(
             $budget,
@@ -1139,7 +1144,7 @@ class WeeklyBudgetController extends Controller
             ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
             ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
-            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all' && empty($weekFilter), fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->whereDate('week_start_date', $weekFilter))
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
@@ -1277,7 +1282,7 @@ class WeeklyBudgetController extends Controller
             ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
             ->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
-            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all' && empty($weekFilter), fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->whereDate('week_start_date', $weekFilter))
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
@@ -1506,6 +1511,9 @@ class WeeklyBudgetController extends Controller
             } elseif ($activeTab === 'approved_not_paid') {
                 $q->where('status_ceo', WeeklyBudgetStatusCeo::Approved->value)
                   ->where('status_finance', WeeklyBudgetStatusFinance::Approved->value);
+            } elseif ($activeTab === 'paid') {
+                $q->where('status_finance', WeeklyBudgetStatusFinance::Paid->value)
+                  ->where('status_ceo', WeeklyBudgetStatusCeo::Approved->value);
             } else {
                 $q->where('status_finance', WeeklyBudgetStatusFinance::Approved->value);
 
@@ -1541,7 +1549,7 @@ class WeeklyBudgetController extends Controller
             ->when(request('status_ceo'), fn($q, $v) => $q->where('status_ceo', $v))
             ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
-            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all' && empty($weekFilter), fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
 
@@ -1554,7 +1562,7 @@ class WeeklyBudgetController extends Controller
 
         $weekScopedQuery = WeeklyBudget::query()
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
-            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter));
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all' && empty($weekFilter), fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter));
 
         $applyWeekFilter($weekScopedQuery);
 
@@ -1604,6 +1612,7 @@ class WeeklyBudgetController extends Controller
                 'week_number' => $wb->week_number,
                 'transferred_to' => $wb->transferred_to,
                 'ceo_approved_at' => $wb->ceo_approved_at?->toDateString(),
+                'paid_at' => $wb->paid_at?->toDateString(),
                 'week_start_date' => $wb->week_start_date?->toDateString(),
                 'week_end_date' => $wb->week_end_date?->toDateString(),
                 'request_type' => $wb->request_type?->value,
@@ -1661,7 +1670,7 @@ class WeeklyBudgetController extends Controller
             'estimatedWeeklySale',
         ])
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
-            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter));
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all' && empty($weekFilter), fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter));
 
         return Inertia::render('Budget/WeeklyBudget/CeoView', [
             'totalBudget' => $totalBudget,
@@ -1731,7 +1740,7 @@ class WeeklyBudgetController extends Controller
             ->when(request('status_ceo'), fn($q, $v) => $q->where('status_ceo', $v))
             ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
-            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all', fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
+            ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all' && empty($weekFilter), fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter))
             ->when($weekFilter && $weekFilter !== 'all', fn($q) => $q->where('week_start_date', $weekFilter))
             ->when(request('payment_category_id'), fn($q, $v) => $q->where('payment_category_id', $v))
             ->when(request('payment_type_id'), fn($q, $v) => $q->where('payment_type_id', $v));
