@@ -1125,12 +1125,6 @@ final class KaldisBot
             ?? $senderProfile->telegramUserId;
         $this->storage->updateCommunication($record);
 
-        if ($this->config->operationsDirectorUserId !== null) {
-            $this->client->sendMessage(
-                $this->config->operationsDirectorUserId,
-                sprintf('%s was forwarded to HO for %s.', $record->referenceNo, $record->department),
-            );
-        }
 
         $this->client->answerCallbackQuery($callbackId, 'Forwarded to Head Office.');
         if (isset($callbackQuery['message']) && is_array($callbackQuery['message'])) {
@@ -1424,16 +1418,6 @@ final class KaldisBot
                     $record->status = 'resolved';
                     $record->regionalManagerUserId = $senderId;
                     $this->storage->updateCommunication($record);
-
-                    $roleTitle = ($userProfile?->role === Roles::OPERATIONS_DIRECTOR) ? 'Operation Head' : 'Regional Manager';
-
-                    $this->client->sendMessage(
-                        $chatId,
-                        "✅ <b>Reference {$record->referenceNo} Resolved</b>\n" .
-                        "<b>Answered by:</b> {$roleTitle} @{$senderName}\n" .
-                        "<b>Response:</b> " . htmlspecialchars($replyText, ENT_QUOTES, 'UTF-8'),
-                        $threadId
-                    );
                     return;
                 }
 
@@ -1552,17 +1536,6 @@ final class KaldisBot
             $regionalManagerId = $this->storage->getRegionalManager($record->region)?->telegramUserId;
         }
 
-        if ($regionalManagerId !== null) {
-            $responseText = sprintf(
-                "Response received for %s\nDepartment: %s\nResponder: %s\nHO topic: %s\nMessage: %s",
-                $record->referenceNo,
-                $record->department,
-                $senderName,
-                $binding->topicName,
-                (string) ($message['text'] ?? $message['caption'] ?? 'Response received'),
-            );
-            $this->client->sendMessage($regionalManagerId, $responseText);
-        }
 
         $record->status = 'responded';
         $record->departmentHeadUserId = $senderId;

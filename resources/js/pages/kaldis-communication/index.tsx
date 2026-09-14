@@ -1,7 +1,7 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import {
     Activity,
@@ -33,6 +33,7 @@ import {
     Users,
     UserX,
     Volume2,
+    X,
     XCircle,
     Zap,
 } from 'lucide-react';
@@ -51,6 +52,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
@@ -207,6 +209,32 @@ export default function KaldisCommunicationPage({
     const [search, setSearch] = useState(filters.search || '');
     const [regionFilter, setRegionFilter] = useState(filters.region || 'all');
     const [statusFilter, setStatusFilter] = useState(filters.status || 'all');
+    const [rosterSearch, setRosterSearch] = useState('');
+
+    const departmentOptions = useMemo(
+        () => departments.map((d) => ({ id: d, name: d })),
+        [departments]
+    );
+
+    const branchOptions = useMemo(
+        () => branches.map((b) => ({ id: b.name, name: b.name })),
+        [branches]
+    );
+
+    const filteredRosterUsers = useMemo(() => {
+        if (!rosterSearch.trim()) return rosterUsers;
+        const q = rosterSearch.toLowerCase().trim();
+        return rosterUsers.filter((u) => {
+            return (
+                String(u.telegram_user_id).includes(q) ||
+                (u.display_name && u.display_name.toLowerCase().includes(q)) ||
+                (u.role && u.role.toLowerCase().includes(q)) ||
+                (u.region && u.region.toLowerCase().includes(q)) ||
+                (u.branch_name && u.branch_name.toLowerCase().includes(q)) ||
+                (u.department && u.department.toLowerCase().includes(q))
+            );
+        });
+    }, [rosterUsers, rosterSearch]);
 
     // Dialog state
     const [isAddUserOpen, setIsAddUserOpen] = useState(false);
@@ -1558,6 +1586,31 @@ export default function KaldisCommunicationPage({
                                 )}
                             </CardHeader>
                             <CardContent>
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+                                    <div className="relative w-full sm:w-80">
+                                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-neutral-400" />
+                                        <Input
+                                            type="text"
+                                            placeholder="Search roster by name, ID, role, branch, dept..."
+                                            value={rosterSearch}
+                                            onChange={(e) => setRosterSearch(e.target.value)}
+                                            className="pl-9 pr-8 text-xs h-9"
+                                        />
+                                        {rosterSearch && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setRosterSearch('')}
+                                                className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-neutral-500 font-medium">
+                                        Showing <span className="font-semibold text-neutral-800 dark:text-neutral-200">{filteredRosterUsers.length}</span> of {rosterUsers.length} staff members
+                                    </div>
+                                </div>
+
                                 <div className="rounded-md border border-neutral-200 dark:border-neutral-800">
                                     <Table>
                                         <TableHeader className="bg-neutral-50 dark:bg-neutral-900">
@@ -1572,14 +1625,18 @@ export default function KaldisCommunicationPage({
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                            {rosterUsers.length === 0 ? (
+                                            {filteredRosterUsers.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={canManage ? 7 : 6} className="h-20 text-center text-neutral-500">
-                                                        No staff registered in the roster yet. Click "Sync Members from Telegram" to import group members.
+                                                    <TableCell colSpan={canManage ? 7 : 6} className="h-20 text-center text-neutral-500 py-6">
+                                                        {rosterSearch ? (
+                                                            <span>No staff roster members found matching "<span className="font-semibold text-neutral-800 dark:text-neutral-200">{rosterSearch}</span>".</span>
+                                                        ) : (
+                                                            <span>No staff registered in the roster yet. Click "Sync Members from Telegram" to import group members.</span>
+                                                        )}
                                                     </TableCell>
                                                 </TableRow>
                                             ) : (
-                                                rosterUsers.map((u) => (
+                                                filteredRosterUsers.map((u) => (
                                                     <TableRow key={u.telegram_user_id}>
                                                         <TableCell className="font-mono text-xs font-semibold">{u.telegram_user_id}</TableCell>
                                                         <TableCell className="font-medium text-sm">{u.display_name}</TableCell>
@@ -1856,42 +1913,30 @@ export default function KaldisCommunicationPage({
                         {userForm.data.role === 'branch_manager' && (
                             <div className="space-y-2">
                                 <Label htmlFor="branch_name">Branch Name</Label>
-                                <Select
+                                <SearchableSelect
+                                    options={branchOptions}
                                     value={userForm.data.branch_name}
                                     onValueChange={(val) => userForm.setData('branch_name', val)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Branch" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {branches.map((b) => (
-                                            <SelectItem key={b.id} value={b.name}>
-                                                {b.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    placeholder="Select Branch"
+                                    searchPlaceholder="Search branch..."
+                                    emptyText="No branch found."
+                                    className="w-full"
+                                />
                             </div>
                         )}
 
                         {userForm.data.role === 'department_head' && (
                             <div className="space-y-2">
                                 <Label htmlFor="department">HO Department</Label>
-                                <Select
+                                <SearchableSelect
+                                    options={departmentOptions}
                                     value={userForm.data.department}
                                     onValueChange={(val) => userForm.setData('department', val)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Department" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {departments.map((dept) => (
-                                            <SelectItem key={dept} value={dept}>
-                                                {dept}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    placeholder="Select Department"
+                                    searchPlaceholder="Search department..."
+                                    emptyText="No department found."
+                                    className="w-full"
+                                />
                             </div>
                         )}
 
@@ -2010,21 +2055,15 @@ export default function KaldisCommunicationPage({
 
                         <div className="space-y-2">
                             <Label htmlFor="department">Target HO Department</Label>
-                            <Select
+                            <SearchableSelect
+                                options={departmentOptions}
                                 value={bindingForm.data.department}
                                 onValueChange={(val) => bindingForm.setData('department', val)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {departments.map((dept) => (
-                                        <SelectItem key={dept} value={dept}>
-                                            {dept}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                placeholder="Select Department"
+                                searchPlaceholder="Search department..."
+                                emptyText="No department found."
+                                className="w-full"
+                            />
                         </div>
 
                         <div className="space-y-2 pt-1 border-t dark:border-neutral-800">
@@ -2088,21 +2127,15 @@ export default function KaldisCommunicationPage({
 
                         <div className="space-y-2">
                             <Label htmlFor="edit_department">Target HO Department</Label>
-                            <Select
+                            <SearchableSelect
+                                options={departmentOptions}
                                 value={editBindingForm.data.department}
                                 onValueChange={(val) => editBindingForm.setData('department', val)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {departments.map((dept) => (
-                                        <SelectItem key={dept} value={dept}>
-                                            {dept}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                placeholder="Select Department"
+                                searchPlaceholder="Search department..."
+                                emptyText="No department found."
+                                className="w-full"
+                            />
                         </div>
 
                         <div className="flex items-center space-x-2 pt-1">
@@ -2199,31 +2232,28 @@ export default function KaldisCommunicationPage({
 
                         <div className="space-y-2">
                             <Label htmlFor="edit_usr_branch">Branch Name</Label>
-                            <Input
-                                id="edit_usr_branch"
+                            <SearchableSelect
+                                options={branchOptions}
                                 value={editUserForm.data.branch_name}
-                                onChange={(e) => editUserForm.setData('branch_name', e.target.value)}
-                                placeholder="e.g., Bole Medhanialem"
+                                onValueChange={(val) => editUserForm.setData('branch_name', val)}
+                                placeholder="Select Branch (if Branch Manager)"
+                                searchPlaceholder="Search branch..."
+                                emptyText="No branch found."
+                                className="w-full"
                             />
                         </div>
 
                         <div className="space-y-2">
                             <Label htmlFor="edit_usr_dept">HO Department</Label>
-                            <Select
+                            <SearchableSelect
+                                options={departmentOptions}
                                 value={editUserForm.data.department}
                                 onValueChange={(val) => editUserForm.setData('department', val)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Department (if HO)" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {departments.map((dept) => (
-                                        <SelectItem key={dept} value={dept}>
-                                            {dept}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                placeholder="Select Department (if HO)"
+                                searchPlaceholder="Search department..."
+                                emptyText="No department found."
+                                className="w-full"
+                            />
                         </div>
 
                         <div className="flex items-center space-x-2 pt-1">
@@ -2278,21 +2308,15 @@ export default function KaldisCommunicationPage({
 
                         <div className="space-y-2">
                             <Label htmlFor="std_topic_dept">Target HO Department</Label>
-                            <Select
+                            <SearchableSelect
+                                options={departmentOptions}
                                 value={standardTopicForm.data.department}
                                 onValueChange={(val) => standardTopicForm.setData('department', val)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {departments.map((dept) => (
-                                        <SelectItem key={dept} value={dept}>
-                                            {dept}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                placeholder="Select Department"
+                                searchPlaceholder="Search department..."
+                                emptyText="No department found."
+                                className="w-full"
+                            />
                         </div>
 
                         <div className="space-y-2">
@@ -2361,21 +2385,15 @@ export default function KaldisCommunicationPage({
 
                         <div className="space-y-2">
                             <Label htmlFor="edit_std_topic_dept">Target HO Department</Label>
-                            <Select
+                            <SearchableSelect
+                                options={departmentOptions}
                                 value={editStandardTopicForm.data.department}
                                 onValueChange={(val) => editStandardTopicForm.setData('department', val)}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Select Department" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {departments.map((dept) => (
-                                        <SelectItem key={dept} value={dept}>
-                                            {dept}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                placeholder="Select Department"
+                                searchPlaceholder="Search department..."
+                                emptyText="No department found."
+                                className="w-full"
+                            />
                         </div>
 
                         <div className="space-y-2">
