@@ -382,40 +382,6 @@ export default function Show({ form, submission, branches, departments, employee
                                 </CardContent>
                             </Card>
 
-                            {submission.employee_scores && submission.employee_scores.length > 0 && (
-                                <div className="col-span-1 md:col-span-3 space-y-4 pt-2">
-                                    <h3 className="text-xl font-bold tracking-tight text-amber-900 border-b pb-2">Employee Scorecards</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                        {submission.employee_scores.map((score: any) => {
-                                            const dept = departments?.find((d) => String(d.id) === String(score.department_id));
-                                            return (
-                                                <div key={score.id} className="bg-white rounded-xl border border-amber-900/10 shadow-sm p-5 hover:shadow-md transition-shadow">
-                                                    <div className="flex flex-col mb-3">
-                                                        <span className="font-bold text-gray-900 truncate tracking-tight text-[16px]">{score.name}</span>
-                                                        <span className="text-xs font-bold uppercase text-amber-600 mt-0.5">{dept?.name || 'Unassigned'}</span>
-                                                    </div>
-                                                    <div className="flex items-end justify-between mt-2 pt-3 border-t">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-[10px] uppercase font-bold text-gray-400">Achieved</span>
-                                                            <span className="font-medium text-gray-700 text-sm">{score.earned_points} / {score.total_points} Pts</span>
-                                                        </div>
-                                                        <div className="flex flex-col items-end">
-                                                            {score.percentage !== null ? (
-                                                                <span className={`font-bold text-lg ${score.percentage >= 80 ? 'text-green-600' : score.percentage >= 50 ? 'text-amber-600' : 'text-red-500'}`}>
-                                                                    {score.percentage}%
-                                                                </span>
-                                                            ) : (
-                                                                <span className="font-bold text-sm text-gray-400 italic">N/A</span>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            )}
-
                             <div className="col-span-1 md:col-span-3 space-y-6">
                                 {formVersion.sections && formVersion.sections.map((section: any, sIdx: number) => (
                                     <Card key={section.id} className="shadow-sm border-amber-900/10">
