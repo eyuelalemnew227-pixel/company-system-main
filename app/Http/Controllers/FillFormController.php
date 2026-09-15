@@ -145,8 +145,8 @@ class FillFormController extends Controller
                             $empId = [(string) $empIdStr]; // Map single employee array for isolated tracking
 
                             foreach ($evals as $subQLabel => $val) {
-                                if ($subQLabel === 'remark')
-                                    continue; // Optional: skip purely text remarks if we only want metrics, or save them!
+                                if ($subQLabel === 'remark' && ($val === '' || $val === null))
+                                    continue;
 
                                 \App\Models\FormSubmissionAnswer::create([
                                     'form_submission_id' => $submission->id,

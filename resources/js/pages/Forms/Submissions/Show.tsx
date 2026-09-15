@@ -22,6 +22,33 @@ export default function Show({ form, submission, branches, departments, employee
 
         const qTypeBase = q.inputType?.type_identifier || q.input_type?.type_identifier;
 
+        if (qTypeBase === 'employee_attendance_roster') {
+            let presentIds: string[] = [];
+            try {
+                if (matchingAns?.value_text) {
+                    const parsed = JSON.parse(matchingAns.value_text);
+                    if (Array.isArray(parsed)) presentIds = parsed.map(String);
+                }
+            } catch (e) {}
+
+            if (presentIds.length === 0) {
+                return <span className="text-gray-400 italic">No employees checked in</span>;
+            }
+
+            return (
+                <div className="flex flex-wrap gap-2 py-1">
+                    {presentIds.map((id) => {
+                        const emp = employees?.find(e => String(e.id) === id);
+                        return (
+                            <span key={id} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-sm">
+                                {emp ? emp.name : `Employee #${id}`}
+                            </span>
+                        );
+                    })}
+                </div>
+            );
+        }
+
         if (qTypeBase === 'employee_evaluation_grid') {
             if (matchingAnswers.length === 0) {
                 return <span className="text-gray-400 italic">No evaluated employees</span>;
@@ -33,64 +60,131 @@ export default function Show({ form, submission, branches, departments, employee
             const choices = q.choices || [];
 
             const getChoiceLabel = (tgtVal: any) => {
-                if (tgtVal === null || tgtVal === undefined) return '-';
-                const matchedChoice = choices.find((c: any) => String(c.value) === String(tgtVal));
+                if (tgtVal === null || tgtVal === undefined || tgtVal === '') return '-';
+                const matchedChoice = choices.find((c: any) => 
+                    String(c.value) === String(tgtVal) || 
+                    String(c.label).toLowerCase() === String(tgtVal).toLowerCase()
+                );
                 return matchedChoice ? matchedChoice.label : tgtVal;
             };
 
-            // Reconstruct the virtual gridData object from multi-row answers matching targeted_employees!
+            // Reconstruct the virtual gridData object from answers
             const virtualGridData: Record<string, any> = {};
-            matchingAnswers.forEach((ans: any) => {
-                const targets = (typeof ans.targeted_employees === 'string' ? JSON.parse(ans.targeted_employees) : ans.targeted_employees) || [];
-                targets.forEach((empStr: string) => {
-                    const empId = String(empStr);
-                    if (!virtualGridData[empId]) virtualGridData[empId] = {};
 
-                    if (ans.sub_question_identifier) {
-                        virtualGridData[empId][ans.sub_question_identifier] = ans.value_text;
+            // 1. Fallback: check if any answer contains a JSON object in value_text
+            matchingAnswers.forEach((ans: any) => {
+                if (ans.value_text && typeof ans.value_text === 'string' && ans.value_text.trim().startsWith('{')) {
+                    try {
+                        const parsed = JSON.parse(ans.value_text);
+                        if (typeof parsed === 'object' && parsed !== null) {
+                            Object.entries(parsed).forEach(([empKey, empVal]: [string, any]) => {
+                                if (typeof empVal === 'object' && empVal !== null) {
+                                    if (!virtualGridData[empKey]) virtualGridData[empKey] = {};
+                                    Object.assign(virtualGridData[empKey], empVal);
+                                }
+                            });
+                        }
+                    } catch (e) {}
+                }
+            });
+
+            // 2. Group decomposed answers by targeted employee
+            const answersByEmp: Record<string, any[]> = {};
+            matchingAnswers.forEach((ans: any) => {
+                let targets: any[] = [];
+                try {
+                    targets = (typeof ans.targeted_employees === 'string' ? JSON.parse(ans.targeted_employees) : ans.targeted_employees) || [];
+                } catch (e) {
+                    targets = [];
+                }
+                if (!Array.isArray(targets) || targets.length === 0) {
+                    if (ans.targeted_employees) targets = [ans.targeted_employees];
+                }
+
+                targets.forEach((empStr: any) => {
+                    const empId = String(empStr);
+                    if (!answersByEmp[empId]) answersByEmp[empId] = [];
+                    answersByEmp[empId].push(ans);
+                });
+            });
+
+            // 3. For each employee, map their answers to sub-questions
+            Object.entries(answersByEmp).forEach(([empId, empAnswers]) => {
+                if (!virtualGridData[empId]) virtualGridData[empId] = {};
+
+                empAnswers.forEach((ans: any, ansIdx: number) => {
+                    const subId = ans.sub_question_identifier;
+                    const val = ans.value_text;
+
+                    if (subId) {
+                        virtualGridData[empId][subId] = val;
+                        // Cross-index with matching sub-question ID and label
+                        const matchedSubQ = subQs.find((sq: any) => 
+                            (sq.id && String(sq.id) === String(subId)) || 
+                            (sq.label && String(sq.label) === String(subId))
+                        );
+                        if (matchedSubQ) {
+                            if (matchedSubQ.id) virtualGridData[empId][matchedSubQ.id] = val;
+                            if (matchedSubQ.label) virtualGridData[empId][matchedSubQ.label] = val;
+                        }
+                    } else if (hasSubQs && subQs.length > 0 && ansIdx < subQs.length) {
+                        // Fallback for submissions where sub_question_identifier was null (saved in sequential order)
+                        const targetSubQ = subQs[ansIdx];
+                        if (targetSubQ) {
+                            if (targetSubQ.id) virtualGridData[empId][targetSubQ.id] = val;
+                            if (targetSubQ.label) virtualGridData[empId][targetSubQ.label] = val;
+                        }
+                        virtualGridData[empId][ansIdx] = val;
                     } else {
-                        virtualGridData[empId]['single'] = ans.value_text;
+                        virtualGridData[empId]['single'] = val;
                     }
                 });
             });
 
             return (
-                <div className="mt-3 overflow-x-auto rounded-md border border-amber-200 shadow-sm max-w-full">
+                <div className="mt-2 overflow-x-auto rounded-md border border-amber-200 shadow-sm w-full">
                     <table className="w-full text-sm text-left whitespace-nowrap">
-                        <thead className="bg-amber-50 text-amber-900 border-b border-amber-200">
+                        <thead className="bg-[#1c2c4c] text-white border-b uppercase text-xs">
                             <tr>
-                                <th className="px-4 py-2 font-semibold">Employee</th>
+                                <th className="px-4 py-3 font-semibold sticky left-0 z-10 border-r bg-[#1c2c4c]">Employee Name</th>
                                 {hasSubQs && subQs.length > 0 ? (
-                                    subQs.map((sq: any) => (
-                                        <th key={sq.id || sq.label} className="px-4 py-2 font-semibold">{sq.label}</th>
+                                    subQs.map((sq: any, sqIdx: number) => (
+                                        <th key={sq.id || sq.label || sqIdx} className="px-4 py-3 font-semibold text-center border-l border-[#2c3e60] leading-snug">{sq.label}</th>
                                     ))
                                 ) : (
-                                    <th className="px-4 py-2 font-semibold">Evaluation</th>
+                                    <th className="px-4 py-3 font-semibold text-center border-l border-[#2c3e60] leading-snug">Evaluation</th>
                                 )}
-                                {hasRemarkField && <th className="px-4 py-2 font-semibold border-l border-amber-100">Remark / Note</th>}
+                                {hasRemarkField && <th className="px-4 py-3 font-semibold border-l border-[#2c3e60]">Remark / Note</th>}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-amber-100 bg-white">
+                        <tbody className="divide-y divide-gray-100 bg-white">
                             {Object.entries(virtualGridData).map(([empId, evals]: [string, any], idx) => {
                                 const empInfo = employees?.find(e => String(e.id) === String(empId));
-                                const employeeName = empInfo ? empInfo.name : `Employee Code/ID #${empId}`;
+                                const employeeName = empInfo ? empInfo.name : `Employee #${empId}`;
 
                                 return (
-                                    <tr key={empId} className="hover:bg-amber-50/30 transition-colors">
-                                        <td className="px-4 py-2 font-medium border-r border-amber-50">{employeeName}</td>
+                                    <tr key={empId} className="hover:bg-amber-50/20 transition-colors">
+                                        <td className="px-4 py-3 font-medium border-r border-gray-200 bg-white sticky left-0 z-10 text-gray-900 shadow-[1px_0_0_0_#e5e7eb]">{employeeName}</td>
                                         {hasSubQs && subQs.length > 0 ? (
-                                            subQs.map((sq: any) => (
-                                                <td key={sq.id || sq.label} className="px-4 py-2 text-gray-700">
-                                                    {getChoiceLabel(evals[sq.label] || evals[sq.id] || evals[sq.id || sq.label])}
-                                                </td>
-                                            ))
+                                            subQs.map((sq: any, sqIdx: number) => {
+                                                const val = evals[sq.id] ?? evals[sq.label] ?? evals[sq.id || sq.label] ?? evals[sqIdx];
+                                                return (
+                                                    <td key={sq.id || sq.label || sqIdx} className="px-4 py-3 text-center border-l border-gray-100 text-gray-800 font-medium">
+                                                        <span className="inline-block px-2.5 py-1 rounded bg-slate-50 border border-slate-200 text-xs font-semibold">
+                                                            {getChoiceLabel(val)}
+                                                        </span>
+                                                    </td>
+                                                );
+                                            })
                                         ) : (
-                                            <td className="px-4 py-2 text-gray-700 font-medium">
-                                                {getChoiceLabel(evals['single'])}
+                                            <td className="px-4 py-3 text-center border-l border-gray-100 text-gray-800 font-medium">
+                                                <span className="inline-block px-2.5 py-1 rounded bg-slate-50 border border-slate-200 text-xs font-semibold">
+                                                    {getChoiceLabel(evals['single'])}
+                                                </span>
                                             </td>
                                         )}
                                         {hasRemarkField && (
-                                            <td className="px-4 py-2 text-gray-600 italic border-l border-amber-50">
+                                            <td className="px-4 py-3 text-gray-600 italic border-l border-gray-100 text-xs">
                                                 {evals['remark'] || '-'}
                                             </td>
                                         )}
@@ -169,67 +263,6 @@ export default function Show({ form, submission, branches, departments, employee
                     <span className="text-indigo-700 font-bold tracking-wide">{sliderVal} / 10</span>
                 </div>
             );
-        }
-
-        if (qType === 'employee_evaluation_grid') {
-            try {
-                const gridData = JSON.parse(val);
-                if (typeof gridData !== 'object' || gridData === null) throw new Error("Invalid");
-
-                const hasSubQs = matchingAns.question?.visibility_logic?.has_sub_questions;
-                const subQs = matchingAns.question?.visibility_logic?.sub_questions || [];
-                const choices = matchingAns.question?.choices || [];
-
-                const getChoiceLabel = (tgtVal: any) => {
-                    if (!tgtVal) return '-';
-                    const matchedChoice = choices.find((c: any) => String(c.value) === String(tgtVal));
-                    return matchedChoice ? matchedChoice.label : tgtVal;
-                };
-
-                return (
-                    <div className="mt-3 overflow-x-auto rounded-md border border-amber-200 shadow-sm max-w-full">
-                        <table className="w-full text-sm text-left whitespace-nowrap">
-                            <thead className="bg-amber-50 text-amber-900 border-b border-amber-200">
-                                <tr>
-                                    <th className="px-4 py-2 font-semibold">Employee</th>
-                                    {hasSubQs && subQs.length > 0 ? (
-                                        subQs.map((sq: any) => (
-                                            <th key={sq.id || sq.label} className="px-4 py-2 font-semibold">{sq.label}</th>
-                                        ))
-                                    ) : (
-                                        <th className="px-4 py-2 font-semibold">Evaluation</th>
-                                    )}
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-amber-100 bg-white">
-                                {Object.entries(gridData).map(([empId, evals]: [string, any], idx) => {
-                                    const empInfo = employees?.find(e => String(e.id) === String(empId));
-                                    const employeeName = empInfo ? empInfo.name : `Employee Code/ID #${empId}`;
-
-                                    return (
-                                        <tr key={empId} className="hover:bg-amber-50/30 transition-colors">
-                                            <td className="px-4 py-2 font-medium border-r border-amber-50">{employeeName}</td>
-                                            {hasSubQs && subQs.length > 0 ? (
-                                                subQs.map((sq: any) => (
-                                                    <td key={sq.id || sq.label} className="px-4 py-2 text-gray-700">
-                                                        {getChoiceLabel(evals[sq.label] || evals[sq.id])}
-                                                    </td>
-                                                ))
-                                            ) : (
-                                                <td className="px-4 py-2 text-gray-700 font-medium">
-                                                    {getChoiceLabel(evals['single'])}
-                                                </td>
-                                            )}
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
-                );
-            } catch (e) {
-                return <span className="text-red-500 italic">Invalid Grid Format</span>;
-            }
         }
 
         return <span className="text-gray-900 font-medium">{val || '-'}</span>;
@@ -408,6 +441,23 @@ export default function Show({ form, submission, branches, departments, employee
                                                             return (
                                                                 <div key={question.id} className="px-5 py-3.5 bg-amber-50/70 border-l-4 border-amber-600">
                                                                     <p className="font-bold text-amber-950 text-base tracking-tight">{question.label}</p>
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        const qTypeBase = inputTypeResolver?.type_identifier || '';
+                                                        const isFullWidth = qTypeBase === 'employee_evaluation_grid' || qTypeBase === 'employee_attendance_roster';
+
+                                                        if (isFullWidth) {
+                                                            return (
+                                                                <div key={question.id} className="p-5 flex flex-col gap-3 hover:bg-gray-50/50 transition-colors">
+                                                                    <div>
+                                                                        <p className="text-sm text-gray-500 mb-1 font-semibold uppercase tracking-wider text-[11px]">Question {sIdx + 1}.{qCounter}</p>
+                                                                        <p className="font-semibold text-gray-900 text-base">{question.label}</p>
+                                                                    </div>
+                                                                    <div className="w-full">
+                                                                        {getAnswerForQuestion(question)}
+                                                                    </div>
                                                                 </div>
                                                             );
                                                         }

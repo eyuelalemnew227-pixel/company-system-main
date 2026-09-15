@@ -270,6 +270,23 @@ class FormSubmissionAdminController extends Controller
 
             if ($questionType === 'boolean') {
                 $parsedAnswers[$ans->form_question_id] = (bool) $ans->value_boolean;
+            } elseif ($questionType === 'employee_evaluation_grid') {
+                if (!isset($parsedAnswers[$ans->form_question_id])) {
+                    $parsedAnswers[$ans->form_question_id] = [];
+                }
+                $targets = $ans->targeted_employees;
+                if (is_string($targets)) {
+                    $targets = json_decode($targets, true);
+                }
+                if (is_array($targets)) {
+                    foreach ($targets as $empId) {
+                        if (!isset($parsedAnswers[$ans->form_question_id][(string) $empId])) {
+                            $parsedAnswers[$ans->form_question_id][(string) $empId] = [];
+                        }
+                        $subQ = $ans->sub_question_identifier ?: 'single';
+                        $parsedAnswers[$ans->form_question_id][(string) $empId][$subQ] = $ans->value_text;
+                    }
+                }
             } else {
                 $val = $ans->value_text;
                 $decoded = json_decode($val, true);
@@ -337,7 +354,7 @@ class FormSubmissionAdminController extends Controller
                         $empId = [(string) $empIdStr];
 
                         foreach ($evals as $subQLabel => $val) {
-                            if ($subQLabel === 'remark')
+                            if ($subQLabel === 'remark' && ($val === '' || $val === null))
                                 continue;
 
                             \App\Models\FormSubmissionAnswer::create([
