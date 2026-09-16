@@ -300,7 +300,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('budget/weekly-budget/finance/send-to-ceo', [WeeklyBudgetController::class, 'sendToCeo'])->name('weekly-budget.finance.send-to-ceo');
     });
 
-    Route::middleware('permission:manage finance budgets')->group(function () {
+    Route::middleware('permission:manage finance budgets|manage finance admin budgets')->group(function () {
         Route::patch('budget/weekly-budget/{weeklyBudget}/finance-status', [WeeklyBudgetController::class, 'updateFinance'])->name('weekly-budget.update-finance');
         Route::patch('budget/weekly-budget/finance/bulk', [WeeklyBudgetController::class, 'bulkUpdateFinance'])->name('weekly-budget.bulk-update-finance');
         Route::post('budget/weekly-budget/finance/override-paid', [WeeklyBudgetController::class, 'overridePaid'])->name('weekly-budget.override-paid');
@@ -322,6 +322,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('permission:view ceo budgets')->group(function () {
         Route::get('budget/weekly-budget/ceo/export', [WeeklyBudgetController::class, 'exportCeo'])->name('weekly-budget.ceo.export');
         Route::get('budget/weekly-budget/ceo', [WeeklyBudgetController::class, 'ceoView'])->name('weekly-budget.ceo');
+    });
+
+    // Finance Admin View for Weekly Budgets
+    Route::middleware('permission:view finance admin budgets')->group(function () {
+        Route::get('budget/weekly-budget/finance-admin/export', [WeeklyBudgetController::class, 'exportFinanceAdmin'])->name('weekly-budget.finance-admin.export');
+        Route::get('budget/weekly-budget/finance-admin', [WeeklyBudgetController::class, 'financeAdminView'])->name('weekly-budget.finance-admin');
     });
 
     Route::middleware('permission:manage ceo budgets')->group(function () {
