@@ -109,6 +109,7 @@ class FormController extends Controller
             'sections.*.questions.*._id' => 'nullable|string',
             'sections.*.questions.*.visibility_logic' => 'nullable|array',
             'sections.*.questions.*.department_targets' => 'nullable|array',
+            'sections.*.questions.*.default_value' => 'nullable|string',
         ]);
 
         DB::transaction(function () use ($validated) {
@@ -145,6 +146,7 @@ class FormController extends Controller
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),
                                 'visibility_logic' => !empty($questionData['visibility_logic']) ? $questionData['visibility_logic'] : null,
                                 'department_targets' => !empty($questionData['department_targets']) ? $questionData['department_targets'] : null,
+                                'default_value' => $questionData['default_value'] ?? null,
                             ]);
 
                             if (!empty($questionData['choices'])) {
@@ -523,6 +525,7 @@ class FormController extends Controller
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),
                                 'visibility_logic' => !empty($questionData['visibility_logic']) ? $questionData['visibility_logic'] : null,
                                 'department_targets' => !empty($questionData['department_targets']) ? $questionData['department_targets'] : null,
+                                'default_value' => $questionData['default_value'] ?? null,
                             ]);
 
                             if (!empty($questionData['choices'])) {

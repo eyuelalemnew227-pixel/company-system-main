@@ -164,12 +164,12 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         });
         return map;
     }, [formVersion]);
-    // Automatically map defaults if starting a fresh form
+    // Automatically map defaults
     const initialAnswers = { ...parsedAnswers };
-    if (!submission && formVersion?.sections) {
+    if (formVersion?.sections) {
         formVersion.sections.forEach((s: any) => {
             s.questions?.forEach((q: any) => {
-                if (q.default_value && initialAnswers[q.id] === undefined) {
+                if (q.default_value && (initialAnswers[q.id] === undefined || initialAnswers[q.id] === null || initialAnswers[q.id] === '')) {
                     initialAnswers[q.id] = String(q.default_value);
                 }
             });
@@ -183,7 +183,8 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
     const getAnswerForType = (typeIdentifier: string) => {
         for (const s of formVersion?.sections || []) {
             for (const q of s.questions || []) {
-                if (q.input_type?.type_identifier === typeIdentifier) {
+                const identifier = q.input_type?.type_identifier || q.inputType?.type_identifier;
+                if (identifier === typeIdentifier) {
                     return data.answers[q.id];
                 }
             }
@@ -263,8 +264,8 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
             return matchQ ? data.answers[matchQ.id] : null;
         };
 
-        const localBranch = getAnswerForTypeInSection('branch_lookup');
-        const localDept = getAnswerForTypeInSection('department_lookup');
+        const localBranch = getAnswerForTypeInSection('branch_lookup') || getAnswerForType('branch_lookup');
+        const localDept = getAnswerForTypeInSection('department_lookup') || getAnswerForType('department_lookup');
 
         let localFilteredDepartments = departments || [];
         if (localBranch) {
@@ -404,7 +405,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     <div className="bg-white border rounded-xl shadow-sm overflow-hidden p-6 gap-6 flex flex-col mb-4">
                         {!localBranch ? (
                             <div className="text-center py-8">
-                                <p className="text-muted-foreground font-medium text-lg">Please select a Branch (in this section) to load the Attendance Roster.</p>
+                                <p className="text-muted-foreground font-medium text-lg">Please select a Branch to load the Attendance Roster.</p>
                             </div>
                         ) : localFilteredEmployees.length === 0 ? (
                             <div className="text-center py-8">

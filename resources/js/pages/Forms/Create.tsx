@@ -120,7 +120,9 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
             label: '',
             form_input_type_id: inputTypes[0]?.id || '',
             is_required: false,
-            choices: []
+            choices: [],
+            default_value: '',
+            department_targets: []
         });
         setData('sections', newSections);
     };
@@ -140,6 +142,12 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
         const isTitle = matchedType?.type_identifier === 'title';
 
         if (field === 'form_input_type_id') {
+            const isBranch = matchedType?.type_identifier === 'branch_lookup';
+            const isDepartment = matchedType?.type_identifier === 'department_lookup';
+            if (!isBranch && !isDepartment) {
+                newSections[sIndex].questions[qIndex].default_value = '';
+            }
+
             if (isTitle) {
                 newSections[sIndex].questions[qIndex].is_required = false;
                 newSections[sIndex].questions[qIndex].choices = [];
@@ -242,6 +250,7 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
                         order_index: qIdx, // Reassert index based on drag order
                         visibility_logic: q.visibility_logic || null,
                         department_targets: isTitle ? null : (q.department_targets || null),
+                        default_value: q.default_value || null,
                         choices: q.choices?.map((c: any, cIdx: number) => ({
                             label: c.label,
                             value: c.value,

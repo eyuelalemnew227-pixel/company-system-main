@@ -99,6 +99,19 @@ class FillFormController extends Controller
 
             $employees = \App\Models\Employee::get();
 
+            $globalRosterArr = [];
+            foreach ($version->sections as $sec) {
+                foreach ($sec->questions as $q) {
+                    $tId = $q->inputType->type_identifier ?? '';
+                    if ($tId === 'employee_attendance_roster' && isset($validated['answers'][$q->id])) {
+                        $ans = $validated['answers'][$q->id];
+                        if (is_array($ans)) {
+                            $globalRosterArr = array_unique(array_merge($globalRosterArr, $ans));
+                        }
+                    }
+                }
+            }
+
             foreach ($version->sections as $section) {
                 $localRosterArr = [];
                 foreach ($section->questions as $q) {
@@ -121,7 +134,8 @@ class FillFormController extends Controller
                     $responsibleEmpIds = [];
 
                     if (!empty($deptTargets)) {
-                        foreach ($localRosterArr as $empIdStr) {
+                        $rosterForMatching = !empty($localRosterArr) ? $localRosterArr : $globalRosterArr;
+                        foreach ($rosterForMatching as $empIdStr) {
                             $emp = $employees->firstWhere('id', (int) $empIdStr);
                             if ($emp) {
                                 if (in_array((string) $emp->department_id, $deptTargets, true)) {
