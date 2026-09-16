@@ -752,6 +752,30 @@ export default function WeeklyBudgetFinanceAdminView({
 		);
 	}
 
+	function updateFinanceStatus(item: WeeklyBudgetRow, status: string) {
+		if (status === item.status_finance) return;
+
+		if (status === 'paid') {
+			if (item.status_ceo !== 'approved') {
+				return triggerPopup('Error', 'Cannot mark as Paid until CEO Status is Approved.', 'error');
+			}
+		}
+
+		if (item.status_finance === 'paid' && status === 'approved' && !canOverridePaid) {
+			return triggerPopup('Error', 'You do not have permission to revert Paid status.', 'error');
+		}
+
+		setSavingStatusId(item.id);
+		router.patch(
+			`/budget/weekly-budget/${item.id}/finance-status`,
+			{ status_finance: status },
+			{
+				preserveScroll: true,
+				onFinish: () => setSavingStatusId(null),
+			},
+		);
+	}
+
 	function canEditDescription(item: WeeklyBudgetRow): boolean {
 		return getFinanceEditMode(item, canManageFinanceAdmin, canOverridePaid) === 'full';
 	}
@@ -1766,15 +1790,15 @@ export default function WeeklyBudgetFinanceAdminView({
 									</div>
 									<div className="mt-3 flex items-center gap-4">
 										<span className="text-sm font-medium text-slate-700 dark:text-slate-300">Filter Status:</span>
-										<div className="flex items-center gap-6">
-											{['all', 'pending', 'approved', 'rejected'].map((status) => (
+										<div className="flex flex-wrap items-center gap-6">
+											{['all', 'pending', 'approved', 'rejected', 'on-hold', 'transferred'].map((status) => (
 												<label key={status} className="flex items-center gap-2 cursor-pointer">
 													<Checkbox
-														checked={selectedStatusCeo === status}
+														checked={selectedStatusFinance === status}
 														onCheckedChange={(checked) => {
 															const newStatus = checked ? status : 'all';
-															setSelectedStatusCeo(newStatus);
-															applyFilters({ status_ceo: newStatus });
+															setSelectedStatusFinance(newStatus);
+															applyFilters({ status_finance: newStatus });
 														}}
 													/>
 													<span className="text-sm capitalize text-slate-700 dark:text-slate-300">{status}</span>
@@ -1820,11 +1844,9 @@ export default function WeeklyBudgetFinanceAdminView({
 												<TableHead className="font-bold text-white">Department</TableHead>
 												<TableHead className="font-bold text-white">Branch</TableHead>
 												<TableHead className="font-bold text-white">Request Type</TableHead>
-												<TableHead className="font-bold text-white">Status (Finance)</TableHead>
+												<TableHead className="w-0 whitespace-nowrap font-bold text-white">Status (Finance)</TableHead>
 												<TableHead className="font-bold text-white">Status (Dept)</TableHead>
 												<TableHead className="font-bold text-white">Status (CEO)</TableHead>
-												<TableHead className="font-bold text-white">Payment Category</TableHead>
-												<TableHead className="font-bold text-white">Payment Type</TableHead>
 												<TableHead className="font-bold text-white">Description</TableHead>
 												<TableHead className="font-bold text-white">Note</TableHead>
 												<TableHead className="font-bold text-white">Amount</TableHead>
@@ -1878,19 +1900,33 @@ export default function WeeklyBudgetFinanceAdminView({
 																requestTypeBadge(item.request_type)
 															)}
 														</TableCell>
-														<TableCell>
-															{isEditing ? (
+														<TableCell className="w-0 whitespace-nowrap">
+															{canManageFinanceAdmin ? (
 																<Select
-																	value={editForm.status_finance}
-																	onValueChange={(v) => setEditForm({ ...editForm, status_finance: v })}
+																	value={item.status_finance}
+																	onValueChange={(status) => updateFinanceStatus(item, status)}
+																	disabled={!isEditable || savingStatusId === item.id}
 																>
-																	<SelectTrigger className="w-[120px]">
+																	<SelectTrigger
+																		className={cn(
+																			'h-7 w-full min-w-0 rounded-full border px-2 text-[11px] font-bold shadow-sm',
+																			statusColorClass(item.status_finance),
+																		)}
+																	>
 																		<SelectValue />
 																	</SelectTrigger>
 																	<SelectContent>
-																		{allowedFinanceStatuses.map((s) => (
-																			<SelectItem key={s} value={s}>
-																				{s.charAt(0).toUpperCase() + s.slice(1)}
+																		{allowedFinanceStatuses.map((status) => (
+																			<SelectItem
+																				key={status}
+																				value={status}
+																				className={cn(
+																					'my-0.5 rounded-full text-[11px] font-bold',
+																					statusColorClass(status),
+																					'focus:bg-inherit focus:text-inherit',
+																				)}
+																			>
+																				{statusLabel(status)}
 																			</SelectItem>
 																		))}
 																	</SelectContent>
@@ -1902,83 +1938,6 @@ export default function WeeklyBudgetFinanceAdminView({
 
 														<TableCell>{statusBadge(item.status_department, 'department')}</TableCell>
 														<TableCell>{statusBadge(item.status_ceo, 'ceo')}</TableCell>
-
-														<TableCell>
-															{canEditPaymentFields ? (
-																<Select
-																	value={editForm.payment_category_id}
-																	onValueChange={(v) =>
-																		setEditForm({ ...editForm, payment_category_id: v, payment_type_id: '' })
-																	}
-																>
-																	<SelectTrigger className="w-[140px]">
-																		<SelectValue placeholder="Category" />
-																	</SelectTrigger>
-																	<SelectContent>
-																		{paymentCategories.map((pc) => (
-																			<SelectItem key={pc.id} value={String(pc.id)}>
-																				{pc.name}
-																			</SelectItem>
-																		))}
-																	</SelectContent>
-																</Select>
-															) : (
-																(paymentCategories.find((c) => c.id === item.payment_category_id)?.name ?? '-')
-															)}
-														</TableCell>
-
-														<TableCell>
-															{canEditPaymentFields ? (
-																<Popover>
-																	<PopoverTrigger asChild>
-																		<Button
-																			variant="outline"
-																			role="combobox"
-																			disabled={!editForm.payment_category_id}
-																			className="w-[200px] justify-between font-normal"
-																		>
-																			{editForm.payment_type_id
-																				? (itemFilteredPaymentTypes.find(
-																					(pt) => String(pt.id) === editForm.payment_type_id,
-																				)?.name ?? 'Select type')
-																				: 'Select type'}
-																			<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-																		</Button>
-																	</PopoverTrigger>
-																	<PopoverContent className="w-[240px] p-0" align="start">
-																		<Command>
-																			<CommandInput placeholder="Search types..." />
-																			<CommandList className="max-h-52">
-																				<CommandEmpty>No types found.</CommandEmpty>
-																				<CommandGroup>
-																					{itemFilteredPaymentTypes.map((pt) => (
-																						<CommandItem
-																							key={pt.id}
-																							value={pt.name}
-																							onSelect={() =>
-																								setEditForm({ ...editForm, payment_type_id: String(pt.id) })
-																							}
-																						>
-																							<Check
-																								className={cn(
-																									'mr-2 size-4',
-																									editForm.payment_type_id === String(pt.id)
-																										? 'opacity-100'
-																										: 'opacity-0',
-																								)}
-																							/>
-																							{pt.name}
-																						</CommandItem>
-																					))}
-																				</CommandGroup>
-																			</CommandList>
-																		</Command>
-																	</PopoverContent>
-																</Popover>
-															) : (
-																(paymentTypes.find((t) => t.id === item.payment_type_id)?.name ?? '-')
-															)}
-														</TableCell>
 
 														<TableCell>
 															<button
@@ -2061,7 +2020,7 @@ export default function WeeklyBudgetFinanceAdminView({
 										<TableFooter>
 											<TableRow className="bg-slate-200 dark:bg-slate-700">
 												{canManageFinanceAdmin && <TableCell />}
-												<TableCell colSpan={10} className="text-right font-bold">
+												<TableCell colSpan={8} className="text-right font-bold">
 													Total
 												</TableCell>
 												<TableCell className="whitespace-nowrap font-bold">{formatCurrency(visibleTotal)}</TableCell>

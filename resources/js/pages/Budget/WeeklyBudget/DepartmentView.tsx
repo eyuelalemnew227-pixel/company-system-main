@@ -315,6 +315,7 @@ export default function WeeklyBudgetDepartmentView({
 	// ── Bulk action state ───────────────────────────────────────────────────
 	const [selectedIds, setSelectedIds] = useState<number[]>([]);
 	const [bulkStatus, setBulkStatus] = useState<string>('');
+	const [savingStatusId, setSavingStatusId] = useState<number | null>(null);
 
 	// ── Edit state ──────────────────────────────────────────────────────────
 	const [editingRowId, setEditingRowId] = useState<number | null>(null);
@@ -514,6 +515,40 @@ export default function WeeklyBudgetDepartmentView({
 	}
 
 	// ── Edit helpers ─────────────────────────────────────────────────────────
+
+	function statusColorClass(status: string) {
+		const colorMap: Record<string, string> = {
+			pending: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+			approved: 'bg-green-50 text-green-700 border-green-200',
+			rejected: 'bg-red-50 text-red-700 border-red-200',
+			paid: 'bg-blue-50 text-blue-700 border-blue-200',
+			'on-hold': 'bg-orange-50 text-orange-700 border-orange-200',
+			transferred: 'bg-purple-50 text-purple-700 border-purple-200',
+		};
+		return colorMap[status] ?? 'border-slate-200 bg-slate-50 text-slate-700';
+	}
+
+	function updateDepartmentStatus(item: WeeklyBudgetRow, status: string) {
+		if (status === item.status_department) return;
+
+		const isDowngrade = item.status_department === 'approved' && status === 'pending';
+		const mismatchNoteNeeded = statusMismatchNoteRequired(status, item.status_finance);
+
+		if (isDowngrade || mismatchNoteNeeded) {
+			triggerPopup('Error', 'A note is required for this status change. Please use the Edit button.', 'error');
+			return;
+		}
+
+		setSavingStatusId(item.id);
+		router.patch(
+			`/budget/weekly-budget/${item.id}/department-status`,
+			{ status_department: status },
+			{
+				preserveScroll: true,
+				onFinish: () => setSavingStatusId(null),
+			},
+		);
+	}
 
 	/**
 	 * Returns true when the new dept status differs from finance status
@@ -1019,7 +1054,7 @@ export default function WeeklyBudgetDepartmentView({
 									<TableHead className="font-bold text-white">Department</TableHead>
 									<TableHead className="font-bold text-white">Branch</TableHead>
 									<TableHead className="font-bold text-white">Request Type</TableHead>
-									<TableHead className="font-bold text-white">Status (Dept)</TableHead>
+									<TableHead className="w-0 whitespace-nowrap font-bold text-white">Status (Dept)</TableHead>
 									<TableHead className="font-bold text-white">Status (Finance)</TableHead>
 									<TableHead className="font-bold text-white">Status (CEO)</TableHead>
 									<TableHead className="font-bold text-white">Payment Category</TableHead>
@@ -1087,7 +1122,7 @@ export default function WeeklyBudgetDepartmentView({
 											</TableCell>
 
 											{/* Department Status — editable unless row is locked */}
-											<TableCell>
+											<TableCell className="w-0 whitespace-nowrap">
 												{isEditing ? (
 													<Select
 														value={editForm.status_department}
@@ -1106,7 +1141,39 @@ export default function WeeklyBudgetDepartmentView({
 													</Select>
 												) : (
 													<div className="flex items-center gap-1.5">
-														{statusBadge(item.status_department, 'department')}
+														{canManageDept && !statusLocked ? (
+															<Select
+																value={item.status_department}
+																onValueChange={(status) => updateDepartmentStatus(item, status)}
+																disabled={savingStatusId === item.id}
+															>
+																<SelectTrigger
+																	className={cn(
+																		'h-7 w-[120px] min-w-0 rounded-full border px-2 text-[11px] font-bold shadow-sm',
+																		statusColorClass(item.status_department)
+																	)}
+																>
+																	<SelectValue />
+																</SelectTrigger>
+																<SelectContent>
+																	{statusDepartments.map((status) => (
+																		<SelectItem
+																			key={status}
+																			value={status}
+																			className={cn(
+																				'my-0.5 rounded-full text-[11px] font-bold',
+																				statusColorClass(status),
+																				'focus:bg-inherit focus:text-inherit'
+																			)}
+																		>
+																			{status.charAt(0).toUpperCase() + status.slice(1)}
+																		</SelectItem>
+																	))}
+																</SelectContent>
+															</Select>
+														) : (
+															statusBadge(item.status_department, 'department')
+														)}
 														{statusLocked && (
 															<Tooltip>
 																<TooltipTrigger asChild>

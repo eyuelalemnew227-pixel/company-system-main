@@ -1808,8 +1808,6 @@ class WeeklyBudgetController extends Controller
                     $q->where('week_start_date', $weekFilter);
                 }
             } else {
-                $q->where('status_finance', WeeklyBudgetStatusFinance::Approved->value);
-
                 if ($weekFilter && $weekFilter !== 'all') {
                     $q->where('status_department', WeeklyBudgetStatusDepartment::Approved->value)
                        ->where('week_start_date', $weekFilter);
@@ -1826,9 +1824,9 @@ class WeeklyBudgetController extends Controller
 
         $query
             ->when(request('budget_id'), fn($q, $v) => $q->where('id', $v))
-            ->when(request('request_type'), fn($q, $v) => $q->where('request_type',
-            'status_finance',
-            'status_department', $v))
+            ->when(request('request_type'), fn($q, $v) => $q->where('request_type', $v))
+            ->when(request('status_finance'), fn($q, $v) => $q->where('status_finance', $v))
+            ->when(request('status_department'), fn($q, $v) => $q->where('status_department', $v))
             ->when(request('status_ceo'), fn($q, $v) => $q->where('status_ceo', $v))
             ->when(request('branch_id'), fn($q, $v) => $q->where('branch_id', $v))
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
