@@ -54,9 +54,19 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
             if (sIdx > currentSIndex) return;
             s.questions.forEach((q: any, qIdx: number) => {
                 if (sIdx === currentSIndex && qIdx >= currentQIndex) return;
-                const isSelectType = inputTypes.find(t => t.id == q.form_input_type_id)?.type_identifier.includes('select');
+                const qType = inputTypes.find(t => t.id == q.form_input_type_id);
+                const isSelectType = qType?.type_identifier.includes('select') || qType?.type_identifier === 'radio' || qType?.type_identifier === 'checkbox';
+                const isBooleanType = qType?.type_identifier === 'boolean';
                 if (isSelectType && q.choices && q.choices.length > 0) {
                     targets.push(q);
+                } else if (isBooleanType) {
+                    targets.push({
+                        ...q,
+                        choices: [
+                            { _id: 'yes', label: 'Yes', value: 'true' },
+                            { _id: 'no', label: 'No', value: 'false' }
+                        ]
+                    });
                 }
             });
         });
@@ -238,12 +248,14 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
             sections: data.sections.map((s: any, sIdx: number) => ({
                 title: s.title,
                 order_index: sIdx, // Reassert index based on drag order
+                visibility_logic: s.visibility_logic || null,
                 questions: s.questions.map((q: any, qIdx: number) => {
                     const qType = inputTypes.find(t => t.id == q.form_input_type_id);
                     const isTitle = qType?.type_identifier === 'title';
                     const isEvalGrid = qType?.type_identifier === 'employee_evaluation_grid';
                     const defaultLabel = isTitle ? 'Untitled Title' : (isEvalGrid && q.visibility_logic?.has_sub_questions ? 'Grid Evaluation Matrix' : 'Untitled Question');
                     return {
+                        _id: q._id,
                         label: q.label || defaultLabel,
                         form_input_type_id: q.form_input_type_id,
                         is_required: isTitle ? false : Boolean(q.is_required),
@@ -333,18 +345,18 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
                                                             </div>
                                                             {section.visibility_logic && (() => {
                                                                 const logicTargets = getAvailableLogicTargets(sIndex, -1);
-                                                                const selectedTarget = logicTargets.find(t => t._id === section.visibility_logic.target_local_id);
+                                                                const selectedTarget = logicTargets.find(t => t._id === section.visibility_logic.target_local_id || (t.id && String(t.id) === String(section.visibility_logic.target_local_id)) || (t.local_id && String(t.local_id) === String(section.visibility_logic.target_local_id)));
 
                                                                 return (
                                                                     <div className="bg-amber-50/50 p-4 rounded-md border border-amber-900/10 space-y-4">
                                                                         {logicTargets.length === 0 ? (
-                                                                            <p className="text-sm text-red-500">No previous multiple-choice questions found in previous sections. Add one above to use conditional logic.</p>
+                                                                            <p className="text-sm text-red-500">No previous multiple-choice or yes/no questions found in previous sections. Add one above to use conditional logic.</p>
                                                                         ) : (
                                                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                                                                 <div className="space-y-1">
                                                                                     <Label className="text-xs">If Question...</Label>
                                                                                     <Select
-                                                                                        value={section.visibility_logic.target_local_id || ''}
+                                                                                        value={selectedTarget ? selectedTarget._id : (section.visibility_logic.target_local_id || '')}
                                                                                         onValueChange={(val) => updateSection(sIndex, 'visibility_logic', { ...section.visibility_logic, target_local_id: val, value: '' })}
                                                                                     >
                                                                                         <SelectTrigger className="bg-white text-sm"><SelectValue placeholder="Select target" /></SelectTrigger>
@@ -377,9 +389,10 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
                                                                                     >
                                                                                         <SelectTrigger className="bg-white text-sm"><SelectValue placeholder="Option value" /></SelectTrigger>
                                                                                         <SelectContent>
-                                                                                            {selectedTarget?.choices?.map((c: any) => (
-                                                                                                <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                                                                                            ))}
+                                                                                            {selectedTarget?.choices?.map((c: any, cIdx: number) => {
+                                                                                                const val = c.value !== undefined && c.value !== null && c.value !== '' ? String(c.value) : (c.label || String(cIdx));
+                                                                                                return <SelectItem key={val} value={val}>{c.label}</SelectItem>;
+                                                                                            })}
                                                                                             {!selectedTarget && <SelectItem value="none" disabled>Select target</SelectItem>}
                                                                                         </SelectContent>
                                                                                     </Select>
@@ -387,7 +400,7 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
                                                                             </div>
                                                                         )}
                                                                     </div>
-                                                                )
+                                                                );
                                                             })()}
                                                         </div>
                                                         <Droppable droppableId={`questions-${sIndex}`} type="question">
@@ -618,18 +631,18 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
                                                                                                     </div>
                                                                                                     {question.visibility_logic && (() => {
                                                                                                         const logicTargets = getAvailableLogicTargets(sIndex, qIndex);
-                                                                                                        const selectedTarget = logicTargets.find(t => t._id === question.visibility_logic.target_local_id);
+                                                                                                        const selectedTarget = logicTargets.find(t => t._id === question.visibility_logic.target_local_id || (t.id && String(t.id) === String(question.visibility_logic.target_local_id)) || (t.local_id && String(t.local_id) === String(question.visibility_logic.target_local_id)));
 
                                                                                                         return (
                                                                                                             <div className="bg-amber-50/50 p-4 rounded-md border border-amber-900/10 space-y-4">
                                                                                                                 {logicTargets.length === 0 ? (
-                                                                                                                    <p className="text-sm text-red-500">No previous multiple-choice questions found. Add one above to use conditional logic.</p>
+                                                                                                                    <p className="text-sm text-red-500">No previous multiple-choice or yes/no questions found. Add one above to use conditional logic.</p>
                                                                                                                 ) : (
                                                                                                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                                                                                                         <div className="space-y-1">
                                                                                                                             <Label className="text-xs">If Question...</Label>
                                                                                                                             <Select
-                                                                                                                                value={question.visibility_logic.target_local_id || ''}
+                                                                                                                                value={selectedTarget ? selectedTarget._id : (question.visibility_logic.target_local_id || '')}
                                                                                                                                 onValueChange={(val) => updateQuestion(sIndex, qIndex, 'visibility_logic', { ...question.visibility_logic, target_local_id: val, value: '' })}
                                                                                                                             >
                                                                                                                                 <SelectTrigger className="bg-white text-sm"><SelectValue placeholder="Select target" /></SelectTrigger>
@@ -637,6 +650,9 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
                                                                                                                                     {logicTargets.map(t => (
                                                                                                                                         <SelectItem key={t._id} value={t._id}>{t.label || 'Untitled Question'}</SelectItem>
                                                                                                                                     ))}
+                                                                                                                                    {!selectedTarget && question.visibility_logic.target_local_id && (
+                                                                                                                                        <SelectItem value={question.visibility_logic.target_local_id}>Selected Question</SelectItem>
+                                                                                                                                    )}
                                                                                                                                 </SelectContent>
                                                                                                                             </Select>
                                                                                                                         </div>
@@ -662,9 +678,10 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
                                                                                                                             >
                                                                                                                                 <SelectTrigger className="bg-white text-sm"><SelectValue placeholder="Option value" /></SelectTrigger>
                                                                                                                                 <SelectContent>
-                                                                                                                                    {selectedTarget?.choices?.map((c: any) => (
-                                                                                                                                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                                                                                                                                    ))}
+                                                                                                                                    {selectedTarget?.choices?.map((c: any, cIdx: number) => {
+                                                                                                                                        const val = c.value !== undefined && c.value !== null && c.value !== '' ? String(c.value) : (c.label || String(cIdx));
+                                                                                                                                        return <SelectItem key={val} value={val}>{c.label}</SelectItem>;
+                                                                                                                                    })}
                                                                                                                                     {!selectedTarget && <SelectItem value="none" disabled>Select target</SelectItem>}
                                                                                                                                 </SelectContent>
                                                                                                                             </Select>
@@ -672,7 +689,7 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
                                                                                                                     </div>
                                                                                                                 )}
                                                                                                             </div>
-                                                                                                        )
+                                                                                                        );
                                                                                                     })()}
                                                                                                 </div>
                                                                                             </div>

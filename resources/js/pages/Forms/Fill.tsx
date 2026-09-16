@@ -160,6 +160,12 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                 if (q.local_id) {
                     map[q.local_id] = q;
                 }
+                if (q.id) {
+                    map[String(q.id)] = q;
+                }
+                if (q._id) {
+                    map[q._id] = q;
+                }
             });
         });
         return map;
@@ -192,10 +198,6 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         return null;
     };
 
-
-
-
-
     const handleAnswerChange = (questionId: number, value: any) => {
         setData(current => ({
             ...current,
@@ -206,50 +208,93 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         }));
     };
 
+    const evaluateVisibilityLogic = (logic: any, givenAnswer: any) => {
+        if (!logic || !logic.target_local_id) return true;
+
+        const operator = logic.operator || 'equals';
+        const requiredValue = logic.value;
+
+        // If target question has not been answered yet
+        if (givenAnswer === undefined || givenAnswer === null || givenAnswer === '') {
+            return operator === 'not_equals';
+        }
+
+        // Helper to normalize booleans
+        const normalizeBool = (val: any) => {
+            if (val === true || val === 1 || val === '1' || val === 'true' || val === 'yes') return true;
+            if (val === false || val === 0 || val === '0' || val === 'false' || val === 'no') return false;
+            return null;
+        };
+
+        const boolAnswer = normalizeBool(givenAnswer);
+        const boolReq = normalizeBool(requiredValue);
+
+        let isMatch = false;
+        if (boolAnswer !== null && boolReq !== null) {
+            isMatch = (boolAnswer === boolReq);
+        } else if (Array.isArray(givenAnswer)) {
+            isMatch = givenAnswer.map(v => String(v).trim().toLowerCase()).includes(String(requiredValue ?? '').trim().toLowerCase());
+        } else {
+            let parsedArray: any = null;
+            if (typeof givenAnswer === 'string' && givenAnswer.startsWith('[') && givenAnswer.endsWith(']')) {
+                try {
+                    parsedArray = JSON.parse(givenAnswer);
+                } catch {
+                    parsedArray = null;
+                }
+            }
+
+            if (Array.isArray(parsedArray)) {
+                isMatch = parsedArray.map(v => String(v).trim().toLowerCase()).includes(String(requiredValue ?? '').trim().toLowerCase());
+            } else {
+                const strGiven = String(givenAnswer ?? '').trim().toLowerCase();
+                const strReq = String(requiredValue ?? '').trim().toLowerCase();
+                isMatch = (strGiven === strReq);
+            }
+        }
+
+        return operator === 'not_equals' ? !isMatch : isMatch;
+    };
+
+    const isQuestionVisible = (question: any) => {
+        if (!question.visibility_logic || !question.visibility_logic.target_local_id) return true;
+        const targetQ = allQuestionsMap[question.visibility_logic.target_local_id];
+        if (!targetQ) return true; // Fail open if target is deleted
+        const givenAnswer = data.answers[targetQ.id];
+        return evaluateVisibilityLogic(question.visibility_logic, givenAnswer);
+    };
+
+    const isSectionVisible = (section: any) => {
+        if (!section.visibility_logic || !section.visibility_logic.target_local_id) return true;
+        const targetQ = allQuestionsMap[section.visibility_logic.target_local_id];
+        if (!targetQ) return true; // Fail open if target is deleted
+        const givenAnswer = data.answers[targetQ.id];
+        return evaluateVisibilityLogic(section.visibility_logic, givenAnswer);
+    };
+
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        transform((currentData) => {
+            const visibleAnswers: Record<number, any> = {};
+            (formVersion?.sections || []).filter(isSectionVisible).forEach((sec: any) => {
+                (sec.questions || []).filter(isQuestionVisible).forEach((q: any) => {
+                    if (currentData.answers[q.id] !== undefined) {
+                        visibleAnswers[q.id] = currentData.answers[q.id];
+                    }
+                });
+            });
+            return {
+                ...currentData,
+                answers: visibleAnswers
+            };
+        });
 
         if (submission) {
             put(`/submissions/${submission.id}`);
         } else {
             post(`/fill-forms/${form.id}`);
         }
-    };
-
-    const isQuestionVisible = (question: any) => {
-        if (!question.visibility_logic || !question.visibility_logic.target_local_id) return true;
-
-        const targetQ = allQuestionsMap[question.visibility_logic.target_local_id];
-        if (!targetQ) return true; // Fail open if target is deleted
-
-        const givenAnswer = data.answers[targetQ.id];
-        const requiredValue = question.visibility_logic.value;
-
-        if (question.visibility_logic.operator === 'equals') {
-            return givenAnswer == requiredValue;
-        } else if (question.visibility_logic.operator === 'not_equals') {
-            return givenAnswer != requiredValue;
-        }
-
-        return true;
-    };
-
-    const isSectionVisible = (section: any) => {
-        if (!section.visibility_logic || !section.visibility_logic.target_local_id) return true;
-
-        const targetQ = allQuestionsMap[section.visibility_logic.target_local_id];
-        if (!targetQ) return true; // Fail open if target is deleted
-
-        const givenAnswer = data.answers[targetQ.id];
-        const requiredValue = section.visibility_logic.value;
-
-        if (section.visibility_logic.operator === 'equals') {
-            return givenAnswer == requiredValue;
-        } else if (section.visibility_logic.operator === 'not_equals') {
-            return givenAnswer != requiredValue;
-        }
-
-        return true;
     };
 
     const renderInput = (section: any, question: any) => {
@@ -792,6 +837,10 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     {!formVersion.sections || formVersion.sections.length === 0 ? (
                         <div className="p-12 text-center bg-gray-50 border rounded-xl">
                             <p className="text-lg text-gray-500 font-medium">This form has no content to fill in yet.</p>
+                        </div>
+                    ) : formVersion.sections.filter(isSectionVisible).length === 0 ? (
+                        <div className="p-12 text-center bg-gray-50 border rounded-xl">
+                            <p className="text-lg text-gray-500 font-medium">No sections are currently available based on your answers.</p>
                         </div>
                     ) : (
                         formVersion.sections.filter(isSectionVisible).map((section: any, idx: number) => (

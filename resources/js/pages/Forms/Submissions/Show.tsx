@@ -334,29 +334,90 @@ export default function Show({ form, submission, branches, departments, employee
                                 if (q.local_id) {
                                     map[q.local_id] = q;
                                 }
+                                if (q.id) {
+                                    map[String(q.id)] = q;
+                                }
+                                if (q._id) {
+                                    map[q._id] = q;
+                                }
                             });
                         });
                         return map;
                     }, [formVersion]);
 
+                    const getTargetAnswer = (targetQ: any) => {
+                        if (!targetQ) return '';
+                        const matchingTargetAns = submission.answers?.find((a: any) => a.form_question_id === targetQ.id);
+                        if (!matchingTargetAns) return '';
+                        if (matchingTargetAns.value_boolean !== null && matchingTargetAns.value_boolean !== undefined) {
+                            return matchingTargetAns.value_boolean;
+                        }
+                        return matchingTargetAns.value_text ?? '';
+                    };
+
+                    const evaluateVisibilityLogic = (logic: any, givenAnswer: any) => {
+                        if (!logic || !logic.target_local_id) return true;
+
+                        const operator = logic.operator || 'equals';
+                        const requiredValue = logic.value;
+
+                        if (givenAnswer === undefined || givenAnswer === null || givenAnswer === '') {
+                            return operator === 'not_equals';
+                        }
+
+                        const normalizeBool = (val: any) => {
+                            if (val === true || val === 1 || val === '1' || val === 'true' || val === 'yes') return true;
+                            if (val === false || val === 0 || val === '0' || val === 'false' || val === 'no') return false;
+                            return null;
+                        };
+
+                        const boolAnswer = normalizeBool(givenAnswer);
+                        const boolReq = normalizeBool(requiredValue);
+
+                        let isMatch = false;
+                        if (boolAnswer !== null && boolReq !== null) {
+                            isMatch = (boolAnswer === boolReq);
+                        } else if (Array.isArray(givenAnswer)) {
+                            isMatch = givenAnswer.map(v => String(v).trim().toLowerCase()).includes(String(requiredValue ?? '').trim().toLowerCase());
+                        } else {
+                            let parsedArray: any = null;
+                            if (typeof givenAnswer === 'string' && givenAnswer.startsWith('[') && givenAnswer.endsWith(']')) {
+                                try {
+                                    parsedArray = JSON.parse(givenAnswer);
+                                } catch {
+                                    parsedArray = null;
+                                }
+                            }
+
+                            if (Array.isArray(parsedArray)) {
+                                isMatch = parsedArray.map(v => String(v).trim().toLowerCase()).includes(String(requiredValue ?? '').trim().toLowerCase());
+                            } else {
+                                const strGiven = String(givenAnswer ?? '').trim().toLowerCase();
+                                const strReq = String(requiredValue ?? '').trim().toLowerCase();
+                                isMatch = (strGiven === strReq);
+                            }
+                        }
+
+                        return operator === 'not_equals' ? !isMatch : isMatch;
+                    };
+
+                    const isSectionVisible = (section: any) => {
+                        if (!section.visibility_logic || !section.visibility_logic.target_local_id) return true;
+                        const targetQ = allQuestionsMap[section.visibility_logic.target_local_id];
+                        if (!targetQ) return true;
+                        const givenAnswer = getTargetAnswer(targetQ);
+                        return evaluateVisibilityLogic(section.visibility_logic, givenAnswer);
+                    };
+
                     const isQuestionVisible = (question: any) => {
                         if (!question.visibility_logic || !question.visibility_logic.target_local_id) return true;
-
                         const targetQ = allQuestionsMap[question.visibility_logic.target_local_id];
                         if (!targetQ) return true;
-
-                        const matchingTargetAns = submission.answers?.find((a: any) => a.form_question_id === targetQ.id);
-                        const givenAnswer = matchingTargetAns ? (matchingTargetAns.value_boolean !== null ? matchingTargetAns.value_boolean : matchingTargetAns.value_text) : '';
-                        const requiredValue = question.visibility_logic.value;
-
-                        if (question.visibility_logic.operator === 'equals') {
-                            // Loose equality ensures '0', 0, 'false', boolean false works.
-                            return givenAnswer == requiredValue;
-                        } else if (question.visibility_logic.operator === 'not_equals') {
-                            return givenAnswer != requiredValue;
-                        }
-                        return true;
+                        const givenAnswer = getTargetAnswer(targetQ);
+                        return evaluateVisibilityLogic(question.visibility_logic, givenAnswer);
                     };
+
+                    const visibleSections = (formVersion.sections || []).filter(isSectionVisible);
 
                     return (
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -383,7 +444,12 @@ export default function Show({ form, submission, branches, departments, employee
                             </Card>
 
                             <div className="col-span-1 md:col-span-3 space-y-6">
-                                {formVersion.sections && formVersion.sections.map((section: any, sIdx: number) => (
+                                {visibleSections.length === 0 ? (
+                                    <Card className="p-8 text-center bg-gray-50 border">
+                                        <p className="text-gray-500 font-medium">No sections or questions were applicable for this submission.</p>
+                                    </Card>
+                                ) : (
+                                    visibleSections.map((section: any, sIdx: number) => (
                                     <Card key={section.id} className="shadow-sm border-amber-900/10">
                                         <CardHeader className="bg-amber-900/5 py-4 border-b border-amber-900/10">
                                             <CardTitle className="text-lg text-amber-900 flex items-center">
@@ -444,7 +510,7 @@ export default function Show({ form, submission, branches, departments, employee
                                             </div>
                                         </CardContent>
                                     </Card>
-                                ))}
+                                )))}
                             </div>
                         </div>
                     );
