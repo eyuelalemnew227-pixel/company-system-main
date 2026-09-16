@@ -541,6 +541,8 @@ function WeekBalanceDialogContent({ balances, estimatedSales, bankBalance, weekl
 	);
 }
 
+const EMPTY_ARRAY: any[] = [];
+
 export default function WeeklyBudgetFinanceView({
 	items,
 	branches,
@@ -561,7 +563,7 @@ export default function WeeklyBudgetFinanceView({
 	totalRequested = 0,
 	urgentRequested = 0,
 	normalRequested = 0,
-	departmentRequested = [],
+	departmentRequested = EMPTY_ARRAY,
 }: CeoProps) {
 	const { flash, errors, bankBalances = [] } = usePage<any>().props;
 	const { triggerPopup, PopupComponent } = usePopup();
@@ -878,14 +880,16 @@ export default function WeeklyBudgetFinanceView({
 		const selectedIdsFromRequest = noneSelected ? [] : requestedIds.length > 0 ? requestedIds : singleId ? [singleId] : null;
 
 		setCheckedChartDepartments((previous) => {
+			let changed = false;
 			const next = { ...previous };
 			departmentShareRows.forEach((row) => {
 				const key = String(row.department_id ?? 'none');
 				if (next[key] === undefined) {
 					next[key] = selectedIdsFromRequest ? selectedIdsFromRequest.includes(key) : true;
+					changed = true;
 				}
 			});
-			return next;
+			return changed ? next : previous;
 		});
 	}, [departmentShareRows, request?.department_ids, request?.department_id]);
 
