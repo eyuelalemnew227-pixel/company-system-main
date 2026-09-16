@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { computeCurrentBalance } from '@/lib/bank-balance';
+import { calculateSinceRequested } from '@/lib/budget-utils';
 import { cn } from '@/lib/utils';
 import { BreadcrumbItem } from '@/types';
 import type { Pagination } from '@/types/pagination';
@@ -48,6 +49,7 @@ type WeeklyBudgetRow = {
 	fiscal_year: string | null;
 	fiscal_month: string | null;
 	week_number: number;
+	created_at?: string;
 	week_start_date: string | null;
 	week_end_date: string | null;
 	request_type: string;
@@ -1937,8 +1939,8 @@ export default function WeeklyBudgetFinanceAdminView({
 																		>
 																			{editForm.payment_type_id
 																				? (itemFilteredPaymentTypes.find(
-																						(pt) => String(pt.id) === editForm.payment_type_id,
-																					)?.name ?? 'Select type')
+																					(pt) => String(pt.id) === editForm.payment_type_id,
+																				)?.name ?? 'Select type')
 																				: 'Select type'}
 																			<ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
 																		</Button>
@@ -2105,14 +2107,7 @@ export default function WeeklyBudgetFinanceAdminView({
 									</TableHeader>
 									<TableBody>
 										{items.data.map((item) => {
-											let sinceRequested = 0;
-											if (item.transferred_to && item.week_number) {
-												if (item.transferred_to >= item.week_number) {
-													sinceRequested = item.transferred_to - item.week_number;
-												} else {
-													sinceRequested = (53 - item.week_number) + item.transferred_to;
-												}
-											}
+											const sinceRequested = calculateSinceRequested(item.week_start_date);
 
 											return (
 												<TableRow key={item.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">

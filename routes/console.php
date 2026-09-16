@@ -12,5 +12,3 @@ Artisan::command('inspire', function () {
 Schedule::command('tickets:send-telegram-weekly-report')->weeklyOn(1, '08:00');
 Schedule::command('tickets:send-telegram-monthly-report')->monthlyOn(1, '08:00');
 
-// Weekly Budget Transferred Increment
-Schedule::command('budgets:increment-transferred')->weeklyOn(1, '00:00');
