@@ -623,7 +623,7 @@ class WeeklyBudgetController extends Controller
         $query->when(request('department_id'), fn($q, $v) => $q->where('department_id', $v));
     }
 
-    public function financeView(): Response
+    public function oldFinanceView_Deleted(): Response
     {
         abort_unless(auth()->user()->can('view finance budgets'), 403);
 
@@ -771,7 +771,7 @@ class WeeklyBudgetController extends Controller
         ]);
     }
 
-    public function exportFinance(CsvExportService $csvExportService)
+    public function oldExportFinance_Deleted(CsvExportService $csvExportService)
     {
         abort_unless(auth()->user()->can('view finance budgets'), 403);
 
@@ -922,7 +922,7 @@ class WeeklyBudgetController extends Controller
 
     public function updateFinance(Request $request, WeeklyBudget $weeklyBudget): RedirectResponse
     {
-        abort_unless(auth()->user()->hasAnyPermission(['manage finance budgets', 'manage finance admin budgets']), 403);
+        abort_unless(auth()->user()->can('manage finance budgets'), 403);
 
         $validated = $request->validate([
             'status_finance' => ['required', Rule::enum(WeeklyBudgetStatusFinance::class)],
@@ -1011,7 +1011,7 @@ class WeeklyBudgetController extends Controller
 
     public function bulkUpdateFinance(Request $request): RedirectResponse
     {
-        abort_unless(auth()->user()->hasAnyPermission(['manage finance budgets', 'manage finance admin budgets']), 403);
+        abort_unless(auth()->user()->can('manage finance budgets'), 403);
 
         $validated = $request->validate([
             'ids' => ['required', 'array'],
@@ -1761,9 +1761,9 @@ class WeeklyBudgetController extends Controller
     // Finance Admin View
     // ─────────────────────────────────────────────
 
-    public function financeAdminView(): Response
+    public function financeView(): Response
     {
-        abort_unless(auth()->user()->can('view finance admin budgets'), 403);
+        abort_unless(auth()->user()->can('view finance budgets'), 403);
 
         [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
         $currentWeekStartDate = \Carbon\Carbon::parse($today)->startOfWeek(\Carbon\CarbonInterface::MONDAY)->toDateString();
@@ -1955,7 +1955,7 @@ class WeeklyBudgetController extends Controller
             ->when($fiscalYearFilter && $fiscalYearFilter !== 'all', fn($q) => $q->where('fiscal_year_id', $fiscalYearFilter))
             ->when($fiscalMonthFilter && $fiscalMonthFilter !== 'all' && empty($weekFilter), fn($q) => $q->where('fiscal_month_id', $fiscalMonthFilter));
 
-        return Inertia::render('Budget/WeeklyBudget/FinanceAdminView', [
+        return Inertia::render('Budget/WeeklyBudget/Finance', [
             'totalBudget' => $totalBudget,
             'visibleTotal' => $visibleTotal,
             'totalRequested' => $totalRequested,
@@ -1985,10 +1985,10 @@ class WeeklyBudgetController extends Controller
         ]);
     }
 
-    public function exportFinanceAdmin(CsvExportService $csvExportService)
+    public function exportFinance(CsvExportService $csvExportService)
     {
 
-        abort_unless(auth()->user()->can('view finance admin budgets'), 403);
+        abort_unless(auth()->user()->can('view finance budgets'), 403);
 
         [$today, $currentFiscalYear, $currentFiscalMonth] = $this->currentFiscalPeriod();
         $currentWeekStartDate = \Carbon\Carbon::parse($today)->startOfWeek(\Carbon\CarbonInterface::MONDAY)->toDateString();
