@@ -37,12 +37,6 @@ class KpiLibraryController extends Controller
 
         $kpis = $query->paginate(15)->withQueryString();
 
-        // Calculate summary metrics
-        $allKpis = KpiLibrary::with('forms:id')->get();
-        $totalKpis = $allKpis->count();
-        $totalWeight = (float) $allKpis->sum('weight');
-        $linkedFormsCount = $allKpis->pluck('forms')->flatten()->pluck('id')->unique()->count();
-
         // All active/available forms for multi-selection dropdown
         $availableForms = Form::select('id', 'title', 'status')
             ->orderBy('title')
@@ -53,11 +47,6 @@ class KpiLibraryController extends Controller
             'filters' => [
                 'search' => $search,
                 'form_id' => $formFilter,
-            ],
-            'metrics' => [
-                'total_kpis' => $totalKpis,
-                'total_weight' => $totalWeight,
-                'linked_forms_count' => $linkedFormsCount,
             ],
             'availableForms' => $availableForms,
         ]);

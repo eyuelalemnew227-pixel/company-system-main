@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/react';
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -34,35 +34,17 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from '@/components/ui/command';
-import {
     Target,
     Plus,
     Search,
     Edit,
     Trash2,
     FileText,
-    Scale,
-    Layers,
-    ExternalLink,
     Check,
     ChevronsUpDown,
     X,
     Filter,
     ArrowLeft,
-    FileQuestion,
-    Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -94,11 +76,6 @@ interface Props {
         search?: string;
         form_id?: string;
     };
-    metrics: {
-        total_kpis: number;
-        total_weight: number;
-        linked_forms_count: number;
-    };
     availableForms: FormOption[];
 }
 
@@ -107,15 +84,33 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'KPI Library', href: '/kpi-libraries' },
 ];
 
-export default function Index({ kpis, filters, metrics, availableForms }: Props) {
+export default function Index({ kpis, filters, availableForms }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [formFilter, setFormFilter] = useState(filters.form_id || 'all');
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [editingKpi, setEditingKpi] = useState<KpiItem | null>(null);
     const [kpiToDelete, setKpiToDelete] = useState<KpiItem | null>(null);
 
-    // Multi-select popover state for create/edit modal
-    const [formSelectOpen, setFormSelectOpen] = useState(false);
+    // Multi-select dropdown state for create/edit modal
+    const [formDropdownOpen, setFormDropdownOpen] = useState(false);
+    const [formSearchQuery, setFormSearchQuery] = useState('');
+    const formDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Close form selection dropdown when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (formDropdownRef.current && !formDropdownRef.current.contains(event.target as Node)) {
+                setFormDropdownOpen(false);
+            }
+        };
+
+        if (formDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [formDropdownOpen]);
 
     // Inertia form for create / edit
     const { data, setData, post, put, processing, errors, reset, clearErrors } = useForm({
@@ -129,6 +124,8 @@ export default function Index({ kpis, filters, metrics, availableForms }: Props)
         reset();
         clearErrors();
         setEditingKpi(null);
+        setFormSearchQuery('');
+        setFormDropdownOpen(false);
         setIsCreateOpen(true);
     };
 
@@ -141,6 +138,8 @@ export default function Index({ kpis, filters, metrics, availableForms }: Props)
             description: kpi.description || '',
             form_ids: kpi.forms ? kpi.forms.map((f) => f.id) : [],
         });
+        setFormSearchQuery('');
+        setFormDropdownOpen(false);
         setIsCreateOpen(true);
     };
 
@@ -223,103 +222,42 @@ export default function Index({ kpis, filters, metrics, availableForms }: Props)
         setData('form_ids', []);
     };
 
+    // Filter available forms based on search query in modal
+    const filteredModalForms = availableForms.filter((f) =>
+        f.title.toLowerCase().includes(formSearchQuery.toLowerCase())
+    );
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="KPI Library - Form Builder" />
 
-            <div className="max-w-7xl mx-auto space-y-8 pb-16">
-                {/* Header Banner */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-r from-amber-900 via-amber-800 to-amber-950 p-6 sm:p-8 rounded-2xl shadow-md text-white">
-                    <div className="space-y-1">
-                        <div className="flex items-center space-x-2">
-                            <span className="p-2 bg-amber-700/50 rounded-xl border border-amber-600/50 text-amber-200">
-                                <Target className="h-6 w-6" />
-                            </span>
-                            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">KPI Library</h1>
-                        </div>
-                        <p className="text-amber-200/80 text-sm sm:text-base max-w-2xl pt-1">
-                            Define Key Performance Indicators with weights and link them to operational forms and checklists.
+            <div className="max-w-7xl mx-auto space-y-6 pb-16">
+                {/* Standard Page Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 className="text-2xl font-bold tracking-tight text-gray-900">KPI Library</h2>
+                        <p className="text-muted-foreground text-sm">
+                            Define Key Performance Indicators, set evaluation weights, and associate them with operational forms.
                         </p>
                     </div>
-                    <div className="flex items-center space-x-3 pt-2 sm:pt-0">
-                        <Button
-                            variant="outline"
-                            asChild
-                            className="bg-amber-950/40 border-amber-700/60 text-amber-100 hover:bg-amber-800/60 hover:text-white"
-                        >
+                    <div className="flex items-center space-x-3">
+                        <Button variant="outline" asChild className="bg-white">
                             <Link href="/forms">
                                 <ArrowLeft className="mr-2 h-4 w-4" /> Back to Forms
                             </Link>
                         </Button>
                         <Button
                             onClick={openCreateModal}
-                            className="bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold shadow-md hover:shadow-lg transition-all"
+                            className="bg-amber-900 hover:bg-amber-800 text-white font-semibold shadow-sm"
                         >
                             <Plus className="mr-2 h-4 w-4" /> Add KPI
                         </Button>
                     </div>
                 </div>
 
-                {/* Metrics Summary Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-                    <Card className="border-amber-900/10 shadow-sm bg-gradient-to-br from-white to-amber-50/30">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-semibold text-amber-900/80">
-                                Total KPIs in Library
-                            </CardTitle>
-                            <div className="p-2 bg-amber-100 rounded-lg text-amber-800">
-                                <Target className="h-4 w-4" />
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-extrabold text-amber-950">
-                                {metrics.total_kpis}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">Configured indicators</p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border-amber-900/10 shadow-sm bg-gradient-to-br from-white to-emerald-50/30">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-semibold text-emerald-900/80">
-                                Cumulative Weight
-                            </CardTitle>
-                            <div className="p-2 bg-emerald-100 rounded-lg text-emerald-800">
-                                <Scale className="h-4 w-4" />
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-extrabold text-emerald-950">
-                                {Number(metrics.total_weight).toLocaleString(undefined, {
-                                    minimumFractionDigits: 0,
-                                    maximumFractionDigits: 2,
-                                })}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">Total weight across library</p>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border-amber-900/10 shadow-sm bg-gradient-to-br from-white to-blue-50/30">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2">
-                            <CardTitle className="text-sm font-semibold text-blue-900/80">
-                                Linked Forms
-                            </CardTitle>
-                            <div className="p-2 bg-blue-100 rounded-lg text-blue-800">
-                                <Layers className="h-4 w-4" />
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-extrabold text-blue-950">
-                                {metrics.linked_forms_count}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">Unique checklists connected</p>
-                        </CardContent>
-                    </Card>
-                </div>
-
                 {/* Search & Filter Toolbar */}
                 <Card className="border-amber-900/10 shadow-sm bg-white">
-                    <CardContent className="p-4 sm:p-5">
+                    <CardContent className="p-4">
                         <form
                             onSubmit={handleSearchSubmit}
                             className="flex flex-col md:flex-row items-stretch md:items-center gap-3"
@@ -590,8 +528,8 @@ export default function Index({ kpis, filters, metrics, availableForms }: Props)
                                     )}
                                 </div>
 
-                                {/* Related Forms Multi-Select */}
-                                <div className="space-y-2">
+                                {/* Related Forms Multi-Select Dropdown (Clickable & Native to Dialog) */}
+                                <div className="space-y-2" ref={formDropdownRef}>
                                     <div className="flex items-center justify-between">
                                         <Label className="font-semibold text-gray-900">
                                             Related Forms / Checklists
@@ -602,7 +540,7 @@ export default function Index({ kpis, filters, metrics, availableForms }: Props)
                                                 onClick={selectAllForms}
                                                 className="text-amber-700 hover:underline font-medium"
                                             >
-                                                Select All
+                                                Select All ({availableForms.length})
                                             </button>
                                             <span className="text-gray-300">|</span>
                                             <button
@@ -615,67 +553,115 @@ export default function Index({ kpis, filters, metrics, availableForms }: Props)
                                         </div>
                                     </div>
 
-                                    {/* Multi-selection dropdown popover */}
-                                    <Popover open={formSelectOpen} onOpenChange={setFormSelectOpen}>
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                role="combobox"
-                                                className="w-full justify-between bg-white border text-left font-normal min-h-[42px] h-auto py-2"
-                                            >
-                                                {data.form_ids.length === 0 ? (
-                                                    <span className="text-muted-foreground">Select related forms...</span>
-                                                ) : (
-                                                    <span className="font-medium text-gray-800">
-                                                        {data.form_ids.length} form{data.form_ids.length > 1 ? 's' : ''} selected
-                                                    </span>
-                                                )}
-                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-[450px] p-0 bg-white shadow-lg" align="start">
-                                            <Command>
-                                                <CommandInput placeholder="Search forms by title..." />
-                                                <CommandList className="max-h-64">
-                                                    <CommandEmpty>No forms found.</CommandEmpty>
-                                                    <CommandGroup>
-                                                        {availableForms.map((form) => {
+                                    {/* Dropdown Input/Trigger Box */}
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormDropdownOpen((prev) => !prev)}
+                                            className={cn(
+                                                "w-full flex items-center justify-between px-3 py-2.5 bg-white border rounded-md shadow-sm text-sm text-left transition-all",
+                                                formDropdownOpen
+                                                    ? "border-amber-800 ring-2 ring-amber-800/20"
+                                                    : "border-gray-300 hover:border-gray-400"
+                                            )}
+                                        >
+                                            <span className={data.form_ids.length === 0 ? 'text-gray-400' : 'text-gray-900 font-medium'}>
+                                                {data.form_ids.length === 0
+                                                    ? 'Click to select related forms...'
+                                                    : `${data.form_ids.length} form${data.form_ids.length > 1 ? 's' : ''} selected`}
+                                            </span>
+                                            <ChevronsUpDown className="w-4 h-4 text-gray-400 shrink-0 ml-2" />
+                                        </button>
+
+                                        {/* Dropdown Menu Container (in-dialog, no Radix Popover trap) */}
+                                        {formDropdownOpen && (
+                                            <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-lg border border-gray-200 shadow-2xl overflow-hidden">
+                                                {/* Search header inside dropdown */}
+                                                <div className="p-2 border-b border-gray-100 bg-gray-50/80">
+                                                    <div className="relative">
+                                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                                        <input
+                                                            type="text"
+                                                            value={formSearchQuery}
+                                                            onChange={(e) => setFormSearchQuery(e.target.value)}
+                                                            placeholder="Search forms by name..."
+                                                            className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-gray-200 rounded-md focus:outline-none focus:border-amber-700"
+                                                            autoFocus
+                                                        />
+                                                        {formSearchQuery && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFormSearchQuery('')}
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                                            >
+                                                                <X className="h-3.5 w-3.5" />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Scrollable list of options */}
+                                                <div className="max-h-52 overflow-y-auto divide-y divide-gray-50 p-1">
+                                                    {filteredModalForms.length === 0 ? (
+                                                        <div className="py-6 text-center text-xs text-gray-500">
+                                                            No matching forms found.
+                                                        </div>
+                                                    ) : (
+                                                        filteredModalForms.map((form) => {
                                                             const isSelected = data.form_ids.includes(form.id);
                                                             return (
-                                                                <CommandItem
+                                                                <div
                                                                     key={form.id}
-                                                                    onSelect={() => toggleFormSelection(form.id)}
-                                                                    className="cursor-pointer"
+                                                                    onClick={() => toggleFormSelection(form.id)}
+                                                                    className={cn(
+                                                                        "flex items-center px-3 py-2 rounded-md text-sm cursor-pointer select-none transition-colors",
+                                                                        isSelected
+                                                                            ? "bg-amber-50/80 hover:bg-amber-100/70"
+                                                                            : "hover:bg-gray-100/70"
+                                                                    )}
                                                                 >
                                                                     <div
                                                                         className={cn(
-                                                                            'mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary',
+                                                                            "w-4 h-4 rounded border mr-2.5 flex items-center justify-center shrink-0 transition-colors",
                                                                             isSelected
-                                                                                ? 'bg-amber-800 text-white border-amber-800'
-                                                                                : 'opacity-50 [&_svg]:invisible'
+                                                                                ? "bg-amber-800 border-amber-800 text-white"
+                                                                                : "border-gray-300 bg-white"
                                                                         )}
                                                                     >
-                                                                        <Check className="h-3 w-3" />
+                                                                        {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                                                                     </div>
-                                                                    <span className="font-medium text-gray-800 flex-1">
+                                                                    <span className="font-medium text-gray-800 flex-1 truncate">
                                                                         {form.title}
                                                                     </span>
                                                                     {form.status && (
-                                                                        <span className="text-[10px] uppercase font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded ml-2">
+                                                                        <span className="text-[10px] uppercase font-semibold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded ml-2 shrink-0">
                                                                             {form.status}
                                                                         </span>
                                                                     )}
-                                                                </CommandItem>
+                                                                </div>
                                                             );
-                                                        })}
-                                                    </CommandGroup>
-                                                </CommandList>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
+                                                        })
+                                                    )}
+                                                </div>
 
-                                    {/* Selected Form Badges */}
+                                                {/* Footer quick action */}
+                                                <div className="p-2 border-t border-gray-100 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
+                                                    <span>{data.form_ids.length} of {availableForms.length} selected</span>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        onClick={() => setFormDropdownOpen(false)}
+                                                        className="h-6 px-2 text-xs text-amber-800 font-semibold hover:bg-amber-100"
+                                                    >
+                                                        Done
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Selected Badges */}
                                     {data.form_ids.length > 0 && (
                                         <div className="flex flex-wrap gap-1.5 pt-1.5">
                                             {data.form_ids.map((fId) => {
@@ -687,11 +673,11 @@ export default function Index({ kpis, filters, metrics, availableForms }: Props)
                                                         variant="secondary"
                                                         className="bg-amber-100/80 text-amber-900 border border-amber-200 text-xs py-1 px-2.5 flex items-center space-x-1"
                                                     >
-                                                        <span>{formObj.title}</span>
+                                                        <span className="truncate max-w-[200px]">{formObj.title}</span>
                                                         <button
                                                             type="button"
                                                             onClick={() => toggleFormSelection(fId)}
-                                                            className="ml-1 text-amber-700 hover:text-amber-950"
+                                                            className="ml-1 text-amber-700 hover:text-amber-950 p-0.5 rounded-full hover:bg-amber-200"
                                                         >
                                                             <X className="h-3 w-3" />
                                                         </button>
@@ -700,6 +686,7 @@ export default function Index({ kpis, filters, metrics, availableForms }: Props)
                                             })}
                                         </div>
                                     )}
+
                                     {errors.form_ids && (
                                         <p className="text-xs text-red-600 font-medium">{errors.form_ids}</p>
                                     )}
