@@ -621,6 +621,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('kaldis-communication/users', [\App\Http\Controllers\KaldisCommunicationController::class, 'updateUser'])->name('kaldis-communication.update-user');
     Route::delete('kaldis-communication/users/{telegramUserId}', [\App\Http\Controllers\KaldisCommunicationController::class, 'deleteUser'])->name('kaldis-communication.delete-user');
     Route::post('kaldis-communication/sync-members', [\App\Http\Controllers\KaldisCommunicationController::class, 'syncMembersFromTelegram'])->name('kaldis-communication.sync-members');
+    Route::post('kaldis-communication/standardize-names', [\App\Http\Controllers\KaldisCommunicationController::class, 'standardizeRosterNames'])->name('kaldis-communication.standardize-names');
     Route::post('kaldis-communication/fetch-member', [\App\Http\Controllers\KaldisCommunicationController::class, 'fetchTelegramMember'])->name('kaldis-communication.fetch-member');
     Route::put('kaldis-communication/status/{referenceNo}', [\App\Http\Controllers\KaldisCommunicationController::class, 'updateStatus'])->name('kaldis-communication.update-status');
     Route::post('kaldis-communication/sync-topics', [\App\Http\Controllers\KaldisCommunicationController::class, 'syncTopics'])->name('kaldis-communication.sync-topics');

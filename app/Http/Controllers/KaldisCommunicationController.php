@@ -205,10 +205,11 @@ class KaldisCommunicationController extends Controller
         $bindingsStmt = $pdo->query('SELECT * FROM topic_bindings ORDER BY group_key, topic_name');
         $topicBindings = $bindingsStmt->fetchAll() ?: [];
 
-        // Fetch Recent Communications
+        // Fetch Recent Communications with Topic & Status Filters
         $search = $request->input('search');
         $regionFilter = $request->input('region');
         $statusFilter = $request->input('status');
+        $topicFilter = $request->input('topic');
 
         $query = 'SELECT * FROM communications WHERE 1=1';
         $params = [];
@@ -223,13 +224,18 @@ class KaldisCommunicationController extends Controller
             $params[':region'] = $regionFilter;
         }
 
-        if ($statusFilter === 'answered') {
-            $query .= " AND status IN ('responded', 'closed')";
-        } elseif ($statusFilter === 'unanswered') {
+        if ($statusFilter === 'answered' || $statusFilter === 'responded') {
+            $query .= " AND status IN ('responded', 'resolved', 'closed')";
+        } elseif ($statusFilter === 'unanswered' || $statusFilter === 'open') {
             $query .= " AND status IN ('recorded', 'forwarded')";
         } elseif ($statusFilter) {
             $query .= ' AND status = :status';
             $params[':status'] = $statusFilter;
+        }
+
+        if ($topicFilter) {
+            $query .= ' AND (LOWER(topic_name) = :topic_filter OR LOWER(department) = :topic_filter)';
+            $params[':topic_filter'] = strtolower(trim($topicFilter));
         }
 
         $query .= ' ORDER BY created_at DESC LIMIT 50';
@@ -237,6 +243,20 @@ class KaldisCommunicationController extends Controller
         $commsStmt = $pdo->prepare($query);
         $commsStmt->execute($params);
         $communications = $commsStmt->fetchAll() ?: [];
+
+        // Fetch Per-Topic Conversation Metrics
+        $topicStatsStmt = $pdo->query("
+            SELECT 
+                topic_name, 
+                department, 
+                COUNT(*) as total,
+                SUM(CASE WHEN status IN ('responded', 'resolved', 'closed') THEN 1 ELSE 0 END) as responded,
+                SUM(CASE WHEN status IN ('recorded', 'forwarded') THEN 1 ELSE 0 END) as unanswered
+            FROM communications 
+            GROUP BY LOWER(topic_name)
+            ORDER BY total DESC
+        ");
+        $topicStats = $topicStatsStmt->fetchAll() ?: [];
 
         // Dynamic Standard Topic Mapping Defaults
         $defaultTopicMapping = $this->getStandardTopicMapping();
@@ -261,6 +281,7 @@ class KaldisCommunicationController extends Controller
             'rosterUsers' => $rosterUsers,
             'topicBindings' => $topicBindings,
             'communications' => $communications,
+            'topicStats' => $topicStats,
             'defaultTopicMapping' => $defaultTopicMapping,
             'departments' => $departments,
             'branches' => $branches,
@@ -269,6 +290,7 @@ class KaldisCommunicationController extends Controller
                 'search' => $search ?? '',
                 'region' => $regionFilter ?? '',
                 'status' => $statusFilter ?? '',
+                'topic' => $topicFilter ?? '',
             ],
             'canManage' => auth()->user()->hasRole(['Super Admin', 'Admin']) || auth()->user()->can('manage telegram config'),
         ]);
@@ -1881,5 +1903,48 @@ class KaldisCommunicationController extends Controller
         }
 
         return redirect()->back()->with('success', "Standard topic preset '{$validated['name']}' removed!");
+    }
+
+    public function standardizeRosterNames(): RedirectResponse
+    {
+        $pdo = $this->getPdo();
+        $stmt = $pdo->query('SELECT telegram_user_id, display_name FROM users');
+        $users = $stmt->fetchAll() ?: [];
+
+        $updateStmt = $pdo->prepare('UPDATE users SET display_name = :display_name, updated_at = :updated_at WHERE telegram_user_id = :telegram_user_id');
+        $now = gmdate('Y-m-d\TH:i:s\Z');
+        $count = 0;
+
+        foreach ($users as $u) {
+            $raw = (string) $u['display_name'];
+            $clean = $this->formatStandardFullName($raw);
+            if ($clean !== $raw && !empty($clean)) {
+                $updateStmt->execute([
+                    ':display_name' => $clean,
+                    ':updated_at' => $now,
+                    ':telegram_user_id' => $u['telegram_user_id'],
+                ]);
+                $count++;
+            }
+        }
+
+        return redirect()->back()->with('success', "Standardized {$count} member display names to Title Case 'First Name Last Name' format!");
+    }
+
+    private function formatStandardFullName(string $name): string
+    {
+        // 1. Remove Telegram handles (@username or (@username))
+        $clean = preg_replace('/\s*\(?@[a-zA-Z0-9_]+\)?/u', '', $name);
+        // 2. Remove emojis and non-alphanumeric/name symbols
+        $clean = preg_replace('/[\x{1F600}-\x{1F64F}\x{1F300}-\x{1F5FF}\x{1F680}-\x{1F6FF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}]/u', '', $clean);
+        // 3. Remove brackets, prefixes like [IT], etc.
+        $clean = preg_replace('/\[[^\]]*\]|\([^\)]*\)/u', '', $clean);
+        // 4. Normalize multiple spaces
+        $clean = trim(preg_replace('/\s+/u', ' ', $clean));
+        if ($clean === '') {
+            return trim($name);
+        }
+        // 5. Convert to Title Case words (First Name Last Name)
+        return mb_convert_case($clean, MB_CASE_TITLE, 'UTF-8');
     }
 }

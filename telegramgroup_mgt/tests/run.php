@@ -61,8 +61,12 @@ final class FakeTelegramClient implements TelegramClientInterface
         return [];
     }
 
+    /** @var array<int, array<string, mixed>> */
+    public array $deletedMessages = [];
+
     public function deleteMessage(int $chatId, int $messageId): array
     {
+        $this->deletedMessages[] = compact('chatId', 'messageId');
         return [];
     }
 }
@@ -336,8 +340,87 @@ function runBotFlowTests(): void
     @unlink($path);
 }
 
+function runDepartmentHeadTopicRestrictionTests(): void
+{
+    $path = tempnam(sys_get_temp_dir(), 'kaldis_restrict_test');
+    if ($path === false) {
+        throw new RuntimeException('Could not allocate temp file.');
+    }
+
+    $client = new FakeTelegramClient();
+    $storage = new SQLiteStorage($path);
+    $config = new BotConfig(
+        botToken: 'fake:token',
+        databasePath: $path,
+        regionGroups: ['Region 1' => -1001],
+        regionCodes: ['Region 1' => 'R1'],
+    );
+    $bot = new KaldisBot($config, $storage, $client);
+
+    // Bind topic 101 to IT and topic 102 to HR
+    $storage->bindTopic(new TopicBinding('Region 1', 101, 'IT', 'IT'));
+    $storage->bindTopic(new TopicBinding('Region 1', 102, 'HR', 'HR'));
+
+    // Register IT Manager (user 50) and Regional Manager (user 60)
+    $storage->upsertUser(new UserProfile(
+        telegramUserId: 50,
+        displayName: 'IT Manager',
+        role: Roles::DEPARTMENT_HEAD,
+        department: 'IT',
+    ));
+    $storage->upsertUser(new UserProfile(
+        telegramUserId: 60,
+        displayName: 'Regional Manager',
+        role: Roles::REGIONAL_MANAGER,
+        region: 'Region 1',
+    ));
+
+    // Case 1: IT Manager posts in IT Topic (101) -> ALLOWED
+    $bot->handleMessage([
+        'message_id' => 201,
+        'from' => ['id' => 50, 'first_name' => 'IT', 'last_name' => 'Manager'],
+        'chat' => ['id' => -1001, 'type' => 'supergroup'],
+        'message_thread_id' => 101,
+        'text' => 'Network status update for IT department.',
+    ]);
+    assertSameValue(0, count($client->deletedMessages), 'IT Manager message in IT topic should NOT be deleted.');
+    $rec1 = $storage->findCommunicationBySourceMessage(-1001, 201);
+    assertTrue($rec1 !== null, 'Communication record for IT topic should be created.');
+
+    // Case 2: IT Manager posts in HR Topic (102) -> RESTRICTED (DELETED)
+    $bot->handleMessage([
+        'message_id' => 202,
+        'from' => ['id' => 50, 'first_name' => 'IT', 'last_name' => 'Manager'],
+        'chat' => ['id' => -1001, 'type' => 'supergroup'],
+        'message_thread_id' => 102,
+        'text' => 'Hello HR, testing message.',
+    ]);
+    assertSameValue(1, count($client->deletedMessages), 'IT Manager message in HR topic MUST be deleted.');
+    assertSameValue(202, $client->deletedMessages[0]['messageId'], 'Deleted message ID mismatch.');
+    $lastSent = end($client->sentMessages);
+    assertTrue(str_contains($lastSent['text'] ?? '', 'Topic Access Restricted'), 'Warning message should notify user of topic restriction.');
+    $rec2 = $storage->findCommunicationBySourceMessage(-1001, 202);
+    assertTrue($rec2 === null, 'Communication record should NOT be created for restricted message.');
+
+    // Case 3: Regional Manager posts in HR Topic (102) -> ALLOWED
+    $bot->handleMessage([
+        'message_id' => 203,
+        'from' => ['id' => 60, 'first_name' => 'Regional', 'last_name' => 'Manager'],
+        'chat' => ['id' => -1001, 'type' => 'supergroup'],
+        'message_thread_id' => 102,
+        'text' => 'HR policy inquiry for Region 1.',
+    ]);
+    assertSameValue(1, count($client->deletedMessages), 'Regional Manager message in HR topic should NOT be deleted.');
+    $rec3 = $storage->findCommunicationBySourceMessage(-1001, 203);
+    assertTrue($rec3 !== null, 'Communication record for Regional Manager should be created.');
+
+    $storage->close();
+    @unlink($path);
+}
+
 runRoutingTests();
 runStorageTests();
 runBotFlowTests();
+runDepartmentHeadTopicRestrictionTests();
 
 echo "All PHP tests passed.\n";

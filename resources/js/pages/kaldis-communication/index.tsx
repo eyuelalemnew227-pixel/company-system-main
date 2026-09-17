@@ -175,12 +175,21 @@ const getTopicEmoji = (topicName: string, mapping: any): string => {
     return TOPIC_EMOJIS[topicName] || '📌';
 };
 
+type TopicStat = {
+    topic_name: string;
+    department: string;
+    total: number;
+    responded: number;
+    unanswered: number;
+};
+
 type Props = {
     stats: SystemStats;
     config: ConfigData;
     rosterUsers: RosterUser[];
     topicBindings: TopicBinding[];
     communications: CommunicationRecord[];
+    topicStats?: TopicStat[];
     defaultTopicMapping: StandardTopicPreset[] | Record<string, string>;
     departments: string[];
     branches: Array<{ id: number; name: string }>;
@@ -189,6 +198,7 @@ type Props = {
         search: string;
         region: string;
         status: string;
+        topic?: string;
     };
     canManage: boolean;
 };
@@ -199,6 +209,7 @@ export default function KaldisCommunicationPage({
     rosterUsers,
     topicBindings,
     communications,
+    topicStats = [],
     defaultTopicMapping,
     departments,
     branches,
@@ -209,7 +220,26 @@ export default function KaldisCommunicationPage({
     const [search, setSearch] = useState(filters.search || '');
     const [regionFilter, setRegionFilter] = useState(filters.region || 'all');
     const [statusFilter, setStatusFilter] = useState(filters.status || 'all');
+    const [topicFilter, setTopicFilter] = useState(filters.topic || 'all');
     const [rosterSearch, setRosterSearch] = useState('');
+
+    const applyFilters = (s?: string, r?: string, st?: string, t?: string) => {
+        const queryParams: Record<string, string> = {};
+        const activeSearch = s !== undefined ? s : search;
+        const activeRegion = r !== undefined ? r : regionFilter;
+        const activeStatus = st !== undefined ? st : statusFilter;
+        const activeTopic = t !== undefined ? t : topicFilter;
+
+        if (activeSearch) queryParams.search = activeSearch;
+        if (activeRegion && activeRegion !== 'all') queryParams.region = activeRegion;
+        if (activeStatus && activeStatus !== 'all') queryParams.status = activeStatus;
+        if (activeTopic && activeTopic !== 'all') queryParams.topic = activeTopic;
+
+        router.get(route('kaldis-communication.index'), queryParams, {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    };
 
     const departmentOptions = useMemo(
         () => departments.map((d) => ({ id: d, name: d })),
@@ -547,6 +577,17 @@ export default function KaldisCommunicationPage({
             onFinish: () => setIsSyncingMembers(false),
             onSuccess: () => toast.success('Telegram group members synced to Staff Roster successfully! You can now edit member details.'),
             onError: (errors: any) => toast.error(errors.sync || 'Failed to sync members from Telegram.'),
+        });
+    };
+
+    const [isStandardizingNames, setIsStandardizingNames] = useState(false);
+
+    const handleStandardizeNames = () => {
+        setIsStandardizingNames(true);
+        router.post(route('kaldis-communication.standardize-names'), {}, {
+            onFinish: () => setIsStandardizingNames(false),
+            onSuccess: () => toast.success("Standardized roster member names to Title Case 'First Name Last Name'!"),
+            onError: () => toast.error('Failed to standardize member names.'),
         });
     };
 
@@ -932,13 +973,12 @@ export default function KaldisCommunicationPage({
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2">
                                         <div className="relative w-64">
-                                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-neutral-400" />
                                             <Input
                                                 placeholder="Search ref, branch, topic..."
                                                 value={search}
                                                 onChange={(e) => {
                                                     setSearch(e.target.value);
-                                                    handleFilterChange(e.target.value, undefined, undefined);
+                                                    applyFilters(e.target.value, undefined, undefined, undefined);
                                                 }}
                                                 className="pl-9 h-9"
                                             />
@@ -947,10 +987,10 @@ export default function KaldisCommunicationPage({
                                             value={regionFilter}
                                             onValueChange={(val) => {
                                                 setRegionFilter(val);
-                                                handleFilterChange(undefined, val, undefined);
+                                                applyFilters(undefined, val, undefined, undefined);
                                             }}
                                         >
-                                            <SelectTrigger className="w-36 h-9">
+                                            <SelectTrigger className="w-32 h-9">
                                                 <SelectValue placeholder="Region" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -963,25 +1003,144 @@ export default function KaldisCommunicationPage({
                                             value={statusFilter}
                                             onValueChange={(val) => {
                                                 setStatusFilter(val);
-                                                handleFilterChange(undefined, undefined, val);
+                                                applyFilters(undefined, undefined, val, undefined);
                                             }}
                                         >
-                                            <SelectTrigger className="w-36 h-9">
+                                            <SelectTrigger className="w-40 h-9">
                                                 <SelectValue placeholder="Status" />
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="all">All Statuses</SelectItem>
-                                                <SelectItem value="answered">✅ Answered Chats</SelectItem>
-                                                <SelectItem value="unanswered">⏳ Unanswered Chats</SelectItem>
+                                                <SelectItem value="unanswered">⏳ Unanswered / Open</SelectItem>
+                                                <SelectItem value="answered">✅ Responded / Answered</SelectItem>
                                                 <SelectItem value="recorded">Recorded Only</SelectItem>
-                                                <SelectItem value="forwarded">Forwarded to HO Only</SelectItem>
-                                                <SelectItem value="responded">Responded Only</SelectItem>
+                                                <SelectItem value="forwarded">Forwarded Only</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <Select
+                                            value={topicFilter}
+                                            onValueChange={(val) => {
+                                                setTopicFilter(val);
+                                                applyFilters(undefined, undefined, undefined, val);
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-44 h-9">
+                                                <SelectValue placeholder="All Topics" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Department Topics</SelectItem>
+                                                {getPresets(defaultTopicMapping).map((preset) => (
+                                                    <SelectItem key={preset.name} value={preset.name}>
+                                                        {preset.emoji} {preset.name} ({preset.department})
+                                                    </SelectItem>
+                                                ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
                                 </div>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="space-y-4">
+                                 {/* Quick Response Status Pills & Filter Bar */}
+                                 <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-800">
+                                     <div className="flex flex-wrap items-center gap-2">
+                                         <span className="text-xs font-semibold text-neutral-500 mr-1">Quick Filters:</span>
+                                         <Button
+                                             size="sm"
+                                             variant={statusFilter === 'all' ? 'default' : 'outline'}
+                                             onClick={() => {
+                                                 setStatusFilter('all');
+                                                 applyFilters(undefined, undefined, 'all', undefined);
+                                             }}
+                                             className={statusFilter === 'all' ? 'bg-neutral-800 text-white h-7 text-xs' : 'h-7 text-xs'}
+                                         >
+                                             All Chats
+                                         </Button>
+                                         <Button
+                                             size="sm"
+                                             variant={statusFilter === 'unanswered' ? 'default' : 'outline'}
+                                             onClick={() => {
+                                                 setStatusFilter('unanswered');
+                                                 applyFilters(undefined, undefined, 'unanswered', undefined);
+                                             }}
+                                             className={statusFilter === 'unanswered' ? 'bg-amber-600 hover:bg-amber-700 text-white h-7 text-xs' : 'h-7 text-xs border-amber-300 text-amber-700 dark:text-amber-300'}
+                                         >
+                                             ⏳ Unanswered Chats
+                                         </Button>
+                                         <Button
+                                             size="sm"
+                                             variant={statusFilter === 'answered' ? 'default' : 'outline'}
+                                             onClick={() => {
+                                                 setStatusFilter('answered');
+                                                 applyFilters(undefined, undefined, 'answered', undefined);
+                                             }}
+                                             className={statusFilter === 'answered' ? 'bg-emerald-600 hover:bg-emerald-700 text-white h-7 text-xs' : 'h-7 text-xs border-emerald-300 text-emerald-700 dark:text-emerald-300'}
+                                         >
+                                             ✅ Responded Chats
+                                         </Button>
+                                     </div>
+                                     {(statusFilter !== 'all' || topicFilter !== 'all' || regionFilter !== 'all' || search) && (
+                                         <Button
+                                             size="sm"
+                                             variant="ghost"
+                                             onClick={() => {
+                                                 setSearch('');
+                                                 setRegionFilter('all');
+                                                 setStatusFilter('all');
+                                                 setTopicFilter('all');
+                                                 applyFilters('', 'all', 'all', 'all');
+                                             }}
+                                             className="h-7 text-xs text-rose-600 hover:text-rose-700 gap-1"
+                                         >
+                                             <X className="h-3.5 w-3.5" />
+                                             Reset All Filters
+                                         </Button>
+                                     )}
+                                 </div>
+
+                                 {/* Topic Breakdown Overview Cards */}
+                                 {topicStats && topicStats.length > 0 && (
+                                     <div className="space-y-2">
+                                         <div className="flex items-center justify-between">
+                                             <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Department Topic Breakdown</span>
+                                             {topicFilter !== 'all' && (
+                                                 <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                                                     Filtered by: {topicFilter}
+                                                 </span>
+                                             )}
+                                         </div>
+                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                                             {topicStats.map((ts) => {
+                                                 const isActive = topicFilter.toLowerCase() === ts.topic_name.toLowerCase();
+                                                 const emoji = getTopicEmoji(ts.topic_name, defaultTopicMapping);
+                                                 return (
+                                                     <button
+                                                         key={ts.topic_name}
+                                                         type="button"
+                                                         onClick={() => {
+                                                             const newTopic = isActive ? 'all' : ts.topic_name;
+                                                             setTopicFilter(newTopic);
+                                                             applyFilters(undefined, undefined, undefined, newTopic);
+                                                         }}
+                                                         className={`p-2.5 rounded-lg border text-left transition-all ${
+                                                             isActive
+                                                                 ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 ring-2 ring-indigo-500/20'
+                                                                 : 'border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
+                                                         }`}
+                                                     >
+                                                         <div className="flex items-center justify-between text-xs font-bold text-neutral-800 dark:text-neutral-200 truncate">
+                                                             <span className="truncate">{emoji} {ts.topic_name}</span>
+                                                             <Badge variant="outline" className="text-[10px] px-1 py-0 ml-1">{ts.total}</Badge>
+                                                         </div>
+                                                         <div className="flex items-center justify-between gap-1 mt-1.5 text-[11px]">
+                                                             <span className="text-amber-600 dark:text-amber-400 font-medium">⏳ {ts.unanswered}</span>
+                                                             <span className="text-emerald-600 dark:text-emerald-400 font-medium">✅ {ts.responded}</span>
+                                                         </div>
+                                                     </button>
+                                                 );
+                                             })}
+                                         </div>
+                                     </div>
+                                 )}
                                 <div className="rounded-md border border-neutral-200 dark:border-neutral-800 overflow-x-auto">
                                     <Table>
                                         <TableHeader className="bg-neutral-50 dark:bg-neutral-900">
@@ -1566,7 +1725,18 @@ export default function KaldisCommunicationPage({
                                     </CardDescription>
                                 </div>
                                 {canManage && (
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={handleStandardizeNames}
+                                            disabled={isStandardizingNames}
+                                            className="gap-1.5 border-amber-500 text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950 dark:text-amber-400"
+                                            title="Clean and format all member names to Title Case First Name & Last Name"
+                                        >
+                                            <Sparkles className={`h-4 w-4 ${isStandardizingNames ? 'animate-spin' : ''}`} />
+                                            {isStandardizingNames ? 'Standardizing...' : 'Standardize All Names'}
+                                        </Button>
                                         <Button
                                             size="sm"
                                             variant="outline"
@@ -1620,6 +1790,7 @@ export default function KaldisCommunicationPage({
                                                 <TableHead>Role</TableHead>
                                                 <TableHead>Region / Branch</TableHead>
                                                 <TableHead>HO Department</TableHead>
+                                                <TableHead>Topic Permission</TableHead>
                                                 <TableHead>Can Forward</TableHead>
                                                 {canManage && <TableHead className="w-24 text-right">Action</TableHead>}
                                             </TableRow>
@@ -1627,7 +1798,7 @@ export default function KaldisCommunicationPage({
                                         <TableBody>
                                             {filteredRosterUsers.length === 0 ? (
                                                 <TableRow>
-                                                    <TableCell colSpan={canManage ? 7 : 6} className="h-20 text-center text-neutral-500 py-6">
+                                                    <TableCell colSpan={canManage ? 8 : 7} className="h-20 text-center text-neutral-500 py-6">
                                                         {rosterSearch ? (
                                                             <span>No staff roster members found matching "<span className="font-semibold text-neutral-800 dark:text-neutral-200">{rosterSearch}</span>".</span>
                                                         ) : (
@@ -1639,7 +1810,16 @@ export default function KaldisCommunicationPage({
                                                 filteredRosterUsers.map((u) => (
                                                     <TableRow key={u.telegram_user_id}>
                                                         <TableCell className="font-mono text-xs font-semibold">{u.telegram_user_id}</TableCell>
-                                                        <TableCell className="font-medium text-sm">{u.display_name}</TableCell>
+                                                        <TableCell className="font-medium text-sm">
+                                                            <div className="flex items-center gap-2">
+                                                                <span>{u.display_name}</span>
+                                                                {u.display_name && u.display_name.trim().split(/\s+/).length < 2 && (
+                                                                    <Badge className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 font-normal text-[10px]">
+                                                                        ⚠️ Needs Last Name
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
                                                         <TableCell>{getRoleBadge(u.role)}</TableCell>
                                                         <TableCell className="text-xs text-neutral-600 dark:text-neutral-400">
                                                             {u.region ? u.region : ''} {u.branch_name ? `• ${u.branch_name}` : ''}
@@ -1647,6 +1827,17 @@ export default function KaldisCommunicationPage({
                                                         </TableCell>
                                                         <TableCell className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
                                                             {u.department || '—'}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {u.role === 'department_head' ? (
+                                                                <Badge className="bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-950 dark:text-purple-300 font-normal text-[11px]">
+                                                                    🔒 {u.department || 'Unassigned'} Topic Only
+                                                                </Badge>
+                                                            ) : (
+                                                                <Badge variant="outline" className="text-emerald-700 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 dark:text-emerald-300 font-normal text-[11px]">
+                                                                    🌐 Full Group Access
+                                                                </Badge>
+                                                            )}
                                                         </TableCell>
                                                         <TableCell>
                                                             {u.can_forward === 1 ? (

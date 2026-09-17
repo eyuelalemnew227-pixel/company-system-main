@@ -1074,6 +1074,35 @@ final class KaldisBot
             return;
         }
 
+        // Enforce Department Head Topic-Level Access Control
+        if ($senderId !== null && $senderId > 0) {
+            $userProfile = $this->storage->getUser($senderId);
+            if ($userProfile !== null && $userProfile->role === Roles::DEPARTMENT_HEAD && !empty($userProfile->department)) {
+                $userDepts = array_map(
+                    fn(string $d): string => Helpers::normalizeTopicName($d),
+                    array_filter(array_map('trim', explode(',', $userProfile->department)))
+                );
+                $topicDept = Helpers::normalizeTopicName($binding->department);
+                $topicName = Helpers::normalizeTopicName($binding->topicName);
+
+                if ($userDepts !== [] && !in_array($topicDept, $userDepts, true) && !in_array($topicName, $userDepts, true)) {
+                    if (isset($message['message_id'])) {
+                        try {
+                            $this->client->deleteMessage($chatId, (int) $message['message_id']);
+                            $this->client->sendMessage(
+                                $chatId,
+                                "⚠️ <b>Topic Access Restricted</b>: @{$senderName}, as the <b>{$userProfile->department}</b> Department Head, you are only allowed to post in the <b>{$userProfile->department}</b> topic thread.",
+                                $threadId
+                            );
+                        } catch (Throwable $e) {
+                            // ignore delete error if bot missing permissions
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+
         $this->processBranchCommunication($message, $binding, $senderId, $senderName);
     }
 
@@ -1441,7 +1470,7 @@ final class KaldisBot
 
             if ($record !== null) {
                 $isAuthorized = $userProfile !== null && (
-                    in_array($userProfile->role, [Roles::REGIONAL_MANAGER, Roles::OPERATIONS_DIRECTOR], true)
+                    in_array($userProfile->role, [Roles::REGIONAL_MANAGER, Roles::OPERATIONS_DIRECTOR, Roles::DEPARTMENT_HEAD], true)
                     || $userProfile->canForward
                 );
 
