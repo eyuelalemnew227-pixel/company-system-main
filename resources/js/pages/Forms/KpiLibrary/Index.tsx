@@ -45,8 +45,21 @@ import {
     X,
     Filter,
     ArrowLeft,
+    Briefcase,
+    Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+interface RoleOption {
+    id: number;
+    name: string;
+}
+
+interface MasterKpiOption {
+    id: number;
+    name: string;
+    description?: string | null;
+}
 
 interface FormOption {
     id: number;
@@ -56,6 +69,9 @@ interface FormOption {
 
 interface KpiItem {
     id: number;
+    role_id?: number | null;
+    role?: { id: number; name: string } | null;
+    kpi_item_id?: number | null;
     name: string;
     weight: number;
     description?: string | null;
@@ -74,8 +90,11 @@ interface Props {
     };
     filters: {
         search?: string;
+        role_id?: string;
         form_id?: string;
     };
+    roles: RoleOption[];
+    masterKpis: MasterKpiOption[];
     availableForms: FormOption[];
 }
 
@@ -84,17 +103,49 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'KPI Library', href: '/kpi-libraries' },
 ];
 
-export default function Index({ kpis, filters, availableForms }: Props) {
+function getCsrfToken(): string {
+    const match = document.cookie.match(new RegExp('(^|;\\s*)XSRF-TOKEN=([^;]*)'));
+    return match ? decodeURIComponent(match[2]) : '';
+}
+
+export default function Index({ kpis, filters, roles = [], masterKpis = [], availableForms = [] }: Props) {
     const [search, setSearch] = useState(filters.search || '');
+    const [roleFilter, setRoleFilter] = useState(filters.role_id || 'all');
     const [formFilter, setFormFilter] = useState(filters.form_id || 'all');
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [editingKpi, setEditingKpi] = useState<KpiItem | null>(null);
     const [kpiToDelete, setKpiToDelete] = useState<KpiItem | null>(null);
 
-    // Multi-select dropdown state for create/edit modal
+    // Dynamic Role & KPI options state (allows instant updates when adding on-the-fly)
+    const [localRoles, setLocalRoles] = useState<RoleOption[]>(roles);
+    const [localMasterKpis, setLocalMasterKpis] = useState<MasterKpiOption[]>(masterKpis);
+
+    // Inline Quick Add state for Role
+    const [isAddingRole, setIsAddingRole] = useState(false);
+    const [newRoleName, setNewRoleName] = useState('');
+    const [roleLoading, setRoleLoading] = useState(false);
+    const [roleError, setRoleError] = useState('');
+
+    // Inline Quick Add state for Master KPI
+    const [isAddingKpi, setIsAddingKpi] = useState(false);
+    const [newKpiName, setNewKpiName] = useState('');
+    const [newKpiDescription, setNewKpiDescription] = useState('');
+    const [kpiLoading, setKpiLoading] = useState(false);
+    const [kpiError, setKpiError] = useState('');
+
+    // Multi-select dropdown state for forms
     const [formDropdownOpen, setFormDropdownOpen] = useState(false);
     const [formSearchQuery, setFormSearchQuery] = useState('');
     const formDropdownRef = useRef<HTMLDivElement>(null);
+
+    // Sync props with state if props update
+    useEffect(() => {
+        setLocalRoles(roles);
+    }, [roles]);
+
+    useEffect(() => {
+        setLocalMasterKpis(masterKpis);
+    }, [masterKpis]);
 
     // Close form selection dropdown when clicking outside
     useEffect(() => {
@@ -114,6 +165,8 @@ export default function Index({ kpis, filters, availableForms }: Props) {
 
     // Inertia form for create / edit
     const { data, setData, post, put, processing, errors, reset, clearErrors } = useForm({
+        role_id: '' as string,
+        kpi_item_id: '' as string,
         name: '',
         weight: '',
         description: '',
@@ -124,6 +177,13 @@ export default function Index({ kpis, filters, availableForms }: Props) {
         reset();
         clearErrors();
         setEditingKpi(null);
+        setIsAddingRole(false);
+        setIsAddingKpi(false);
+        setRoleError('');
+        setKpiError('');
+        setNewRoleName('');
+        setNewKpiName('');
+        setNewKpiDescription('');
         setFormSearchQuery('');
         setFormDropdownOpen(false);
         setIsCreateOpen(true);
@@ -132,7 +192,13 @@ export default function Index({ kpis, filters, availableForms }: Props) {
     const openEditModal = (kpi: KpiItem) => {
         clearErrors();
         setEditingKpi(kpi);
+        setIsAddingRole(false);
+        setIsAddingKpi(false);
+        setRoleError('');
+        setKpiError('');
         setData({
+            role_id: kpi.role_id ? String(kpi.role_id) : '',
+            kpi_item_id: kpi.kpi_item_id ? String(kpi.kpi_item_id) : '',
             name: kpi.name,
             weight: kpi.weight !== null && kpi.weight !== undefined ? String(kpi.weight) : '',
             description: kpi.description || '',
@@ -141,6 +207,111 @@ export default function Index({ kpis, filters, availableForms }: Props) {
         setFormSearchQuery('');
         setFormDropdownOpen(false);
         setIsCreateOpen(true);
+    };
+
+    // Quick-Add Role Handler
+    const handleQuickAddRole = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmed = newRoleName.trim();
+        if (!trimmed) return;
+
+        setRoleLoading(true);
+        setRoleError('');
+        try {
+            const res = await fetch('/kpi-libraries/quick-role', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-XSRF-TOKEN': getCsrfToken(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ name: trimmed }),
+            });
+            const json = await res.json();
+            if (json.success && json.role) {
+                setLocalRoles((prev) => {
+                    if (prev.some((r) => r.id === json.role.id)) return prev;
+                    return [...prev, json.role].sort((a, b) => a.name.localeCompare(b.name));
+                });
+                setData('role_id', String(json.role.id));
+                setNewRoleName('');
+                setIsAddingRole(false);
+            } else {
+                setRoleError(json.message || 'Failed to create role.');
+            }
+        } catch (err: any) {
+            setRoleError(err.message || 'Network error occurred while creating role.');
+        } finally {
+            setRoleLoading(false);
+        }
+    };
+
+    // Quick-Add KPI Handler
+    const handleQuickAddKpi = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const trimmed = newKpiName.trim();
+        if (!trimmed) return;
+
+        setKpiLoading(true);
+        setKpiError('');
+        try {
+            const res = await fetch('/kpi-libraries/quick-kpi', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-XSRF-TOKEN': getCsrfToken(),
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    name: trimmed,
+                    description: newKpiDescription.trim() || undefined,
+                }),
+            });
+            const json = await res.json();
+            if (json.success && json.kpi) {
+                setLocalMasterKpis((prev) => {
+                    if (prev.some((k) => k.id === json.kpi.id)) return prev;
+                    return [...prev, json.kpi].sort((a, b) => a.name.localeCompare(b.name));
+                });
+                setData((prev) => ({
+                    ...prev,
+                    kpi_item_id: String(json.kpi.id),
+                    name: json.kpi.name,
+                    description: prev.description ? prev.description : (json.kpi.description || ''),
+                }));
+                setNewKpiName('');
+                setNewKpiDescription('');
+                setIsAddingKpi(false);
+            } else {
+                setKpiError(json.message || 'Failed to create KPI.');
+            }
+        } catch (err: any) {
+            setKpiError(err.message || 'Network error occurred while creating KPI.');
+        } finally {
+            setKpiLoading(false);
+        }
+    };
+
+    // When selecting a KPI from the dropdown
+    const handleKpiDropdownSelect = (val: string) => {
+        if (!val) {
+            setData((prev) => ({ ...prev, kpi_item_id: '', name: '' }));
+            return;
+        }
+
+        const found = localMasterKpis.find((k) => String(k.id) === val);
+        if (found) {
+            setData((prev) => ({
+                ...prev,
+                kpi_item_id: String(found.id),
+                name: found.name,
+                description: prev.description ? prev.description : (found.description || ''),
+            }));
+        } else {
+            setData((prev) => ({ ...prev, kpi_item_id: '', name: val }));
+        }
     };
 
     const handleFormSubmit = (e: React.FormEvent) => {
@@ -176,6 +347,20 @@ export default function Index({ kpis, filters, availableForms }: Props) {
             '/kpi-libraries',
             {
                 search: search || undefined,
+                role_id: roleFilter !== 'all' ? roleFilter : undefined,
+                form_id: formFilter !== 'all' ? formFilter : undefined,
+            },
+            { preserveState: true }
+        );
+    };
+
+    const handleRoleFilterChange = (val: string) => {
+        setRoleFilter(val);
+        router.get(
+            '/kpi-libraries',
+            {
+                search: search || undefined,
+                role_id: val !== 'all' ? val : undefined,
                 form_id: formFilter !== 'all' ? formFilter : undefined,
             },
             { preserveState: true }
@@ -188,6 +373,7 @@ export default function Index({ kpis, filters, availableForms }: Props) {
             '/kpi-libraries',
             {
                 search: search || undefined,
+                role_id: roleFilter !== 'all' ? roleFilter : undefined,
                 form_id: val !== 'all' ? val : undefined,
             },
             { preserveState: true }
@@ -196,6 +382,7 @@ export default function Index({ kpis, filters, availableForms }: Props) {
 
     const handleResetFilters = () => {
         setSearch('');
+        setRoleFilter('all');
         setFormFilter('all');
         router.get('/kpi-libraries', {}, { preserveState: true });
     };
@@ -237,7 +424,7 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                     <div>
                         <h2 className="text-2xl font-bold tracking-tight text-gray-900">KPI Library</h2>
                         <p className="text-muted-foreground text-sm">
-                            Define Key Performance Indicators, set evaluation weights, and associate them with operational forms.
+                            Manage Key Performance Indicators by Role, set evaluation weights, and associate them with operational forms.
                         </p>
                     </div>
                     <div className="flex items-center space-x-3">
@@ -262,19 +449,38 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                             onSubmit={handleSearchSubmit}
                             className="flex flex-col md:flex-row items-stretch md:items-center gap-3"
                         >
+                            {/* Search */}
                             <div className="relative flex-1">
                                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="Search KPIs by name or description..."
+                                    placeholder="Search by KPI name, description, or role..."
                                     className="pl-10 bg-white"
                                 />
                             </div>
 
-                            <div className="flex items-center space-x-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                                {/* Role Filter */}
+                                <Select value={roleFilter} onValueChange={handleRoleFilterChange}>
+                                    <SelectTrigger className="w-[190px] bg-white text-sm">
+                                        <Briefcase className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+                                        <SelectValue placeholder="Filter by Role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Roles</SelectItem>
+                                        <SelectItem value="unassigned">General (No Role)</SelectItem>
+                                        {localRoles.map((r) => (
+                                            <SelectItem key={r.id} value={String(r.id)}>
+                                                {r.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+
+                                {/* Form Filter */}
                                 <Select value={formFilter} onValueChange={handleFormFilterChange}>
-                                    <SelectTrigger className="w-[240px] bg-white text-sm">
+                                    <SelectTrigger className="w-[200px] bg-white text-sm">
                                         <Filter className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
                                         <SelectValue placeholder="Filter by form" />
                                     </SelectTrigger>
@@ -292,7 +498,9 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                                     Search
                                 </Button>
 
-                                {(filters.search || (filters.form_id && filters.form_id !== 'all')) && (
+                                {(filters.search ||
+                                    (filters.role_id && filters.role_id !== 'all') ||
+                                    (filters.form_id && filters.form_id !== 'all')) && (
                                     <Button
                                         type="button"
                                         variant="ghost"
@@ -313,7 +521,8 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                         <table className="w-full text-left text-sm">
                             <thead className="bg-amber-900/5 text-amber-950 font-bold border-b border-amber-900/10 text-xs uppercase tracking-wider">
                                 <tr>
-                                    <th className="py-4 px-6">KPI Name</th>
+                                    <th className="py-4 px-6">Role</th>
+                                    <th className="py-4 px-6">KPI Indicator</th>
                                     <th className="py-4 px-6 text-center w-28">Weight</th>
                                     <th className="py-4 px-6">Description</th>
                                     <th className="py-4 px-6">Related Forms</th>
@@ -323,13 +532,13 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                             <tbody className="divide-y divide-gray-100">
                                 {kpis.data.length === 0 ? (
                                     <tr>
-                                        <td colSpan={5} className="py-16 text-center text-muted-foreground">
+                                        <td colSpan={6} className="py-16 text-center text-muted-foreground">
                                             <div className="mx-auto rounded-full bg-amber-50 p-4 w-fit mb-3">
                                                 <Target className="h-8 w-8 text-amber-500" />
                                             </div>
                                             <p className="text-base font-semibold text-gray-900">No KPIs found</p>
                                             <p className="text-sm text-gray-500 mt-1 max-w-sm mx-auto">
-                                                {filters.search || filters.form_id
+                                                {filters.search || filters.role_id || filters.form_id
                                                     ? 'No KPIs matched your search filters. Try clearing the filter to see all items.'
                                                     : 'Your KPI library is currently empty. Click "Add KPI" to create your first performance indicator.'}
                                             </p>
@@ -344,6 +553,21 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                                 ) : (
                                     kpis.data.map((kpi) => (
                                         <tr key={kpi.id} className="hover:bg-amber-50/30 transition-colors group">
+                                            {/* Role Column */}
+                                            <td className="py-4 px-6 align-top">
+                                                {kpi.role ? (
+                                                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-100/70 text-amber-900 border border-amber-200">
+                                                        <Briefcase className="w-3 h-3 mr-1.5 text-amber-700" />
+                                                        {kpi.role.name}
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs text-gray-500 bg-gray-100 italic">
+                                                        General (All Roles)
+                                                    </span>
+                                                )}
+                                            </td>
+
+                                            {/* KPI Name Column */}
                                             <td className="py-4 px-6 align-top">
                                                 <div className="flex items-start space-x-3">
                                                     <div className="p-2 rounded-lg bg-amber-100/70 border border-amber-200/80 text-amber-800 mt-0.5 shrink-0 group-hover:scale-105 transition-transform">
@@ -361,6 +585,7 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                                                 </div>
                                             </td>
 
+                                            {/* Weight Column */}
                                             <td className="py-4 px-6 align-top text-center">
                                                 <Badge
                                                     variant="secondary"
@@ -372,6 +597,7 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                                                 </Badge>
                                             </td>
 
+                                            {/* Description Column */}
                                             <td className="py-4 px-6 align-top max-w-xs text-gray-600">
                                                 {kpi.description ? (
                                                     <p className="line-clamp-2 text-sm leading-relaxed" title={kpi.description}>
@@ -382,6 +608,7 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                                                 )}
                                             </td>
 
+                                            {/* Related Forms Column */}
                                             <td className="py-4 px-6 align-top">
                                                 {!kpi.forms || kpi.forms.length === 0 ? (
                                                     <span className="text-xs text-muted-foreground italic">No forms linked</span>
@@ -401,6 +628,7 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                                                 )}
                                             </td>
 
+                                            {/* Actions */}
                                             <td className="py-4 px-6 align-top text-right">
                                                 <div className="flex items-center justify-end space-x-1">
                                                     <Button
@@ -458,7 +686,7 @@ export default function Index({ kpis, filters, availableForms }: Props) {
 
                 {/* Create & Edit Modal */}
                 <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                    <DialogContent className="max-w-xl bg-white">
+                    <DialogContent className="max-w-xl bg-white max-h-[90vh] overflow-y-auto">
                         <form onSubmit={handleFormSubmit}>
                             <DialogHeader>
                                 <DialogTitle className="text-xl font-bold text-amber-950 flex items-center">
@@ -466,30 +694,175 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                                     {editingKpi ? 'Edit KPI Indicator' : 'Create New KPI Indicator'}
                                 </DialogTitle>
                                 <DialogDescription>
-                                    Define the name, evaluation weight, and link this indicator to relevant forms.
+                                    Assign a Role, select or define a KPI, enter evaluation weight, and link related operational forms.
                                 </DialogDescription>
                             </DialogHeader>
 
                             <div className="space-y-5 py-5">
-                                {/* Name */}
+                                {/* 1. Role Selection + Add Role Button */}
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="kpi-name" className="font-semibold text-gray-900">
-                                        KPI Name <span className="text-red-500">*</span>
-                                    </Label>
-                                    <Input
-                                        id="kpi-name"
-                                        value={data.name}
-                                        onChange={(e) => setData('name', e.target.value)}
-                                        placeholder="e.g., Daily Quality Compliance Score"
-                                        className="bg-white"
-                                        required
-                                    />
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="kpi-role" className="font-semibold text-gray-900 flex items-center gap-1.5">
+                                            <Briefcase className="w-4 h-4 text-amber-800" />
+                                            Target Role / Position
+                                        </Label>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsAddingRole(!isAddingRole);
+                                                setRoleError('');
+                                            }}
+                                            className="inline-flex items-center text-xs font-semibold text-amber-800 hover:text-amber-950 hover:underline"
+                                        >
+                                            <Plus className="w-3.5 h-3.5 mr-1" />
+                                            {isAddingRole ? 'Close' : 'Add Role'}
+                                        </button>
+                                    </div>
+
+                                    {/* Inline Add Role Form */}
+                                    {isAddingRole ? (
+                                        <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg space-y-2 animate-in fade-in-50">
+                                            <div className="text-xs font-bold text-amber-950">Add New Role</div>
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    value={newRoleName}
+                                                    onChange={(e) => setNewRoleName(e.target.value)}
+                                                    placeholder="e.g. Barista Lead, Assistant Store Manager..."
+                                                    className="bg-white text-sm"
+                                                    autoFocus
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    onClick={handleQuickAddRole}
+                                                    disabled={roleLoading || !newRoleName.trim()}
+                                                    size="sm"
+                                                    className="bg-amber-900 hover:bg-amber-800 text-white shrink-0"
+                                                >
+                                                    {roleLoading ? 'Saving...' : 'Save Role'}
+                                                </Button>
+                                            </div>
+                                            {roleError && <p className="text-xs text-red-600 font-medium">{roleError}</p>}
+                                        </div>
+                                    ) : (
+                                        <Select
+                                            value={data.role_id || 'none'}
+                                            onValueChange={(val) => setData('role_id', val === 'none' ? '' : val)}
+                                        >
+                                            <SelectTrigger className="w-full bg-white text-sm">
+                                                <SelectValue placeholder="Select target role (optional)..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="none">General / All Roles (No specific role)</SelectItem>
+                                                {localRoles.map((r) => (
+                                                    <SelectItem key={r.id} value={String(r.id)}>
+                                                        {r.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                    {errors.role_id && (
+                                        <p className="text-xs text-red-600 font-medium">{errors.role_id}</p>
+                                    )}
+                                </div>
+
+                                {/* 2. KPI Indicator Selection + Add KPI Button */}
+                                <div className="space-y-1.5">
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="kpi-name" className="font-semibold text-gray-900 flex items-center gap-1.5">
+                                            <Target className="w-4 h-4 text-amber-800" />
+                                            KPI Indicator <span className="text-red-500">*</span>
+                                        </Label>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setIsAddingKpi(!isAddingKpi);
+                                                setKpiError('');
+                                            }}
+                                            className="inline-flex items-center text-xs font-semibold text-amber-800 hover:text-amber-950 hover:underline"
+                                        >
+                                            <Plus className="w-3.5 h-3.5 mr-1" />
+                                            {isAddingKpi ? 'Close' : 'Add KPI'}
+                                        </button>
+                                    </div>
+
+                                    {/* Inline Add KPI Form */}
+                                    {isAddingKpi ? (
+                                        <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg space-y-2 animate-in fade-in-50">
+                                            <div className="text-xs font-bold text-amber-950">Add Master KPI to Library</div>
+                                            <Input
+                                                value={newKpiName}
+                                                onChange={(e) => setNewKpiName(e.target.value)}
+                                                placeholder="e.g. Daily Quality Compliance Score"
+                                                className="bg-white text-sm"
+                                                autoFocus
+                                            />
+                                            <Input
+                                                value={newKpiDescription}
+                                                onChange={(e) => setNewKpiDescription(e.target.value)}
+                                                placeholder="Default context or formula description (optional)..."
+                                                className="bg-white text-xs"
+                                            />
+                                            <div className="flex items-center justify-end gap-2 pt-1">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setIsAddingKpi(false)}
+                                                    className="text-xs"
+                                                >
+                                                    Cancel
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    onClick={handleQuickAddKpi}
+                                                    disabled={kpiLoading || !newKpiName.trim()}
+                                                    size="sm"
+                                                    className="bg-amber-900 hover:bg-amber-800 text-white text-xs"
+                                                >
+                                                    {kpiLoading ? 'Saving...' : 'Save & Select'}
+                                                </Button>
+                                            </div>
+                                            {kpiError && <p className="text-xs text-red-600 font-medium">{kpiError}</p>}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            {/* KPI Dropdown from Master KPIs */}
+                                            {localMasterKpis.length > 0 && (
+                                                <Select
+                                                    value={data.kpi_item_id || ''}
+                                                    onValueChange={handleKpiDropdownSelect}
+                                                >
+                                                    <SelectTrigger className="w-full bg-white text-sm">
+                                                        <SelectValue placeholder="Select from KPI catalog..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {localMasterKpis.map((k) => (
+                                                            <SelectItem key={k.id} value={String(k.id)}>
+                                                                {k.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+
+                                            {/* Direct Input (allows fine-tuning title or manual typing) */}
+                                            <Input
+                                                id="kpi-name"
+                                                value={data.name}
+                                                onChange={(e) => setData('name', e.target.value)}
+                                                placeholder="e.g., Daily Quality Compliance Score"
+                                                className="bg-white text-sm"
+                                                required
+                                            />
+                                        </div>
+                                    )}
                                     {errors.name && (
                                         <p className="text-xs text-red-600 font-medium">{errors.name}</p>
                                     )}
                                 </div>
 
-                                {/* Weight */}
+                                {/* 3. Weight Value */}
                                 <div className="space-y-1.5">
                                     <Label htmlFor="kpi-weight" className="font-semibold text-gray-900 flex items-center justify-between">
                                         <span>Weight Value</span>
@@ -510,7 +883,7 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                                     )}
                                 </div>
 
-                                {/* Description */}
+                                {/* 4. Description */}
                                 <div className="space-y-1.5">
                                     <Label htmlFor="kpi-description" className="font-semibold text-gray-900">
                                         Description
@@ -528,7 +901,7 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                                     )}
                                 </div>
 
-                                {/* Related Forms Multi-Select Dropdown (Clickable & Native to Dialog) */}
+                                {/* 5. Related Forms Multi-Select Dropdown */}
                                 <div className="space-y-2" ref={formDropdownRef}>
                                     <div className="flex items-center justify-between">
                                         <Label className="font-semibold text-gray-900">
@@ -573,7 +946,7 @@ export default function Index({ kpis, filters, availableForms }: Props) {
                                             <ChevronsUpDown className="w-4 h-4 text-gray-400 shrink-0 ml-2" />
                                         </button>
 
-                                        {/* Dropdown Menu Container (in-dialog, no Radix Popover trap) */}
+                                        {/* Dropdown Menu Container (in-dialog, direct clicks) */}
                                         {formDropdownOpen && (
                                             <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-lg border border-gray-200 shadow-2xl overflow-hidden">
                                                 {/* Search header inside dropdown */}
