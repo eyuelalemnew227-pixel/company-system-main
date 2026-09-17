@@ -197,6 +197,7 @@ const baseSections: NavSection[] = [
     icon: ClipboardList,
     items: [
       { title: 'All Forms', href: '/forms', icon: ListChecks, permission: 'view forms' },
+      { title: 'KPI Library', href: '/kpi-libraries', icon: Target, permission: 'view forms' },
       { title: 'Fill Forms', href: '/available-forms', icon: ClipboardCheck, permission: 'fill forms' },
       { title: 'All Submissions', href: '/submissions', icon: ClipboardList, permission: 'view form submissions' },
     ],

@@ -30,4 +30,10 @@ class Form extends Model
     {
         return $this->belongsTo(User::class, 'created_by');
     }
+
+    public function kpiLibraries()
+    {
+        return $this->belongsToMany(KpiLibrary::class, 'form_kpi_library')
+            ->withTimestamps();
+    }
 }

@@ -175,6 +175,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/forms/{form}/versions', [FormController::class, 'versions'])->name('forms.versions');
         Route::get('/forms/{form}/permissions', [\App\Http\Controllers\FormPermissionController::class, 'index'])->name('forms.permissions');
         Route::post('/forms/{form}/permissions', [\App\Http\Controllers\FormPermissionController::class, 'update'])->name('forms.permissions.update');
+        Route::resource('kpi-libraries', \App\Http\Controllers\KpiLibraryController::class)->except(['create', 'edit', 'show']);
     });
 
     Route::middleware('permission:create forms')->group(function () {

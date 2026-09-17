@@ -3,7 +3,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText, Plus, ClipboardList, Edit, Upload, Download, MoreHorizontal, History, Trash2, ShieldAlert } from 'lucide-react';
+import { FileText, Plus, ClipboardList, Edit, Upload, Download, MoreHorizontal, History, Trash2, ShieldAlert, Target } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import React, { useRef } from 'react';
@@ -58,6 +58,11 @@ export default function Index({ forms }: { forms: any[] }) {
                         <input type="file" className="hidden" ref={replaceFileInputRef} accept=".json" onChange={handleReplaceFileChange} />
                         <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="bg-white">
                             <Download className="mr-2 h-4 w-4" /> Import JSON
+                        </Button>
+                        <Button variant="outline" asChild className="bg-white text-amber-900 border-amber-200 hover:bg-amber-50">
+                            <Link href="/kpi-libraries">
+                                <Target className="mr-2 h-4 w-4 text-amber-700" /> KPI Library
+                            </Link>
                         </Button>
                         <Button asChild>
                             <Link href="/forms/create">
