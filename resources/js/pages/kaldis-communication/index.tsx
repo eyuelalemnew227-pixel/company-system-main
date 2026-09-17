@@ -94,7 +94,6 @@ type ConfigData = {
         'Region 1': number;
         'Region 2': number;
     };
-    ho_group_chat_id: number;
     operations_director_user_id: number;
     database: string;
     anti_link_protection?: boolean;
@@ -442,7 +441,6 @@ export default function KaldisCommunicationPage({
         bot_token: config.bot_token || '',
         region_1_chat_id: config.region_groups?.['Region 1'] || '',
         region_2_chat_id: config.region_groups?.['Region 2'] || '',
-        ho_group_chat_id: config.ho_group_chat_id || '',
         operations_director_user_id: config.operations_director_user_id || '',
     });
 
@@ -1217,14 +1215,6 @@ export default function KaldisCommunicationPage({
                                 >
                                     Region 2 Group
                                 </Button>
-                                <Button
-                                    size="sm"
-                                    variant={topicSubTab === 'headOffice' ? 'default' : 'outline'}
-                                    onClick={() => setTopicSubTab('headOffice')}
-                                    className={topicSubTab === 'headOffice' ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}
-                                >
-                                    Head Office Group
-                                </Button>
                             </div>
 
                             {canManage && selectedBindings.length > 0 && (
@@ -1252,14 +1242,13 @@ export default function KaldisCommunicationPage({
                         </div>
 
                         {/* Render Sub-Tab content based on topicSubTab */}
-                        {['region1', 'region2', 'headOffice'].map((groupTab) => {
+                        {['region1', 'region2'].map((groupTab) => {
                             if (topicSubTab !== groupTab) return null;
 
-                            const groupKeyName = groupTab === 'region1' ? 'Region 1' : groupTab === 'region2' ? 'Region 2' : 'Head Office';
+                            const groupKeyName = groupTab === 'region1' ? 'Region 1' : 'Region 2';
                             const filteredBindings = topicBindings.filter((b) => {
                                 if (groupTab === 'region1') return b.group_key === 'Region 1';
-                                if (groupTab === 'region2') return b.group_key === 'Region 2';
-                                return b.group_key === 'Head Office' || b.group_key.startsWith('ho:');
+                                return b.group_key === 'Region 2';
                             });
 
                             return (
@@ -1939,20 +1928,6 @@ export default function KaldisCommunicationPage({
                                         </div>
                                     </div>
 
-                                    <div className="grid gap-4 sm:grid-cols-2">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="ho_group_chat_id">Head Office Group Chat ID</Label>
-                                            <Input
-                                                id="ho_group_chat_id"
-                                                placeholder="-1001234567892"
-                                                value={configForm.data.ho_group_chat_id}
-                                                onChange={(e) => configForm.setData('ho_group_chat_id', e.target.value)}
-                                                disabled={!canManage}
-                                            />
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label htmlFor="operations_director_user_id">Operations Director User ID</Label>
                                             <Input
                                                 id="operations_director_user_id"
                                                 placeholder="987654321"

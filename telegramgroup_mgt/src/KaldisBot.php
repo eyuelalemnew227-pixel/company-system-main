@@ -167,7 +167,6 @@ final class BotConfig
         public ?int $operationsDirectorUserId = null,
         public array $regionGroups = [],
         public array $regionCodes = [],
-        public ?int $hoGroupChatId = null,
         public bool $antiLinkProtection = false,
         public bool $autoWelcome = false,
         public string $welcomeMessage = 'Welcome {name} to {group}! Please follow group rules.',
@@ -197,7 +196,6 @@ final class BotConfig
             operationsDirectorUserId: self::nullableInt($raw['operations_director_user_id'] ?? null),
             regionGroups: $regionGroups,
             regionCodes: $regionCodes,
-            hoGroupChatId: self::nullableInt($raw['ho_group_chat_id'] ?? ($raw['groups']['Head Office'] ?? null)),
             antiLinkProtection: !empty($raw['anti_link_protection']),
             autoWelcome: !empty($raw['auto_welcome']),
             welcomeMessage: (string) ($raw['welcome_message'] ?? 'Welcome {name} to {group}! Please follow group rules.'),
@@ -1061,14 +1059,6 @@ final class KaldisBot
             return;
         }
 
-        if ($groupKey === 'Head Office') {
-            $binding = $this->storage->getTopicBinding($groupKey, $threadId);
-            if ($binding !== null && isset($message['reply_to_message'])) {
-                $this->processHoReply($message, $binding, $senderId, $senderName);
-            }
-            return;
-        }
-
         $binding = $this->storage->getTopicBinding($groupKey, $threadId);
         if ($binding === null) {
             return;
@@ -1463,26 +1453,18 @@ final class KaldisBot
         $region = $binding->groupKey;
         $userProfile = $senderId !== null ? $this->storage->getUser($senderId) : null;
 
-        // Only Regional Manager or Operation Head (Operations Director) can reply with text to resolve requests locally
+        // Only Department Head can reply to a message thread to resolve requests silently in the database
         if (isset($message['reply_to_message'])) {
             $repliedMsgId = (int) ($message['reply_to_message']['message_id'] ?? 0);
             $record = $this->storage->findCommunicationBySourceMessage($chatId, $repliedMsgId, $threadId);
 
             if ($record !== null) {
-                $isAuthorized = $userProfile !== null && (
-                    in_array($userProfile->role, [Roles::REGIONAL_MANAGER, Roles::OPERATIONS_DIRECTOR, Roles::DEPARTMENT_HEAD], true)
-                    || $userProfile->canForward
-                );
-
-                if ($userProfile !== null && $userProfile->role === Roles::REGIONAL_MANAGER && !empty($userProfile->region) && $userProfile->region !== $record->region) {
-                    $isAuthorized = false;
-                }
-
+                $isDepartmentHead = $userProfile !== null && $userProfile->role === Roles::DEPARTMENT_HEAD;
                 $replyText = trim((string) ($message['text'] ?? $message['caption'] ?? ''));
 
-                if ($isAuthorized && $replyText !== '') {
+                if ($isDepartmentHead && $replyText !== '') {
                     $record->status = 'resolved';
-                    $record->regionalManagerUserId = $senderId;
+                    $record->departmentHeadUserId = $senderId;
                     $this->storage->updateCommunication($record);
                     return;
                 }
@@ -1542,7 +1524,7 @@ final class KaldisBot
         );
 
         $this->storage->insertCommunication($record);
-        $this->sendReferenceCard($chatId, $threadId, $region, $branchName, $topicName, $department, $referenceNo);
+        // Silent background tracking: reference numbers and communication status are processed and saved silently without posting cards into Telegram chat.
 
         return $referenceNo;
     }
@@ -1556,26 +1538,7 @@ final class KaldisBot
         string $department,
         string $referenceNo,
     ): void {
-        $text = sprintf(
-            "Reference %s\nRegion: %s\nBranch: %s\nTopic: %s\nDepartment: %s",
-            $referenceNo,
-            $region,
-            $branchName ?? 'Unassigned',
-            $topicName,
-            $department,
-        );
-        $replyMarkup = [
-            'inline_keyboard' => [
-                [
-                    [
-                        'text' => '➡️ Forward to HO',
-                        'callback_data' => 'forward:' . $referenceNo,
-                    ],
-                ],
-            ],
-        ];
-
-        $this->client->sendMessage($chatId, $text, $threadId, $replyMarkup);
+        // Disabled chat reference card per user preference (works in background)
     }
 
     public function resolveUserBranch(?int $senderId, string $senderName, ?string $existingBranch = null): ?string
@@ -1699,21 +1662,7 @@ final class KaldisBot
 
     private function groupKey(int $chatId): ?string
     {
-        $region = $this->config->regionForChatId($chatId);
-        if ($region !== null) {
-            return $region;
-        }
-
-        if ((int) $this->config->hoGroupChatId === $chatId) {
-            return 'Head Office';
-        }
-
-        return null;
-    }
-
-    private function hoGroupKey(): string
-    {
-        return 'Head Office';
+        return $this->config->regionForChatId($chatId);
     }
 
     private function regionForGroupKey(string $groupKey): ?string
@@ -1721,7 +1670,7 @@ final class KaldisBot
         if (str_starts_with($groupKey, 'region:')) {
             return substr($groupKey, strlen('region:'));
         }
-        if (in_array($groupKey, ['Region 1', 'Region 2', 'Head Office'], true)) {
+        if (in_array($groupKey, ['Region 1', 'Region 2'], true)) {
             return $groupKey;
         }
 

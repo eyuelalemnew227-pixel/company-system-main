@@ -198,7 +198,6 @@ function runBotFlowTests(): void
         databasePath: $path,
         regionGroups: ['Region 1' => -1001],
         regionCodes: ['Region 1' => 'R1'],
-        hoGroupChatId: -1002,
         operationsDirectorUserId: 999,
     );
     $storage = new SQLiteStorage($path);
@@ -242,26 +241,7 @@ function runBotFlowTests(): void
     ]);
     $record = $storage->findCommunicationBySourceMessage(-1001, 3);
     assertTrue($record !== null, 'Communication record was not created.');
-    $forwardCallback = null;
-    foreach ($client->sentMessages as $sentMessage) {
-        if (is_array($sentMessage['replyMarkup'] ?? null)) {
-            $forwardCallback = $sentMessage;
-        }
-    }
-    assertTrue($forwardCallback !== null, 'Forward card was not posted.');
-
-    // Test 1: Non-authorized user attempt to forward
-    $bot->handleCallbackQuery([
-        'id' => 'cb-unauthorized',
-        'from' => ['id' => 999, 'first_name' => 'BranchStaff'],
-        'data' => 'forward:' . $record->referenceNo,
-        'message' => [
-            'chat' => ['id' => -1001],
-            'message_id' => $forwardCallback['messageId'],
-        ],
-    ]);
-    $lastCallback = end($client->callbackAnswers);
-    assertTrue(str_contains($lastCallback['text'] ?? '', 'Only a Regional Manager or Operation Head'), 'Unauthorized forward callback answer mismatch.');
+    assertSameValue('recorded', $record->status, 'Initial status should be recorded in background.');
 
     // Test 2: Non-authorized user replying to message in region (must NOT resolve)
     $bot->handleMessage([
@@ -275,66 +255,36 @@ function runBotFlowTests(): void
     $unresolved = $storage->getCommunication($record->referenceNo);
     assertSameValue('recorded', $unresolved->status, 'Communication should remain recorded after non-authorized user reply.');
 
-    // Test 3: Authorized Regional Manager replying to text resolves communication
+    // Test 3: Regional Manager reply (must NOT resolve)
     $bot->handleMessage([
         'message_id' => 5,
         'from' => ['id' => 42, 'first_name' => 'Maya'],
         'chat' => ['id' => -1001, 'type' => 'supergroup'],
         'message_thread_id' => 11,
         'reply_to_message' => ['message_id' => 3],
-        'text' => 'Resolved locally. Replacement delivered.',
+        'text' => 'Checking replacement kettle',
     ]);
-    $locallyResolved = $storage->getCommunication($record->referenceNo);
-    assertSameValue('resolved', $locallyResolved->status, 'Local resolution status mismatch.');
+    $stillRecorded = $storage->getCommunication($record->referenceNo);
+    assertSameValue('recorded', $stillRecorded->status, 'Regional Manager reply should NOT resolve communication.');
 
-    // Create another communication record to test Operation Head forwarding & local resolution
+    // Test 4: Register Department Head and test reply (MUST resolve)
+    $storage->upsertUser(new UserProfile(
+        telegramUserId: 77,
+        displayName: 'HR Head',
+        role: Roles::DEPARTMENT_HEAD,
+        department: 'HR',
+    ));
     $bot->handleMessage([
         'message_id' => 6,
-        'from' => ['id' => 100, 'first_name' => 'Staff'],
+        'from' => ['id' => 77, 'first_name' => 'HR', 'last_name' => 'Head'],
         'chat' => ['id' => -1001, 'type' => 'supergroup'],
         'message_thread_id' => 11,
-        'text' => 'Second regional issue',
+        'reply_to_message' => ['message_id' => 3],
+        'text' => 'Approved replacement kettle.',
     ]);
-    $record2 = $storage->findCommunicationBySourceMessage(-1001, 6);
-    assertTrue($record2 !== null, 'Second communication record was not created.');
-
-    // Register user 88 as Operations Director (Operation Head)
-    $storage->upsertUser(new UserProfile(
-        telegramUserId: 88,
-        displayName: 'Ops Head',
-        role: Roles::OPERATIONS_DIRECTOR,
-        canForward: true,
-    ));
-
-    // Test 4: Operation Head forwarding request
-    $forwardCallback2 = end($client->sentMessages);
-    $bot->handleCallbackQuery([
-        'id' => 'cb-ops-head',
-        'from' => ['id' => 88, 'first_name' => 'Ops Head'],
-        'data' => 'forward:' . $record2->referenceNo,
-        'message' => [
-            'chat' => ['id' => -1001],
-            'message_id' => $forwardCallback2['messageId'],
-        ],
-    ]);
-
-    $forwarded = $storage->getCommunication($record2->referenceNo);
-    assertSameValue('forwarded', $forwarded->status, 'Forward status mismatch.');
-    assertTrue($forwarded->hoMessageId !== null, 'HO message was not stored.');
-
-    $bot->handleMessage([
-        'message_id' => 10,
-        'from' => ['id' => 84, 'first_name' => 'Daniel'],
-        'chat' => ['id' => -1002, 'type' => 'supergroup'],
-        'message_thread_id' => 21,
-        'reply_to_message' => ['message_id' => $forwarded->hoMessageId],
-        'text' => 'Approved. Replacement scheduled.',
-    ]);
-
-    $responded = $storage->getCommunication($record2->referenceNo);
-    assertSameValue('responded', $responded->status, 'Response status mismatch.');
-    assertTrue(count($client->callbackAnswers) >= 1, 'Forward callback was not acknowledged.');
-    assertTrue(count($client->editedReplyMarkups) >= 1, 'Forward button was not removed.');
+    $deptHeadResolved = $storage->getCommunication($record->referenceNo);
+    assertSameValue('resolved', $deptHeadResolved->status, 'Department Head reply MUST resolve communication.');
+    assertSameValue(77, $deptHeadResolved->departmentHeadUserId, 'Department Head user ID mismatch.');
 
     $storage->close();
     @unlink($path);

@@ -150,8 +150,6 @@ class KaldisCommunicationController extends Controller
 
         $reg1 = $data['region_groups']['Region 1'] ?? ($data['groups']['Region 1'] ?? 0);
         $reg2 = $data['region_groups']['Region 2'] ?? ($data['groups']['Region 2'] ?? 0);
-        $hoGroup = $data['ho_group_chat_id'] ?? ($data['groups']['Head Office'] ?? ($data['region_groups']['Head Office'] ?? 0));
-
         return [
             'bot_token' => $data['bot_token'] ?? '',
             'region_groups' => [
@@ -161,9 +159,7 @@ class KaldisCommunicationController extends Controller
             'groups' => [
                 'Region 1' => (int) $reg1,
                 'Region 2' => (int) $reg2,
-                'Head Office' => (int) $hoGroup,
             ],
-            'ho_group_chat_id' => (int) $hoGroup,
             'operations_director_user_id' => $data['operations_director_user_id'] ?? 0,
             'database' => $data['database'] ?? 'kaldis.db',
             'anti_link_protection' => !empty($data['anti_link_protection']),
@@ -323,13 +319,11 @@ class KaldisCommunicationController extends Controller
             'bot_token' => ['nullable', 'string', 'max:255'],
             'region_1_chat_id' => ['nullable', 'numeric'],
             'region_2_chat_id' => ['nullable', 'numeric'],
-            'ho_group_chat_id' => ['nullable', 'numeric'],
             'operations_director_user_id' => ['nullable', 'numeric'],
         ]);
 
         $reg1 = (int) ($validated['region_1_chat_id'] ?? 0);
         $reg2 = (int) ($validated['region_2_chat_id'] ?? 0);
-        $hoChat = (int) ($validated['ho_group_chat_id'] ?? 0);
 
         $configData = $this->readConfig();
         $configData['bot_token'] = trim($validated['bot_token'] ?? '');
@@ -340,9 +334,7 @@ class KaldisCommunicationController extends Controller
         $configData['groups'] = [
             'Region 1' => $reg1,
             'Region 2' => $reg2,
-            'Head Office' => $hoChat,
         ];
-        $configData['ho_group_chat_id'] = $hoChat;
         $configData['operations_director_user_id'] = (int) ($validated['operations_director_user_id'] ?? 0);
         $configData['database'] = 'kaldis.db';
 
@@ -1178,11 +1170,9 @@ class KaldisCommunicationController extends Controller
         $groups = [];
         $reg1 = $config['region_groups']['Region 1'] ?? ($config['groups']['Region 1'] ?? null);
         $reg2 = $config['region_groups']['Region 2'] ?? ($config['groups']['Region 2'] ?? null);
-        $hoChat = $config['ho_group_chat_id'] ?? ($config['groups']['Head Office'] ?? null);
 
         if (!empty($reg1)) $groups['Region 1'] = (int) $reg1;
         if (!empty($reg2)) $groups['Region 2'] = (int) $reg2;
-        if (!empty($hoChat)) $groups['Head Office'] = (int) $hoChat;
 
         $stmt = $pdo->prepare(
             'INSERT INTO users (
@@ -1404,16 +1394,12 @@ class KaldisCommunicationController extends Controller
         $groupsToSync = [];
         $reg1 = (int) ($config['region_groups']['Region 1'] ?? ($config['groups']['Region 1'] ?? 0));
         $reg2 = (int) ($config['region_groups']['Region 2'] ?? ($config['groups']['Region 2'] ?? 0));
-        $hoChat = (int) ($config['ho_group_chat_id'] ?? ($config['groups']['Head Office'] ?? 0));
 
         if (($targetGroup === 'all' || $targetGroup === 'Region 1') && !empty($reg1)) {
             $groupsToSync['Region 1'] = $reg1;
         }
         if (($targetGroup === 'all' || $targetGroup === 'Region 2') && !empty($reg2)) {
             $groupsToSync['Region 2'] = $reg2;
-        }
-        if (($targetGroup === 'all' || $targetGroup === 'Head Office') && !empty($hoChat)) {
-            $groupsToSync['Head Office'] = $hoChat;
         }
 
         if (empty($groupsToSync)) {
