@@ -99,6 +99,7 @@ type ConfigData = {
     anti_link_protection?: boolean;
     auto_welcome?: boolean;
     welcome_message?: string;
+    ho_group_chat_id?: number | string;
 };
 
 type RosterUser = {
@@ -1928,6 +1929,9 @@ export default function KaldisCommunicationPage({
                                         </div>
                                     </div>
 
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="operations_director_user_id">Operations Director User ID</Label>
                                             <Input
                                                 id="operations_director_user_id"
                                                 placeholder="987654321"
