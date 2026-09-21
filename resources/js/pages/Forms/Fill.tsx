@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import SignatureCanvas from 'react-signature-canvas';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MultiSelect } from '@/components/ui/multi-select';
-import { Star, MapPin, ChevronRight } from 'lucide-react';
+import { Star, MapPin, ChevronRight, RotateCcw, FileSignature } from 'lucide-react';
 import React, { useMemo, useEffect, useState, useRef } from 'react';
 const GeoLocationPicker = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
     const [loading, setLoading] = React.useState(false);
@@ -88,17 +88,32 @@ const SignaturePad = ({ value, onChange }: { value: string, onChange: (val: stri
         onChangeRef.current = onChange;
     }, [onChange]);
 
-    React.useEffect(() => {
+    const initCanvas = React.useCallback(() => {
         if (sigPad.current && containerRef.current) {
             const canvas = sigPad.current.getCanvas();
             const ratio = Math.max(window.devicePixelRatio || 1, 1);
-            canvas.width = containerRef.current.offsetWidth * ratio;
-            canvas.height = containerRef.current.offsetHeight * ratio;
-            canvas.getContext('2d').scale(ratio, ratio);
+            const width = containerRef.current.offsetWidth;
+            const height = containerRef.current.offsetHeight;
+            if (width === 0 || height === 0) return;
+
+            const existingData = !sigPad.current.isEmpty() ? sigPad.current.toDataURL('image/png') : null;
+            canvas.width = width * ratio;
+            canvas.height = height * ratio;
+            canvas.getContext('2d')?.scale(ratio, ratio);
             sigPad.current.clear();
-            if (value) sigPad.current.fromDataURL(value);
+            if (existingData) {
+                sigPad.current.fromDataURL(existingData);
+            } else if (value) {
+                sigPad.current.fromDataURL(value);
+            }
         }
     }, []);
+
+    React.useEffect(() => {
+        initCanvas();
+        window.addEventListener('resize', initCanvas);
+        return () => window.removeEventListener('resize', initCanvas);
+    }, [initCanvas]);
 
     React.useEffect(() => {
         if (!value && sigPad.current && !sigPad.current.isEmpty()) {
@@ -112,36 +127,77 @@ const SignaturePad = ({ value, onChange }: { value: string, onChange: (val: stri
         }
     };
 
+    const handleClear = (e?: React.MouseEvent | React.TouchEvent) => {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        if (sigPad.current) {
+            sigPad.current.clear();
+        }
+        onChangeRef.current('');
+    };
+
     return (
-        <div
-            ref={containerRef}
-            className="border border-gray-300 rounded-md bg-white flex flex-col items-center relative h-48 w-full max-w-lg overflow-hidden shrink-0 group touch-none"
-            onPointerUp={captureData}
-            onPointerOut={captureData}
-        >
-            {!value && (
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-gray-200 font-medium text-lg">
-                    Sign Here
-                </div>
-            )}
-            <SignatureCanvas
-                penColor="black"
-                canvasProps={{ className: 'w-full h-full cursor-crosshair relative z-10 touch-none', style: { width: '100%', height: '100%' } }}
-                ref={sigPad}
-                onEnd={captureData}
-            />
-            <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                className="absolute top-2 right-2 h-7 text-xs bg-white shadow-sm z-20 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={() => {
-                    if (sigPad.current) sigPad.current.clear();
-                    onChangeRef.current('');
-                }}
+        <div className="flex flex-col space-y-1.5 w-full max-w-lg">
+            <div
+                ref={containerRef}
+                className="border border-gray-300 rounded-lg bg-white flex flex-col items-center relative h-48 w-full overflow-hidden shrink-0 touch-none shadow-sm"
+                onPointerUp={captureData}
+                onPointerOut={captureData}
             >
-                Clear
-            </Button>
+                {!value && (
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center text-gray-300 font-medium text-base select-none">
+                        Sign Here
+                    </div>
+                )}
+                <SignatureCanvas
+                    penColor="black"
+                    canvasProps={{
+                        className: 'w-full h-full cursor-crosshair relative z-10 touch-none',
+                        style: { width: '100%', height: '100%' }
+                    }}
+                    ref={sigPad}
+                    onEnd={captureData}
+                />
+                {/* Clear button in corner - always visible and accessible on mobile and desktop */}
+                <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="absolute top-2 right-2 h-7 px-2.5 text-xs bg-white/95 hover:bg-white text-gray-700 shadow-sm border border-gray-200 z-20 flex items-center gap-1 rounded-md active:bg-gray-100"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onPointerUp={(e) => e.stopPropagation()}
+                    onClick={handleClear}
+                >
+                    <RotateCcw className="h-3 w-3 text-gray-500" />
+                    Clear
+                </Button>
+            </div>
+            {/* Helper & Clear action bar below pad */}
+            <div className="flex items-center justify-between px-1 text-xs text-gray-500">
+                <span className="flex items-center gap-1">
+                    {value ? (
+                        <span className="text-emerald-600 font-medium flex items-center gap-1">
+                            ✓ Signature captured
+                        </span>
+                    ) : (
+                        <span className="text-gray-400 flex items-center gap-1">
+                            <FileSignature className="h-3.5 w-3.5" /> Sign with finger or stylus above
+                        </span>
+                    )}
+                </span>
+                {value && (
+                    <button
+                        type="button"
+                        onClick={handleClear}
+                        className="text-xs text-red-600 hover:text-red-700 font-medium flex items-center gap-1 hover:underline active:opacity-70"
+                    >
+                        <RotateCcw className="h-3 w-3" />
+                        Clear Signature
+                    </button>
+                )}
+            </div>
         </div>
     );
 };
