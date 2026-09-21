@@ -5,10 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Form;
 use App\Models\KpiItem;
 use App\Models\KpiLibrary;
+use App\Models\KpiRole;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Spatie\Permission\Models\Role;
-use Spatie\Permission\PermissionRegistrar;
 
 class KpiLibraryController extends Controller
 {
@@ -18,11 +17,11 @@ class KpiLibraryController extends Controller
     public function index(Request $request)
     {
         $search = $request->input('search');
-        $roleFilter = $request->input('role_id');
+        $roleFilter = $request->input('kpi_role_id');
         $formFilter = $request->input('form_id');
 
         $query = KpiLibrary::with([
-            'role:id,name',
+            'kpiRole:id,name',
             'kpiItem:id,name,description',
             'forms:id,title,status',
             'creator:id,name',
@@ -32,7 +31,7 @@ class KpiLibraryController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%")
-                  ->orWhereHas('role', function ($rq) use ($search) {
+                  ->orWhereHas('kpiRole', function ($rq) use ($search) {
                       $rq->where('name', 'like', "%{$search}%");
                   });
             });
@@ -40,9 +39,9 @@ class KpiLibraryController extends Controller
 
         if (!empty($roleFilter) && $roleFilter !== 'all') {
             if ($roleFilter === 'unassigned') {
-                $query->whereNull('role_id');
+                $query->whereNull('kpi_role_id');
             } else {
-                $query->where('role_id', $roleFilter);
+                $query->where('kpi_role_id', $roleFilter);
             }
         }
 
@@ -55,7 +54,7 @@ class KpiLibraryController extends Controller
         $kpis = $query->paginate(15)->withQueryString();
 
         // Available lists for dropdowns & filters
-        $roles = Role::select('id', 'name')->orderBy('name')->get();
+        $kpiRoles = KpiRole::select('id', 'name')->orderBy('name')->get();
         $masterKpis = KpiItem::select('id', 'name', 'description')->orderBy('name')->get();
         $availableForms = Form::select('id', 'title', 'status')->orderBy('title')->get();
 
@@ -63,10 +62,10 @@ class KpiLibraryController extends Controller
             'kpis' => $kpis,
             'filters' => [
                 'search' => $search,
-                'role_id' => $roleFilter,
+                'kpi_role_id' => $roleFilter,
                 'form_id' => $formFilter,
             ],
-            'roles' => $roles,
+            'kpiRoles' => $kpiRoles,
             'masterKpis' => $masterKpis,
             'availableForms' => $availableForms,
         ]);
@@ -78,7 +77,7 @@ class KpiLibraryController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'role_id' => 'nullable|exists:roles,id',
+            'kpi_role_id' => 'nullable|exists:kpi_roles,id',
             'kpi_item_id' => 'nullable|exists:kpi_items,id',
             'name' => 'required|string|max:255',
             'weight' => 'nullable|numeric|min:0',
@@ -98,7 +97,7 @@ class KpiLibraryController extends Controller
         }
 
         $kpi = KpiLibrary::create([
-            'role_id' => $validated['role_id'] ?? null,
+            'kpi_role_id' => $validated['kpi_role_id'] ?? null,
             'kpi_item_id' => $kpiItemId,
             'name' => $validated['name'],
             'weight' => $validated['weight'] ?? 0.00,
@@ -119,7 +118,7 @@ class KpiLibraryController extends Controller
     public function update(Request $request, KpiLibrary $kpiLibrary)
     {
         $validated = $request->validate([
-            'role_id' => 'nullable|exists:roles,id',
+            'kpi_role_id' => 'nullable|exists:kpi_roles,id',
             'kpi_item_id' => 'nullable|exists:kpi_items,id',
             'name' => 'required|string|max:255',
             'weight' => 'nullable|numeric|min:0',
@@ -138,7 +137,7 @@ class KpiLibraryController extends Controller
         }
 
         $kpiLibrary->update([
-            'role_id' => $validated['role_id'] ?? null,
+            'kpi_role_id' => $validated['kpi_role_id'] ?? null,
             'kpi_item_id' => $kpiItemId,
             'name' => $validated['name'],
             'weight' => $validated['weight'] ?? 0.00,
@@ -165,7 +164,7 @@ class KpiLibraryController extends Controller
     }
 
     /**
-     * Quick-add a new Role on-the-fly.
+     * Quick-add a new KPI Role on-the-fly.
      */
     public function quickRole(Request $request)
     {
@@ -173,17 +172,15 @@ class KpiLibraryController extends Controller
             'name' => 'required|string|max:255',
         ]);
 
-        $role = Role::firstOrCreate(
-            ['name' => trim($request->name), 'guard_name' => 'web']
+        $kpiRole = KpiRole::firstOrCreate(
+            ['name' => trim($request->name)]
         );
-
-        app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
         return response()->json([
             'success' => true,
             'role' => [
-                'id' => $role->id,
-                'name' => $role->name,
+                'id' => $kpiRole->id,
+                'name' => $kpiRole->name,
             ],
         ]);
     }

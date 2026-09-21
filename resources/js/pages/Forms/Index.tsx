@@ -7,6 +7,7 @@ import { FileText, Plus, ClipboardList, Edit, Upload, Download, MoreHorizontal, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import React, { useRef } from 'react';
+import { usePermission } from '@/hooks/user-permissions';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Form Builder', href: '/forms' },
@@ -14,6 +15,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function Index({ forms }: { forms: any[] }) {
+    const { can } = usePermission();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const replaceFileInputRef = useRef<HTMLInputElement>(null);
     const [replaceFormId, setReplaceFormId] = React.useState<number | null>(null);
@@ -59,11 +61,13 @@ export default function Index({ forms }: { forms: any[] }) {
                         <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="bg-white">
                             <Download className="mr-2 h-4 w-4" /> Import JSON
                         </Button>
-                        <Button variant="outline" asChild className="bg-white text-amber-900 border-amber-200 hover:bg-amber-50">
-                            <Link href="/kpi-libraries">
-                                <Target className="mr-2 h-4 w-4 text-amber-700" /> KPI Library
-                            </Link>
-                        </Button>
+                        {can('view kpi libraries') && (
+                            <Button variant="outline" asChild className="bg-white text-amber-900 border-amber-200 hover:bg-amber-50">
+                                <Link href="/kpi-libraries">
+                                    <Target className="mr-2 h-4 w-4 text-amber-700" /> KPI Library
+                                </Link>
+                            </Button>
+                        )}
                         <Button asChild>
                             <Link href="/forms/create">
                                 <Plus className="mr-2 h-4 w-4" /> Create Form

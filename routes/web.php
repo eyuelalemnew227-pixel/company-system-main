@@ -174,9 +174,24 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('forms', FormController::class)->except(['destroy']);
         Route::get('/forms/{form}/versions', [FormController::class, 'versions'])->name('forms.versions');
         Route::get('/forms/{form}/permissions', [\App\Http\Controllers\FormPermissionController::class, 'index'])->name('forms.permissions');
-        Route::post('kpi-libraries/quick-role', [\App\Http\Controllers\KpiLibraryController::class, 'quickRole'])->name('kpi-libraries.quick-role');
-        Route::post('kpi-libraries/quick-kpi', [\App\Http\Controllers\KpiLibraryController::class, 'quickKpi'])->name('kpi-libraries.quick-kpi');
-        Route::resource('kpi-libraries', \App\Http\Controllers\KpiLibraryController::class)->except(['create', 'edit', 'show']);
+        Route::post('kpi-libraries/quick-role', [\App\Http\Controllers\KpiLibraryController::class, 'quickRole'])
+            ->name('kpi-libraries.quick-role')
+            ->middleware('permission:create kpi libraries');
+        Route::post('kpi-libraries/quick-kpi', [\App\Http\Controllers\KpiLibraryController::class, 'quickKpi'])
+            ->name('kpi-libraries.quick-kpi')
+            ->middleware('permission:create kpi libraries');
+        Route::get('kpi-libraries', [\App\Http\Controllers\KpiLibraryController::class, 'index'])
+            ->name('kpi-libraries.index')
+            ->middleware('permission:view kpi libraries');
+        Route::post('kpi-libraries', [\App\Http\Controllers\KpiLibraryController::class, 'store'])
+            ->name('kpi-libraries.store')
+            ->middleware('permission:create kpi libraries');
+        Route::match(['put', 'patch'], 'kpi-libraries/{kpi_library}', [\App\Http\Controllers\KpiLibraryController::class, 'update'])
+            ->name('kpi-libraries.update')
+            ->middleware('permission:update kpi libraries');
+        Route::delete('kpi-libraries/{kpi_library}', [\App\Http\Controllers\KpiLibraryController::class, 'destroy'])
+            ->name('kpi-libraries.destroy')
+            ->middleware('permission:delete kpi libraries');
     });
 
     Route::middleware('permission:create forms')->group(function () {

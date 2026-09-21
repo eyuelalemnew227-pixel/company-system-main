@@ -4,14 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Spatie\Permission\Models\Role;
 
 class KpiLibrary extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'role_id',
+        'kpi_role_id',
         'kpi_item_id',
         'name',
         'weight',
@@ -23,9 +22,9 @@ class KpiLibrary extends Model
         'weight' => 'float',
     ];
 
-    public function role()
+    public function kpiRole()
     {
-        return $this->belongsTo(Role::class, 'role_id');
+        return $this->belongsTo(KpiRole::class, 'kpi_role_id');
     }
 
     public function kpiItem()

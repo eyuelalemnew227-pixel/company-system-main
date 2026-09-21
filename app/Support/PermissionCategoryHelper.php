@@ -75,9 +75,9 @@ class PermissionCategoryHelper
             return 'Budget & Finance';
         }
 
-        // 12. Telecom & SMS
-        if (self::containsAny($perm, ['telecom', 'sms', 'broadband', 'phone_number', 'provider'])) {
-            return 'Telecom & SMS';
+        // 13. Form Builder & KPI Library
+        if (self::containsAny($perm, ['form', 'forms', 'kpi', 'kpis', 'submission', 'submissions'])) {
+            return 'Form Builder';
         }
 
         return 'System & General';

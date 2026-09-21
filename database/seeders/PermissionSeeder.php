@@ -326,7 +326,7 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'update spare parts']);
         Permission::firstOrCreate(['name' => 'delete spare parts']);
 
-        // Form Builder
+        // Form Builder & KPI Library
         Permission::firstOrCreate(['name' => 'view forms']);
         Permission::firstOrCreate(['name' => 'create forms']);
         Permission::firstOrCreate(['name' => 'update forms']);
@@ -335,5 +335,9 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'view form submissions']);
         Permission::firstOrCreate(['name' => 'delete form submissions']);
         Permission::firstOrCreate(['name' => 'export form submissions']);
+        Permission::firstOrCreate(['name' => 'view kpi libraries']);
+        Permission::firstOrCreate(['name' => 'create kpi libraries']);
+        Permission::firstOrCreate(['name' => 'update kpi libraries']);
+        Permission::firstOrCreate(['name' => 'delete kpi libraries']);
     }
 }
