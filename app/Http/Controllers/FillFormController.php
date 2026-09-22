@@ -42,12 +42,13 @@ class FillFormController extends Controller
 
         $branches = \App\Models\Branch::select('id', 'name')->get();
         $departments = \App\Models\Department::select('id', 'name')->get();
-        $employees = \App\Models\Employee::get()->map(function ($e) {
+        $employees = \App\Models\Employee::where('status', 'active')->get()->map(function ($e) {
             return [
                 'id' => $e->id,
                 'name' => trim($e->first_name . ' ' . $e->last_name) ?: $e->employee_code,
                 'branch_id' => $e->branch_id,
                 'department_id' => $e->department_id,
+                'status' => $e->status,
             ];
         });
 

@@ -369,7 +369,13 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
             );
         }
 
-        let localFilteredEmployees = employees || [];
+        let localFilteredEmployees = (employees || []).filter(e => {
+            const isActive = !e.status || e.status === 'active';
+            const isCurrentlySelected = Array.isArray(answer)
+                ? answer.includes(String(e.id))
+                : (answer !== '' && answer !== null && answer !== undefined && String(e.id) === String(answer));
+            return isActive || isCurrentlySelected;
+        });
         if (localBranch) {
             localFilteredEmployees = localFilteredEmployees.filter(e => String(e.branch_id) === String(localBranch));
         }
@@ -647,6 +653,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
 
                 const targetedEmps = localRosterArray.map(empIdStr => employees?.find(e => String(e.id) === empIdStr)).filter(emp => {
                     if (!emp) return false;
+                    if (emp.status && emp.status !== 'active') return false;
                     return evalTargets.length === 0 || evalTargets.includes(String(emp.department_id));
                 });
 

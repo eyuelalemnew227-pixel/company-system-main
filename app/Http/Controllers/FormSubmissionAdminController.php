@@ -306,6 +306,7 @@ class FormSubmissionAdminController extends Controller
                 'name' => trim($e->first_name . ' ' . $e->last_name) ?: $e->employee_code,
                 'branch_id' => $e->branch_id,
                 'department_id' => $e->department_id,
+                'status' => $e->status,
             ];
         });
 
