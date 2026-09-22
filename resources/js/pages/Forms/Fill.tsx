@@ -242,18 +242,6 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         answers: initialAnswers as Record<number, any>
     });
 
-    const getAnswerForType = (typeIdentifier: string) => {
-        for (const s of formVersion?.sections || []) {
-            for (const q of s.questions || []) {
-                const identifier = q.input_type?.type_identifier || q.inputType?.type_identifier;
-                if (identifier === typeIdentifier) {
-                    return data.answers[q.id];
-                }
-            }
-        }
-        return null;
-    };
-
     const handleAnswerChange = (questionId: number, value: any) => {
         setData(current => ({
             ...current,
@@ -362,11 +350,17 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
             const matchQ = section?.questions?.find((q: any) =>
                 (q.input_type?.type_identifier === tId || q.inputType?.type_identifier === tId)
             );
-            return matchQ ? data.answers[matchQ.id] : null;
+            if (!matchQ) return null;
+            const ans = data.answers[matchQ.id];
+            if (ans !== undefined && ans !== null && ans !== '') {
+                return ans;
+            }
+            return matchQ.default_value || null;
         };
 
-        const localBranch = getAnswerForTypeInSection('branch_lookup') || getAnswerForType('branch_lookup');
-        const localDept = getAnswerForTypeInSection('department_lookup') || getAnswerForType('department_lookup');
+        // Scoped strictly to the current section so branch or department filters do not leak across sections
+        const localBranch = getAnswerForTypeInSection('branch_lookup');
+        const localDept = getAnswerForTypeInSection('department_lookup');
 
         let localFilteredDepartments = departments || [];
         if (localBranch) {
