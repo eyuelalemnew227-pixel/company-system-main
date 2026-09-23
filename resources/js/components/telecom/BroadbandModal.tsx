@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useForm } from '@inertiajs/react';
-import { Loader2, Wifi } from 'lucide-react';
-import React, { useEffect } from 'react';
+import { Calendar, Loader2, Wifi } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { OptionItem } from './PhoneNumberModal';
 
 export interface BroadbandRecord {
@@ -16,6 +17,8 @@ export interface BroadbandRecord {
     telecom_provider_id?: number | string;
     connection_type: string;
     package_type?: string;
+    package_start_date?: string;
+    package_expiry_date?: string;
     bandwidth_speed?: string;
     speed_mbps?: number | string;
     monthly_cost: number | string;
@@ -48,6 +51,7 @@ export default function BroadbandModal({
     onSuccessCallback,
 }: BroadbandModalProps) {
     const isEdit = !!initialData?.id;
+    const [durationMonths, setDurationMonths] = useState<number>(1);
 
     const { data, setData, post, put, processing, errors, reset } = useForm({
         connection_name: '',
@@ -56,6 +60,8 @@ export default function BroadbandModal({
         telecom_provider_id: '',
         connection_type: 'WTTx (Fixed Wireless)',
         package_type: '',
+        package_start_date: '',
+        package_expiry_date: '',
         bandwidth_speed: '',
         speed_mbps: '',
         monthly_cost: 0,
@@ -79,6 +85,8 @@ export default function BroadbandModal({
                 telecom_provider_id: String(initialData.telecom_provider_id || ''),
                 connection_type: initialData.connection_type || 'WTTx (Fixed Wireless)',
                 package_type: initialData.package_type || '',
+                package_start_date: initialData.package_start_date || initialData.contract_start_date || '',
+                package_expiry_date: initialData.package_expiry_date || initialData.contract_expiry_date || '',
                 bandwidth_speed: initialData.bandwidth_speed || (initialData.speed_mbps ? `${initialData.speed_mbps} Mbps` : ''),
                 speed_mbps: String(initialData.speed_mbps || ''),
                 monthly_cost: Number(initialData.monthly_cost) || 0,
@@ -96,6 +104,37 @@ export default function BroadbandModal({
             reset();
         }
     }, [initialData, open]);
+
+    const calculateExpiryDate = (startDateStr: string, months: number) => {
+        if (!startDateStr) return '';
+        const d = new Date(startDateStr);
+        if (isNaN(d.getTime())) return '';
+        d.setMonth(d.getMonth() + months);
+        return d.toISOString().split('T')[0];
+    };
+
+    const handleStartDateChange = (startDateStr: string) => {
+        const calculatedExpiry = calculateExpiryDate(startDateStr, durationMonths);
+        setData((prev) => ({
+            ...prev,
+            package_start_date: startDateStr,
+            package_expiry_date: calculatedExpiry || prev.package_expiry_date,
+            contract_start_date: startDateStr,
+            contract_expiry_date: calculatedExpiry || prev.contract_expiry_date,
+        }));
+    };
+
+    const handleDurationChange = (months: number) => {
+        setDurationMonths(months);
+        if (data.package_start_date) {
+            const calculatedExpiry = calculateExpiryDate(data.package_start_date, months);
+            setData((prev) => ({
+                ...prev,
+                package_expiry_date: calculatedExpiry,
+                contract_expiry_date: calculatedExpiry,
+            }));
+        }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -122,6 +161,11 @@ export default function BroadbandModal({
             post('/telecom/broadbands', options);
         }
     };
+
+    const formattedBranches = branches.map((b) => ({
+        id: String(b.id),
+        name: b.name,
+    }));
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -214,22 +258,29 @@ export default function BroadbandModal({
                             <InputError message={errors.telecom_provider_id} />
                         </div>
 
-                        <div>
-                            <Label htmlFor="branch_id">Assigned Branch</Label>
-                            <select
-                                id="branch_id"
+                        {/* Searchable Branch Selector */}
+                        <div className="space-y-1">
+                            <Label htmlFor="branch_id">Search & Select Assigned Branch</Label>
+                            <SearchableSelect
+                                options={formattedBranches}
                                 value={data.branch_id}
-                                onChange={(e) => setData('branch_id', e.target.value)}
-                                className="mt-1 w-full rounded-md border border-input bg-white p-2 text-sm dark:bg-slate-950"
-                            >
-                                <option value="">Select Branch...</option>
-                                {branches.map((b) => (
-                                    <option key={b.id} value={b.id}>
-                                        {b.name}
-                                    </option>
-                                ))}
-                            </select>
+                                onValueChange={(val) => setData('branch_id', val)}
+                                placeholder="Type to search branch..."
+                                searchPlaceholder="Search branch..."
+                                className="w-full bg-white dark:bg-slate-950"
+                            />
                             <InputError message={errors.branch_id} />
+                        </div>
+
+                        <div>
+                            <Label htmlFor="package_type">Package / Rate Plan</Label>
+                            <Input
+                                id="package_type"
+                                placeholder="e.g. Business Fiber 50Mbps, WTTx Unlimited"
+                                value={data.package_type}
+                                onChange={(e) => setData('package_type', e.target.value)}
+                                className="mt-1"
+                            />
                         </div>
 
                         <div>
@@ -241,6 +292,52 @@ export default function BroadbandModal({
                                 onChange={(e) => setData('bandwidth_speed', e.target.value)}
                                 className="mt-1"
                             />
+                        </div>
+
+                        {/* Package Start Date */}
+                        <div>
+                            <Label htmlFor="package_start_date" className="flex items-center gap-1.5 font-semibold text-purple-700 dark:text-purple-400">
+                                <Calendar className="h-4 w-4" /> Package Start Date
+                            </Label>
+                            <Input
+                                id="package_start_date"
+                                type="date"
+                                value={data.package_start_date}
+                                onChange={(e) => handleStartDateChange(e.target.value)}
+                                className="mt-1 border-purple-300 dark:border-purple-800"
+                            />
+                            <InputError message={errors.package_start_date} />
+                        </div>
+
+                        {/* Package Duration Selector */}
+                        <div>
+                            <Label className="font-semibold text-slate-700 dark:text-slate-300">Package Duration</Label>
+                            <select
+                                value={durationMonths}
+                                onChange={(e) => handleDurationChange(parseInt(e.target.value, 10))}
+                                className="mt-1 w-full rounded-md border border-input bg-white p-2 text-sm dark:bg-slate-950"
+                            >
+                                <option value={1}>1 Month (+30 Days)</option>
+                                <option value={3}>3 Months</option>
+                                <option value={6}>6 Months</option>
+                                <option value={12}>1 Year (12 Months)</option>
+                            </select>
+                        </div>
+
+                        {/* Calculated Package Expire Date */}
+                        <div>
+                            <Label htmlFor="package_expiry_date" className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400">
+                                <Calendar className="h-4 w-4" /> Package Expire Date
+                            </Label>
+                            <Input
+                                id="package_expiry_date"
+                                type="date"
+                                value={data.package_expiry_date}
+                                onChange={(e) => setData('package_expiry_date', e.target.value)}
+                                className="mt-1 border-emerald-300 dark:border-emerald-800 font-semibold"
+                            />
+                            <p className="text-[11px] text-muted-foreground mt-0.5">Calculated based on start date & duration</p>
+                            <InputError message={errors.package_expiry_date} />
                         </div>
 
                         <div>
@@ -295,17 +392,6 @@ export default function BroadbandModal({
                                 value={data.ip_address}
                                 onChange={(e) => setData('ip_address', e.target.value)}
                                 className="mt-1 font-mono text-xs"
-                            />
-                        </div>
-
-                        <div>
-                            <Label htmlFor="contract_expiry_date">Contract Expiry Date</Label>
-                            <Input
-                                id="contract_expiry_date"
-                                type="date"
-                                value={data.contract_expiry_date}
-                                onChange={(e) => setData('contract_expiry_date', e.target.value)}
-                                className="mt-1"
                             />
                         </div>
                     </div>

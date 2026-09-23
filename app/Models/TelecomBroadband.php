@@ -17,6 +17,8 @@ class TelecomBroadband extends Model
         'connection_type',
         'telecom_provider_id',
         'package_type',
+        'package_start_date',
+        'package_expiry_date',
         'bandwidth_speed',
         'monthly_cost',
         'billing_type',
@@ -35,6 +37,8 @@ class TelecomBroadband extends Model
         'monthly_cost' => 'decimal:2',
         'contract_start_date' => 'date',
         'contract_expiry_date' => 'date',
+        'package_start_date' => 'date',
+        'package_expiry_date' => 'date',
     ];
 
     public function provider(): BelongsTo

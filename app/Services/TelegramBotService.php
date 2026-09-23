@@ -274,6 +274,17 @@ class TelegramBotService
                 ->pluck('telegram_chat_id')
                 ->toArray();
             $chatIds = array_merge($chatIds, $branchChatIds);
+
+            $branchUserChatIds = User::query()
+                ->whereHas('employee', function ($q) {
+                    $q->whereNotNull('branch_id');
+                })
+                ->where('is_active', true)
+                ->whereNotNull('telegram_chat_id')
+                ->where('telegram_chat_id', '!=', '')
+                ->pluck('telegram_chat_id')
+                ->toArray();
+            $chatIds = array_merge($chatIds, $branchUserChatIds);
         }
 
         if (in_array($targetAudience, ['everything', 'all_users'], true)) {
@@ -302,6 +313,17 @@ class TelegramBotService
             if ($branch && !empty($branch->telegram_chat_id)) {
                 $chatIds[] = $branch->telegram_chat_id;
             }
+
+            $branchUserChatIds = User::query()
+                ->whereHas('employee', function ($q) use ($branchId) {
+                    $q->where('branch_id', $branchId);
+                })
+                ->where('is_active', true)
+                ->whereNotNull('telegram_chat_id')
+                ->where('telegram_chat_id', '!=', '')
+                ->pluck('telegram_chat_id')
+                ->toArray();
+            $chatIds = array_merge($chatIds, $branchUserChatIds);
         }
 
         $chatIds = array_unique(array_filter($chatIds));
@@ -345,7 +367,7 @@ class TelegramBotService
     public function sendMessage(string|int $chatId, string $text, ?array $replyMarkup = null): bool
     {
         $settings = TelegramSettings::getInstance();
-        if (!$settings->is_active || empty($settings->bot_token) || empty($chatId)) {
+        if (!$settings->is_active || empty($chatId)) {
             return false;
         }
 
@@ -425,7 +447,7 @@ class TelegramBotService
     public function editMessageText(string|int $chatId, int $messageId, string $text, ?array $replyMarkup = null): bool
     {
         $settings = TelegramSettings::getInstance();
-        if (!$settings->is_active || empty($settings->bot_token) || empty($chatId)) {
+        if (!$settings->is_active || empty($chatId)) {
             return false;
         }
 

@@ -919,8 +919,10 @@ class TicketController extends Controller
         );
 
         // Send Web In-App Notifications
+        $branchUserIds = $ticket->requestor_branch_id ? User::whereHas('employee', fn($q) => $q->where('branch_id', $ticket->requestor_branch_id))->pluck('id')->all() : [];
         $recipients = array_unique(array_merge(
-            [$ticket->user_id],
+            array_filter([$ticket->user_id]),
+            $branchUserIds,
             $ticket->assignments()->where('is_current', true)->pluck('assigned_to')->all(),
             $this->actionService->departmentManagerUserIds($ticket->department_id)
         ));

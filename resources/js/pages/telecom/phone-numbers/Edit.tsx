@@ -2,12 +2,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft, Save } from 'lucide-react';
-import { FormEvent } from 'react';
+import { ArrowLeft, Calendar, Save } from 'lucide-react';
+import { FormEvent, useState } from 'react';
 
 type Option = { id: number; name: string };
 type EmployeeOption = { id: number; first_name: string; last_name: string; employee_code: string };
@@ -20,6 +21,8 @@ type PhoneNumber = {
     telecom_provider_id?: number | null;
     service_type: string;
     package_type?: string | null;
+    package_start_date?: string | null;
+    package_expiry_date?: string | null;
     monthly_cost: number;
     billing_type: string;
     assigned_type: string;
@@ -41,6 +44,8 @@ type PageProps = {
 };
 
 export default function PhoneNumbersEdit({ phoneNumber, providers = [], branches = [], departments = [], employees = [] }: PageProps) {
+    const [durationMonths, setDurationMonths] = useState<number>(1);
+
     const { data, setData, put, processing, errors } = useForm({
         phone_number: phoneNumber.phone_number ?? '',
         account_number: phoneNumber.account_number ?? '',
@@ -48,6 +53,8 @@ export default function PhoneNumbersEdit({ phoneNumber, providers = [], branches
         telecom_provider_id: phoneNumber.telecom_provider_id ? String(phoneNumber.telecom_provider_id) : '',
         service_type: phoneNumber.service_type ?? 'Mobile Voice',
         package_type: phoneNumber.package_type ?? '',
+        package_start_date: phoneNumber.package_start_date ?? '',
+        package_expiry_date: phoneNumber.package_expiry_date ?? phoneNumber.renewal_date ?? '',
         monthly_cost: String(phoneNumber.monthly_cost ?? '0.00'),
         billing_type: phoneNumber.billing_type ?? 'Postpaid',
         assigned_type: phoneNumber.assigned_type ?? 'Unassigned',
@@ -60,10 +67,55 @@ export default function PhoneNumbersEdit({ phoneNumber, providers = [], branches
         notes: phoneNumber.notes ?? '',
     });
 
+    const calculateExpiryDate = (startDateStr: string, months: number) => {
+        if (!startDateStr) return '';
+        const d = new Date(startDateStr);
+        if (isNaN(d.getTime())) return '';
+        d.setMonth(d.getMonth() + months);
+        return d.toISOString().split('T')[0];
+    };
+
+    const handleStartDateChange = (startDateStr: string) => {
+        const calculatedExpiry = calculateExpiryDate(startDateStr, durationMonths);
+        setData((prev) => ({
+            ...prev,
+            package_start_date: startDateStr,
+            package_expiry_date: calculatedExpiry || prev.package_expiry_date,
+            renewal_date: calculatedExpiry || prev.renewal_date,
+        }));
+    };
+
+    const handleDurationChange = (months: number) => {
+        setDurationMonths(months);
+        if (data.package_start_date) {
+            const calculatedExpiry = calculateExpiryDate(data.package_start_date, months);
+            setData((prev) => ({
+                ...prev,
+                package_expiry_date: calculatedExpiry,
+                renewal_date: calculatedExpiry,
+            }));
+        }
+    };
+
     function handleSubmit(e: FormEvent) {
         e.preventDefault();
         put(`/telecom/phone-numbers/${phoneNumber.id}`);
     }
+
+    const formattedEmployees = employees.map((emp) => ({
+        id: String(emp.id),
+        name: `${emp.employee_code ? `[${emp.employee_code}] ` : ''}${emp.first_name} ${emp.last_name}`,
+    }));
+
+    const formattedBranches = branches.map((b) => ({
+        id: String(b.id),
+        name: b.name,
+    }));
+
+    const formattedDepartments = departments.map((d) => ({
+        id: String(d.id),
+        name: d.name,
+    }));
 
     return (
         <AppLayout
@@ -152,7 +204,56 @@ export default function PhoneNumbersEdit({ phoneNumber, providers = [], branches
                                         id="package_type"
                                         value={data.package_type}
                                         onChange={(e) => setData('package_type', e.target.value)}
+                                        placeholder="e.g. Postpaid Enterprise Unlimited, Flexi 15GB"
                                     />
+                                </div>
+
+                                {/* Package Start Date */}
+                                <div>
+                                    <Label htmlFor="package_start_date" className="flex items-center gap-1.5 font-semibold text-blue-700 dark:text-blue-400">
+                                        <Calendar className="h-4 w-4" /> Package Start Date
+                                    </Label>
+                                    <Input
+                                        id="package_start_date"
+                                        type="date"
+                                        value={data.package_start_date}
+                                        onChange={(e) => handleStartDateChange(e.target.value)}
+                                        className="mt-1 border-blue-300 dark:border-blue-800"
+                                    />
+                                </div>
+
+                                {/* Package Duration Selector */}
+                                <div>
+                                    <Label className="font-semibold text-slate-700 dark:text-slate-300">Package Duration</Label>
+                                    <Select
+                                        value={String(durationMonths)}
+                                        onValueChange={(val) => handleDurationChange(parseInt(val, 10))}
+                                    >
+                                        <SelectTrigger className="mt-1">
+                                            <SelectValue placeholder="Select Duration" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="1">1 Month (+30 Days)</SelectItem>
+                                            <SelectItem value="3">3 Months</SelectItem>
+                                            <SelectItem value="6">6 Months</SelectItem>
+                                            <SelectItem value="12">1 Year (12 Months)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Calculated Package Expire Date */}
+                                <div>
+                                    <Label htmlFor="package_expiry_date" className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400">
+                                        <Calendar className="h-4 w-4" /> Package Expire Date
+                                    </Label>
+                                    <Input
+                                        id="package_expiry_date"
+                                        type="date"
+                                        value={data.package_expiry_date}
+                                        onChange={(e) => setData('package_expiry_date', e.target.value)}
+                                        className="mt-1 border-emerald-300 dark:border-emerald-800 font-semibold"
+                                    />
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">Calculated based on start date & duration</p>
                                 </div>
 
                                 {/* Billing Type */}
@@ -244,86 +345,51 @@ export default function PhoneNumbersEdit({ phoneNumber, providers = [], branches
                                     </Select>
                                 </div>
 
+                                {/* Searchable Assignment Dropdowns */}
                                 {data.assigned_type === 'Employee' && (
-                                    <div>
-                                        <Label htmlFor="employee_id">Assigned Employee</Label>
-                                        <Select
+                                    <div className="space-y-1">
+                                        <Label htmlFor="employee_id">Search & Select Employee</Label>
+                                        <SearchableSelect
+                                            options={formattedEmployees}
                                             value={data.employee_id}
                                             onValueChange={(val) => setData('employee_id', val)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select Employee" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {employees.map((emp) => (
-                                                    <SelectItem key={emp.id} value={String(emp.id)}>
-                                                        {emp.first_name} {emp.last_name} ({emp.employee_code})
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                            placeholder="Search employee name or code..."
+                                            searchPlaceholder="Search employee..."
+                                            className="w-full bg-white dark:bg-slate-950"
+                                        />
                                     </div>
                                 )}
 
                                 {data.assigned_type === 'Branch' && (
-                                    <div>
-                                        <Label htmlFor="branch_id">Assigned Branch</Label>
-                                        <Select
+                                    <div className="space-y-1">
+                                        <Label htmlFor="branch_id">Search & Select Branch</Label>
+                                        <SearchableSelect
+                                            options={formattedBranches}
                                             value={data.branch_id}
                                             onValueChange={(val) => setData('branch_id', val)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select Branch" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {branches.map((b) => (
-                                                    <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                            placeholder="Search branch name..."
+                                            searchPlaceholder="Search branch..."
+                                            className="w-full bg-white dark:bg-slate-950"
+                                        />
                                     </div>
                                 )}
 
                                 {data.assigned_type === 'Department' && (
-                                    <div>
-                                        <Label htmlFor="department_id">Assigned Department</Label>
-                                        <Select
+                                    <div className="space-y-1">
+                                        <Label htmlFor="department_id">Search & Select Department</Label>
+                                        <SearchableSelect
+                                            options={formattedDepartments}
                                             value={data.department_id}
                                             onValueChange={(val) => setData('department_id', val)}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Select Department" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {departments.map((d) => (
-                                                    <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                            placeholder="Search department name..."
+                                            searchPlaceholder="Search department..."
+                                            className="w-full bg-white dark:bg-slate-950"
+                                        />
                                     </div>
                                 )}
-
-                                <div>
-                                    <Label htmlFor="issue_date">Issue Date</Label>
-                                    <Input
-                                        id="issue_date"
-                                        type="date"
-                                        value={data.issue_date}
-                                        onChange={(e) => setData('issue_date', e.target.value)}
-                                    />
-                                </div>
-
-                                <div>
-                                    <Label htmlFor="renewal_date">Renewal / Expiry Date</Label>
-                                    <Input
-                                        id="renewal_date"
-                                        type="date"
-                                        value={data.renewal_date}
-                                        onChange={(e) => setData('renewal_date', e.target.value)}
-                                    />
-                                </div>
                             </div>
 
+                            {/* Notes */}
                             <div>
                                 <Label htmlFor="notes">Notes / Description</Label>
                                 <Textarea

@@ -24,6 +24,8 @@ type Broadband = {
     connection_name: string;
     connection_type: string;
     package_type?: string | null;
+    package_start_date?: string | null;
+    package_expiry_date?: string | null;
     bandwidth_speed?: string | null;
     monthly_cost: number;
     billing_type: string;
@@ -258,6 +260,11 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
                                             {item.package_type && (
                                                 <div className="text-xs text-muted-foreground">{item.package_type}</div>
                                             )}
+                                            {(item.package_start_date || item.package_expiry_date) && (
+                                                <div className="text-[11px] text-purple-600 dark:text-purple-400 font-mono mt-0.5">
+                                                    {item.package_start_date || 'N/A'} ~ {item.package_expiry_date || 'N/A'}
+                                                </div>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             <div className="font-mono font-medium">{Number(item.monthly_cost).toFixed(2)} ETB</div>
@@ -303,6 +310,8 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
                                                                 telecom_provider_id: item.provider?.id || '',
                                                                 connection_type: item.connection_type,
                                                                 package_type: item.package_type || '',
+                                                                package_start_date: item.package_start_date || '',
+                                                                package_expiry_date: item.package_expiry_date || '',
                                                                 bandwidth_speed: item.bandwidth_speed || '',
                                                                 monthly_cost: item.monthly_cost,
                                                                 billing_type: item.billing_type || 'Postpaid',

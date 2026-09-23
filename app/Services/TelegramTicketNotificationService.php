@@ -553,7 +553,7 @@ class TelegramTicketNotificationService
      */
     public function notifyTicketChatMessage(Ticket $ticket, User $sender, string $messageText): void
     {
-        $ticket->loadMissing(['requestor', 'assignments.assignee']);
+        $ticket->loadMissing(['requestor', 'requestorBranch', 'assignments.assignee']);
         $header = $this->formatTicketHeader($ticket);
         $senderName = e($sender->name);
         $cleanMessage = e(mb_strimwidth($messageText, 0, 300, '...'));
@@ -573,25 +573,22 @@ class TelegramTicketNotificationService
                 "📝 <b>Message:</b>\n<i>\"{$cleanMessage}\"</i>\n\n" .
                 "<i>Tap below to open ticket and reply in system.</i>";
 
+        // 1. Notify Requestor & Requestor Branch (excluding sender chat ID)
+        $senderChatId = !empty($sender->telegram_chat_id) ? [(string) $sender->telegram_chat_id] : [];
+        $this->sendToBranchOrRequestor($ticket, $text, $buttons, $senderChatId);
+
+        // 2. Add Department Manager(s) & Assigned Technical staff
         $recipientIds = [];
 
-        // 1. Add Requestor
-        $requestorId = $ticket->user_id ?: $ticket->requestor?->id;
-        if ($requestorId && $requestorId !== $sender->id) {
-            $recipientIds[] = $requestorId;
-        }
-
-        // 2. Add Department Manager(s)
         $managerIds = $this->ticketActionService->departmentManagerUserIds($ticket->department_id);
         foreach ($managerIds as $mId) {
-            if ($mId !== $sender->id) {
+            if ((int) $mId !== (int) $sender->id) {
                 $recipientIds[] = $mId;
             }
         }
 
-        // 3. Add Assigned Technical
         $currentAssignee = $ticket->assignments()->where('is_current', true)->with('assignee')->first()?->assignee;
-        if ($currentAssignee && $currentAssignee->id !== $sender->id) {
+        if ($currentAssignee && (int) $currentAssignee->id !== (int) $sender->id) {
             $recipientIds[] = $currentAssignee->id;
         }
 

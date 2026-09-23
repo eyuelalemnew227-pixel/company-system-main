@@ -17,6 +17,8 @@ class TelecomPhoneNumber extends Model
         'telecom_provider_id',
         'service_type',
         'package_type',
+        'package_start_date',
+        'package_expiry_date',
         'monthly_cost',
         'billing_type',
         'assigned_type',
@@ -33,6 +35,8 @@ class TelecomPhoneNumber extends Model
         'monthly_cost' => 'decimal:2',
         'issue_date' => 'date',
         'renewal_date' => 'date',
+        'package_start_date' => 'date',
+        'package_expiry_date' => 'date',
     ];
 
     public function provider(): BelongsTo

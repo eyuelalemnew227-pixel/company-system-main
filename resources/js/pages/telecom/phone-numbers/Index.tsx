@@ -23,6 +23,8 @@ type PhoneNumber = {
     sim_card_number?: string | null;
     service_type: string;
     package_type?: string | null;
+    package_start_date?: string | null;
+    package_expiry_date?: string | null;
     monthly_cost: number;
     billing_type: string;
     assigned_type: string;
@@ -285,6 +287,11 @@ export default function PhoneNumbersIndex({
                                             {item.package_type && (
                                                 <div className="text-xs text-muted-foreground">{item.package_type}</div>
                                             )}
+                                            {(item.package_start_date || item.package_expiry_date || item.renewal_date) && (
+                                                <div className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5 font-mono">
+                                                    {item.package_start_date ?? item.issue_date ?? 'N/A'} &rarr; {item.package_expiry_date ?? item.renewal_date ?? 'N/A'}
+                                                </div>
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             <div className="font-mono font-medium">{Number(item.monthly_cost).toFixed(2)} ETB</div>
@@ -328,6 +335,8 @@ export default function PhoneNumbersIndex({
                                                                 telecom_provider_id: item.provider?.id || '',
                                                                 service_type: item.service_type,
                                                                 package_type: item.package_type || '',
+                                                                package_start_date: item.package_start_date || '',
+                                                                package_expiry_date: item.package_expiry_date || item.renewal_date || '',
                                                                 monthly_cost: item.monthly_cost,
                                                                 billing_type: item.billing_type,
                                                                 assigned_type: item.assigned_type,

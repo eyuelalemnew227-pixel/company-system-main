@@ -27,7 +27,8 @@ class TelecomBroadbandController extends Controller
                     ->orWhere('package_type', 'like', "%{$search}%")
                     ->orWhere('ip_address', 'like', "%{$search}%")
                     ->orWhere('installation_address', 'like', "%{$search}%")
-                    ->orWhere('equipment_details', 'like', "%{$search}%");
+                    ->orWhere('equipment_details', 'like', "%{$search}%")
+                    ->orWhereHas('branch', fn($bq) => $bq->where('name', 'like', "%{$search}%"));
             });
         }
 
@@ -108,6 +109,8 @@ class TelecomBroadbandController extends Controller
             'connection_type' => ['required', 'string', 'max:100'],
             'telecom_provider_id' => ['nullable', 'exists:telecom_providers,id'],
             'package_type' => ['nullable', 'string', 'max:150'],
+            'package_start_date' => ['nullable', 'date'],
+            'package_expiry_date' => ['nullable', 'date'],
             'bandwidth_speed' => ['nullable', 'string', 'max:100'],
             'monthly_cost' => ['required', 'numeric', 'min:0'],
             'billing_type' => ['nullable', 'string', 'max:50'],
@@ -150,6 +153,8 @@ class TelecomBroadbandController extends Controller
             'connection_type' => ['required', 'string', 'max:100'],
             'telecom_provider_id' => ['nullable', 'exists:telecom_providers,id'],
             'package_type' => ['nullable', 'string', 'max:150'],
+            'package_start_date' => ['nullable', 'date'],
+            'package_expiry_date' => ['nullable', 'date'],
             'bandwidth_speed' => ['nullable', 'string', 'max:100'],
             'monthly_cost' => ['required', 'numeric', 'min:0'],
             'billing_type' => ['nullable', 'string', 'max:50'],
@@ -199,7 +204,7 @@ class TelecomBroadbandController extends Controller
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
                 'ID', 'Connection Name', 'Account / Circuit No', 'Service Number', 'Connection Type', 'Provider',
-                'Package Type', 'Bandwidth / Speed', 'Billing Type', 'Monthly Cost',
+                'Package Type', 'Package Start Date', 'Package Expiry Date', 'Bandwidth / Speed', 'Billing Type', 'Monthly Cost',
                 'Branch', 'Department', 'IP Address', 'Status', 'Start Date', 'Expiry Date', 'Equipment'
             ]);
 
@@ -212,6 +217,8 @@ class TelecomBroadbandController extends Controller
                     $item->connection_type,
                     $item->provider?->name ?? 'N/A',
                     $item->package_type ?? '',
+                    $item->package_start_date ? $item->package_start_date->format('Y-m-d') : '',
+                    $item->package_expiry_date ? $item->package_expiry_date->format('Y-m-d') : '',
                     $item->bandwidth_speed ?? '',
                     $item->billing_type,
                     $item->monthly_cost,

@@ -26,7 +26,9 @@ class TelecomPhoneNumberController extends Controller
                     ->orWhere('account_number', 'like', "%{$search}%")
                     ->orWhere('sim_card_number', 'like', "%{$search}%")
                     ->orWhere('package_type', 'like', "%{$search}%")
-                    ->orWhere('notes', 'like', "%{$search}%");
+                    ->orWhere('notes', 'like', "%{$search}%")
+                    ->orWhereHas('branch', fn($bq) => $bq->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('employee', fn($eq) => $eq->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%")->orWhere('employee_code', 'like', "%{$search}%"));
             });
         }
 
@@ -87,6 +89,8 @@ class TelecomPhoneNumberController extends Controller
             'telecom_provider_id' => ['nullable', 'exists:telecom_providers,id'],
             'service_type' => ['required', 'string', 'max:50'],
             'package_type' => ['nullable', 'string', 'max:150'],
+            'package_start_date' => ['nullable', 'date'],
+            'package_expiry_date' => ['nullable', 'date'],
             'monthly_cost' => ['required', 'numeric', 'min:0'],
             'billing_type' => ['required', 'string', 'max:50'],
             'assigned_type' => ['required', 'string', 'max:50'],
@@ -125,6 +129,8 @@ class TelecomPhoneNumberController extends Controller
             'telecom_provider_id' => ['nullable', 'exists:telecom_providers,id'],
             'service_type' => ['required', 'string', 'max:50'],
             'package_type' => ['nullable', 'string', 'max:150'],
+            'package_start_date' => ['nullable', 'date'],
+            'package_expiry_date' => ['nullable', 'date'],
             'monthly_cost' => ['required', 'numeric', 'min:0'],
             'billing_type' => ['required', 'string', 'max:50'],
             'assigned_type' => ['required', 'string', 'max:50'],
@@ -170,7 +176,7 @@ class TelecomPhoneNumberController extends Controller
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
                 'ID', 'Phone Number', 'Account No', 'SIM Card / ICCID', 'Provider',
-                'Service Type', 'Package Type', 'Billing Type', 'Monthly Cost',
+                'Service Type', 'Package Type', 'Package Start Date', 'Package Expiry Date', 'Billing Type', 'Monthly Cost',
                 'Assigned To', 'Assigned Name', 'Status', 'Issue Date', 'Renewal Date', 'Notes'
             ]);
 
@@ -192,6 +198,8 @@ class TelecomPhoneNumberController extends Controller
                     $item->provider?->name ?? 'N/A',
                     $item->service_type,
                     $item->package_type ?? '',
+                    $item->package_start_date ? $item->package_start_date->format('Y-m-d') : '',
+                    $item->package_expiry_date ? $item->package_expiry_date->format('Y-m-d') : '',
                     $item->billing_type,
                     $item->monthly_cost,
                     $item->assigned_type,

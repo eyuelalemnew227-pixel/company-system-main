@@ -2,12 +2,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import AppLayout from '@/layouts/app-layout';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { ArrowLeft, Save } from 'lucide-react';
-import { FormEvent } from 'react';
+import { ArrowLeft, Calendar, Save } from 'lucide-react';
+import { FormEvent, useState } from 'react';
 
 type Option = { id: number; name: string };
 
@@ -19,6 +20,8 @@ type Broadband = {
     connection_type: string;
     telecom_provider_id?: number | null;
     package_type?: string | null;
+    package_start_date?: string | null;
+    package_expiry_date?: string | null;
     bandwidth_speed?: string | null;
     monthly_cost: number;
     billing_type: string;
@@ -41,6 +44,8 @@ type PageProps = {
 };
 
 export default function BroadbandsEdit({ broadband, providers = [], branches = [], departments = [] }: PageProps) {
+    const [durationMonths, setDurationMonths] = useState<number>(1);
+
     const { data, setData, put, processing, errors } = useForm({
         connection_name: broadband.connection_name ?? '',
         account_number: broadband.account_number ?? '',
@@ -48,6 +53,8 @@ export default function BroadbandsEdit({ broadband, providers = [], branches = [
         connection_type: broadband.connection_type ?? 'WTTx (Fixed Wireless)',
         telecom_provider_id: broadband.telecom_provider_id ? String(broadband.telecom_provider_id) : '',
         package_type: broadband.package_type ?? '',
+        package_start_date: broadband.package_start_date ?? broadband.contract_start_date ?? '',
+        package_expiry_date: broadband.package_expiry_date ?? broadband.contract_expiry_date ?? '',
         bandwidth_speed: broadband.bandwidth_speed ?? '',
         monthly_cost: String(broadband.monthly_cost ?? '0.00'),
         billing_type: broadband.billing_type ?? 'Postpaid',
@@ -62,10 +69,51 @@ export default function BroadbandsEdit({ broadband, providers = [], branches = [
         notes: broadband.notes ?? '',
     });
 
+    const calculateExpiryDate = (startDateStr: string, months: number) => {
+        if (!startDateStr) return '';
+        const d = new Date(startDateStr);
+        if (isNaN(d.getTime())) return '';
+        d.setMonth(d.getMonth() + months);
+        return d.toISOString().split('T')[0];
+    };
+
+    const handleStartDateChange = (startDateStr: string) => {
+        const calculatedExpiry = calculateExpiryDate(startDateStr, durationMonths);
+        setData((prev) => ({
+            ...prev,
+            package_start_date: startDateStr,
+            package_expiry_date: calculatedExpiry || prev.package_expiry_date,
+            contract_start_date: startDateStr,
+            contract_expiry_date: calculatedExpiry || prev.contract_expiry_date,
+        }));
+    };
+
+    const handleDurationChange = (months: number) => {
+        setDurationMonths(months);
+        if (data.package_start_date) {
+            const calculatedExpiry = calculateExpiryDate(data.package_start_date, months);
+            setData((prev) => ({
+                ...prev,
+                package_expiry_date: calculatedExpiry,
+                contract_expiry_date: calculatedExpiry,
+            }));
+        }
+    };
+
     function handleSubmit(e: FormEvent) {
         e.preventDefault();
         put(`/telecom/broadbands/${broadband.id}`);
     }
+
+    const formattedBranches = branches.map((b) => ({
+        id: String(b.id),
+        name: b.name,
+    }));
+
+    const formattedDepartments = departments.map((d) => ({
+        id: String(d.id),
+        name: d.name,
+    }));
 
     return (
         <AppLayout
@@ -141,6 +189,16 @@ export default function BroadbandsEdit({ broadband, providers = [], branches = [
                                     />
                                 </div>
 
+                                {/* Account / Service ID */}
+                                <div>
+                                    <Label htmlFor="account_number">Account / Circuit ID</Label>
+                                    <Input
+                                        id="account_number"
+                                        value={data.account_number}
+                                        onChange={(e) => setData('account_number', e.target.value)}
+                                    />
+                                </div>
+
                                 {/* Provider */}
                                 <div>
                                     <Label htmlFor="telecom_provider_id">Telecom Provider</Label>
@@ -159,13 +217,16 @@ export default function BroadbandsEdit({ broadband, providers = [], branches = [
                                     </Select>
                                 </div>
 
-                                {/* Account / Service ID */}
-                                <div>
-                                    <Label htmlFor="account_number">Account / Circuit ID</Label>
-                                    <Input
-                                        id="account_number"
-                                        value={data.account_number}
-                                        onChange={(e) => setData('account_number', e.target.value)}
+                                {/* Location / Branch (Searchable) */}
+                                <div className="space-y-1">
+                                    <Label htmlFor="branch_id">Search & Select Assigned Branch</Label>
+                                    <SearchableSelect
+                                        options={formattedBranches}
+                                        value={data.branch_id}
+                                        onValueChange={(val) => setData('branch_id', val)}
+                                        placeholder="Search branch name..."
+                                        searchPlaceholder="Search branch..."
+                                        className="w-full bg-white dark:bg-slate-950"
                                     />
                                 </div>
 
@@ -187,6 +248,54 @@ export default function BroadbandsEdit({ broadband, providers = [], branches = [
                                         value={data.bandwidth_speed}
                                         onChange={(e) => setData('bandwidth_speed', e.target.value)}
                                     />
+                                </div>
+
+                                {/* Package Start Date */}
+                                <div>
+                                    <Label htmlFor="package_start_date" className="flex items-center gap-1.5 font-semibold text-purple-700 dark:text-purple-400">
+                                        <Calendar className="h-4 w-4" /> Package Start Date
+                                    </Label>
+                                    <Input
+                                        id="package_start_date"
+                                        type="date"
+                                        value={data.package_start_date}
+                                        onChange={(e) => handleStartDateChange(e.target.value)}
+                                        className="mt-1 border-purple-300 dark:border-purple-800"
+                                    />
+                                </div>
+
+                                {/* Package Duration Selector */}
+                                <div>
+                                    <Label className="font-semibold text-slate-700 dark:text-slate-300">Package Duration</Label>
+                                    <Select
+                                        value={String(durationMonths)}
+                                        onValueChange={(val) => handleDurationChange(parseInt(val, 10))}
+                                    >
+                                        <SelectTrigger className="mt-1">
+                                            <SelectValue placeholder="Select Duration" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="1">1 Month (+30 Days)</SelectItem>
+                                            <SelectItem value="3">3 Months</SelectItem>
+                                            <SelectItem value="6">6 Months</SelectItem>
+                                            <SelectItem value="12">1 Year (12 Months)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Calculated Package Expire Date */}
+                                <div>
+                                    <Label htmlFor="package_expiry_date" className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400">
+                                        <Calendar className="h-4 w-4" /> Package Expire Date
+                                    </Label>
+                                    <Input
+                                        id="package_expiry_date"
+                                        type="date"
+                                        value={data.package_expiry_date}
+                                        onChange={(e) => setData('package_expiry_date', e.target.value)}
+                                        className="mt-1 border-emerald-300 dark:border-emerald-800 font-semibold"
+                                    />
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">Calculated based on start date & duration</p>
                                 </div>
 
                                 {/* Billing Type */}
@@ -219,40 +328,17 @@ export default function BroadbandsEdit({ broadband, providers = [], branches = [
                                     />
                                 </div>
 
-                                {/* Location / Branch */}
-                                <div>
-                                    <Label htmlFor="branch_id">Assigned Branch</Label>
-                                    <Select
-                                        value={data.branch_id}
-                                        onValueChange={(val) => setData('branch_id', val)}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select Branch" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {branches.map((b) => (
-                                                <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                {/* Department */}
-                                <div>
-                                    <Label htmlFor="department_id">Department</Label>
-                                    <Select
+                                {/* Department (Searchable) */}
+                                <div className="space-y-1">
+                                    <Label htmlFor="department_id">Search & Select Department</Label>
+                                    <SearchableSelect
+                                        options={formattedDepartments}
                                         value={data.department_id}
                                         onValueChange={(val) => setData('department_id', val)}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select Department" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {departments.map((d) => (
-                                                <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                        placeholder="Search department name..."
+                                        searchPlaceholder="Search department..."
+                                        className="w-full bg-white dark:bg-slate-950"
+                                    />
                                 </div>
 
                                 {/* Static IP */}
@@ -292,28 +378,6 @@ export default function BroadbandsEdit({ broadband, providers = [], branches = [
                                             <SelectItem value="Pending Installation">Pending Installation</SelectItem>
                                         </SelectContent>
                                     </Select>
-                                </div>
-
-                                {/* Contract Start Date */}
-                                <div>
-                                    <Label htmlFor="contract_start_date">Contract Start Date</Label>
-                                    <Input
-                                        id="contract_start_date"
-                                        type="date"
-                                        value={data.contract_start_date}
-                                        onChange={(e) => setData('contract_start_date', e.target.value)}
-                                    />
-                                </div>
-
-                                {/* Contract Expiry Date */}
-                                <div>
-                                    <Label htmlFor="contract_expiry_date">Contract Expiry Date</Label>
-                                    <Input
-                                        id="contract_expiry_date"
-                                        type="date"
-                                        value={data.contract_expiry_date}
-                                        onChange={(e) => setData('contract_expiry_date', e.target.value)}
-                                    />
                                 </div>
                             </div>
 
