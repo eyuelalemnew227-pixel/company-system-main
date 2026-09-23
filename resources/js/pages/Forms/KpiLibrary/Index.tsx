@@ -175,8 +175,15 @@ export default function Index({ kpis, filters, kpiRoles = [], masterKpis = [], a
         form_ids: [] as number[],
     });
 
-    const openCreateModal = () => {
-        reset();
+    const resetForm = () => {
+        setData({
+            kpi_role_id: '',
+            kpi_item_id: '',
+            name: '',
+            weight: '',
+            description: '',
+            form_ids: [],
+        });
         clearErrors();
         setEditingKpi(null);
         setIsAddingRole(false);
@@ -188,6 +195,10 @@ export default function Index({ kpis, filters, kpiRoles = [], masterKpis = [], a
         setNewKpiDescription('');
         setFormSearchQuery('');
         setFormDropdownOpen(false);
+    };
+
+    const openCreateModal = () => {
+        resetForm();
         setIsCreateOpen(true);
     };
 
@@ -322,15 +333,14 @@ export default function Index({ kpis, filters, kpiRoles = [], masterKpis = [], a
             put(`/kpi-libraries/${editingKpi.id}`, {
                 onSuccess: () => {
                     setIsCreateOpen(false);
-                    setEditingKpi(null);
-                    reset();
+                    resetForm();
                 },
             });
         } else {
             post('/kpi-libraries', {
                 onSuccess: () => {
                     setIsCreateOpen(false);
-                    reset();
+                    resetForm();
                 },
             });
         }
@@ -695,20 +705,23 @@ export default function Index({ kpis, filters, kpiRoles = [], masterKpis = [], a
                 </Card>
 
                 {/* Create & Edit Modal */}
-                <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                    <DialogContent className="max-w-xl bg-white max-h-[90vh] overflow-y-auto">
-                        <form onSubmit={handleFormSubmit}>
-                            <DialogHeader>
+                <Dialog open={isCreateOpen} onOpenChange={(open) => {
+                    setIsCreateOpen(open);
+                    if (!open) resetForm();
+                }}>
+                    <DialogContent className="max-w-xl bg-white max-h-[85vh] sm:max-h-[88vh] flex flex-col p-0 overflow-hidden shadow-2xl rounded-xl border border-amber-900/10">
+                        <form onSubmit={handleFormSubmit} className="flex flex-col flex-1 min-h-0 overflow-hidden">
+                            <DialogHeader className="p-6 pb-4 border-b border-gray-100 bg-white shrink-0 pr-12 text-left">
                                 <DialogTitle className="text-xl font-bold text-amber-950 flex items-center">
                                     <Target className="mr-2 h-5 w-5 text-amber-700" />
                                     {editingKpi ? 'Edit KPI Indicator' : 'Create New KPI Indicator'}
                                 </DialogTitle>
-                                <DialogDescription>
+                                <DialogDescription className="mt-1 text-xs text-gray-500">
                                     Assign a KPI Role, select or define a KPI, enter evaluation weight, and link related operational forms.
                                 </DialogDescription>
                             </DialogHeader>
 
-                            <div className="space-y-5 py-5">
+                            <div className="flex-1 overflow-y-auto p-6 py-5 space-y-5 custom-scrollbar min-h-0 overscroll-contain">
                                 {/* 1. KPI Role Selection + Add Role Button */}
                                 <div className="space-y-1.5">
                                     <div className="flex items-center justify-between">
@@ -984,7 +997,7 @@ export default function Index({ kpis, filters, kpiRoles = [], masterKpis = [], a
                                                 </div>
 
                                                 {/* Scrollable list of options */}
-                                                <div className="max-h-52 overflow-y-auto divide-y divide-gray-50 p-1">
+                                                <div className="max-h-52 overflow-y-auto overscroll-contain divide-y divide-gray-50 p-1 custom-scrollbar">
                                                     {filteredModalForms.length === 0 ? (
                                                         <div className="py-6 text-center text-xs text-gray-500">
                                                             No matching forms found.
@@ -1076,18 +1089,21 @@ export default function Index({ kpis, filters, kpiRoles = [], masterKpis = [], a
                                 </div>
                             </div>
 
-                            <DialogFooter className="pt-2 border-t border-gray-100">
+                            <DialogFooter className="p-4 px-6 border-t border-gray-100 bg-gray-50/80 flex items-center justify-end space-x-3 shrink-0">
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={() => setIsCreateOpen(false)}
+                                    onClick={() => {
+                                        setIsCreateOpen(false);
+                                        resetForm();
+                                    }}
                                 >
                                     Cancel
                                 </Button>
                                 <Button
                                     type="submit"
                                     disabled={processing}
-                                    className="bg-amber-900 hover:bg-amber-800 text-white font-bold"
+                                    className="bg-amber-900 hover:bg-amber-800 text-white font-bold px-6 shadow-sm"
                                 >
                                     {processing ? 'Saving...' : editingKpi ? 'Update KPI' : 'Save KPI'}
                                 </Button>
