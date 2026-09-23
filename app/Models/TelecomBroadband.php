@@ -12,6 +12,7 @@ class TelecomBroadband extends Model
 
     protected $fillable = [
         'account_number',
+        'service_number',
         'connection_name',
         'connection_type',
         'telecom_provider_id',

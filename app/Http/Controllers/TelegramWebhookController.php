@@ -88,7 +88,7 @@ class TelegramWebhookController extends Controller
             if (!empty($update)) {
                 $configPath = base_path('telegramgroup_mgt/config.json');
                 $dbPath = base_path('telegramgroup_mgt/kaldis.db');
-                if (file_exists($configPath) && file_exists($dbPath)) {
+                if (file_exists($configPath)) {
                     require_once base_path('telegramgroup_mgt/src/bootstrap.php');
 
                     $config = \KaldisTelegram\BotConfig::fromFile($configPath);

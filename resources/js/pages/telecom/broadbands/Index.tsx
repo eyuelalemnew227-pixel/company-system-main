@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 type Broadband = {
     id: number;
     account_number?: string | null;
+    service_number?: string | null;
     connection_name: string;
     connection_type: string;
     package_type?: string | null;
@@ -135,7 +136,6 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
             <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
                 {/* Unified Header Navigation */}
                 <TelecomHeaderNav
-                    onOpenAddBroadbandModal={() => setOpenAddModal(true)}
                     onOpenTransferModal={() => {
                         if (broadbands.data.length > 0) {
                             setTransferringItem(broadbands.data[0]);
@@ -184,10 +184,11 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
                                 <SelectContent>
                                     <SelectItem value="all">All Types</SelectItem>
                                     <SelectItem value="WTTx (Fixed Wireless)">WTTx (4G/5G Wireless)</SelectItem>
-                                    <SelectItem value="Fiber / FTTH">Fiber / FTTH</SelectItem>
-                                    <SelectItem value="Broadband ADSL">Broadband ADSL</SelectItem>
-                                    <SelectItem value="Leased Line">Leased Line</SelectItem>
-                                    <SelectItem value="Satellite">Satellite</SelectItem>
+                                    <SelectItem value="Data Sim Card">Data SIM Card</SelectItem>
+                                    <SelectItem value="Fiber Broadband (FTTH/FTTB)">Fiber Broadband (FTTH/FTTB)</SelectItem>
+                                    <SelectItem value="ADSL / Copper Broadband">ADSL / Copper Broadband</SelectItem>
+                                    <SelectItem value="Dedicated Leased Line">Dedicated Leased Line</SelectItem>
+                                    <SelectItem value="VSAT Satellite">VSAT Satellite</SelectItem>
                                 </SelectContent>
                             </Select>
 
@@ -239,6 +240,9 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
                                         <TableCell>{(broadbands.from ?? 0) + idx}</TableCell>
                                         <TableCell className="font-semibold">
                                             <div>{item.connection_name}</div>
+                                            {item.service_number && (
+                                                <div className="text-xs text-purple-600 font-mono">Service No: {item.service_number}</div>
+                                            )}
                                             {item.account_number && (
                                                 <div className="text-xs text-muted-foreground font-mono">Acc: {item.account_number}</div>
                                             )}
@@ -295,9 +299,13 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
                                                                 id: item.id,
                                                                 connection_name: item.connection_name,
                                                                 account_number: item.account_number || '',
+                                                                service_number: item.service_number || '',
                                                                 telecom_provider_id: item.provider?.id || '',
                                                                 connection_type: item.connection_type,
+                                                                package_type: item.package_type || '',
+                                                                bandwidth_speed: item.bandwidth_speed || '',
                                                                 monthly_cost: item.monthly_cost,
+                                                                billing_type: item.billing_type || 'Postpaid',
                                                                 branch_id: item.branch?.id || '',
                                                                 status: item.status,
                                                                 ip_address: item.ip_address || '',

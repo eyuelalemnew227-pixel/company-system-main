@@ -107,7 +107,6 @@ function runStorageTests(): void
         displayName: 'A Manager',
         role: Roles::REGIONAL_MANAGER,
         region: 'Region 1',
-        canForward: true,
     ));
     assertTrue($storage->getUser(10) !== null, 'User was not stored.');
 

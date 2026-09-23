@@ -65,7 +65,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 type SystemStats = {
     total_communications: number;
     recorded_communications: number;
-    forwarded_communications: number;
+    forwarded_communications?: number;
     responded_communications: number;
     answered_communications?: number;
     unanswered_communications?: number;
@@ -94,12 +94,12 @@ type ConfigData = {
         'Region 1': number;
         'Region 2': number;
     };
+    ho_group_chat_id?: number | string;
     operations_director_user_id: number;
     database: string;
     anti_link_protection?: boolean;
     auto_welcome?: boolean;
     welcome_message?: string;
-    ho_group_chat_id?: number | string;
 };
 
 type RosterUser = {
@@ -109,7 +109,6 @@ type RosterUser = {
     region: string | null;
     branch_name: string | null;
     department: string | null;
-    can_forward: number;
     created_at: string;
     updated_at: string;
 };
@@ -453,7 +452,6 @@ export default function KaldisCommunicationPage({
         region: 'Region 1',
         branch_name: '',
         department: 'Operations',
-        can_forward: false,
     });
 
     // Binding form
@@ -474,7 +472,7 @@ export default function KaldisCommunicationPage({
     });
 
     const openAddBindingPreset = (topicName: string, dept: string, emoji: string, targetGroup?: string) => {
-        const groupKey = targetGroup || (topicSubTab === 'region2' ? 'Region 2' : topicSubTab === 'headOffice' ? 'Head Office' : 'Region 1');
+        const groupKey = targetGroup || (topicSubTab === 'region2' ? 'Region 2' : 'Region 1');
         bindingForm.setData({
             group_key: groupKey,
             thread_id: '',
@@ -524,22 +522,11 @@ export default function KaldisCommunicationPage({
         });
     };
 
-    const [isRegisteringCmds, setIsRegisteringCmds] = useState(false);
-
     const handleSaveConfig = (e: React.FormEvent) => {
         e.preventDefault();
         configForm.post(route('kaldis-communication.update-config'), {
-            onSuccess: () => toast.success('Bot configuration saved & commands registered in Telegram!'),
+            onSuccess: () => toast.success('Bot configuration saved successfully!'),
             onError: () => toast.error('Failed to save configuration.'),
-        });
-    };
-
-    const handleRegisterCommands = () => {
-        setIsRegisteringCmds(true);
-        router.post(route('kaldis-communication.register-commands'), {}, {
-            onFinish: () => setIsRegisteringCmds(false),
-            onSuccess: () => toast.success('Registered 13 slash commands in Telegram for all group chats!'),
-            onError: (errors: any) => toast.error(errors.commands || 'Failed to register commands with Telegram API.'),
         });
     };
 
@@ -557,8 +544,21 @@ export default function KaldisCommunicationPage({
         });
     };
 
+    const [isRegisteringCmds, setIsRegisteringCmds] = useState(false);
+
+    const handleRegisterCommands = () => {
+        setIsRegisteringCmds(true);
+        router.post(route('kaldis-communication.update-config'), {
+            action: 'register_commands',
+        }, {
+            onFinish: () => setIsRegisteringCmds(false),
+            onSuccess: () => toast.success('Registered Telegram slash commands (/it, /hr, /topics) successfully!'),
+            onError: () => toast.error('Failed to register Telegram slash commands.'),
+        });
+    };
+
     const handleGenerateInviteLink = (u: RosterUser) => {
-        const groupKey = u.region || (u.role === 'department_head' || u.role === 'operations_director' ? 'Head Office' : 'Region 1');
+        const groupKey = u.region || 'Region 1';
         router.post(route('kaldis-communication.generate-invite-link'), {
             telegram_user_id: u.telegram_user_id,
             group_key: groupKey,
@@ -598,7 +598,6 @@ export default function KaldisCommunicationPage({
         region: string;
         branch_name: string;
         department: string;
-        can_forward: boolean;
     }>({
         telegram_user_id: 0,
         display_name: '',
@@ -606,7 +605,6 @@ export default function KaldisCommunicationPage({
         region: 'Region 1',
         branch_name: '',
         department: '',
-        can_forward: false,
     });
 
     const openEditUser = (u: RosterUser) => {
@@ -618,7 +616,6 @@ export default function KaldisCommunicationPage({
             region: u.region || 'Region 1',
             branch_name: u.branch_name || '',
             department: u.department || '',
-            can_forward: u.can_forward === 1,
         });
     };
 
@@ -674,7 +671,7 @@ export default function KaldisCommunicationPage({
 
     const memberActionForm = useForm({
         action: 'ban',
-        chat_id: String(config.region_groups?.['Region 1'] || config.ho_group_chat_id || ''),
+        chat_id: String(config.region_groups?.['Region 1'] || ''),
         telegram_user_id: '',
     });
 
@@ -694,7 +691,7 @@ export default function KaldisCommunicationPage({
         message: string;
         pin: boolean;
     }>({
-        chat_id: String(config.ho_group_chat_id || config.region_groups?.['Region 1'] || ''),
+        chat_id: String(config.region_groups?.['Region 1'] || ''),
         message: '',
         pin: true,
     });
@@ -776,14 +773,11 @@ export default function KaldisCommunicationPage({
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'recorded':
-                return <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">⏳ Unanswered (Recorded)</Badge>;
-            case 'forwarded':
-            case 'forwarded_to_ho':
-                return <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">⏳ Unanswered (Forwarded HO)</Badge>;
+                return <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">⏳ Unanswered</Badge>;
             case 'responded':
             case 'closed':
             case 'resolved':
-                return <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">✅ Answered (Responded)</Badge>;
+                return <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">✅ Answered</Badge>;
             default:
                 return <Badge variant="outline">{status}</Badge>;
         }
@@ -817,7 +811,7 @@ export default function KaldisCommunicationPage({
                             KALDIS Branch Communication Telegram Bot
                         </h1>
                         <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-                            Standardized Telegram communication platform across Regions 1 & 2 and Head Office departments.
+                            Standardized Telegram communication platform across Region 1 & Region 2 groups.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -865,7 +859,7 @@ export default function KaldisCommunicationPage({
                 </div>
 
                 {/* Key Stat Metrics */}
-                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
                     <Card className="border-neutral-200 dark:border-neutral-800">
                         <CardHeader className="p-4 pb-2">
                             <CardDescription className="text-xs font-medium text-neutral-500">Total Communications</CardDescription>
@@ -884,7 +878,7 @@ export default function KaldisCommunicationPage({
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 pt-0">
-                            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">HO Responded & Closed</span>
+                            <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">Responded & Closed</span>
                         </CardContent>
                     </Card>
 
@@ -892,21 +886,11 @@ export default function KaldisCommunicationPage({
                         <CardHeader className="p-4 pb-2">
                             <CardDescription className="text-xs font-semibold text-amber-700 dark:text-amber-300">⏳ Unanswered Chats</CardDescription>
                             <CardTitle className="text-2xl font-bold text-amber-700 dark:text-amber-400">
-                                {stats.unanswered_communications ?? (stats.recorded_communications + stats.forwarded_communications)}
+                                {stats.unanswered_communications ?? stats.recorded_communications}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-4 pt-0">
-                            <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Pending HO Response</span>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="border-neutral-200 dark:border-neutral-800">
-                        <CardHeader className="p-4 pb-2">
-                            <CardDescription className="text-xs font-medium text-blue-600 dark:text-blue-400">Forwarded to HO</CardDescription>
-                            <CardTitle className="text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.forwarded_communications}</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0">
-                            <span className="text-xs text-neutral-400">Sent to HO Dept</span>
+                            <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">Pending Response</span>
                         </CardContent>
                     </Card>
 
@@ -967,7 +951,7 @@ export default function KaldisCommunicationPage({
                                             Live Communication Log & Tracking
                                         </CardTitle>
                                         <CardDescription>
-                                            Every message posted in Region 1 & Region 2 groups is tagged with a reference number and routed to Head Office.
+                                            Every message posted in Region 1 & Region 2 groups is tagged with a reference number and tracked.
                                         </CardDescription>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-2">
@@ -1013,7 +997,6 @@ export default function KaldisCommunicationPage({
                                                 <SelectItem value="unanswered">⏳ Unanswered / Open</SelectItem>
                                                 <SelectItem value="answered">✅ Responded / Answered</SelectItem>
                                                 <SelectItem value="recorded">Recorded Only</SelectItem>
-                                                <SelectItem value="forwarded">Forwarded Only</SelectItem>
                                             </SelectContent>
                                         </Select>
                                         <Select
@@ -1573,11 +1556,6 @@ export default function KaldisCommunicationPage({
                                                             Region 2 Group ({config.region_groups['Region 2']})
                                                         </SelectItem>
                                                     )}
-                                                    {config.ho_group_chat_id && (
-                                                        <SelectItem value={String(config.ho_group_chat_id)}>
-                                                            Head Office Group ({config.ho_group_chat_id})
-                                                        </SelectItem>
-                                                    )}
                                                 </SelectContent>
                                             </Select>
                                         </div>
@@ -1646,11 +1624,6 @@ export default function KaldisCommunicationPage({
                                                     <SelectValue placeholder="Select Target" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {config.ho_group_chat_id && (
-                                                        <SelectItem value={String(config.ho_group_chat_id)}>
-                                                            Head Office Group ({config.ho_group_chat_id})
-                                                        </SelectItem>
-                                                    )}
                                                     {config.region_groups?.['Region 1'] && (
                                                         <SelectItem value={String(config.region_groups['Region 1'])}>
                                                             Region 1 Group ({config.region_groups['Region 1']})
@@ -1727,17 +1700,6 @@ export default function KaldisCommunicationPage({
                                             <Sparkles className={`h-4 w-4 ${isStandardizingNames ? 'animate-spin' : ''}`} />
                                             {isStandardizingNames ? 'Standardizing...' : 'Standardize All Names'}
                                         </Button>
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={handleSyncMembers}
-                                            disabled={isSyncingMembers}
-                                            className="gap-1.5 border-purple-500 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950"
-                                            title="Scrape and sync all members/admins from Telegram groups into system roster"
-                                        >
-                                            <RefreshCw className={`h-4 w-4 ${isSyncingMembers ? 'animate-spin' : ''}`} />
-                                            {isSyncingMembers ? 'Syncing...' : 'Sync Members from Telegram'}
-                                        </Button>
                                         <Button size="sm" onClick={() => setIsAddUserOpen(true)} className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white">
                                             <UserPlus className="h-4 w-4" />
                                             Register User
@@ -1781,7 +1743,6 @@ export default function KaldisCommunicationPage({
                                                 <TableHead>Region / Branch</TableHead>
                                                 <TableHead>HO Department</TableHead>
                                                 <TableHead>Topic Permission</TableHead>
-                                                <TableHead>Can Forward</TableHead>
                                                 {canManage && <TableHead className="w-24 text-right">Action</TableHead>}
                                             </TableRow>
                                         </TableHeader>
@@ -1829,13 +1790,7 @@ export default function KaldisCommunicationPage({
                                                                 </Badge>
                                                             )}
                                                         </TableCell>
-                                                        <TableCell>
-                                                            {u.can_forward === 1 ? (
-                                                                <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">Yes</Badge>
-                                                            ) : (
-                                                                <Badge variant="outline" className="text-neutral-400">No</Badge>
-                                                            )}
-                                                        </TableCell>
+
                                                         {canManage && (
                                                             <TableCell className="text-right">
                                                                 <div className="flex items-center justify-end gap-1">
@@ -1931,7 +1886,7 @@ export default function KaldisCommunicationPage({
 
                                     <div className="grid gap-4 sm:grid-cols-2">
                                         <div className="space-y-2">
-                                            <Label htmlFor="operations_director_user_id">Operations Director User ID</Label>
+                                            <Label htmlFor="operations_director_user_id">Operations Director Telegram User ID</Label>
                                             <Input
                                                 id="operations_director_user_id"
                                                 placeholder="987654321"
@@ -2188,7 +2143,6 @@ export default function KaldisCommunicationPage({
                                 <SelectContent>
                                     <SelectItem value="Region 1">Region 1 Group</SelectItem>
                                     <SelectItem value="Region 2">Region 2 Group</SelectItem>
-                                    <SelectItem value="Head Office">Head Office Group</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -2447,18 +2401,7 @@ export default function KaldisCommunicationPage({
                             </div>
                         )}
 
-                        <div className="flex items-center space-x-2 pt-1">
-                            <input
-                                type="checkbox"
-                                id="edit_usr_fwd"
-                                checked={editUserForm.data.can_forward}
-                                onChange={(e) => editUserForm.setData('can_forward', e.target.checked)}
-                                className="h-4 w-4 rounded border-neutral-300 text-amber-600 focus:ring-amber-500"
-                            />
-                            <Label htmlFor="edit_usr_fwd" className="text-xs text-neutral-600 dark:text-neutral-400">
-                                Allow forwarding communications to Head Office
-                            </Label>
-                        </div>
+
 
                         <DialogFooter className="pt-2">
                             <Button type="button" variant="outline" onClick={() => setEditingUser(null)}>

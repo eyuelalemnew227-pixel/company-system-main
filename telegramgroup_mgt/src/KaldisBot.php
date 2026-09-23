@@ -45,7 +45,6 @@ final class UserProfile
         public ?string $region = null,
         public ?string $branchName = null,
         public ?string $department = null,
-        public bool $canForward = false,
     ) {
     }
 }
@@ -95,15 +94,12 @@ final class Helpers
 
     public static function displayName(array $user): string
     {
-        $parts = [];
-        if (!empty($user['first_name'])) {
-            $parts[] = (string) $user['first_name'];
-        }
-        if (!empty($user['last_name'])) {
-            $parts[] = (string) $user['last_name'];
-        }
-        if ($parts !== []) {
-            return trim(implode(' ', $parts));
+        $firstName = trim((string) ($user['first_name'] ?? ''));
+        $lastName = trim((string) ($user['last_name'] ?? ''));
+
+        if ($firstName !== '' || $lastName !== '') {
+            $raw = trim($firstName . ' ' . $lastName);
+            return mb_convert_case($raw, MB_CASE_TITLE, 'UTF-8');
         }
 
         if (!empty($user['username'])) {
@@ -424,10 +420,10 @@ final class SQLiteStorage
         $stmt = $this->pdo->prepare(
             'INSERT INTO users (
                 telegram_user_id, display_name, role, region, branch_name, department,
-                can_forward, created_at, updated_at
+                created_at, updated_at
             ) VALUES (
                 :telegram_user_id, :display_name, :role, :region, :branch_name, :department,
-                :can_forward, :created_at, :updated_at
+                :created_at, :updated_at
             )
             ON CONFLICT(telegram_user_id) DO UPDATE SET
                 display_name = excluded.display_name,
@@ -435,7 +431,6 @@ final class SQLiteStorage
                 region = excluded.region,
                 branch_name = excluded.branch_name,
                 department = excluded.department,
-                can_forward = excluded.can_forward,
                 updated_at = excluded.updated_at'
         );
         $stmt->execute([
@@ -445,7 +440,6 @@ final class SQLiteStorage
             ':region' => $profile->region,
             ':branch_name' => $profile->branchName,
             ':department' => $profile->department,
-            ':can_forward' => $profile->canForward ? 1 : 0,
             ':created_at' => $timestamp,
             ':updated_at' => $timestamp,
         ]);
@@ -754,7 +748,6 @@ final class SQLiteStorage
                 region TEXT,
                 branch_name TEXT,
                 department TEXT,
-                can_forward INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )'
@@ -806,7 +799,6 @@ final class SQLiteStorage
             region: $row['region'] !== null ? (string) $row['region'] : null,
             branchName: $row['branch_name'] !== null ? (string) $row['branch_name'] : null,
             department: $row['department'] !== null ? (string) $row['department'] : null,
-            canForward: ((int) $row['can_forward']) === 1,
         );
     }
 
@@ -962,7 +954,6 @@ final class KaldisBot
                             region: $assignedRegion,
                             branchName: null,
                             department: $assignedDept,
-                            canForward: false,
                         ));
                     }
                 }
@@ -1001,7 +992,6 @@ final class KaldisBot
                     region: $assignedRegion,
                     branchName: null,
                     department: $assignedDept,
-                    canForward: false,
                 ));
             }
         }
@@ -1100,97 +1090,7 @@ final class KaldisBot
     public function handleCallbackQuery(array $callbackQuery): void
     {
         $callbackId = (string) ($callbackQuery['id'] ?? '');
-        $data = (string) ($callbackQuery['data'] ?? '');
-        $sender = is_array($callbackQuery['from'] ?? null) ? $callbackQuery['from'] : [];
-        $senderId = isset($sender['id']) ? (int) $sender['id'] : null;
-        $senderProfile = $senderId !== null ? $this->storage->getUser($senderId) : null;
-
-        if (!str_starts_with($data, 'forward:')) {
-            $this->client->answerCallbackQuery($callbackId, 'Unsupported action.');
-            return;
-        }
-
-        $referenceNo = substr($data, strlen('forward:'));
-        $record = $this->storage->getCommunication($referenceNo);
-        if ($record === null) {
-            $this->client->answerCallbackQuery($callbackId, 'Reference not found.');
-            return;
-        }
-
-        $isAuthorized = $senderProfile !== null && (
-            in_array($senderProfile->role, [Roles::REGIONAL_MANAGER, Roles::OPERATIONS_DIRECTOR], true)
-            || $senderProfile->canForward
-        );
-
-        if (!$isAuthorized) {
-            $this->client->answerCallbackQuery($callbackId, 'Only a Regional Manager or Operation Head can forward this.');
-            return;
-        }
-
-        if ($senderProfile->role === Roles::REGIONAL_MANAGER && !empty($senderProfile->region) && $senderProfile->region !== $record->region) {
-            $this->client->answerCallbackQuery($callbackId, 'This reference belongs to a different region.');
-            return;
-        }
-
-        if ($record->hoMessageId !== null) {
-            $this->client->answerCallbackQuery($callbackId, 'Already forwarded to Head Office.');
-            return;
-        }
-
-        $hoGroupKey = $this->hoGroupKey();
-        $hoThreadId = $this->topicThreadIdForDepartment($hoGroupKey, $record->department);
-        if ($hoThreadId === null || $this->config->hoGroupChatId === null) {
-            $this->client->answerCallbackQuery($callbackId, 'Head Office topic is not configured.');
-            return;
-        }
-
-        if ($record->branchName === null || $record->branchName === '' || $record->branchName === 'Unassigned') {
-            $resolvedBranch = $this->resolveUserBranch($record->senderUserId, $record->senderDisplayName, null);
-            if ($resolvedBranch !== null) {
-                $record->branchName = $resolvedBranch;
-                $this->storage->updateCommunication($record);
-            }
-        }
-
-        $summaryText = sprintf(
-            "Reference %s\nRegion: %s\nBranch: %s\nTopic: %s\nDepartment: %s",
-            $record->referenceNo,
-            $record->region,
-            $record->branchName ?? 'Unassigned',
-            $record->topicName,
-            $record->department,
-        );
-        $summaryMessage = $this->client->sendMessage(
-            $this->config->hoGroupChatId,
-            $summaryText,
-            $hoThreadId,
-        );
-        $copiedMessage = $this->client->copyMessage(
-            $this->config->hoGroupChatId,
-            $record->sourceChatId,
-            $record->sourceMessageId,
-            $hoThreadId,
-        );
-
-        $record->hoChatId = $this->config->hoGroupChatId;
-        $record->hoSummaryMessageId = isset($summaryMessage['message_id']) ? (int) $summaryMessage['message_id'] : null;
-        $record->hoMessageId = isset($copiedMessage['message_id']) ? (int) $copiedMessage['message_id'] : null;
-        $record->status = 'forwarded';
-        $record->regionalManagerUserId = $record->regionalManagerUserId
-            ?? $this->storage->getRegionalManager($record->region)?->telegramUserId
-            ?? $senderProfile->telegramUserId;
-        $this->storage->updateCommunication($record);
-
-
-        $this->client->answerCallbackQuery($callbackId, 'Forwarded to Head Office.');
-        if (isset($callbackQuery['message']) && is_array($callbackQuery['message'])) {
-            $message = $callbackQuery['message'];
-            $chatId = isset($message['chat']['id']) ? (int) $message['chat']['id'] : 0;
-            $messageId = isset($message['message_id']) ? (int) $message['message_id'] : 0;
-            if ($chatId !== 0 && $messageId !== 0) {
-                $this->client->editMessageReplyMarkup($chatId, $messageId, null);
-            }
-        }
+        $this->client->answerCallbackQuery($callbackId, 'Action acknowledged.');
     }
 
     /** @param array<int, string> $tokens */
@@ -1243,7 +1143,6 @@ final class KaldisBot
                 displayName: $senderName,
                 role: Roles::REGIONAL_MANAGER,
                 region: $region,
-                canForward: true,
             ));
             $this->client->sendMessage($chatId, sprintf('Registered %s as regional manager for %s.', $senderName, $region));
             return;
@@ -1271,7 +1170,6 @@ final class KaldisBot
                 telegramUserId: $senderId,
                 displayName: $senderName,
                 role: Roles::OPERATIONS_DIRECTOR,
-                canForward: true,
             ));
             $this->client->sendMessage($chatId, sprintf('Registered %s as operations director.', $senderName));
             return;
@@ -1627,37 +1525,6 @@ final class KaldisBot
         }
 
         return null;
-    }
-
-    /** @param array<string, mixed> $message */
-    private function processHoReply(array $message, TopicBinding $binding, ?int $senderId, string $senderName): void
-    {
-        $replyTo = is_array($message['reply_to_message'] ?? null) ? $message['reply_to_message'] : [];
-        $repliedToMessageId = isset($replyTo['message_id']) ? (int) $replyTo['message_id'] : null;
-        if ($repliedToMessageId === null) {
-            return;
-        }
-
-        $record = $this->storage->findCommunicationByHoMessageId($repliedToMessageId);
-        if ($record === null) {
-            return;
-        }
-
-        $departmentHead = $this->storage->getDepartmentHead($binding->department);
-        if ($departmentHead !== null && $senderId !== null && $senderId !== $departmentHead->telegramUserId) {
-            return;
-        }
-
-        $regionalManagerId = $record->regionalManagerUserId;
-        if ($regionalManagerId === null) {
-            $regionalManagerId = $this->storage->getRegionalManager($record->region)?->telegramUserId;
-        }
-
-
-        $record->status = 'responded';
-        $record->departmentHeadUserId = $senderId;
-        $record->regionalManagerUserId = $regionalManagerId;
-        $this->storage->updateCommunication($record);
     }
 
     private function groupKey(int $chatId): ?string

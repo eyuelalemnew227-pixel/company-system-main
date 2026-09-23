@@ -654,7 +654,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('kaldis-communication/moderation/settings', [\App\Http\Controllers\KaldisCommunicationController::class, 'updateModerationSettings'])->name('kaldis-communication.moderation.settings');
     Route::post('kaldis-communication/moderation/member', [\App\Http\Controllers\KaldisCommunicationController::class, 'moderateMember'])->name('kaldis-communication.moderation.member');
     Route::post('kaldis-communication/moderation/broadcast', [\App\Http\Controllers\KaldisCommunicationController::class, 'broadcastChannel'])->name('kaldis-communication.moderation.broadcast');
-    Route::post('kaldis-communication/register-commands', [\App\Http\Controllers\KaldisCommunicationController::class, 'registerCommands'])->name('kaldis-communication.register-commands');
+
     Route::post('kaldis-communication/set-webhook', [\App\Http\Controllers\KaldisCommunicationController::class, 'registerWebhook'])->name('kaldis-communication.set-webhook');
     Route::post('kaldis-communication/generate-invite-link', [\App\Http\Controllers\KaldisCommunicationController::class, 'generateInviteLink'])->name('kaldis-communication.generate-invite-link');
     Route::post('kaldis-communication/purge-unlisted', [\App\Http\Controllers\KaldisCommunicationController::class, 'purgeUnlistedBindings'])->name('kaldis-communication.purge-unlisted');

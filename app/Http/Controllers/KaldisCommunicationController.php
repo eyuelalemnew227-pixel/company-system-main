@@ -75,7 +75,6 @@ class KaldisCommunicationController extends Controller
                 region TEXT,
                 branch_name TEXT,
                 department TEXT,
-                can_forward INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             )'
@@ -186,10 +185,9 @@ class KaldisCommunicationController extends Controller
         // Get Stats
         $totalComms = (int) ($pdo->query('SELECT COUNT(*) FROM communications')->fetchColumn() ?: 0);
         $recordedComms = (int) ($pdo->query("SELECT COUNT(*) FROM communications WHERE status = 'recorded'")->fetchColumn() ?: 0);
-        $forwardedComms = (int) ($pdo->query("SELECT COUNT(*) FROM communications WHERE status = 'forwarded'")->fetchColumn() ?: 0);
-        $respondedComms = (int) ($pdo->query("SELECT COUNT(*) FROM communications WHERE status = 'responded'")->fetchColumn() ?: 0);
-        $answeredComms = (int) ($pdo->query("SELECT COUNT(*) FROM communications WHERE status IN ('responded', 'closed')")->fetchColumn() ?: 0);
-        $unansweredComms = (int) ($pdo->query("SELECT COUNT(*) FROM communications WHERE status IN ('recorded', 'forwarded')")->fetchColumn() ?: 0);
+        $respondedComms = (int) ($pdo->query("SELECT COUNT(*) FROM communications WHERE status IN ('responded', 'resolved', 'closed')")->fetchColumn() ?: 0);
+        $answeredComms = (int) ($pdo->query("SELECT COUNT(*) FROM communications WHERE status IN ('responded', 'resolved', 'closed')")->fetchColumn() ?: 0);
+        $unansweredComms = (int) ($pdo->query("SELECT COUNT(*) FROM communications WHERE status = 'recorded'")->fetchColumn() ?: 0);
         $totalUsers = (int) ($pdo->query('SELECT COUNT(*) FROM users')->fetchColumn() ?: 0);
         $totalBindings = (int) ($pdo->query('SELECT COUNT(*) FROM topic_bindings')->fetchColumn() ?: 0);
 
@@ -223,7 +221,7 @@ class KaldisCommunicationController extends Controller
         if ($statusFilter === 'answered' || $statusFilter === 'responded') {
             $query .= " AND status IN ('responded', 'resolved', 'closed')";
         } elseif ($statusFilter === 'unanswered' || $statusFilter === 'open') {
-            $query .= " AND status IN ('recorded', 'forwarded')";
+            $query .= " AND status = 'recorded'";
         } elseif ($statusFilter) {
             $query .= ' AND status = :status';
             $params[':status'] = $statusFilter;
@@ -266,7 +264,6 @@ class KaldisCommunicationController extends Controller
             'stats' => [
                 'total_communications' => $totalComms,
                 'recorded_communications' => $recordedComms,
-                'forwarded_communications' => $forwardedComms,
                 'responded_communications' => $respondedComms,
                 'answered_communications' => $answeredComms,
                 'unanswered_communications' => $unansweredComms,
@@ -344,31 +341,10 @@ class KaldisCommunicationController extends Controller
             ]);
         }
 
-        // Auto-register Bot Commands with Telegram setMyCommands for all group chats
-        if (!empty($configData['bot_token'])) {
-            $this->registerCommandsToTelegram($configData['bot_token']);
-        }
-
-        return redirect()->back()->with('success', 'Kaldis Communication bot settings updated and Telegram slash commands registered for all groups!');
+        return redirect()->back()->with('success', 'Kaldis Communication bot settings updated successfully!');
     }
 
-    public function registerCommands(Request $request): RedirectResponse
-    {
-        $config = $this->readConfig();
-        $botToken = trim($config['bot_token'] ?? '');
 
-        if (empty($botToken)) {
-            return redirect()->back()->withErrors(['commands' => 'Telegram Bot Token is not configured.']);
-        }
-
-        $success = $this->registerCommandsToTelegram($botToken, $error);
-
-        if ($success) {
-            return redirect()->back()->with('success', 'Successfully registered 13 topic commands in Telegram for all group chats and private chats!');
-        }
-
-        return redirect()->back()->withErrors(['commands' => "Telegram API Error: {$error}"]);
-    }
 
     private function getStandardTopicMapping(): array
     {
@@ -947,7 +923,6 @@ class KaldisCommunicationController extends Controller
             'region' => ['nullable', 'string', 'max:255'],
             'branch_name' => ['nullable', 'string', 'max:255'],
             'department' => ['nullable', 'string', 'max:255'],
-            'can_forward' => ['nullable', 'boolean'],
         ]);
 
         $pdo = $this->getPdo();
@@ -955,16 +930,15 @@ class KaldisCommunicationController extends Controller
 
         $stmt = $pdo->prepare(
             'INSERT INTO users (
-                telegram_user_id, display_name, role, region, branch_name, department, can_forward, created_at, updated_at
+                telegram_user_id, display_name, role, region, branch_name, department, created_at, updated_at
             ) VALUES (
-                :telegram_user_id, :display_name, :role, :region, :branch_name, :department, :can_forward, :created_at, :updated_at
+                :telegram_user_id, :display_name, :role, :region, :branch_name, :department, :created_at, :updated_at
             ) ON CONFLICT(telegram_user_id) DO UPDATE SET
                 display_name = excluded.display_name,
                 role = excluded.role,
                 region = excluded.region,
                 branch_name = excluded.branch_name,
                 department = excluded.department,
-                can_forward = excluded.can_forward,
                 updated_at = excluded.updated_at'
         );
 
@@ -975,7 +949,6 @@ class KaldisCommunicationController extends Controller
             ':region' => $validated['region'] ?? null,
             ':branch_name' => $validated['branch_name'] ?? null,
             ':department' => $validated['department'] ?? null,
-            ':can_forward' => ($validated['role'] === 'regional_manager' || $validated['role'] === 'operations_director' || !empty($validated['can_forward'])) ? 1 : 0,
             ':created_at' => $now,
             ':updated_at' => $now,
         ]);
@@ -1122,7 +1095,6 @@ class KaldisCommunicationController extends Controller
             'region' => ['nullable', 'string', 'max:255'],
             'branch_name' => ['nullable', 'string', 'max:255'],
             'department' => ['nullable', 'string', 'max:255'],
-            'can_forward' => ['nullable', 'boolean'],
         ]);
 
         $pdo = $this->getPdo();
@@ -1135,7 +1107,6 @@ class KaldisCommunicationController extends Controller
                 region = :region,
                 branch_name = :branch_name,
                 department = :department,
-                can_forward = :can_forward,
                 updated_at = :updated_at
              WHERE telegram_user_id = :telegram_user_id'
         );
@@ -1147,7 +1118,6 @@ class KaldisCommunicationController extends Controller
             ':region' => $validated['region'] ?? null,
             ':branch_name' => $validated['branch_name'] ?? null,
             ':department' => $validated['department'] ?? null,
-            ':can_forward' => ($validated['role'] === 'regional_manager' || $validated['role'] === 'operations_director' || !empty($validated['can_forward'])) ? 1 : 0,
             ':updated_at' => $now,
         ]);
 
@@ -1176,9 +1146,9 @@ class KaldisCommunicationController extends Controller
 
         $stmt = $pdo->prepare(
             'INSERT INTO users (
-                telegram_user_id, display_name, role, region, branch_name, department, can_forward, created_at, updated_at
+                telegram_user_id, display_name, role, region, branch_name, department, created_at, updated_at
             ) VALUES (
-                :telegram_user_id, :display_name, :role, :region, :branch_name, :department, :can_forward, :created_at, :updated_at
+                :telegram_user_id, :display_name, :role, :region, :branch_name, :department, :created_at, :updated_at
             ) ON CONFLICT(telegram_user_id) DO UPDATE SET
                 display_name = CASE WHEN users.display_name IS NULL OR users.display_name = "" OR users.display_name LIKE "Telegram User%" THEN excluded.display_name ELSE users.display_name END,
                 updated_at = excluded.updated_at'
@@ -1205,11 +1175,9 @@ class KaldisCommunicationController extends Controller
                         $nameParts = [];
                         if (!empty($user['first_name'])) $nameParts[] = $user['first_name'];
                         if (!empty($user['last_name'])) $nameParts[] = $user['last_name'];
-                        $displayName = implode(' ', $nameParts);
-                        if (!empty($user['username'])) {
-                            $displayName .= ($displayName !== '' ? " (@{$user['username']})" : "@{$user['username']}");
-                        }
-                        if (empty($displayName)) $displayName = "Telegram User {$userId}";
+                        $rawName = implode(' ', $nameParts);
+                        $displayName = $this->formatStandardFullName($rawName);
+                        if (empty($displayName)) $displayName = !empty($user['username']) ? "@{$user['username']}" : "Telegram User {$userId}";
 
                         $defaultRole = ($groupKey === 'Head Office') ? 'department_head' : 'branch_manager';
                         $defaultDept = ($groupKey === 'Head Office') ? 'Operations' : null;
@@ -1221,7 +1189,6 @@ class KaldisCommunicationController extends Controller
                             ':region' => $groupKey,
                             ':branch_name' => null,
                             ':department' => $defaultDept,
-                            ':can_forward' => ($defaultRole === 'department_head') ? 1 : 0,
                             ':created_at' => $now,
                             ':updated_at' => $now,
                         ]);
@@ -1251,7 +1218,6 @@ class KaldisCommunicationController extends Controller
                     ':region' => $region,
                     ':branch_name' => null,
                     ':department' => ($region === 'Head Office') ? 'Operations' : null,
-                    ':can_forward' => 0,
                     ':created_at' => $now,
                     ':updated_at' => $now,
                 ]);
@@ -1302,9 +1268,10 @@ class KaldisCommunicationController extends Controller
                     $nameParts = [];
                     if (!empty($u['first_name'])) $nameParts[] = $u['first_name'];
                     if (!empty($u['last_name'])) $nameParts[] = $u['last_name'];
-                    $name = implode(' ', $nameParts);
-                    if (!empty($u['username'])) {
-                        $name .= ($name !== '' ? " (@{$u['username']})" : "@{$u['username']}");
+                    $rawName = implode(' ', $nameParts);
+                    $name = $this->formatStandardFullName($rawName);
+                    if (empty($name) && !empty($u['username'])) {
+                        $name = "@{$u['username']}";
                     }
                     if (!empty($name)) {
                         $fetchedName = $name;
@@ -1325,9 +1292,9 @@ class KaldisCommunicationController extends Controller
 
             $stmt = $pdo->prepare(
                 'INSERT INTO users (
-                    telegram_user_id, display_name, role, region, branch_name, department, can_forward, created_at, updated_at
+                    telegram_user_id, display_name, role, region, branch_name, department, created_at, updated_at
                 ) VALUES (
-                    :telegram_user_id, :display_name, :role, :region, :branch_name, :department, :can_forward, :created_at, :updated_at
+                    :telegram_user_id, :display_name, :role, :region, :branch_name, :department, :created_at, :updated_at
                 ) ON CONFLICT(telegram_user_id) DO UPDATE SET
                     display_name = excluded.display_name,
                     region = COALESCE(users.region, excluded.region),
@@ -1341,7 +1308,6 @@ class KaldisCommunicationController extends Controller
                 ':region' => $foundGroup,
                 ':branch_name' => null,
                 ':department' => $dept,
-                ':can_forward' => 0,
                 ':created_at' => $now,
                 ':updated_at' => $now,
             ]);
@@ -1364,7 +1330,7 @@ class KaldisCommunicationController extends Controller
     public function updateStatus(string $referenceNo, Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'status' => ['required', 'string', 'in:recorded,forwarded,responded'],
+            'status' => ['required', 'string', 'in:recorded,responded,resolved,closed'],
         ]);
 
         $pdo = $this->getPdo();
@@ -1618,11 +1584,6 @@ class KaldisCommunicationController extends Controller
             'auto_welcome' => ['required', 'boolean'],
             'welcome_message' => ['nullable', 'string', 'max:1000'],
         ]);
-
-        $config = $this->readConfig();
-        $config['anti_link_protection'] = $validated['anti_link_protection'];
-        $config['auto_welcome'] = $validated['auto_welcome'];
-        $config['welcome_message'] = $validated['welcome_message'] ?? 'Welcome {name} to {group}! Please follow group rules.';
 
         $config = $this->readConfig();
         $config['anti_link_protection'] = $validated['anti_link_protection'];

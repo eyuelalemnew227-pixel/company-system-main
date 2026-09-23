@@ -21,6 +21,7 @@ export default function BroadbandsCreate({ providers = [], branches = [], depart
     const { data, setData, post, processing, errors } = useForm({
         connection_name: '',
         account_number: '',
+        service_number: '',
         connection_type: 'WTTx (Fixed Wireless)',
         telecom_provider_id: '',
         package_type: '',
@@ -56,8 +57,8 @@ export default function BroadbandsCreate({ providers = [], branches = [], depart
             <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6 max-w-4xl mx-auto w-full">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Record Broadband / WTTx Connection</h1>
-                        <p className="text-sm text-muted-foreground">Add WTTx, Fiber, Leased line internet connections and equipment.</p>
+                        <h1 className="text-2xl font-bold tracking-tight">Record Broadband / WTTx / Data SIM Connection</h1>
+                        <p className="text-sm text-muted-foreground">Add WTTx, Data SIM, Fiber, Leased line internet connections and equipment.</p>
                     </div>
                     <Link href="/telecom/broadbands">
                         <Button variant="outline" size="sm" className="gap-1.5">
@@ -80,7 +81,7 @@ export default function BroadbandsCreate({ providers = [], branches = [], depart
                                         id="connection_name"
                                         value={data.connection_name}
                                         onChange={(e) => setData('connection_name', e.target.value)}
-                                        placeholder="e.g. Head Office WTTx, Bole Branch Fiber"
+                                        placeholder="e.g. Head Office WTTx, Bole Branch Fiber, Region 1 Data SIM"
                                         required
                                     />
                                     {errors.connection_name && <p className="text-xs text-rose-500 mt-1">{errors.connection_name}</p>}
@@ -97,31 +98,25 @@ export default function BroadbandsCreate({ providers = [], branches = [], depart
                                             <SelectValue placeholder="Select Connection Type" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="WTTx (Fixed Wireless)">WTTx (4G/5G Wireless)</SelectItem>
-                                            <SelectItem value="Fiber / FTTH">Fiber / FTTH</SelectItem>
-                                            <SelectItem value="Broadband ADSL">Broadband ADSL</SelectItem>
-                                            <SelectItem value="Leased Line">Leased Line</SelectItem>
-                                            <SelectItem value="Satellite">Satellite</SelectItem>
+                                            <SelectItem value="WTTx (Fixed Wireless)">WTTx (Fixed Wireless 4G/5G)</SelectItem>
+                                            <SelectItem value="Data Sim Card">Data SIM Card</SelectItem>
+                                            <SelectItem value="Fiber Broadband (FTTH/FTTB)">Fiber Broadband (FTTH/FTTB)</SelectItem>
+                                            <SelectItem value="ADSL / Copper Broadband">ADSL / Copper Broadband</SelectItem>
+                                            <SelectItem value="Dedicated Leased Line">Dedicated Leased Line</SelectItem>
+                                            <SelectItem value="VSAT Satellite">VSAT Satellite</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
 
-                                {/* Provider */}
+                                {/* Service Number */}
                                 <div>
-                                    <Label htmlFor="telecom_provider_id">Telecom Provider</Label>
-                                    <Select
-                                        value={data.telecom_provider_id}
-                                        onValueChange={(val) => setData('telecom_provider_id', val)}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select Provider" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {providers.map((p) => (
-                                                <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Label htmlFor="service_number">Service Number / SIM Phone Number</Label>
+                                    <Input
+                                        id="service_number"
+                                        value={data.service_number}
+                                        onChange={(e) => setData('service_number', e.target.value)}
+                                        placeholder="e.g. 0911XXXXXX or SIM Line No."
+                                    />
                                 </div>
 
                                 {/* Account / Service ID */}

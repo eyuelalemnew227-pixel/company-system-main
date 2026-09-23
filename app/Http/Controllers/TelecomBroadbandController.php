@@ -23,6 +23,7 @@ class TelecomBroadbandController extends Controller
             $query->where(function ($q) use ($search) {
                 $q->where('connection_name', 'like', "%{$search}%")
                     ->orWhere('account_number', 'like', "%{$search}%")
+                    ->orWhere('service_number', 'like', "%{$search}%")
                     ->orWhere('package_type', 'like', "%{$search}%")
                     ->orWhere('ip_address', 'like', "%{$search}%")
                     ->orWhere('installation_address', 'like', "%{$search}%")
@@ -72,17 +73,44 @@ class TelecomBroadbandController extends Controller
         ]);
     }
 
+    private function sanitizePayload(Request $request): array
+    {
+        $input = $request->all();
+        foreach (['telecom_provider_id', 'branch_id', 'department_id'] as $field) {
+            if (isset($input[$field]) && (string)$input[$field] === '') {
+                $input[$field] = null;
+            }
+        }
+        if (!isset($input['billing_type']) || trim((string)$input['billing_type']) === '') {
+            $input['billing_type'] = 'Postpaid';
+        }
+        if (!isset($input['status']) || trim((string)$input['status']) === '') {
+            $input['status'] = 'Active';
+        }
+        if (isset($input['monthly_cost'])) {
+            $input['monthly_cost'] = (float) $input['monthly_cost'];
+        } else {
+            $input['monthly_cost'] = 0.00;
+        }
+        if (isset($input['speed_mbps']) && !isset($input['bandwidth_speed'])) {
+            $input['bandwidth_speed'] = $input['speed_mbps'] ? "{$input['speed_mbps']} Mbps" : null;
+        }
+        return $input;
+    }
+
     public function store(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
+        $data = $this->sanitizePayload($request);
+        $validator = \Illuminate\Support\Facades\Validator::make($data, [
             'account_number' => ['nullable', 'string', 'max:100'],
+            'service_number' => ['nullable', 'string', 'max:100'],
             'connection_name' => ['required', 'string', 'max:255'],
             'connection_type' => ['required', 'string', 'max:100'],
             'telecom_provider_id' => ['nullable', 'exists:telecom_providers,id'],
             'package_type' => ['nullable', 'string', 'max:150'],
             'bandwidth_speed' => ['nullable', 'string', 'max:100'],
             'monthly_cost' => ['required', 'numeric', 'min:0'],
-            'billing_type' => ['required', 'string', 'max:50'],
+            'billing_type' => ['nullable', 'string', 'max:50'],
             'branch_id' => ['nullable', 'exists:branches,id'],
             'department_id' => ['nullable', 'exists:departments,id'],
             'installation_address' => ['nullable', 'string', 'max:255'],
@@ -94,10 +122,12 @@ class TelecomBroadbandController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
+        $validated = $validator->validate();
+
         TelecomBroadband::create($validated);
 
         return redirect()->route('telecom.broadbands.index')
-            ->with('success', 'Broadband / WTTx connection recorded successfully.');
+            ->with('success', 'Broadband / WTTx / Data Sim connection recorded successfully.');
     }
 
     public function edit(TelecomBroadband $broadband): Response
@@ -112,15 +142,17 @@ class TelecomBroadbandController extends Controller
 
     public function update(Request $request, TelecomBroadband $broadband): RedirectResponse
     {
-        $validated = $request->validate([
+        $data = $this->sanitizePayload($request);
+        $validator = \Illuminate\Support\Facades\Validator::make($data, [
             'account_number' => ['nullable', 'string', 'max:100'],
+            'service_number' => ['nullable', 'string', 'max:100'],
             'connection_name' => ['required', 'string', 'max:255'],
             'connection_type' => ['required', 'string', 'max:100'],
             'telecom_provider_id' => ['nullable', 'exists:telecom_providers,id'],
             'package_type' => ['nullable', 'string', 'max:150'],
             'bandwidth_speed' => ['nullable', 'string', 'max:100'],
             'monthly_cost' => ['required', 'numeric', 'min:0'],
-            'billing_type' => ['required', 'string', 'max:50'],
+            'billing_type' => ['nullable', 'string', 'max:50'],
             'branch_id' => ['nullable', 'exists:branches,id'],
             'department_id' => ['nullable', 'exists:departments,id'],
             'installation_address' => ['nullable', 'string', 'max:255'],
@@ -131,6 +163,8 @@ class TelecomBroadbandController extends Controller
             'status' => ['required', 'string', 'max:50'],
             'notes' => ['nullable', 'string'],
         ]);
+
+        $validated = $validator->validate();
 
         $broadband->update($validated);
 
@@ -164,7 +198,7 @@ class TelecomBroadbandController extends Controller
         $response = new StreamedResponse(function () use ($items) {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
-                'ID', 'Connection Name', 'Account / Circuit No', 'Connection Type', 'Provider',
+                'ID', 'Connection Name', 'Account / Circuit No', 'Service Number', 'Connection Type', 'Provider',
                 'Package Type', 'Bandwidth / Speed', 'Billing Type', 'Monthly Cost',
                 'Branch', 'Department', 'IP Address', 'Status', 'Start Date', 'Expiry Date', 'Equipment'
             ]);
@@ -174,6 +208,7 @@ class TelecomBroadbandController extends Controller
                     $item->id,
                     $item->connection_name,
                     $item->account_number ?? '',
+                    $item->service_number ?? '',
                     $item->connection_type,
                     $item->provider?->name ?? 'N/A',
                     $item->package_type ?? '',

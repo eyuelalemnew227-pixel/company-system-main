@@ -1,12 +1,12 @@
 {
-    "bot_token": "8989019561:AAHr6FYIYvXGv57bhu23ry_WkteMRAhFkeQ",
+    "bot_token": "8989019561:AAGZey9AIifl27hM2swv_FhpG31wh5ogPWQ",
     "region_groups": {
-        "Region 1": -1004315854895,
-        "Region 2": -1003782532757
+        "Region 1": -1003724420241,
+        "Region 2": 0
     },
     "groups": {
-        "Region 1": -1004315854895,
-        "Region 2": -1003782532757
+        "Region 1": -1003724420241,
+        "Region 2": 0
     },
     "operations_director_user_id": 0,
     "database": "kaldis.db",
@@ -17,62 +17,62 @@
         {
             "name": "Announcements",
             "department": "Operations",
-            "emoji": "\ud83d\udce2"
+            "emoji": "📢"
         },
         {
             "name": "Operations",
             "department": "Operations",
-            "emoji": "\u2699\ufe0f"
+            "emoji": "⚙️"
         },
         {
             "name": "HR",
             "department": "HR",
-            "emoji": "\ud83d\udcbc"
+            "emoji": "💼"
         },
         {
             "name": "Finance",
             "department": "Finance",
-            "emoji": "\ud83d\udcb0"
+            "emoji": "💰"
         },
         {
             "name": "Supply Chain",
             "department": "Supply Chain",
-            "emoji": "\ud83d\udce6"
+            "emoji": "📦"
         },
         {
             "name": "IT",
             "department": "IT",
-            "emoji": "\ud83d\udcbb"
+            "emoji": "💻"
         },
         {
             "name": "Maintenance",
             "department": "Maintenance",
-            "emoji": "\ud83d\udd27"
+            "emoji": "🔧"
         },
         {
             "name": "F&B",
             "department": "F&B",
-            "emoji": "\u2615"
+            "emoji": "☕"
         },
         {
             "name": "T&D",
             "department": "T&D",
-            "emoji": "\ud83c\udf93"
+            "emoji": "🎓"
         },
         {
             "name": "QA",
             "department": "QA",
-            "emoji": "\ud83d\udee1\ufe0f"
+            "emoji": "🛡️"
         },
         {
             "name": "BI",
             "department": "BI",
-            "emoji": "\ud83d\udcca"
+            "emoji": "📊"
         },
         {
             "name": "BIt",
             "department": "Bar Tender",
-            "emoji": "\ud83d\udce2"
+            "emoji": "📢"
         }
     ]
 }

@@ -14,6 +14,7 @@ type Option = { id: number; name: string };
 type Broadband = {
     id: number;
     account_number?: string | null;
+    service_number?: string | null;
     connection_name: string;
     connection_type: string;
     telecom_provider_id?: number | null;
@@ -43,6 +44,7 @@ export default function BroadbandsEdit({ broadband, providers = [], branches = [
     const { data, setData, put, processing, errors } = useForm({
         connection_name: broadband.connection_name ?? '',
         account_number: broadband.account_number ?? '',
+        service_number: broadband.service_number ?? '',
         connection_type: broadband.connection_type ?? 'WTTx (Fixed Wireless)',
         telecom_provider_id: broadband.telecom_provider_id ? String(broadband.telecom_provider_id) : '',
         package_type: broadband.package_type ?? '',
@@ -78,8 +80,8 @@ export default function BroadbandsEdit({ broadband, providers = [], branches = [
             <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6 max-w-4xl mx-auto w-full">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Edit Broadband / WTTx: {broadband.connection_name}</h1>
-                        <p className="text-sm text-muted-foreground">Update connection parameters, speed, IP address, and contract info.</p>
+                        <h1 className="text-2xl font-bold tracking-tight">Edit Broadband / WTTx / Data SIM: {broadband.connection_name}</h1>
+                        <p className="text-sm text-muted-foreground">Update connection parameters, service number, speed, IP address, and contract info.</p>
                     </div>
                     <Link href="/telecom/broadbands">
                         <Button variant="outline" size="sm" className="gap-1.5">
@@ -118,13 +120,25 @@ export default function BroadbandsEdit({ broadband, providers = [], branches = [
                                             <SelectValue placeholder="Select Connection Type" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="WTTx (Fixed Wireless)">WTTx (4G/5G Wireless)</SelectItem>
-                                            <SelectItem value="Fiber / FTTH">Fiber / FTTH</SelectItem>
-                                            <SelectItem value="Broadband ADSL">Broadband ADSL</SelectItem>
-                                            <SelectItem value="Leased Line">Leased Line</SelectItem>
-                                            <SelectItem value="Satellite">Satellite</SelectItem>
+                                            <SelectItem value="WTTx (Fixed Wireless)">WTTx (Fixed Wireless 4G/5G)</SelectItem>
+                                            <SelectItem value="Data Sim Card">Data SIM Card</SelectItem>
+                                            <SelectItem value="Fiber Broadband (FTTH/FTTB)">Fiber Broadband (FTTH/FTTB)</SelectItem>
+                                            <SelectItem value="ADSL / Copper Broadband">ADSL / Copper Broadband</SelectItem>
+                                            <SelectItem value="Dedicated Leased Line">Dedicated Leased Line</SelectItem>
+                                            <SelectItem value="VSAT Satellite">VSAT Satellite</SelectItem>
                                         </SelectContent>
                                     </Select>
+                                </div>
+
+                                {/* Service Number */}
+                                <div>
+                                    <Label htmlFor="service_number">Service Number / SIM Phone Number</Label>
+                                    <Input
+                                        id="service_number"
+                                        value={data.service_number}
+                                        onChange={(e) => setData('service_number', e.target.value)}
+                                        placeholder="e.g. 0911XXXXXX or SIM Line No."
+                                    />
                                 </div>
 
                                 {/* Provider */}
