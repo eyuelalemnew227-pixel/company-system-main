@@ -1,3 +1,4 @@
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import BroadbandModal, { BroadbandRecord } from '@/components/telecom/BroadbandModal';
 import { OptionItem } from '@/components/telecom/PhoneNumberModal';
 import TelecomHeaderNav from '@/components/telecom/TelecomHeaderNav';
@@ -394,32 +395,50 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
                 )}
             </div>
 
-            {/* Transfer Broadband / Voucher Dialog */}
+            {/* Enhanced Transfer Broadband / Voucher Dialog */}
             <Dialog open={!!transferringItem} onOpenChange={(val) => !val && setTransferringItem(null)}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-lg">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
+                        <DialogTitle className="flex items-center gap-2 text-purple-800 dark:text-purple-300">
                             <ArrowLeftRight className="h-5 w-5 text-purple-600" />
-                            Transfer Broadband / Voucher
+                            Transfer Broadband / Voucher Connection
                         </DialogTitle>
                         <DialogDescription>
-                            Transfer broadband connection <code className="font-bold text-purple-600">{transferringItem?.connection_name}</code> to a new branch or department.
+                            Reassign connection or voucher allocation to another branch or department.
                         </DialogDescription>
                     </DialogHeader>
+
+                    {transferringItem && (
+                        <div className="p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/50 rounded-lg space-y-1 text-xs">
+                            <div className="font-bold text-purple-900 dark:text-purple-300 flex items-center justify-between">
+                                <span>{transferringItem.connection_name}</span>
+                                {transferringItem.service_number && (
+                                    <span className="font-mono text-[11px] text-purple-600 dark:text-purple-400">Svc: {transferringItem.service_number}</span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground pt-1">
+                                <span>
+                                    Current: <strong className="text-foreground">{transferringItem.branch?.name ? `${transferringItem.branch.name} (Branch)` : transferringItem.department?.name ? `${transferringItem.department.name} (Department)` : 'Unassigned'}</strong>
+                                </span>
+                                <ArrowLeftRight className="h-3.5 w-3.5 text-purple-600 shrink-0" />
+                                <span className="font-semibold text-purple-700 dark:text-purple-300">New Target</span>
+                            </div>
+                        </div>
+                    )}
 
                     <form onSubmit={(e) => {
                         e.preventDefault();
                         if (!transferringItem) return;
                         transferForm.post(route('telecom.broadbands.transfer', transferringItem.id), {
                             onSuccess: () => {
-                                toast.success('Broadband connection transferred successfully!');
+                                toast.success('Broadband / Voucher transferred successfully!');
                                 setTransferringItem(null);
                                 transferForm.reset();
                             },
                             onError: () => toast.error('Failed to transfer broadband connection.'),
                         });
                     }} className="space-y-4 py-2">
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             <Label>Assignment Target Type</Label>
                             <Select
                                 value={transferForm.data.assigned_type}
@@ -429,56 +448,40 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
                                     <SelectValue placeholder="Select Target Type" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="Branch">Branch</SelectItem>
+                                    <SelectItem value="Branch">Branch / Office</SelectItem>
                                     <SelectItem value="Department">Department</SelectItem>
-                                    <SelectItem value="Unassigned">Unassigned</SelectItem>
+                                    <SelectItem value="Unassigned">Unassigned / Reserve</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
                         {transferForm.data.assigned_type === 'Branch' && (
-                            <div className="space-y-2">
-                                <Label>Target Branch</Label>
-                                <Select
+                            <div className="space-y-1.5">
+                                <Label>Search & Select Target Branch</Label>
+                                <SearchableSelect
+                                    options={branches.map((b) => ({ id: String(b.id), name: b.name }))}
                                     value={transferForm.data.branch_id}
                                     onValueChange={(val) => transferForm.setData('branch_id', val)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Branch" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {branches.map((b) => (
-                                            <SelectItem key={b.id} value={String(b.id)}>
-                                                {b.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    placeholder="Search target branch..."
+                                    searchPlaceholder="Type branch name..."
+                                />
                             </div>
                         )}
 
                         {transferForm.data.assigned_type === 'Department' && (
-                            <div className="space-y-2">
-                                <Label>Target Department</Label>
-                                <Select
+                            <div className="space-y-1.5">
+                                <Label>Search & Select Target Department</Label>
+                                <SearchableSelect
+                                    options={(departments || []).map((d) => ({ id: String(d.id), name: d.name }))}
                                     value={transferForm.data.department_id}
                                     onValueChange={(val) => transferForm.setData('department_id', val)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Department" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {(departments || []).map((d) => (
-                                            <SelectItem key={d.id} value={String(d.id)}>
-                                                {d.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    placeholder="Search target department..."
+                                    searchPlaceholder="Type department name..."
+                                />
                             </div>
                         )}
 
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             <Label>Reason for Transfer (Optional)</Label>
                             <Input
                                 value={transferForm.data.transfer_reason}
@@ -491,7 +494,7 @@ export default function BroadbandsIndex({ broadbands, providers = [], branches =
                             <Button type="button" variant="outline" onClick={() => setTransferringItem(null)}>
                                 Cancel
                             </Button>
-                            <Button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white" disabled={transferForm.processing}>
+                            <Button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white font-semibold" disabled={transferForm.processing}>
                                 Confirm Transfer
                             </Button>
                         </DialogFooter>

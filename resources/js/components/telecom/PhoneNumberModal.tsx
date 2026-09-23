@@ -194,21 +194,21 @@ export default function PhoneNumberModal({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="max-w-4xl max-h-[90vh] overflow-y-auto"
+                className="max-w-6xl max-h-[92vh] overflow-y-auto p-6"
                 onPointerDownOutside={(e) => e.preventDefault()}
                 onInteractOutside={(e) => e.preventDefault()}
                 onEscapeKeyDown={(e) => e.preventDefault()}
             >
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-lg font-bold">
-                        <Phone className="h-5 w-5 text-blue-600" />
-                        {isEdit ? 'Edit Phone Line' : 'Add New Phone Line / SIM'}
+                    <DialogTitle className="flex items-center gap-2 text-xl font-bold text-blue-700 dark:text-blue-400">
+                        <Phone className="h-6 w-6 text-blue-600" />
+                        {isEdit ? 'Edit Phone Line Details' : 'Add New Phone Line / SIM Card'}
                     </DialogTitle>
                 </DialogHeader>
-                <hr />
+                <hr className="my-1" />
 
-                <form onSubmit={handleSubmit} className="space-y-4 py-2">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form onSubmit={handleSubmit} className="space-y-6 py-2">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                         <div>
                             <Label htmlFor="phone_number">Phone Number <span className="text-destructive">*</span></Label>
                             <Input
@@ -240,6 +240,21 @@ export default function PhoneNumberModal({
                         </div>
 
                         <div>
+                            <Label htmlFor="service_type">Service Type <span className="text-destructive">*</span></Label>
+                            <select
+                                id="service_type"
+                                value={data.service_type}
+                                onChange={(e) => setData('service_type', e.target.value)}
+                                className="mt-1 w-full rounded-md border border-input bg-white p-2 text-sm dark:bg-slate-950"
+                            >
+                                <option value="Mobile">Mobile SIM</option>
+                                <option value="Fixed Line">Fixed Landline</option>
+                                <option value="CDMA">CDMA</option>
+                                <option value="Toll Free">Toll Free</option>
+                            </select>
+                        </div>
+
+                        <div>
                             <Label htmlFor="account_number">Account / Contract No.</Label>
                             <Input
                                 id="account_number"
@@ -259,21 +274,6 @@ export default function PhoneNumberModal({
                                 onChange={(e) => setData('sim_card_number', e.target.value)}
                                 className="mt-1"
                             />
-                        </div>
-
-                        <div>
-                            <Label htmlFor="service_type">Service Type <span className="text-destructive">*</span></Label>
-                            <select
-                                id="service_type"
-                                value={data.service_type}
-                                onChange={(e) => setData('service_type', e.target.value)}
-                                className="mt-1 w-full rounded-md border border-input bg-white p-2 text-sm dark:bg-slate-950"
-                            >
-                                <option value="Mobile">Mobile SIM</option>
-                                <option value="Fixed Line">Fixed Landline</option>
-                                <option value="CDMA">CDMA</option>
-                                <option value="Toll Free">Toll Free</option>
-                            </select>
                         </div>
 
                         <div>

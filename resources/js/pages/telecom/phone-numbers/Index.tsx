@@ -1,3 +1,4 @@
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import PhoneNumberModal, { EmployeeItem, OptionItem, PhoneNumberRecord } from '@/components/telecom/PhoneNumberModal';
 import TelecomHeaderNav from '@/components/telecom/TelecomHeaderNav';
 import TablePagination from '@/components/table-pagination';
@@ -420,18 +421,36 @@ export default function PhoneNumbersIndex({
                 )}
             </div>
 
-            {/* Transfer SIM Card Dialog */}
+            {/* Enhanced Transfer SIM Card / Line Dialog */}
             <Dialog open={!!transferringItem} onOpenChange={(val) => !val && setTransferringItem(null)}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-lg">
                     <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
+                        <DialogTitle className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
                             <ArrowLeftRight className="h-5 w-5 text-amber-600" />
-                            Transfer SIM Card / Line
+                            Transfer SIM Card / Phone Line
                         </DialogTitle>
                         <DialogDescription>
-                            Transfer line <code className="font-bold text-amber-600">{transferringItem?.phone_number}</code> to a new employee, branch, or department.
+                            Reassign line or SIM card to a new employee, branch, or department.
                         </DialogDescription>
                     </DialogHeader>
+
+                    {transferringItem && (
+                        <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-lg space-y-1 text-xs">
+                            <div className="font-bold text-amber-900 dark:text-amber-300 flex items-center justify-between">
+                                <span className="font-mono text-sm">{transferringItem.phone_number}</span>
+                                {transferringItem.account_number && (
+                                    <span className="font-mono text-[11px] text-amber-700 dark:text-amber-400">Acc: {transferringItem.account_number}</span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2 text-muted-foreground pt-1">
+                                <span>
+                                    Current: <strong className="text-foreground">{transferringItem.employee ? `${transferringItem.employee.first_name} ${transferringItem.employee.last_name} (Employee)` : transferringItem.branch?.name ? `${transferringItem.branch.name} (Branch)` : transferringItem.department?.name ? `${transferringItem.department.name} (Department)` : 'Unassigned'}</strong>
+                                </span>
+                                <ArrowLeftRight className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                                <span className="font-semibold text-amber-700 dark:text-amber-300">New Target</span>
+                            </div>
+                        </div>
+                    )}
 
                     <form onSubmit={(e) => {
                         e.preventDefault();
@@ -445,7 +464,7 @@ export default function PhoneNumbersIndex({
                             onError: () => toast.error('Failed to transfer line.'),
                         });
                     }} className="space-y-4 py-2">
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             <Label>Assignment Category</Label>
                             <Select
                                 value={transferForm.data.assigned_type}
@@ -455,78 +474,57 @@ export default function PhoneNumbersIndex({
                                     <SelectValue placeholder="Select Category" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="Employee">Employee</SelectItem>
-                                    <SelectItem value="Branch">Branch</SelectItem>
+                                    <SelectItem value="Employee">Specific Employee</SelectItem>
+                                    <SelectItem value="Branch">Branch / Office</SelectItem>
                                     <SelectItem value="Department">Department</SelectItem>
-                                    <SelectItem value="Unassigned">Unassigned</SelectItem>
+                                    <SelectItem value="Unassigned">Unassigned / Reserve</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
                         {transferForm.data.assigned_type === 'Employee' && (
-                            <div className="space-y-2">
-                                <Label>Target Employee</Label>
-                                <Select
+                            <div className="space-y-1.5">
+                                <Label>Search & Select Target Employee</Label>
+                                <SearchableSelect
+                                    options={(employees || []).map((emp) => ({
+                                        id: String(emp.id),
+                                        name: `${emp.first_name} ${emp.last_name} ${emp.employee_code ? `(${emp.employee_code})` : ''}`,
+                                    }))}
                                     value={transferForm.data.employee_id}
                                     onValueChange={(val) => transferForm.setData('employee_id', val)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Employee" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {(employees || []).map((emp) => (
-                                            <SelectItem key={emp.id} value={String(emp.id)}>
-                                                {emp.first_name} {emp.last_name} ({emp.employee_code})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    placeholder="Search target employee..."
+                                    searchPlaceholder="Type employee name or code..."
+                                />
                             </div>
                         )}
 
                         {transferForm.data.assigned_type === 'Branch' && (
-                            <div className="space-y-2">
-                                <Label>Target Branch</Label>
-                                <Select
+                            <div className="space-y-1.5">
+                                <Label>Search & Select Target Branch</Label>
+                                <SearchableSelect
+                                    options={branches.map((b) => ({ id: String(b.id), name: b.name }))}
                                     value={transferForm.data.branch_id}
                                     onValueChange={(val) => transferForm.setData('branch_id', val)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Branch" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {branches.map((b) => (
-                                            <SelectItem key={b.id} value={String(b.id)}>
-                                                {b.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    placeholder="Search target branch..."
+                                    searchPlaceholder="Type branch name..."
+                                />
                             </div>
                         )}
 
                         {transferForm.data.assigned_type === 'Department' && (
-                            <div className="space-y-2">
-                                <Label>Target Department</Label>
-                                <Select
+                            <div className="space-y-1.5">
+                                <Label>Search & Select Target Department</Label>
+                                <SearchableSelect
+                                    options={departments.map((d) => ({ id: String(d.id), name: d.name }))}
                                     value={transferForm.data.department_id}
                                     onValueChange={(val) => transferForm.setData('department_id', val)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select Department" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {departments.map((d) => (
-                                            <SelectItem key={d.id} value={String(d.id)}>
-                                                {d.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    placeholder="Search target department..."
+                                    searchPlaceholder="Type department name..."
+                                />
                             </div>
                         )}
 
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                             <Label>Reason for Transfer (Optional)</Label>
                             <Input
                                 value={transferForm.data.transfer_reason}
@@ -539,7 +537,7 @@ export default function PhoneNumbersIndex({
                             <Button type="button" variant="outline" onClick={() => setTransferringItem(null)}>
                                 Cancel
                             </Button>
-                            <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white" disabled={transferForm.processing}>
+                            <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold" disabled={transferForm.processing}>
                                 Confirm Transfer
                             </Button>
                         </DialogFooter>

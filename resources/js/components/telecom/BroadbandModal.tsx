@@ -184,21 +184,21 @@ export default function BroadbandModal({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="max-w-4xl max-h-[90vh] overflow-y-auto"
+                className="max-w-6xl max-h-[92vh] overflow-y-auto p-6"
                 onPointerDownOutside={(e) => e.preventDefault()}
                 onInteractOutside={(e) => e.preventDefault()}
                 onEscapeKeyDown={(e) => e.preventDefault()}
             >
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-lg font-bold text-purple-700 dark:text-purple-400">
-                        <Wifi className="h-5 w-5 text-purple-600" />
-                        {isEdit ? 'Edit Broadband / Data Connection' : 'Quick Add Broadband / WTTx / Data SIM Connection'}
+                    <DialogTitle className="flex items-center gap-2 text-xl font-bold text-purple-700 dark:text-purple-400">
+                        <Wifi className="h-6 w-6 text-purple-600" />
+                        {isEdit ? 'Edit Broadband / Data Connection' : 'Add Broadband / WTTx / Data SIM Connection'}
                     </DialogTitle>
                 </DialogHeader>
-                <hr />
+                <hr className="my-1" />
 
-                <form onSubmit={handleSubmit} className="space-y-4 py-2">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <form onSubmit={handleSubmit} className="space-y-6 py-2">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                         <div>
                             <Label htmlFor="connection_name">Connection Name / Identifier <span className="text-destructive">*</span></Label>
                             <Input
