@@ -77,7 +77,7 @@ class FormController extends Controller
     public function create()
     {
         $inputTypes = FormInputType::where('is_active', true)->get();
-        $branches = \App\Models\Branch::select('id', 'name')->get();
+        $branches = \App\Models\Branch::where('is_sales_generating', 1)->select('id', 'name', 'is_sales_generating')->get();
         $departments = \App\Models\Department::select('id', 'name')->get();
 
         return Inertia::render('Forms/Create', [
@@ -198,7 +198,7 @@ class FormController extends Controller
         ])->first();
 
         $inputTypes = FormInputType::where('is_active', true)->get();
-        $branches = \App\Models\Branch::select('id', 'name')->get();
+        $branches = \App\Models\Branch::where('is_sales_generating', 1)->select('id', 'name', 'is_sales_generating')->get();
         $departments = \App\Models\Department::select('id', 'name')->get();
 
         return Inertia::render('Forms/Edit', [

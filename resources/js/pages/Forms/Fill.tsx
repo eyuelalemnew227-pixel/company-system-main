@@ -383,6 +383,12 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
             localFilteredEmployees = localFilteredEmployees.filter(e => String(e.department_id) === String(localDept));
         }
 
+        const filteredBranches = (branches || []).filter(b => {
+            const isSalesGen = b.is_sales_generating === undefined || b.is_sales_generating === null || Boolean(b.is_sales_generating);
+            const isCurrentlySelected = answer !== '' && answer !== null && answer !== undefined && String(b.id) === String(answer);
+            return isSalesGen || isCurrentlySelected;
+        });
+
         switch (typeId) {
             case 'title':
                 return null;
@@ -435,7 +441,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
             case 'branch_lookup':
                 return (
                     <SearchableSelect
-                        options={branches || []}
+                        options={filteredBranches}
                         value={answer}
                         onValueChange={(val) => handleAnswerChange(question.id, val)}
                         placeholder="Search branches..."

@@ -298,7 +298,7 @@ class FormSubmissionAdminController extends Controller
             }
         }
 
-        $branches = \App\Models\Branch::select('id', 'name')->get();
+        $branches = \App\Models\Branch::select('id', 'name', 'is_sales_generating')->get();
         $departments = \App\Models\Department::select('id', 'name')->get();
         $employees = \App\Models\Employee::get()->map(function ($e) {
             return [

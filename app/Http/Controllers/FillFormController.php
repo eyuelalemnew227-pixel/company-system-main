@@ -40,7 +40,7 @@ class FillFormController extends Controller
 
         $version->load(['sections.questions.inputType', 'sections.questions.choices']);
 
-        $branches = \App\Models\Branch::select('id', 'name')->get();
+        $branches = \App\Models\Branch::where('is_sales_generating', 1)->select('id', 'name', 'is_sales_generating')->get();
         $departments = \App\Models\Department::select('id', 'name')->get();
         $employees = \App\Models\Employee::where('status', 'active')->get()->map(function ($e) {
             return [
