@@ -114,16 +114,30 @@ export default function PhoneNumberModal({
         }
     }, [initialData, open]);
 
-    const calculateExpiryDate = (startDateStr: string, months: number) => {
+    // Automatically set package_expiry_date whenever package_start_date or durationMonths changes
+    useEffect(() => {
+        if (data.package_start_date) {
+            const calculatedExpiry = calculateExpiryDate(data.package_start_date, durationMonths || 1);
+            if (calculatedExpiry && calculatedExpiry !== data.package_expiry_date) {
+                setData((prev) => ({
+                    ...prev,
+                    package_expiry_date: calculatedExpiry,
+                    renewal_date: calculatedExpiry,
+                }));
+            }
+        }
+    }, [data.package_start_date, durationMonths]);
+
+    const calculateExpiryDate = (startDateStr: string, months: number = 1) => {
         if (!startDateStr) return '';
         const d = new Date(startDateStr);
         if (isNaN(d.getTime())) return '';
-        d.setMonth(d.getMonth() + months);
+        d.setMonth(d.getMonth() + (months || 1));
         return d.toISOString().split('T')[0];
     };
 
     const handleStartDateChange = (startDateStr: string) => {
-        const calculatedExpiry = calculateExpiryDate(startDateStr, durationMonths);
+        const calculatedExpiry = calculateExpiryDate(startDateStr, durationMonths || 1);
         setData((prev) => ({
             ...prev,
             package_start_date: startDateStr,
@@ -180,7 +194,7 @@ export default function PhoneNumberModal({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="max-w-2xl max-h-[90vh] overflow-y-auto"
+                className="max-w-4xl max-h-[90vh] overflow-y-auto"
                 onPointerDownOutside={(e) => e.preventDefault()}
                 onInteractOutside={(e) => e.preventDefault()}
                 onEscapeKeyDown={(e) => e.preventDefault()}
