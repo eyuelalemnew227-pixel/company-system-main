@@ -174,6 +174,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('forms', FormController::class)->except(['destroy']);
         Route::get('/forms/{form}/versions', [FormController::class, 'versions'])->name('forms.versions');
         Route::get('/forms/{form}/permissions', [\App\Http\Controllers\FormPermissionController::class, 'index'])->name('forms.permissions');
+        Route::post('/forms/{form}/permissions', [\App\Http\Controllers\FormPermissionController::class, 'update'])->name('forms.permissions.update');
     });
 
     // KPI Library Management
