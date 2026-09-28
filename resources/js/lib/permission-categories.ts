@@ -24,6 +24,7 @@ export function getPermissionCategory(permission: string): string {
     if (containsAny(['pre-order', 'pre-orders', 'walkin', 'collection days', 'order types', 'order', 'orders', 'broadcast'])) return 'Pre-Orders & Sales';
     if (containsAny(['telecom', 'sms'])) return 'Telecom & SMS';
     if (containsAny(['telegram'])) return 'Telegram Integration';
+    if (containsAny(['form', 'forms', 'kpi', 'kpis', 'submission', 'submissions'])) return 'Form Builder';
 
     return 'System & General';
 }

@@ -4,6 +4,7 @@ import { Head, Link } from '@inertiajs/react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ClipboardCheck, FileText, FileCheck } from 'lucide-react';
+import { usePermission } from '@/hooks/user-permissions';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Form Builder', href: '/available-forms' },
@@ -11,6 +12,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function Available({ forms }: { forms: any[] }) {
+    const { can } = usePermission();
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Fill Forms" />
@@ -20,11 +23,13 @@ export default function Available({ forms }: { forms: any[] }) {
                         <h2 className="text-2xl font-bold tracking-tight text-amber-950">Available Forms</h2>
                         <p className="text-muted-foreground">Select a form or checklist to fill out.</p>
                     </div>
-                    <Button asChild variant="outline" className="border-amber-300 text-amber-900 hover:bg-amber-50 shadow-sm">
-                        <Link href="/my-submissions">
-                            <FileCheck className="w-4 h-4 mr-2 text-amber-700" /> My Submissions
-                        </Link>
-                    </Button>
+                    {can('view my form submissions') && (
+                        <Button asChild variant="outline" className="border-amber-300 text-amber-900 hover:bg-amber-50 shadow-sm">
+                            <Link href="/my-submissions">
+                                <FileCheck className="w-4 h-4 mr-2 text-amber-700" /> My Submissions
+                            </Link>
+                        </Button>
+                    )}
                 </div>
 
                 {forms.length === 0 ? (

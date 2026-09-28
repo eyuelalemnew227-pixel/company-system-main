@@ -162,14 +162,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('inventory-periods', \App\Http\Controllers\InventoryPeriodController::class)->except(['show']);
     });
 
-    // Forms Builder - Fill Forms & Submissions
+    // Forms Builder - Fill Forms
     Route::middleware('auth')->group(function () {
         Route::get('available-forms', [FormController::class, 'available'])->name('forms.available');
         Route::get('fill-forms/{form}', [\App\Http\Controllers\FillFormController::class, 'show'])->name('forms.fill');
         Route::post('fill-forms/{form}', [\App\Http\Controllers\FillFormController::class, 'store'])->name('forms.fill.store');
+        Route::get('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'show'])->name('forms.submissions.show');
+    });
+
+    // Forms Builder - My Submissions (Dedicated permission: view my form submissions)
+    Route::middleware(['auth', 'permission:view my form submissions'])->group(function () {
         Route::get('my-submissions', [\App\Http\Controllers\FormSubmissionAdminController::class, 'my_submissions'])->name('forms.submissions.my');
         Route::get('my-submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'show'])->name('forms.submissions.my_show');
-        Route::get('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'show'])->name('forms.submissions.show');
     });
 
     // Forms Builder - Management (Controller-level ACL handled)
