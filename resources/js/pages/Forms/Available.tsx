@@ -2,11 +2,12 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link } from '@inertiajs/react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { ClipboardCheck, FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ClipboardCheck, FileText, FileCheck } from 'lucide-react';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Form Builder', href: '/forms' },
-    { title: 'Fill Forms', href: '/forms/available' },
+    { title: 'Form Builder', href: '/available-forms' },
+    { title: 'Fill Forms', href: '/available-forms' },
 ];
 
 export default function Available({ forms }: { forms: any[] }) {
@@ -14,9 +15,16 @@ export default function Available({ forms }: { forms: any[] }) {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Fill Forms" />
             <div className="max-w-7xl mx-auto space-y-6 pb-12">
-                <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Available Forms</h2>
-                    <p className="text-muted-foreground">Select a form or checklist to fill out.</p>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h2 className="text-2xl font-bold tracking-tight text-amber-950">Available Forms</h2>
+                        <p className="text-muted-foreground">Select a form or checklist to fill out.</p>
+                    </div>
+                    <Button asChild variant="outline" className="border-amber-300 text-amber-900 hover:bg-amber-50 shadow-sm">
+                        <Link href="/my-submissions">
+                            <FileCheck className="w-4 h-4 mr-2 text-amber-700" /> My Submissions
+                        </Link>
+                    </Button>
                 </div>
 
                 {forms.length === 0 ? (

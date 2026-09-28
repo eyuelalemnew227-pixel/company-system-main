@@ -207,6 +207,92 @@ class FormSubmissionAdminController extends Controller
     }
 
     /**
+     * List only the authenticated user's own submissions.
+     */
+    public function my_submissions()
+    {
+        $user = auth()->user();
+
+        $submissions = FormSubmission::where('user_id', $user->id)
+            ->with([
+                'formVersion.form',
+                'answers.question.inputType',
+            ])
+            ->orderByDesc('id')
+            ->get();
+
+        $fullEmployeesCollection = \App\Models\Employee::get();
+        $submissions->each(function ($sub) use ($fullEmployeesCollection) {
+            $this->_calculateEmployeeScores($sub, $fullEmployeesCollection);
+        });
+
+        $branches = \App\Models\Branch::pluck('name', 'id')->toArray();
+        $departments = \App\Models\Department::pluck('name', 'id')->toArray();
+        $employees = \App\Models\Employee::get()->mapWithKeys(function ($e) {
+            $name = trim($e->first_name . ' ' . $e->last_name) ?: $e->employee_code;
+            return [$e->id => $name];
+        })->toArray();
+
+        // Load fiscal periods and resolve each submission
+        $fiscalYears = \App\Models\FiscalYear::orderBy('gregorian_start_date')->get(['id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+        $fiscalMonths = \App\Models\FiscalMonth::orderBy('gregorian_start_date')->get(['id', 'fiscal_year_id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+
+        $submissions->each(function ($sub) use ($fiscalYears, $fiscalMonths) {
+            $submittedAt = \Carbon\Carbon::parse($sub->created_at);
+
+            $matchedYear = $fiscalYears->first(
+                fn($fy) =>
+                $submittedAt->between(
+                    \Carbon\Carbon::parse($fy->gregorian_start_date),
+                    \Carbon\Carbon::parse($fy->gregorian_end_date)
+                )
+            );
+            $sub->fiscal_year_id = $matchedYear?->id;
+            $sub->fiscal_year_name = $matchedYear?->name;
+
+            $matchedMonth = $fiscalMonths->first(
+                fn($fm) =>
+                $submittedAt->between(
+                    \Carbon\Carbon::parse($fm->gregorian_start_date),
+                    \Carbon\Carbon::parse($fm->gregorian_end_date)
+                )
+            );
+            $sub->fiscal_month_id = $matchedMonth?->id;
+            $sub->fiscal_month_name = $matchedMonth?->name;
+        });
+
+        $today = \Carbon\Carbon::today();
+        $currentFiscalYear = $fiscalYears->first(fn($fy) => $today->between(
+            \Carbon\Carbon::parse($fy->gregorian_start_date),
+            \Carbon\Carbon::parse($fy->gregorian_end_date)
+        ));
+        $currentFiscalMonth = $fiscalMonths->first(fn($fm) => $today->between(
+            \Carbon\Carbon::parse($fm->gregorian_start_date),
+            \Carbon\Carbon::parse($fm->gregorian_end_date)
+        ));
+
+        // Get unique forms from user's submissions
+        $forms = $submissions->map(function ($s) {
+            return $s->formVersion?->form ? [
+                'id' => $s->formVersion->form->id,
+                'title' => $s->formVersion->form->title,
+            ] : null;
+        })->filter()->unique('id')->values();
+
+        return Inertia::render('Forms/Submissions/MySubmissions', [
+            'submissions' => $submissions,
+            'forms' => $forms,
+            'branches' => $branches,
+            'departments' => $departments,
+            'employees' => $employees,
+            'fiscalYears' => $fiscalYears->map(fn($fy) => ['id' => $fy->id, 'name' => $fy->name])->values(),
+            'fiscalMonths' => $fiscalMonths->map(fn($fm) => ['id' => $fm->id, 'fiscal_year_id' => $fm->fiscal_year_id, 'name' => $fm->name])->values(),
+            'currentFiscalYearId' => $currentFiscalYear?->id,
+            'currentFiscalMonthId' => $currentFiscalMonth?->id,
+        ]);
+    }
+
+    /**
      * Show a detailed view of a singular submission's answers.
      */
     public function show(string $submissionId)
@@ -221,11 +307,15 @@ class FormSubmissionAdminController extends Controller
         ])->findOrFail($submissionId);
 
         $user = auth()->user();
-        if ($submission->formVersion->form->created_by !== $user->id) {
-            if (!$submission->formVersion->form->user_permissions()->where('user_id', $user->id)->where('can_view_submissions', true)->exists()) {
-                abort(403, 'You must be granted explicit form-level access to view submissions for this form.');
-            }
+        $isSubmitter = ((int) $submission->user_id === (int) $user->id);
+        $isCreator = ((int) ($submission->formVersion->form->created_by ?? 0) === (int) $user->id);
+        $hasViewPermission = $submission->formVersion->form->user_permissions()->where('user_id', $user->id)->where('can_view_submissions', true)->exists();
+
+        if (!$isSubmitter && !$isCreator && !$hasViewPermission) {
+            abort(403, 'You must be granted explicit form-level access to view submissions for this form.');
         }
+
+        $canApproveReject = $isCreator || $submission->formVersion->form->user_permissions()->where('user_id', $user->id)->where('can_edit_submissions', true)->exists();
 
         $branches = \App\Models\Branch::select('id', 'name')->get();
         $departments = \App\Models\Department::select('id', 'name')->get();
@@ -239,12 +329,16 @@ class FormSubmissionAdminController extends Controller
         $fullEmployeesCollection = \App\Models\Employee::get();
         $this->_calculateEmployeeScores($submission, $fullEmployeesCollection);
 
+        $from = request()->query('from', ($isSubmitter && !$canApproveReject) ? 'my-submissions' : null);
+
         return Inertia::render('Forms/Submissions/Show', [
             'form' => $submission->formVersion->form, // Keep old prop structure to limit UI rewrites
             'submission' => $submission,
             'branches' => $branches,
             'departments' => $departments,
             'employees' => $employees,
+            'canApproveReject' => $canApproveReject,
+            'from' => $from,
         ]);
     }
     public function edit(string $submissionId)

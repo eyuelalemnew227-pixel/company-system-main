@@ -1,6 +1,6 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm, Link } from '@inertiajs/react';
+import { Head, useForm, Link, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import SignatureCanvas from 'react-signature-canvas';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MultiSelect } from '@/components/ui/multi-select';
-import { Star, MapPin, ChevronRight, RotateCcw, FileSignature } from 'lucide-react';
+import { Star, MapPin, ChevronRight, RotateCcw, FileSignature, CheckCircle2, History } from 'lucide-react';
 import React, { useMemo, useEffect, useState, useRef } from 'react';
 const GeoLocationPicker = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
     const [loading, setLoading] = React.useState(false);
@@ -226,21 +226,102 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         });
         return map;
     }, [formVersion]);
-    // Automatically map defaults
-    const initialAnswers = { ...parsedAnswers };
-    if (formVersion?.sections) {
-        formVersion.sections.forEach((s: any) => {
-            s.questions?.forEach((q: any) => {
-                if (q.default_value && (initialAnswers[q.id] === undefined || initialAnswers[q.id] === null || initialAnswers[q.id] === '')) {
-                    initialAnswers[q.id] = String(q.default_value);
-                }
+    const pageProps = usePage()?.props as any;
+    const userId = pageProps?.auth?.user?.id || 'guest';
+    const draftKey = !submission ? `form_draft_u${userId}_f${form.id}_v${formVersion?.id || 'default'}` : null;
+    const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
+
+    const getPureDefaults = React.useCallback(() => {
+        const defaults: Record<number, any> = { ...parsedAnswers };
+        if (formVersion?.sections) {
+            formVersion.sections.forEach((s: any) => {
+                s.questions?.forEach((q: any) => {
+                    if (q.default_value && (defaults[q.id] === undefined || defaults[q.id] === null || defaults[q.id] === '')) {
+                        defaults[q.id] = String(q.default_value);
+                    }
+                });
             });
-        });
-    }
+        }
+        return defaults;
+    }, [formVersion, parsedAnswers]);
+
+    const initialAnswers = React.useMemo(() => {
+        const defaults = getPureDefaults();
+        if (draftKey && typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem(draftKey);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && typeof parsed === 'object') {
+                        const hasValues = Object.values(parsed).some(v => v !== undefined && v !== null && v !== '');
+                        if (hasValues) {
+                            return { ...defaults, ...parsed };
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to parse cached form draft:', e);
+            }
+        }
+        return defaults;
+    }, [draftKey, getPureDefaults]);
+
+    useEffect(() => {
+        if (draftKey && typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem(draftKey);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    const hasValues = parsed && typeof parsed === 'object' && Object.values(parsed).some(v => v !== undefined && v !== null && v !== '');
+                    if (hasValues) {
+                        setHasRestoredDraft(true);
+                    }
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+    }, [draftKey]);
 
     const { data, setData, post, put, processing, errors, transform } = useForm({
         answers: initialAnswers as Record<number, any>
     });
+
+    // Auto-save draft to localStorage whenever answers change
+    useEffect(() => {
+        if (!draftKey || typeof window === 'undefined') return;
+
+        try {
+            const serializable: Record<number, any> = {};
+            let hasAnyAnswer = false;
+
+            for (const [qId, val] of Object.entries(data.answers)) {
+                if (val instanceof File) continue;
+                if (val !== undefined && val !== null && val !== '') {
+                    hasAnyAnswer = true;
+                }
+                serializable[Number(qId)] = val;
+            }
+
+            if (hasAnyAnswer) {
+                localStorage.setItem(draftKey, JSON.stringify(serializable));
+            }
+        } catch (e) {
+            console.error('Failed to auto-save form draft in localStorage:', e);
+        }
+    }, [data.answers, draftKey]);
+
+    const clearDraftAndReset = () => {
+        if (draftKey && typeof window !== 'undefined') {
+            try {
+                localStorage.removeItem(draftKey);
+            } catch (e) {
+                // ignore
+            }
+        }
+        setData('answers', getPureDefaults());
+        setHasRestoredDraft(false);
+    };
 
     const handleAnswerChange = (questionId: number, value: any) => {
         setData(current => ({
@@ -337,7 +418,17 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         if (submission) {
             put(`/submissions/${submission.id}`);
         } else {
-            post(`/fill-forms/${form.id}`);
+            post(`/fill-forms/${form.id}`, {
+                onSuccess: () => {
+                    if (draftKey && typeof window !== 'undefined') {
+                        try {
+                            localStorage.removeItem(draftKey);
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+                }
+            });
         }
     };
 
@@ -896,6 +987,29 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     {form.description && <p className="text-lg text-gray-600 mt-3 font-medium">{form.description}</p>}
                 </div>
 
+                {hasRestoredDraft && (
+                    <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+                        <div className="flex items-center space-x-3">
+                            <div className="p-2 rounded-lg bg-amber-100 text-amber-800 shrink-0">
+                                <History className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-amber-950">Draft Restored</p>
+                                <p className="text-xs text-amber-800/80">We recovered your previously entered responses so you didn't lose your work.</p>
+                            </div>
+                        </div>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={clearDraftAndReset}
+                            className="text-xs text-amber-900 border-amber-300 hover:bg-amber-100 hover:text-amber-950 shrink-0 self-end sm:self-auto"
+                        >
+                            <RotateCcw className="w-3.5 h-3.5 mr-1" /> Reset & Start Fresh
+                        </Button>
+                    </div>
+                )}
+
                 <form onSubmit={submit} className="space-y-10">
                     {!formVersion.sections || formVersion.sections.length === 0 ? (
                         <div className="p-12 text-center bg-gray-50 border rounded-xl">
@@ -969,13 +1083,23 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                         </div>
                     )}
 
-                    <div className="flex justify-end pt-6 border-t space-x-4">
-                        <Button type="button" variant="outline" size="lg" asChild className="px-8 text-base shadow-sm">
-                            <Link href="/available-forms">Cancel</Link>
-                        </Button>
-                        <Button type="submit" size="lg" disabled={processing} className="px-10 text-base font-bold shadow-md bg-amber-700 hover:bg-amber-800 text-white transition-all transform hover:scale-105 active:scale-95">
-                            {processing ? 'Submitting Responses...' : 'Submit Form'}
-                        </Button>
+                    <div className="flex flex-col sm:flex-row items-center justify-between pt-6 border-t gap-4">
+                        <div className="text-xs text-muted-foreground flex items-center gap-1.5 order-2 sm:order-1">
+                            {!submission && (
+                                <>
+                                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>Responses automatically cached on this device</span>
+                                </>
+                            )}
+                        </div>
+                        <div className="flex items-center space-x-4 order-1 sm:order-2 w-full sm:w-auto justify-end">
+                            <Button type="button" variant="outline" size="lg" asChild className="px-8 text-base shadow-sm">
+                                <Link href="/available-forms">Cancel</Link>
+                            </Button>
+                            <Button type="submit" size="lg" disabled={processing} className="px-10 text-base font-bold shadow-md bg-amber-700 hover:bg-amber-800 text-white transition-all transform hover:scale-105 active:scale-95">
+                                {processing ? 'Submitting Responses...' : 'Submit Form'}
+                            </Button>
+                        </div>
                     </div>
                 </form>
             </div>

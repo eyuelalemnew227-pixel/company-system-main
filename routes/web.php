@@ -162,11 +162,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::resource('inventory-periods', \App\Http\Controllers\InventoryPeriodController::class)->except(['show']);
     });
 
-    // Forms Builder - Fill Forms
+    // Forms Builder - Fill Forms & Submissions
     Route::middleware('auth')->group(function () {
         Route::get('available-forms', [FormController::class, 'available'])->name('forms.available');
         Route::get('fill-forms/{form}', [\App\Http\Controllers\FillFormController::class, 'show'])->name('forms.fill');
         Route::post('fill-forms/{form}', [\App\Http\Controllers\FillFormController::class, 'store'])->name('forms.fill.store');
+        Route::get('my-submissions', [\App\Http\Controllers\FormSubmissionAdminController::class, 'my_submissions'])->name('forms.submissions.my');
+        Route::get('my-submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'show'])->name('forms.submissions.my_show');
+        Route::get('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'show'])->name('forms.submissions.show');
     });
 
     // Forms Builder - Management (Controller-level ACL handled)
@@ -221,7 +224,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['auth', 'permission:view form submissions'])->group(function () {
         Route::get('submissions', [\App\Http\Controllers\FormSubmissionAdminController::class, 'all_index'])->name('forms.submissions.index');
         Route::get('submissions/form/{form}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'form_submissions'])->name('forms.submissions.by_form');
-        Route::get('submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'show'])->name('forms.submissions.show');
         Route::get('/submissions/{id}/edit', [\App\Http\Controllers\FormSubmissionAdminController::class, 'edit'])->name('submissions.edit');
         Route::put('/submissions/{id}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update'])->name('submissions.update');
         Route::patch('/submissions/{id}/status', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update_status'])->name('submissions.update_status');

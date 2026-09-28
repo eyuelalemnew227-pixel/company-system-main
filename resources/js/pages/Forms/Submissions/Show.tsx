@@ -6,11 +6,33 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, User, Clock, ShieldCheck, Star, MapPin } from 'lucide-react';
 import React from 'react';
 
-export default function Show({ form, submission, branches, departments, employees }: { form: any, submission: any, branches?: any[], departments?: any[], employees?: any[] }) {
-    const breadcrumbs: BreadcrumbItem[] = [
+export default function Show({
+    form,
+    submission,
+    branches,
+    departments,
+    employees,
+    canApproveReject = true,
+    from,
+}: {
+    form: any;
+    submission: any;
+    branches?: any[];
+    departments?: any[];
+    employees?: any[];
+    canApproveReject?: boolean;
+    from?: string;
+}) {
+    const isFromMySubmissions = from === 'my-submissions' || (typeof window !== 'undefined' && window.location.pathname.startsWith('/my-submissions'));
+
+    const breadcrumbs: BreadcrumbItem[] = isFromMySubmissions ? [
+        { title: 'Form Builder', href: '/available-forms' },
+        { title: 'My Submissions', href: '/my-submissions' },
+        { title: `Submission #${submission.id}`, href: `/my-submissions/${submission.id}` },
+    ] : [
         { title: 'Form Builder', href: '/forms' },
         { title: 'All Submissions', href: '/submissions' },
-        { title: `${form.title} Records`, href: `/submissions/form/${form.id}` },
+        { title: `${form?.title || 'Form'} Records`, href: `/submissions/form/${form?.id || ''}` },
         { title: `Submission #${submission.id}`, href: `/submissions/${submission.id}` },
     ];
 
@@ -269,11 +291,14 @@ export default function Show({ form, submission, branches, departments, employee
     };
 
     const formVersion = submission.form_version || submission.formVersion;
+    const formObj = form || formVersion?.form || submission.form || {};
     if (!formVersion) return <div>Data sync error.</div>;
+
+    const resolvedFormTitle = formObj.title || (formVersion?.version_number ? `Form Version ${formVersion.version_number}` : 'Form Checklist');
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Submission #${submission.id} - ${form.title || 'Unknown Form'}`} />
+            <Head title={`Submission #${submission.id} - ${resolvedFormTitle}`} />
 
             <div className="max-w-4xl mx-auto space-y-6 pb-12">
                 <div className="flex justify-between items-center">
@@ -288,7 +313,7 @@ export default function Show({ form, submission, branches, departments, employee
                         </span>
                     </div>
                     <div className="flex items-center space-x-3">
-                        {(submission.status !== 'pending') && (
+                        {canApproveReject && (submission.status !== 'pending') && (
                             <Button
                                 variant="outline"
                                 className="text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100 shadow-sm"
@@ -298,7 +323,7 @@ export default function Show({ form, submission, branches, departments, employee
                                 Reset to Pending
                             </Button>
                         )}
-                        {(submission.status !== 'approved') && (
+                        {canApproveReject && (submission.status !== 'approved') && (
                             <Button
                                 variant="outline"
                                 className="text-green-700 bg-green-50 border-green-200 hover:bg-green-100 shadow-sm"
@@ -308,7 +333,7 @@ export default function Show({ form, submission, branches, departments, employee
                                 <ShieldCheck className="mr-2 h-4 w-4" /> Approve
                             </Button>
                         )}
-                        {(submission.status !== 'rejected') && (
+                        {canApproveReject && (submission.status !== 'rejected') && (
                             <Button
                                 variant="outline"
                                 className="text-red-700 bg-red-50 border-red-200 hover:bg-red-100 shadow-sm"
@@ -319,8 +344,8 @@ export default function Show({ form, submission, branches, departments, employee
                             </Button>
                         )}
                         <Button variant="outline" asChild>
-                            <Link href={`/submissions/form/${form.id}`}>
-                                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Records
+                            <Link href={isFromMySubmissions ? '/my-submissions' : `/submissions/form/${form.id}`}>
+                                <ArrowLeft className="mr-2 h-4 w-4" /> {isFromMySubmissions ? 'Back to My Submissions' : 'Back to Records'}
                             </Link>
                         </Button>
                     </div>
@@ -426,7 +451,7 @@ export default function Show({ form, submission, branches, departments, employee
                                     <div className="flex flex-col md:flex-row justify-between gap-6">
                                         <div className="space-y-1">
                                             <p className="text-sm text-gray-500 font-bold uppercase tracking-wider">Form Template</p>
-                                            <h3 className="text-xl font-bold">{form.title || 'Unknown Form'}</h3>
+                                            <h3 className="text-xl font-bold">{resolvedFormTitle}</h3>
                                             <p className="text-sm bg-blue-100 text-blue-800 w-fit px-2 py-0.5 rounded-full font-medium">Version {formVersion.version_number}.0</p>
                                         </div>
                                         <div className="space-y-3 pt-2 md:pt-0">
