@@ -223,15 +223,70 @@ export default function Show({
             return <span className="text-gray-400 italic">No answer provided</span>;
         }
 
+        // Resolve choice label if question has choices
+        const choices = q.choices || matchingAns.question?.choices || [];
+        let resolvedChoiceLabel: string | null = null;
+        if (choices && choices.length > 0) {
+            const valText = matchingAns.value_text ? String(matchingAns.value_text).trim() : '';
+
+            // 1. Match by label directly (e.g. "ወድያው", "2ደቂቃ", "አዎ")
+            if (valText) {
+                const matchByLabel = choices.find((c: any) => String(c.label).trim().toLowerCase() === valText.toLowerCase());
+                if (matchByLabel) {
+                    resolvedChoiceLabel = matchByLabel.label;
+                }
+            }
+
+            // 2. Match by choice ID (e.g. 4169)
+            if (!resolvedChoiceLabel && valText) {
+                const matchById = choices.find((c: any) => String(c.id) === valText);
+                if (matchById) {
+                    resolvedChoiceLabel = matchById.label;
+                }
+            }
+
+            // 3. Match by choice value
+            if (!resolvedChoiceLabel && valText) {
+                const matchByVal = choices.find((c: any) => String(c.value).trim() === valText);
+                if (matchByVal) {
+                    resolvedChoiceLabel = matchByVal.label;
+                }
+            }
+
+            // 4. Match based on boolean / score (for legacy submissions with '1' or '0')
+            if (!resolvedChoiceLabel && matchingAns.value_boolean !== null) {
+                const targetScore = matchingAns.value_boolean ? '1' : '0';
+                const matchByScore = choices.find((c: any) => String(c.value).trim() === targetScore);
+                if (matchByScore) {
+                    resolvedChoiceLabel = matchByScore.label;
+                } else {
+                    const matchByBoolText = choices.find((c: any) =>
+                        matchingAns.value_boolean
+                            ? ['አዎ', 'yes', 'true'].includes(String(c.label).trim().toLowerCase())
+                            : ['አይ', 'no', 'false'].includes(String(c.label).trim().toLowerCase())
+                    );
+                    if (matchByBoolText) {
+                        resolvedChoiceLabel = matchByBoolText.label;
+                    }
+                }
+            }
+        }
+
+        const displayLabel = resolvedChoiceLabel || (
+            matchingAns.value_text && matchingAns.value_text !== '1' && matchingAns.value_text !== '0'
+                ? matchingAns.value_text
+                : (matchingAns.value_boolean !== null ? (matchingAns.value_boolean ? 'አዎ' : 'አይ') : (matchingAns.value_text || 'No answer provided'))
+        );
+
         if (matchingAns.value_boolean !== null) {
             return (
-                <span className={`px-2 py-1 rounded inline-block text-sm font-bold ${matchingAns.value_boolean ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {matchingAns.value_boolean ? 'Yes' : 'No'}
+                <span className={`px-2.5 py-1 rounded inline-block text-sm font-semibold shadow-sm ${matchingAns.value_boolean ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`}>
+                    {displayLabel}
                 </span>
             );
         }
 
-        let val = matchingAns.value_text || matchingAns.value_boolean?.toString() || 'No answer provided';
+        let val = resolvedChoiceLabel || matchingAns.value_text || 'No answer provided';
 
         const inputTypeResolver = matchingAns.question?.input_type || matchingAns.question?.inputType;
         const qType = inputTypeResolver?.type_identifier;

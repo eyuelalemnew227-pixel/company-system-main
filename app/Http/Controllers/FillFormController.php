@@ -173,6 +173,57 @@ class FillFormController extends Controller
                                 ]);
                             }
                         }
+                    } elseif ($tId === 'select_one') {
+                        $selectedChoice = $q->choices->first(function ($c) use ($answerValue) {
+                            return (string) $c->id === (string) $answerValue;
+                        });
+
+                        if (!$selectedChoice) {
+                            $selectedChoice = $q->choices->first(function ($c) use ($answerValue) {
+                                return strtolower(trim((string) $c->label)) === strtolower(trim((string) $answerValue));
+                            });
+                        }
+
+                        if (!$selectedChoice) {
+                            $selectedChoice = $q->choices->first(function ($c) use ($answerValue) {
+                                return (string) $c->value === (string) $answerValue;
+                            });
+                        }
+
+                        $boolVal = null;
+                        $valText = null;
+
+                        if ($selectedChoice) {
+                            $cVal = strtolower(trim((string) $selectedChoice->value));
+                            if ($cVal === '1' || $cVal === 'yes' || $cVal === 'true') {
+                                $boolVal = true;
+                            } elseif ($cVal === '0' || $cVal === 'no' || $cVal === 'false') {
+                                $boolVal = false;
+                            } else {
+                                $cLabel = strtolower(trim((string) $selectedChoice->label));
+                                if (in_array($cLabel, ['yes', 'true', 'አዎ'], true)) {
+                                    $boolVal = true;
+                                } elseif (in_array($cLabel, ['no', 'false', 'አይ'], true)) {
+                                    $boolVal = false;
+                                }
+                            }
+                            $valText = (string) $selectedChoice->label;
+                        } else {
+                            $valText = is_bool($answerValue) ? ($answerValue ? 'yes' : 'no') : (is_array($answerValue) ? json_encode($answerValue) : (string) $answerValue);
+                            if (in_array(strtolower((string) $answerValue), ['yes', 'true', '1'], true)) {
+                                $boolVal = true;
+                            } elseif (in_array(strtolower((string) $answerValue), ['no', 'false', '0'], true)) {
+                                $boolVal = false;
+                            }
+                        }
+
+                        \App\Models\FormSubmissionAnswer::create([
+                            'form_submission_id' => $submission->id,
+                            'form_question_id' => $q->id,
+                            'value_text' => $valText,
+                            'value_boolean' => $boolVal,
+                            'targeted_employees' => empty($responsibleEmpIds) ? null : $responsibleEmpIds, // Generic targets
+                        ]);
                     } else {
                         $boolVal = null;
                         if (is_bool($answerValue)) {

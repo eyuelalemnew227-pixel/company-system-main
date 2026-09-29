@@ -42,20 +42,42 @@ class FormSubmissionAdminController extends Controller
 
         foreach ($submission->answers as $ans) {
             $qType = $ans->question->inputType->type_identifier ?? 'text';
-            if ($qType === 'select_one' && ($ans->value_text === '0' || $ans->value_text === '1')) {
-                $totalBoolQuestions++;
-                $isYes = ($ans->value_text === '1');
-                if ($isYes) {
-                    $yesAnswers++;
+            if ($qType === 'select_one') {
+                $isScored = false;
+                $isYes = false;
+
+                if ($ans->value_boolean !== null) {
+                    $isScored = true;
+                    $isYes = (bool) $ans->value_boolean;
+                } elseif ($ans->value_text === '0' || $ans->value_text === '1') {
+                    $isScored = true;
+                    $isYes = ($ans->value_text === '1');
+                } else {
+                    $choice = $ans->question?->choices?->first(function ($c) use ($ans) {
+                        return (string) $c->id === (string) $ans->value_text
+                            || (string) $c->label === (string) $ans->value_text
+                            || (string) $c->value === (string) $ans->value_text;
+                    });
+                    if ($choice && ($choice->value === '1' || $choice->value === '0')) {
+                        $isScored = true;
+                        $isYes = ($choice->value === '1');
+                    }
                 }
 
-                $targetDepts = $ans->question->department_targets ?? [];
+                if ($isScored) {
+                    $totalBoolQuestions++;
+                    if ($isYes) {
+                        $yesAnswers++;
+                    }
 
-                foreach ($employeeScoresMatrix as $empId => &$empScore) {
-                    if (empty($targetDepts) || in_array((string) $empScore['department_id'], $targetDepts, true)) {
-                        $empScore['total_points']++;
-                        if ($isYes) {
-                            $empScore['earned_points']++;
+                    $targetDepts = $ans->question->department_targets ?? [];
+
+                    foreach ($employeeScoresMatrix as $empId => &$empScore) {
+                        if (empty($targetDepts) || in_array((string) $empScore['department_id'], $targetDepts, true)) {
+                            $empScore['total_points']++;
+                            if ($isYes) {
+                                $empScore['earned_points']++;
+                            }
                         }
                     }
                 }
@@ -462,6 +484,75 @@ class FormSubmissionAdminController extends Controller
                             ]);
                         }
                     }
+                } elseif ($qObj = \App\Models\FormQuestion::with('choices', 'inputType')->find($questionId)) {
+                    $tId = $qObj->inputType?->type_identifier ?? '';
+                    if ($tId === 'select_one') {
+                        $selectedChoice = $qObj->choices->first(function ($c) use ($answerValue) {
+                            return (string) $c->id === (string) $answerValue;
+                        });
+
+                        if (!$selectedChoice) {
+                            $selectedChoice = $qObj->choices->first(function ($c) use ($answerValue) {
+                                return strtolower(trim((string) $c->label)) === strtolower(trim((string) $answerValue));
+                            });
+                        }
+
+                        if (!$selectedChoice) {
+                            $selectedChoice = $qObj->choices->first(function ($c) use ($answerValue) {
+                                return (string) $c->value === (string) $answerValue;
+                            });
+                        }
+
+                        $boolVal = null;
+                        $valText = null;
+
+                        if ($selectedChoice) {
+                            $cVal = strtolower(trim((string) $selectedChoice->value));
+                            if ($cVal === '1' || $cVal === 'yes' || $cVal === 'true') {
+                                $boolVal = true;
+                            } elseif ($cVal === '0' || $cVal === 'no' || $cVal === 'false') {
+                                $boolVal = false;
+                            } else {
+                                $cLabel = strtolower(trim((string) $selectedChoice->label));
+                                if (in_array($cLabel, ['yes', 'true', 'አዎ'], true)) {
+                                    $boolVal = true;
+                                } elseif (in_array($cLabel, ['no', 'false', 'አይ'], true)) {
+                                    $boolVal = false;
+                                }
+                            }
+                            $valText = (string) $selectedChoice->label;
+                        } else {
+                            $valText = is_bool($answerValue) ? ($answerValue ? 'yes' : 'no') : (is_array($answerValue) ? json_encode($answerValue) : (string) $answerValue);
+                            if (in_array(strtolower((string) $answerValue), ['yes', 'true', '1'], true)) {
+                                $boolVal = true;
+                            } elseif (in_array(strtolower((string) $answerValue), ['no', 'false', '0'], true)) {
+                                $boolVal = false;
+                            }
+                        }
+
+                        \App\Models\FormSubmissionAnswer::create([
+                            'form_submission_id' => $submission->id,
+                            'form_question_id' => $questionId,
+                            'value_text' => $valText,
+                            'value_boolean' => $boolVal,
+                        ]);
+                    } else {
+                        $boolVal = null;
+                        if (is_bool($answerValue)) {
+                            $boolVal = $answerValue;
+                        } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['yes', 'true', '1'], true)) {
+                            $boolVal = true;
+                        } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['no', 'false', '0'], true)) {
+                            $boolVal = false;
+                        }
+
+                        \App\Models\FormSubmissionAnswer::create([
+                            'form_submission_id' => $submission->id,
+                            'form_question_id' => $questionId,
+                            'value_text' => is_bool($answerValue) ? ($answerValue ? 'yes' : 'no') : (is_array($answerValue) ? json_encode($answerValue) : (string) $answerValue),
+                            'value_boolean' => $boolVal,
+                        ]);
+                    }
                 } else {
                     $boolVal = null;
                     if (is_bool($answerValue)) {
@@ -618,7 +709,9 @@ class FormSubmissionAdminController extends Controller
 
                     $ans = $ansMap[$localId];
                     if ($ans->value_boolean !== null) {
-                        $row[] = $ans->value_boolean ? 'Yes' : 'No';
+                        $row[] = ($ans->value_text && $ans->value_text !== '1' && $ans->value_text !== '0')
+                            ? $ans->value_text
+                            : ($ans->value_boolean ? 'Yes' : 'No');
                     } else {
                         $val = trim((string) $ans->value_text);
                         if ($qData['type'] === 'branch_lookup') {

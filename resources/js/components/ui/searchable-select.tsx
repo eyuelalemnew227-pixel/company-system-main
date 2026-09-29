@@ -63,6 +63,11 @@ export function SearchableSelect({
         );
     }, [options, search]);
 
+    const MAX_DISPLAY = 100;
+    const displayedOptions = React.useMemo(() => {
+        return filteredOptions.slice(0, MAX_DISPLAY);
+    }, [filteredOptions]);
+
     const handleSelect = (selectedVal: string) => {
         onValueChange(selectedVal);
         setOpen(false);
@@ -132,26 +137,33 @@ export function SearchableSelect({
                     {filteredOptions.length === 0 ? (
                         <div className="py-4 text-center text-xs text-muted-foreground">{emptyText}</div>
                     ) : (
-                        filteredOptions.map((opt) => {
-                            const optIdStr = String(opt.id);
-                            const isSelected = stringValue === optIdStr || stringValue === opt.name;
-                            return (
-                                <div
-                                    key={opt.id}
-                                    onMouseDown={(e) => {
-                                        e.preventDefault();
-                                        handleSelect(optIdStr);
-                                    }}
-                                    className={cn(
-                                        'flex items-center justify-between px-2.5 py-2 rounded-sm text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground select-none transition-colors',
-                                        isSelected && 'bg-purple-100 dark:bg-purple-950/50 text-purple-900 dark:text-purple-200 font-semibold'
-                                    )}
-                                >
-                                    <span className="truncate">{opt.name}</span>
-                                    {isSelected && <Check className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />}
+                        <>
+                            {displayedOptions.map((opt) => {
+                                const optIdStr = String(opt.id);
+                                const isSelected = stringValue === optIdStr || stringValue === opt.name;
+                                return (
+                                    <div
+                                        key={opt.id}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault();
+                                            handleSelect(optIdStr);
+                                        }}
+                                        className={cn(
+                                            'flex items-center justify-between px-2.5 py-2 rounded-sm text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground select-none transition-colors',
+                                            isSelected && 'bg-purple-100 dark:bg-purple-950/50 text-purple-900 dark:text-purple-200 font-semibold'
+                                        )}
+                                    >
+                                        <span className="truncate">{opt.name}</span>
+                                        {isSelected && <Check className="h-4 w-4 text-purple-600 dark:text-purple-400 shrink-0" />}
+                                    </div>
+                                );
+                            })}
+                            {filteredOptions.length > MAX_DISPLAY && (
+                                <div className="py-1.5 px-2 text-center text-[11px] text-muted-foreground bg-muted/30 border-t sticky bottom-0">
+                                    Showing first {MAX_DISPLAY} of {filteredOptions.length} results. Type to search...
                                 </div>
-                            );
-                        })
+                            )}
+                        </>
                     )}
                 </div>
             </PopoverContent>

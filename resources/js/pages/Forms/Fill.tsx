@@ -226,6 +226,33 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         });
         return map;
     }, [formVersion]);
+
+    const employeesById = React.useMemo(() => {
+        const map = new Map<string, any>();
+        (employees || []).forEach(e => map.set(String(e.id), e));
+        return map;
+    }, [employees]);
+
+    const employeesByBranch = React.useMemo(() => {
+        const map: Record<string, any[]> = {};
+        (employees || []).forEach(e => {
+            const bId = String(e.branch_id || 'none');
+            if (!map[bId]) map[bId] = [];
+            map[bId].push(e);
+        });
+        return map;
+    }, [employees]);
+
+    const activeSalesBranches = React.useMemo(() => {
+        return (branches || []).filter(b => b.is_sales_generating === undefined || b.is_sales_generating === null || Boolean(b.is_sales_generating));
+    }, [branches]);
+
+    const departmentsById = React.useMemo(() => {
+        const map = new Map<string, any>();
+        (departments || []).forEach(d => map.set(String(d.id), d));
+        return map;
+    }, [departments]);
+
     const pageProps = usePage()?.props as any;
     const userId = pageProps?.auth?.user?.id || 'guest';
     const draftKey = !submission ? `form_draft_u${userId}_f${form.id}_v${formVersion?.id || 'default'}` : null;
@@ -287,28 +314,32 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         answers: initialAnswers as Record<number, any>
     });
 
-    // Auto-save draft to localStorage whenever answers change
+    // Debounced auto-save draft to localStorage whenever answers change (avoids blocking main thread on every input/click)
     useEffect(() => {
         if (!draftKey || typeof window === 'undefined') return;
 
-        try {
-            const serializable: Record<number, any> = {};
-            let hasAnyAnswer = false;
+        const timer = setTimeout(() => {
+            try {
+                const serializable: Record<number, any> = {};
+                let hasAnyAnswer = false;
 
-            for (const [qId, val] of Object.entries(data.answers)) {
-                if (val instanceof File) continue;
-                if (val !== undefined && val !== null && val !== '') {
-                    hasAnyAnswer = true;
+                for (const [qId, val] of Object.entries(data.answers)) {
+                    if (val instanceof File) continue;
+                    if (val !== undefined && val !== null && val !== '') {
+                        hasAnyAnswer = true;
+                    }
+                    serializable[Number(qId)] = val;
                 }
-                serializable[Number(qId)] = val;
-            }
 
-            if (hasAnyAnswer) {
-                localStorage.setItem(draftKey, JSON.stringify(serializable));
+                if (hasAnyAnswer) {
+                    localStorage.setItem(draftKey, JSON.stringify(serializable));
+                }
+            } catch (e) {
+                console.error('Failed to auto-save form draft in localStorage:', e);
             }
-        } catch (e) {
-            console.error('Failed to auto-save form draft in localStorage:', e);
-        }
+        }, 400);
+
+        return () => clearTimeout(timer);
     }, [data.answers, draftKey]);
 
     const clearDraftAndReset = () => {
@@ -449,37 +480,6 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
             return matchQ.default_value || null;
         };
 
-        // Scoped strictly to the current section so branch or department filters do not leak across sections
-        const localBranch = getAnswerForTypeInSection('branch_lookup');
-        const localDept = getAnswerForTypeInSection('department_lookup');
-
-        let localFilteredDepartments = departments || [];
-        if (localBranch) {
-            localFilteredDepartments = localFilteredDepartments.filter(d =>
-                !d.branch_id || String(d.branch_id) === String(localBranch)
-            );
-        }
-
-        let localFilteredEmployees = (employees || []).filter(e => {
-            const isActive = !e.status || e.status === 'active';
-            const isCurrentlySelected = Array.isArray(answer)
-                ? answer.includes(String(e.id))
-                : (answer !== '' && answer !== null && answer !== undefined && String(e.id) === String(answer));
-            return isActive || isCurrentlySelected;
-        });
-        if (localBranch) {
-            localFilteredEmployees = localFilteredEmployees.filter(e => String(e.branch_id) === String(localBranch));
-        }
-        if (localDept) {
-            localFilteredEmployees = localFilteredEmployees.filter(e => String(e.department_id) === String(localDept));
-        }
-
-        const filteredBranches = (branches || []).filter(b => {
-            const isSalesGen = b.is_sales_generating === undefined || b.is_sales_generating === null || Boolean(b.is_sales_generating);
-            const isCurrentlySelected = answer !== '' && answer !== null && answer !== undefined && String(b.id) === String(answer);
-            return isSalesGen || isCurrentlySelected;
-        });
-
         switch (typeId) {
             case 'title':
                 return null;
@@ -530,9 +530,19 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     />
                 );
             case 'branch_lookup':
+                let branchOptions = activeSalesBranches;
+                if (answer !== '' && answer !== null && answer !== undefined) {
+                    const strAnswer = String(answer);
+                    if (!branchOptions.some(b => String(b.id) === strAnswer)) {
+                        const sel = (branches || []).find(b => String(b.id) === strAnswer);
+                        if (sel) {
+                            branchOptions = [...branchOptions, sel];
+                        }
+                    }
+                }
                 return (
                     <SearchableSelect
-                        options={filteredBranches}
+                        options={branchOptions}
                         value={answer}
                         onValueChange={(val) => handleAnswerChange(question.id, val)}
                         placeholder="Search branches..."
@@ -540,6 +550,13 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     />
                 );
             case 'department_lookup':
+                const localBranchForDept = getAnswerForTypeInSection('branch_lookup');
+                let localFilteredDepartments = departments || [];
+                if (localBranchForDept) {
+                    localFilteredDepartments = localFilteredDepartments.filter(d =>
+                        !d.branch_id || String(d.branch_id) === String(localBranchForDept)
+                    );
+                }
                 return (
                     <SearchableSelect
                         options={localFilteredDepartments}
@@ -551,6 +568,18 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     />
                 );
             case 'employee_lookup':
+                const localBranchForEmp = getAnswerForTypeInSection('branch_lookup');
+                const localDeptForEmp = getAnswerForTypeInSection('department_lookup');
+                const pool = localBranchForEmp ? (employeesByBranch[String(localBranchForEmp)] || []) : (employees || []);
+                const localFilteredEmployees = pool.filter(e => {
+                    const isActive = !e.status || e.status === 'active';
+                    const isCurrentlySelected = Array.isArray(answer)
+                        ? answer.includes(String(e.id))
+                        : (answer !== '' && answer !== null && answer !== undefined && String(e.id) === String(answer));
+                    if (!isActive && !isCurrentlySelected) return false;
+                    if (localDeptForEmp && String(e.department_id) !== String(localDeptForEmp)) return false;
+                    return true;
+                });
                 return (
                     <SearchableSelect
                         options={localFilteredEmployees}
@@ -562,42 +591,46 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                 );
             case 'employee_attendance_roster':
                 const rosterArr = Array.isArray(answer) ? answer : [];
+                const localBranch = getAnswerForTypeInSection('branch_lookup');
+                const branchRosterEmployees = localBranch
+                    ? (employeesByBranch[String(localBranch)] || [])
+                    : [];
 
-                // Group employees by department
-                const groupedEmployees = useMemo(() => {
-                    const groups: Record<string, any[]> = {};
-                    const unassigned: any[] = [];
-                    localFilteredEmployees.forEach(emp => {
-                        const deptId = String(emp.department_id || '');
-                        if (deptId && deptId !== 'null') {
-                            if (!groups[deptId]) groups[deptId] = [];
-                            groups[deptId].push(emp);
-                        } else {
-                            unassigned.push(emp);
-                        }
-                    });
+                const filteredRosterEmployees = branchRosterEmployees.filter(e => {
+                    const isActive = !e.status || e.status === 'active';
+                    const isSelected = rosterArr.includes(String(e.id));
+                    return isActive || isSelected;
+                });
 
-                    // Convert dict into array mapped with department names for structured rendering
-                    const structuredGroups = Object.entries(groups).map(([deptId, emps]) => {
-                        const dept = departments?.find((d: any) => String(d.id) === deptId);
-                        return {
-                            id: deptId,
-                            name: dept?.name || 'Unknown Department',
-                            employees: emps
-                        };
-                    });
-
-                    // Always show unassigned last if it has any employees
-                    if (unassigned.length > 0) {
-                        structuredGroups.push({
-                            id: 'unassigned',
-                            name: 'Unassigned employees',
-                            employees: unassigned
-                        });
+                // Group employees by department without illegal hook calls
+                const groups: Record<string, any[]> = {};
+                const unassigned: any[] = [];
+                filteredRosterEmployees.forEach(emp => {
+                    const deptId = String(emp.department_id || '');
+                    if (deptId && deptId !== 'null') {
+                        if (!groups[deptId]) groups[deptId] = [];
+                        groups[deptId].push(emp);
+                    } else {
+                        unassigned.push(emp);
                     }
+                });
 
-                    return structuredGroups;
-                }, [localFilteredEmployees, departments]);
+                const structuredGroups = Object.entries(groups).map(([deptId, emps]) => {
+                    const dept = departmentsById.get(deptId);
+                    return {
+                        id: deptId,
+                        name: dept?.name || 'Unknown Department',
+                        employees: emps
+                    };
+                });
+
+                if (unassigned.length > 0) {
+                    structuredGroups.push({
+                        id: 'unassigned',
+                        name: 'Unassigned employees',
+                        employees: unassigned
+                    });
+                }
 
                 return (
                     <div className="bg-white border rounded-xl shadow-sm overflow-hidden p-6 gap-6 flex flex-col mb-4">
@@ -605,13 +638,13 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                             <div className="text-center py-8">
                                 <p className="text-muted-foreground font-medium text-lg">Please select a Branch to load the Attendance Roster.</p>
                             </div>
-                        ) : localFilteredEmployees.length === 0 ? (
+                        ) : filteredRosterEmployees.length === 0 ? (
                             <div className="text-center py-8">
                                 <p className="text-red-500 font-medium">No employees found for this location.</p>
                             </div>
                         ) : (
                             <div className="space-y-6">
-                                {groupedEmployees.map((group) => {
+                                {structuredGroups.map((group) => {
                                     const selectedCount = group.employees.filter((emp: any) => rosterArr.includes(String(emp.id))).length;
                                     const totalCount = group.employees.length;
                                     const isComplete = selectedCount > 0;
@@ -633,7 +666,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                                                     return (
                                                         <label
                                                             key={emp.id}
-                                                            className={`flex animate-in fade-in zoom-in duration-300 items-start p-4 rounded-lg border-2 cursor-pointer transition-all ${isPresent
+                                                            className={`flex items-start p-4 rounded-lg border-2 cursor-pointer transition-all ${isPresent
                                                                 ? 'bg-amber-50 border-amber-500 shadow-md ring-1 ring-amber-500/20'
                                                                 : 'bg-white border-gray-100 hover:border-amber-200 hover:bg-gray-50'
                                                                 }`}
@@ -664,10 +697,10 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                                 })}
                             </div>
                         )}
-                        {localBranch && localFilteredEmployees.length > 0 && (
+                        {localBranch && filteredRosterEmployees.length > 0 && (
                             <div className="flex justify-end pt-4 border-t border-gray-200 items-center mt-2">
                                 <span className={`text-sm font-semibold px-3 py-1.5 rounded-full shadow-sm border ${rosterArr.length > 0 ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-red-50 text-red-600 border-red-200"}`}>
-                                    Total: {rosterArr.length} / {localFilteredEmployees.length} Present
+                                    Total: {rosterArr.length} / {filteredRosterEmployees.length} Present
                                 </span>
                             </div>
                         )}
@@ -677,34 +710,75 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                 // Optional chaining fallback array for safety
                 const choices = question.choices || [];
 
+                const hasDuplicateValues = (() => {
+                    const vals = choices.map((c: any) => String(c.value ?? ''));
+                    return new Set(vals).size !== choices.length;
+                })();
+
+                const isChoiceChecked = (choice: any) => {
+                    if (answer === undefined || answer === null || answer === '') return false;
+                    const ansStr = String(answer).trim();
+                    // 1. Direct ID match
+                    if (choice.id !== undefined && String(choice.id) === ansStr) return true;
+                    // 2. Direct Label match
+                    if (choice.label !== undefined && String(choice.label).trim() === ansStr) return true;
+                    // 3. Match by value ONLY if choice.value is unique across all choices of this question
+                    if (choice.value !== undefined && String(choice.value).trim() === ansStr) {
+                        const matching = choices.filter((c: any) => String(c.value).trim() === ansStr);
+                        if (matching.length === 1) return true;
+                    }
+                    return false;
+                };
+
+                const getSelectedValueToStore = (choice: any) => {
+                    return hasDuplicateValues ? choice.id : choice.value;
+                };
+
                 if (choices.length <= 4 && choices.length > 0) {
                     return (
                         <div className="flex flex-col space-y-3">
-                            {choices.map((choice: any) => (
-                                <label key={choice.id} className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors w-fit">
-                                    <input
-                                        type="radio"
-                                        name={`q-${question.id}`}
-                                        value={choice.value}
-                                        checked={answer === choice.value}
-                                        onChange={() => handleAnswerChange(question.id, choice.value)}
-                                        required={question.is_required}
-                                        className="w-5 h-5 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500"
-                                    />
-                                    <span className="text-base font-medium leading-none">{choice.label}</span>
-                                </label>
-                            ))}
+                            {choices.map((choice: any) => {
+                                const checked = isChoiceChecked(choice);
+                                return (
+                                    <label key={choice.id} className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors w-fit">
+                                        <input
+                                            type="radio"
+                                            name={`q-${question.id}`}
+                                            value={choice.id ?? choice.value}
+                                            checked={checked}
+                                            onChange={() => handleAnswerChange(question.id, getSelectedValueToStore(choice))}
+                                            required={question.is_required}
+                                            className="w-5 h-5 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500"
+                                        />
+                                        <span className="text-base font-medium leading-none">{choice.label}</span>
+                                    </label>
+                                );
+                            })}
                         </div>
                     );
                 } else if (choices.length > 0) {
+                    const selectedChoice = choices.find((c: any) => isChoiceChecked(c));
+                    const selectValue = selectedChoice ? String(selectedChoice.id) : (answer ? String(answer) : '');
+
                     return (
-                        <Select value={answer} onValueChange={(v: string) => handleAnswerChange(question.id, v)} required={question.is_required}>
+                        <Select
+                            value={selectValue}
+                            onValueChange={(val: string) => {
+                                const found = choices.find((c: any) => String(c.id) === val);
+                                if (found) {
+                                    handleAnswerChange(question.id, getSelectedValueToStore(found));
+                                } else {
+                                    handleAnswerChange(question.id, val);
+                                }
+                            }}
+                            required={question.is_required}
+                        >
                             <SelectTrigger className="w-[300px] bg-white">
                                 <SelectValue placeholder="Select an option" />
                             </SelectTrigger>
                             <SelectContent>
                                 {choices.map((choice: any) => (
-                                    <SelectItem key={choice.id} value={choice.value}>{choice.label}</SelectItem>
+                                    <SelectItem key={choice.id} value={String(choice.id)}>{choice.label}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -748,11 +822,13 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     return <p className="text-sm text-amber-500 italic border p-3 rounded-md bg-amber-50">No Options configured. Please edit the form and add choices.</p>;
                 }
 
-                const targetedEmps = localRosterArray.map(empIdStr => employees?.find(e => String(e.id) === empIdStr)).filter(emp => {
-                    if (!emp) return false;
-                    if (emp.status && emp.status !== 'active') return false;
-                    return evalTargets.length === 0 || evalTargets.includes(String(emp.department_id));
-                });
+                const targetedEmps = localRosterArray
+                    .map(empIdStr => employeesById.get(empIdStr))
+                    .filter((emp): emp is any => {
+                        if (!emp) return false;
+                        if (emp.status && emp.status !== 'active') return false;
+                        return evalTargets.length === 0 || evalTargets.includes(String(emp.department_id));
+                    });
 
                 if (targetedEmps.length === 0) {
                     return <p className="text-sm text-gray-500 italic border p-3 rounded-md bg-gray-50">No active employees matching the targeted departments are checked in.</p>;
