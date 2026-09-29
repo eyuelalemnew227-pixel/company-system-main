@@ -39,6 +39,10 @@ return [
         'key' => env('POWER_BI_API_KEY'),
     ],
 
+    'forms' => [
+        'key' => env('FORMS_API_KEY', env('POWER_BI_API_KEY', 'kaldis_forms_api_2026')),
+    ],
+
     'geezsms' => [
         'token' => env('GEEZSMS_TOKEN'),
         'shortcode_id' => env('GEEZSMS_SHORTCODE_ID'),

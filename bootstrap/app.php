@@ -36,6 +36,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'powerbi' => PowerBiApiKeyMiddleware::class,
+            'forms.api' => \App\Http\Middleware\FormsApiAuthMiddleware::class,
             'permission' => PermissionMiddleware::class,
             'role' => RoleMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,

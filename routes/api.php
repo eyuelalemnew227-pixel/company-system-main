@@ -32,3 +32,13 @@ Route::post('/telegram/webhook/{slug}', [TelegramWebhookController::class, 'hand
 Route::get('/pre-orders/miniapp/data', [\App\Http\Controllers\PreOrderMiniAppApiController::class, 'getData']);
 Route::post('/pre-orders/miniapp/order', [\App\Http\Controllers\PreOrderMiniAppApiController::class, 'storeOrder']);
 Route::get('/pre-orders/miniapp/status', [\App\Http\Controllers\PreOrderMiniAppApiController::class, 'getOrderStatus']);
+
+// Forms API Endpoints for external consumption and analysis (Secured by FormsApiAuthMiddleware: API key or session/token)
+Route::prefix('forms')->middleware('forms.api')->group(function () {
+    Route::get('/', [\App\Http\Controllers\FormApiController::class, 'index']);
+    Route::get('/analytics', [\App\Http\Controllers\FormApiController::class, 'analytics']);
+    Route::get('/submissions', [\App\Http\Controllers\FormApiController::class, 'submissions']);
+    Route::get('/{id}', [\App\Http\Controllers\FormApiController::class, 'show']);
+    Route::get('/{id}/submissions', [\App\Http\Controllers\FormApiController::class, 'submissions']);
+    Route::get('/{id}/analytics', [\App\Http\Controllers\FormApiController::class, 'analytics']);
+});

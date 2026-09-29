@@ -20,4 +20,9 @@ class FormVersion extends Model
     {
         return $this->hasMany(FormSection::class)->orderBy('order_index');
     }
+
+    public function submissions()
+    {
+        return $this->hasMany(FormSubmission::class, 'form_version_id');
+    }
 }
