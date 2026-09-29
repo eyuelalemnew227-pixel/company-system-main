@@ -193,7 +193,7 @@ const baseSections: NavSection[] = [
     ],
   },
   {
-    label: 'Form Builder',
+    label: 'Form',
     icon: ClipboardList,
     items: [
       { title: 'All Forms', href: '/forms', icon: ListChecks, permission: 'view forms' },

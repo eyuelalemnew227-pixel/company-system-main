@@ -18,7 +18,7 @@ import React from 'react';
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Form Builder', href: '/forms' },
+    { title: 'Form', href: '/forms' },
     { title: 'All Forms', href: '/forms' },
     { title: 'Create Template', href: '/forms/create' },
 ];

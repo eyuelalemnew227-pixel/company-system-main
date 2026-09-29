@@ -13,7 +13,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 
 export default function FormSubmissions({ form, submissions, branches = {}, departments = {}, employees = {}, fiscalYears = [], fiscalMonths = [], currentFiscalYearId = null, currentFiscalMonthId = null }: { form: any, submissions: any[], branches?: Record<string, string>, departments?: Record<string, string>, employees?: Record<string, string>, fiscalYears?: { id: number, name: string }[], fiscalMonths?: { id: number, fiscal_year_id: number, name: string }[], currentFiscalYearId?: number | null, currentFiscalMonthId?: number | null }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Form Builder', href: '/forms' },
+        { title: 'Form', href: '/forms' },
         { title: 'All Submissions', href: '/submissions' },
         { title: `${form.title} Records`, href: `/submissions/form/${form.id}` },
     ];

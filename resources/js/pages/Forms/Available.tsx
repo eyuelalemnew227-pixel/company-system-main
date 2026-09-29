@@ -7,7 +7,7 @@ import { ClipboardCheck, FileText, FileCheck } from 'lucide-react';
 import { usePermission } from '@/hooks/user-permissions';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Form Builder', href: '/available-forms' },
+    { title: 'Form', href: '/available-forms' },
     { title: 'Fill Forms', href: '/available-forms' },
 ];
 

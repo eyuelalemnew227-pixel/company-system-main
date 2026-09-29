@@ -12,7 +12,7 @@ import TablePagination from '@/components/table-pagination';
 
 export default function Permissions({ form, users, branches, filters }: { form: any, users: any, branches: any[], filters: any }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Form Builder', href: '/forms' },
+        { title: 'Form', href: '/forms' },
         { title: form.title, href: `/forms/${form.id}/edit` },
         { title: 'Access Control', href: `/forms/${form.id}/permissions` },
     ];

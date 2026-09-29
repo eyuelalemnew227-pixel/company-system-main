@@ -337,7 +337,14 @@ class FormSubmissionAdminController extends Controller
             abort(403, 'You must be granted explicit form-level access to view submissions for this form.');
         }
 
-        $canApproveReject = $isCreator || $submission->formVersion->form->user_permissions()->where('user_id', $user->id)->where('can_edit_submissions', true)->exists();
+        $isMySubmissions = request()->routeIs('forms.submissions.my_show')
+            || request()->is('my-submissions*')
+            || request()->query('from') === 'my-submissions';
+
+        // When viewing via My Submissions or when the user is viewing their own submission, approval actions are disabled
+        $canApproveReject = !$isMySubmissions
+            && !$isSubmitter
+            && ($isCreator || $submission->formVersion->form->user_permissions()->where('user_id', $user->id)->where('can_edit_submissions', true)->exists());
 
         $branches = \App\Models\Branch::select('id', 'name')->get();
         $departments = \App\Models\Department::select('id', 'name')->get();
@@ -351,7 +358,7 @@ class FormSubmissionAdminController extends Controller
         $fullEmployeesCollection = \App\Models\Employee::get();
         $this->_calculateEmployeeScores($submission, $fullEmployeesCollection);
 
-        $from = request()->query('from', ($isSubmitter && !$canApproveReject) ? 'my-submissions' : null);
+        $from = request()->query('from', ($isMySubmissions || $isSubmitter) ? 'my-submissions' : null);
 
         return Inertia::render('Forms/Submissions/Show', [
             'form' => $submission->formVersion->form, // Keep old prop structure to limit UI rewrites
@@ -588,6 +595,10 @@ class FormSubmissionAdminController extends Controller
         $submission = FormSubmission::with('formVersion.form')->findOrFail($submissionId);
 
         $user = auth()->user();
+        if ((int) $submission->user_id === (int) $user->id) {
+            abort(403, 'You cannot approve or reject your own submission.');
+        }
+
         if ($submission->formVersion->form->created_by !== $user->id) {
             if (!$submission->formVersion->form->user_permissions()->where('user_id', $user->id)->where('can_edit_submissions', true)->exists()) {
                 abort(403, 'You must be granted explicit form-level access to edit submissions for this form.');

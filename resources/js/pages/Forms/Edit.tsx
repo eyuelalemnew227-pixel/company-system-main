@@ -20,7 +20,7 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 
 export default function Edit({ form, formVersion, inputTypes, branches, departments }: { form: any, formVersion: any, inputTypes: any[], branches: any[], departments: any[] }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Form Builder', href: '/forms' },
+        { title: 'Form', href: '/forms' },
         { title: 'All Forms', href: '/forms' },
         { title: `Edit: ${form.title}`, href: `/forms/${form.id}/edit` },
     ];

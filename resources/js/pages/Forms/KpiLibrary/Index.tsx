@@ -100,7 +100,7 @@ interface Props {
 }
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Form Builder', href: '/forms' },
+    { title: 'Form', href: '/forms' },
     { title: 'KPI Library', href: '/kpi-libraries' },
 ];
 
@@ -428,7 +428,7 @@ export default function Index({ kpis, filters, kpiRoles = [], masterKpis = [], a
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="KPI Library - Form Builder" />
+            <Head title="KPI Library - Form" />
 
             <div className="max-w-7xl mx-auto space-y-6 pb-16">
                 {/* Standard Page Header */}

@@ -12,7 +12,7 @@ export default function Show({
     branches,
     departments,
     employees,
-    canApproveReject = true,
+    canApproveReject = false,
     from,
 }: {
     form: any;
@@ -24,13 +24,14 @@ export default function Show({
     from?: string;
 }) {
     const isFromMySubmissions = from === 'my-submissions' || (typeof window !== 'undefined' && window.location.pathname.startsWith('/my-submissions'));
+    const showApprovalActions = Boolean(canApproveReject) && !isFromMySubmissions;
 
     const breadcrumbs: BreadcrumbItem[] = isFromMySubmissions ? [
-        { title: 'Form Builder', href: '/available-forms' },
+        { title: 'Form', href: '/available-forms' },
         { title: 'My Submissions', href: '/my-submissions' },
         { title: `Submission #${submission.id}`, href: `/my-submissions/${submission.id}` },
     ] : [
-        { title: 'Form Builder', href: '/forms' },
+        { title: 'Form', href: '/forms' },
         { title: 'All Submissions', href: '/submissions' },
         { title: `${form?.title || 'Form'} Records`, href: `/submissions/form/${form?.id || ''}` },
         { title: `Submission #${submission.id}`, href: `/submissions/${submission.id}` },
@@ -368,7 +369,7 @@ export default function Show({
                         </span>
                     </div>
                     <div className="flex items-center space-x-3">
-                        {canApproveReject && (submission.status !== 'pending') && (
+                        {showApprovalActions && (submission.status !== 'pending') && (
                             <Button
                                 variant="outline"
                                 className="text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100 shadow-sm"
@@ -378,7 +379,7 @@ export default function Show({
                                 Reset to Pending
                             </Button>
                         )}
-                        {canApproveReject && (submission.status !== 'approved') && (
+                        {showApprovalActions && (submission.status !== 'approved') && (
                             <Button
                                 variant="outline"
                                 className="text-green-700 bg-green-50 border-green-200 hover:bg-green-100 shadow-sm"
@@ -388,7 +389,7 @@ export default function Show({
                                 <ShieldCheck className="mr-2 h-4 w-4" /> Approve
                             </Button>
                         )}
-                        {canApproveReject && (submission.status !== 'rejected') && (
+                        {showApprovalActions && (submission.status !== 'rejected') && (
                             <Button
                                 variant="outline"
                                 className="text-red-700 bg-red-50 border-red-200 hover:bg-red-100 shadow-sm"

@@ -10,7 +10,7 @@ import React, { useRef } from 'react';
 import { usePermission } from '@/hooks/user-permissions';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Form Builder', href: '/forms' },
+    { title: 'Form', href: '/forms' },
     { title: 'All Forms', href: '/forms' },
 ];
 

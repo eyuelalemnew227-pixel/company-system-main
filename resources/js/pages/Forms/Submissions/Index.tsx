@@ -8,7 +8,7 @@ import React from 'react';
 
 export default function Index({ forms }: { forms: any[] }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Form Builder', href: '/forms' },
+        { title: 'Form', href: '/forms' },
         { title: 'All Submissions', href: '/submissions' },
     ];
 

@@ -34,7 +34,7 @@ export default function MySubmissions({
     currentFiscalMonthId = null,
 }: Props) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Form Builder', href: '/available-forms' },
+        { title: 'Form', href: '/available-forms' },
         { title: 'My Submissions', href: '/my-submissions' },
     ];
 
