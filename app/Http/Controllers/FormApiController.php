@@ -210,9 +210,9 @@ class FormApiController extends Controller
 
         // Apply branch filter if provided
         if ($branchIdFilter) {
-            $data = $data->filter(function ($row) use ($branchIdFilter) {
+            $data = $data->filter(function ($row) use ($branchIdFilter, $branches) {
                 return (string) $row['branch_id'] === (string) $branchIdFilter
-                    || strcasecmp($row['branch_name'], $branchIdFilter) === 0;
+                    || (isset($branches[$row['branch_id']]) && strcasecmp($branches[$row['branch_id']], $branchIdFilter) === 0);
             })->values();
         }
 
@@ -554,16 +554,9 @@ class FormApiController extends Controller
             'form_title' => $sub->formVersion?->form?->title ?? 'Unknown Form',
             'status' => $sub->status ?: 'pending',
             'branch_id' => $branchId,
-            'branch_name' => $branchName,
-            'submitted_by' => [
-                'id' => $sub->user_id,
-                'name' => $sub->user?->name ?? 'Unknown',
-                'email' => $sub->user?->email,
-            ],
+            'submitted_by' => $sub->user?->name ?? 'Unknown',
             'submitted_at' => $sub->created_at ? $sub->created_at->toDateTimeString() : null,
-            'updated_at' => $sub->updated_at ? $sub->updated_at->toDateTimeString() : null,
             'answers_flat' => $answersFlat,
-            'answers_detailed' => $answersDetailed,
         ];
     }
 
@@ -592,7 +585,7 @@ class FormApiController extends Controller
             }
 
             // Collect all unique question headers
-            $baseHeaders = ['submission_id', 'form_title', 'branch_name', 'status', 'submitted_by', 'submitted_at'];
+            $baseHeaders = ['submission_id', 'form_id', 'form_title', 'status', 'branch_id', 'submitted_by', 'submitted_at'];
             $questionHeaders = [];
             foreach ($rows as $row) {
                 foreach (array_keys($row['answers_flat']) as $q) {
@@ -607,10 +600,11 @@ class FormApiController extends Controller
             foreach ($rows as $row) {
                 $line = [
                     $row['submission_id'],
+                    $row['form_id'],
                     $row['form_title'],
-                    $row['branch_name'],
                     $row['status'],
-                    $row['submitted_by']['name'],
+                    $row['branch_id'],
+                    $row['submitted_by'],
                     $row['submitted_at'],
                 ];
                 foreach ($questionHeaders as $q) {
