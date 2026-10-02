@@ -273,6 +273,16 @@ export default function Show({
             }
         }
 
+        const inputTypeResolver = matchingAns.question?.input_type || matchingAns.question?.inputType || (q as any)?.input_type || (q as any)?.inputType;
+        const qType = inputTypeResolver?.type_identifier;
+
+        if (qType === 'number') {
+            const numVal = (matchingAns.value_text !== null && matchingAns.value_text !== '' && matchingAns.value_text !== undefined)
+                ? matchingAns.value_text
+                : (matchingAns.value_boolean !== null ? (matchingAns.value_boolean ? '1' : '0') : 'No answer provided');
+            return <span className="text-gray-900 font-medium">{numVal}</span>;
+        }
+
         const displayLabel = resolvedChoiceLabel || (
             matchingAns.value_text && matchingAns.value_text !== '1' && matchingAns.value_text !== '0'
                 ? matchingAns.value_text
@@ -288,9 +298,6 @@ export default function Show({
         }
 
         let val = resolvedChoiceLabel || matchingAns.value_text || 'No answer provided';
-
-        const inputTypeResolver = matchingAns.question?.input_type || matchingAns.question?.inputType;
-        const qType = inputTypeResolver?.type_identifier;
         if (qType === 'branch_lookup') {
             val = branches?.find(b => String(b.id) === String(val))?.name || val;
         } else if (qType === 'department_lookup') {

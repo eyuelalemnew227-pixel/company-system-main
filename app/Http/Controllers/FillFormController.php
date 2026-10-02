@@ -226,18 +226,24 @@ class FillFormController extends Controller
                         ]);
                     } else {
                         $boolVal = null;
-                        if (is_bool($answerValue)) {
-                            $boolVal = $answerValue;
-                        } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['yes', 'true', '1'], true)) {
-                            $boolVal = true;
-                        } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['no', 'false', '0'], true)) {
-                            $boolVal = false;
+                        if ($tId === 'boolean') {
+                            if (is_bool($answerValue)) {
+                                $boolVal = $answerValue;
+                            } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['yes', 'true', '1'], true)) {
+                                $boolVal = true;
+                            } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['no', 'false', '0'], true)) {
+                                $boolVal = false;
+                            }
                         }
+
+                        $valText = is_bool($answerValue)
+                            ? ($answerValue ? 'yes' : 'no')
+                            : (is_array($answerValue) ? json_encode($answerValue) : (string) $answerValue);
 
                         \App\Models\FormSubmissionAnswer::create([
                             'form_submission_id' => $submission->id,
                             'form_question_id' => $q->id,
-                            'value_text' => is_bool($answerValue) ? ($answerValue ? 'yes' : 'no') : (is_array($answerValue) ? json_encode($answerValue) : (string) $answerValue),
+                            'value_text' => $valText,
                             'value_boolean' => $boolVal,
                             'targeted_employees' => empty($responsibleEmpIds) ? null : $responsibleEmpIds, // Generic targets
                         ]);

@@ -545,36 +545,33 @@ class FormSubmissionAdminController extends Controller
                         ]);
                     } else {
                         $boolVal = null;
-                        if (is_bool($answerValue)) {
-                            $boolVal = $answerValue;
-                        } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['yes', 'true', '1'], true)) {
-                            $boolVal = true;
-                        } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['no', 'false', '0'], true)) {
-                            $boolVal = false;
+                        if ($tId === 'boolean') {
+                            if (is_bool($answerValue)) {
+                                $boolVal = $answerValue;
+                            } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['yes', 'true', '1'], true)) {
+                                $boolVal = true;
+                            } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['no', 'false', '0'], true)) {
+                                $boolVal = false;
+                            }
                         }
+
+                        $valText = is_bool($answerValue)
+                            ? ($answerValue ? 'yes' : 'no')
+                            : (is_array($answerValue) ? json_encode($answerValue) : (string) $answerValue);
 
                         \App\Models\FormSubmissionAnswer::create([
                             'form_submission_id' => $submission->id,
                             'form_question_id' => $questionId,
-                            'value_text' => is_bool($answerValue) ? ($answerValue ? 'yes' : 'no') : (is_array($answerValue) ? json_encode($answerValue) : (string) $answerValue),
+                            'value_text' => $valText,
                             'value_boolean' => $boolVal,
                         ]);
                     }
                 } else {
-                    $boolVal = null;
-                    if (is_bool($answerValue)) {
-                        $boolVal = $answerValue;
-                    } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['yes', 'true', '1'], true)) {
-                        $boolVal = true;
-                    } else if (!is_array($answerValue) && in_array(strtolower((string) $answerValue), ['no', 'false', '0'], true)) {
-                        $boolVal = false;
-                    }
-
                     \App\Models\FormSubmissionAnswer::create([
                         'form_submission_id' => $submission->id,
                         'form_question_id' => $questionId,
                         'value_text' => is_bool($answerValue) ? ($answerValue ? 'yes' : 'no') : (is_array($answerValue) ? json_encode($answerValue) : (string) $answerValue),
-                        'value_boolean' => $boolVal,
+                        'value_boolean' => null,
                     ]);
                 }
             }
@@ -719,7 +716,11 @@ class FormSubmissionAdminController extends Controller
                     }
 
                     $ans = $ansMap[$localId];
-                    if ($ans->value_boolean !== null) {
+                    if ($qData['type'] === 'number') {
+                        $row[] = ($ans->value_text !== null && $ans->value_text !== '')
+                            ? $ans->value_text
+                            : ($ans->value_boolean !== null ? (string) (int) $ans->value_boolean : '');
+                    } elseif ($ans->value_boolean !== null) {
                         $row[] = ($ans->value_text && $ans->value_text !== '1' && $ans->value_text !== '0')
                             ? $ans->value_text
                             : ($ans->value_boolean ? 'Yes' : 'No');

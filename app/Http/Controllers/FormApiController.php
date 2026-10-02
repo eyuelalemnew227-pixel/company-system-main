@@ -494,6 +494,8 @@ class FormApiController extends Controller
                 $resolvedVal = $departments[$val] ?? $val;
             } elseif ($type === 'employee_lookup') {
                 $resolvedVal = $employees[$val] ?? $val;
+            } elseif ($type === 'number') {
+                $resolvedVal = ($ans->value_text !== null && $ans->value_text !== '') ? $ans->value_text : ($ans->value_boolean !== null ? (string) (int) $ans->value_boolean : $val);
             } elseif ($question && $question->choices->isNotEmpty()) {
                 $c = $question->choices->first(function ($choice) use ($ans) {
                     return (string) $choice->id === (string) $ans->value_text
@@ -528,7 +530,9 @@ class FormApiController extends Controller
             // If input_type is signature, do not return "value"
             if (!$isSignature) {
                 $detailItem['value'] = $resolvedVal;
-                $detailItem['raw_value'] = $ans->value_text ?? ($ans->value_boolean !== null ? (string) $ans->value_boolean : null);
+                $detailItem['raw_value'] = ($type === 'number')
+                    ? (($ans->value_text !== null && $ans->value_text !== '') ? $ans->value_text : ($ans->value_boolean !== null ? (string) (int) $ans->value_boolean : null))
+                    : ($ans->value_text ?? ($ans->value_boolean !== null ? (string) $ans->value_boolean : null));
             } else {
                 $detailItem['has_signature'] = !empty($ans->value_text);
             }
