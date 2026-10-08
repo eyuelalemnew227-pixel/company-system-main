@@ -136,6 +136,9 @@ class FormApiController extends Controller
     {
         $targetFormId = $id ?? $request->query('form_id');
         $branchIdFilter = $request->query('branch_id');
+        $departmentIdFilter = $request->query('department_id');
+        $employeeIdFilter = $request->query('employee_id');
+        $submittedByIdFilter = $request->query('submitted_by_id') ?? $request->query('user_id');
         $statusFilter = $request->query('status');
         $dateFrom = $request->query('date_from');
         $dateTo = $request->query('date_to');
@@ -152,8 +155,10 @@ class FormApiController extends Controller
         // Base query
         $query = FormSubmission::with([
             'formVersion.form',
-            'user:id,name,email',
+            'user:id,name,email,employee_id',
+            'user.employee:id,first_name,last_name,employee_code,branch_id,department_id',
             'user.employee.branch:id,name',
+            'user.employee.department:id,name',
             'answers.question.choices',
             'answers.question.inputType',
         ]);
@@ -162,6 +167,10 @@ class FormApiController extends Controller
             $query->whereHas('formVersion', function ($q) use ($targetFormId) {
                 $q->where('form_id', $targetFormId);
             });
+        }
+
+        if ($submittedByIdFilter && $submittedByIdFilter !== 'all') {
+            $query->where('user_id', $submittedByIdFilter);
         }
 
         if ($statusFilter && $statusFilter !== 'all') {
@@ -209,10 +218,29 @@ class FormApiController extends Controller
         });
 
         // Apply branch filter if provided
-        if ($branchIdFilter) {
+        if ($branchIdFilter && $branchIdFilter !== 'all') {
             $data = $data->filter(function ($row) use ($branchIdFilter, $branches) {
                 return (string) $row['branch_id'] === (string) $branchIdFilter
-                    || (isset($branches[$row['branch_id']]) && strcasecmp($branches[$row['branch_id']], $branchIdFilter) === 0);
+                    || (isset($branches[$row['branch_id']]) && strcasecmp($branches[$row['branch_id']], $branchIdFilter) === 0)
+                    || collect($row['branches'])->contains(fn($b) => (string) $b['id'] === (string) $branchIdFilter);
+            })->values();
+        }
+
+        // Apply department filter if provided
+        if ($departmentIdFilter && $departmentIdFilter !== 'all') {
+            $data = $data->filter(function ($row) use ($departmentIdFilter, $departments) {
+                return (string) $row['department_id'] === (string) $departmentIdFilter
+                    || (isset($departments[$row['department_id']]) && strcasecmp($departments[$row['department_id']], $departmentIdFilter) === 0)
+                    || collect($row['departments'])->contains(fn($d) => (string) $d['id'] === (string) $departmentIdFilter);
+            })->values();
+        }
+
+        // Apply employee filter if provided
+        if ($employeeIdFilter && $employeeIdFilter !== 'all') {
+            $data = $data->filter(function ($row) use ($employeeIdFilter, $employees) {
+                return (string) $row['employee_id'] === (string) $employeeIdFilter
+                    || (isset($employees[$row['employee_id']]) && strcasecmp($employees[$row['employee_id']], $employeeIdFilter) === 0)
+                    || collect($row['employees'])->contains(fn($e) => (string) $e['id'] === (string) $employeeIdFilter);
             })->values();
         }
 
@@ -251,7 +279,7 @@ class FormApiController extends Controller
         // 2. Fetch Submissions
         $subQuery = FormSubmission::with([
             'formVersion:id,form_id',
-            'user:id,name',
+            'user:id,name,employee_id',
             'user.employee.branch:id,name',
             'answers' => function ($q) {
                 $q->whereHas('question.inputType', function ($iq) {
@@ -467,8 +495,29 @@ class FormApiController extends Controller
      */
     private function formatSubmissionRow($sub, array $branches, array $departments, array $employees): array
     {
+        $submittedById = $sub->user_id ? (int) $sub->user_id : ($sub->user?->id ? (int) $sub->user->id : null);
+        $submittedByName = $sub->user?->name ?? 'Unknown';
+        $submitterEmail = $sub->user?->email;
+
+        $submitterEmp = $sub->user?->employee;
+        $submitterEmployeeId = $submitterEmp?->id;
+        $submitterEmployeeName = $submitterEmp ? trim($submitterEmp->first_name . ' ' . $submitterEmp->last_name) : null;
+        $submitterDeptId = $submitterEmp?->department?->id;
+        $submitterDeptName = $submitterEmp?->department?->name;
+        $submitterBranchId = $submitterEmp?->branch?->id;
+        $submitterBranchName = $submitterEmp?->branch?->name;
+
         $branchId = null;
         $branchName = null;
+        $branchesList = [];
+
+        $departmentId = null;
+        $departmentName = null;
+        $departmentsList = [];
+
+        $employeeId = null;
+        $employeeName = null;
+        $employeesList = [];
 
         $answersFlat = [];
         $answersDetailed = [];
@@ -478,22 +527,79 @@ class FormApiController extends Controller
             $qLabel = $question?->label ?? ('question_' . $ans->form_question_id);
             $type = $question?->inputType?->type_identifier ?? 'text';
             $val = $ans->value_text;
+            $rawId = null;
+            $resolvedName = null;
 
             // Resolve lookups & choices
             if ($type === 'branch_lookup') {
+                $rawId = $val;
                 if (isset($branches[$val])) {
-                    $branchId = (string) $val;
-                    $branchName = $branches[$val];
-                    $resolvedVal = $branches[$val];
+                    $bId = is_numeric($val) ? (int) $val : (string) $val;
+                    $bName = $branches[$val];
                 } else {
-                    $resolvedVal = $val;
-                    $branchName = $val;
-                    $branchId = 'custom_' . md5($val);
+                    $bId = $val;
+                    $bName = $val;
+                }
+                $resolvedVal = $bName;
+                $resolvedName = $bName;
+
+                $branchesList[] = [
+                    'id' => $bId,
+                    'name' => $bName,
+                    'question_id' => $ans->form_question_id,
+                    'question' => $qLabel,
+                ];
+
+                if ($branchId === null) {
+                    $branchId = (string) $bId;
+                    $branchName = $bName;
                 }
             } elseif ($type === 'department_lookup') {
-                $resolvedVal = $departments[$val] ?? $val;
+                $rawId = $val;
+                if (isset($departments[$val])) {
+                    $dId = is_numeric($val) ? (int) $val : (string) $val;
+                    $dName = $departments[$val];
+                } else {
+                    $dId = $val;
+                    $dName = $val;
+                }
+                $resolvedVal = $dName;
+                $resolvedName = $dName;
+
+                $departmentsList[] = [
+                    'id' => $dId,
+                    'name' => $dName,
+                    'question_id' => $ans->form_question_id,
+                    'question' => $qLabel,
+                ];
+
+                if ($departmentId === null) {
+                    $departmentId = $dId;
+                    $departmentName = $dName;
+                }
             } elseif ($type === 'employee_lookup') {
-                $resolvedVal = $employees[$val] ?? $val;
+                $rawId = $val;
+                if (isset($employees[$val])) {
+                    $eId = is_numeric($val) ? (int) $val : (string) $val;
+                    $eName = $employees[$val];
+                } else {
+                    $eId = $val;
+                    $eName = $val;
+                }
+                $resolvedVal = $eName;
+                $resolvedName = $eName;
+
+                $employeesList[] = [
+                    'id' => $eId,
+                    'name' => $eName,
+                    'question_id' => $ans->form_question_id,
+                    'question' => $qLabel,
+                ];
+
+                if ($employeeId === null) {
+                    $employeeId = $eId;
+                    $employeeName = $eName;
+                }
             } elseif ($type === 'number') {
                 $resolvedVal = ($ans->value_text !== null && $ans->value_text !== '') ? $ans->value_text : ($ans->value_boolean !== null ? (string) (int) $ans->value_boolean : $val);
             } elseif ($question && $question->choices->isNotEmpty()) {
@@ -502,7 +608,13 @@ class FormApiController extends Controller
                         || (string) $choice->value === (string) $ans->value_text
                         || (string) $choice->label === (string) $ans->value_text;
                 });
-                $resolvedVal = $c ? $c->label : ($ans->value_text ?? ($ans->value_boolean !== null ? ($ans->value_boolean ? 'Yes' : 'No') : null));
+                if ($c) {
+                    $rawId = $c->id;
+                    $resolvedName = $c->label;
+                    $resolvedVal = $c->label;
+                } else {
+                    $resolvedVal = $ans->value_text ?? ($ans->value_boolean !== null ? ($ans->value_boolean ? 'Yes' : 'No') : null);
+                }
             } elseif ($ans->value_boolean !== null) {
                 $resolvedVal = $ans->value_boolean ? 'Yes' : 'No';
             } else {
@@ -520,12 +632,22 @@ class FormApiController extends Controller
             }
 
             $answersFlat[$qLabel] = $flatVal;
+            if (in_array($type, ['branch_lookup', 'department_lookup', 'employee_lookup']) && $rawId !== null) {
+                $answersFlat[$qLabel . ' (ID)'] = is_numeric($rawId) ? (int) $rawId : $rawId;
+            }
 
             $detailItem = [
                 'question_id' => $ans->form_question_id,
                 'question' => $qLabel,
                 'input_type' => $type,
             ];
+
+            if ($rawId !== null) {
+                $detailItem['id'] = is_numeric($rawId) ? (int) $rawId : $rawId;
+                if ($resolvedName !== null) {
+                    $detailItem['name'] = $resolvedName;
+                }
+            }
 
             // If input_type is signature, do not return "value"
             if (!$isSignature) {
@@ -542,14 +664,25 @@ class FormApiController extends Controller
 
         // Fallback branch if not filled in form
         if (!$branchId) {
-            $empBranch = $sub->user?->employee?->branch;
-            if ($empBranch) {
-                $branchId = (string) $empBranch->id;
-                $branchName = $empBranch->name;
+            if ($submitterBranchId) {
+                $branchId = (string) $submitterBranchId;
+                $branchName = $submitterBranchName;
             } else {
                 $branchId = 'unassigned';
                 $branchName = 'Unassigned';
             }
+        }
+
+        // Fallback department if not filled in form
+        if ($departmentId === null && $submitterDeptId) {
+            $departmentId = $submitterDeptId;
+            $departmentName = $submitterDeptName;
+        }
+
+        // Fallback employee if not filled in form
+        if ($employeeId === null && $submitterEmployeeId) {
+            $employeeId = $submitterEmployeeId;
+            $employeeName = $submitterEmployeeName;
         }
 
         return [
@@ -557,10 +690,53 @@ class FormApiController extends Controller
             'form_id' => $sub->formVersion?->form_id,
             'form_title' => $sub->formVersion?->form?->title ?? 'Unknown Form',
             'status' => $sub->status ?: 'pending',
+
+            // Submitter
+            'submitted_by_id' => $submittedById,
+            'submitted_by' => $submittedByName,
+            'submitted_by_email' => $submitterEmail,
+            'submitter' => [
+                'id' => $submittedById,
+                'name' => $submittedByName,
+                'email' => $submitterEmail,
+                'employee_id' => $submitterEmployeeId,
+                'employee_name' => $submitterEmployeeName,
+                'department_id' => $submitterDeptId,
+                'department_name' => $submitterDeptName,
+                'branch_id' => $submitterBranchId,
+                'branch_name' => $submitterBranchName,
+            ],
+
+            // Department
+            'department_id' => $departmentId,
+            'department_name' => $departmentName,
+            'department' => $departmentId ? [
+                'id' => $departmentId,
+                'name' => $departmentName,
+            ] : null,
+            'departments' => $departmentsList,
+
+            // Employee
+            'employee_id' => $employeeId,
+            'employee_name' => $employeeName,
+            'employee' => $employeeId ? [
+                'id' => $employeeId,
+                'name' => $employeeName,
+            ] : null,
+            'employees' => $employeesList,
+
+            // Branch
             'branch_id' => $branchId,
-            'submitted_by' => $sub->user?->name ?? 'Unknown',
+            'branch_name' => $branchName,
+            'branch' => [
+                'id' => $branchId,
+                'name' => $branchName,
+            ],
+            'branches' => $branchesList,
+
             'submitted_at' => $sub->created_at ? $sub->created_at->toDateTimeString() : null,
             'answers_flat' => $answersFlat,
+            'answers_detailed' => $answersDetailed,
         ];
     }
 
@@ -589,7 +765,21 @@ class FormApiController extends Controller
             }
 
             // Collect all unique question headers
-            $baseHeaders = ['submission_id', 'form_id', 'form_title', 'status', 'branch_id', 'submitted_by', 'submitted_at'];
+            $baseHeaders = [
+                'submission_id',
+                'form_id',
+                'form_title',
+                'status',
+                'submitted_by_id',
+                'submitted_by',
+                'branch_id',
+                'branch_name',
+                'department_id',
+                'department_name',
+                'employee_id',
+                'employee_name',
+                'submitted_at',
+            ];
             $questionHeaders = [];
             foreach ($rows as $row) {
                 foreach (array_keys($row['answers_flat']) as $q) {
@@ -607,8 +797,14 @@ class FormApiController extends Controller
                     $row['form_id'],
                     $row['form_title'],
                     $row['status'],
-                    $row['branch_id'],
+                    $row['submitted_by_id'],
                     $row['submitted_by'],
+                    $row['branch_id'],
+                    $row['branch_name'],
+                    $row['department_id'],
+                    $row['department_name'],
+                    $row['employee_id'],
+                    $row['employee_name'],
                     $row['submitted_at'],
                 ];
                 foreach ($questionHeaders as $q) {

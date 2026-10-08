@@ -4,7 +4,7 @@ import { Head, Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Eye, FileCheck, ClipboardCheck, FilterX, ChevronLeft, ChevronRight, Search, FileText, CheckCircle2, Clock, XCircle, ArrowUpRight } from 'lucide-react';
+import { Eye, FileCheck, ClipboardCheck, FilterX, ChevronLeft, ChevronRight, Search, FileText, CheckCircle2, Clock, XCircle, ArrowUpRight, Calendar, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -44,6 +44,19 @@ export default function MySubmissions({
     const [branchFilter, setBranchFilter] = useState('all');
     const [fiscalYearFilter, setFiscalYearFilter] = useState('all');
     const [fiscalMonthFilter, setFiscalMonthFilter] = useState('all');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+
+    // Helpers for date filtering
+    const getSubmissionLocalDate = (createdAt: string): string => {
+        if (!createdAt) return '';
+        const d = new Date(createdAt);
+        if (isNaN(d.getTime())) return '';
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
 
     // Helper to get lookup answers like branch or employee
     const getLookupValue = (sub: any, type: string, dictionary: Record<string, string>) => {
@@ -106,9 +119,14 @@ export default function MySubmissions({
                 return false;
             }
 
+            // Date range filter
+            const subDate = getSubmissionLocalDate(sub.created_at);
+            if (startDate && subDate < startDate) return false;
+            if (endDate && subDate > endDate) return false;
+
             return true;
         });
-    }, [submissions, searchQuery, formFilter, statusFilter, branchFilter, fiscalYearFilter, fiscalMonthFilter, hasBranch, branches]);
+    }, [submissions, searchQuery, formFilter, statusFilter, branchFilter, fiscalYearFilter, fiscalMonthFilter, startDate, endDate, hasBranch, branches]);
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -116,7 +134,7 @@ export default function MySubmissions({
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, formFilter, statusFilter, branchFilter, fiscalYearFilter, fiscalMonthFilter]);
+    }, [searchQuery, formFilter, statusFilter, branchFilter, fiscalYearFilter, fiscalMonthFilter, startDate, endDate]);
 
     const paginatedSubmissions = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
@@ -132,10 +150,20 @@ export default function MySubmissions({
         setBranchFilter('all');
         setFiscalYearFilter('all');
         setFiscalMonthFilter('all');
+        setStartDate('');
+        setEndDate('');
         setCurrentPage(1);
     };
 
-    const hasActiveFilters = searchQuery !== '' || formFilter !== 'all' || statusFilter !== 'all' || branchFilter !== 'all' || fiscalYearFilter !== 'all' || fiscalMonthFilter !== 'all';
+    const hasActiveFilters =
+        searchQuery !== '' ||
+        formFilter !== 'all' ||
+        statusFilter !== 'all' ||
+        branchFilter !== 'all' ||
+        fiscalYearFilter !== 'all' ||
+        fiscalMonthFilter !== 'all' ||
+        startDate !== '' ||
+        endDate !== '';
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -268,7 +296,7 @@ export default function MySubmissions({
                                 searchPlaceholder="Search branch..."
                                 allowAll={true}
                                 allLabel="All Branches"
-                                className="w-[180px] bg-gray-50/50"
+                                className="w-[170px] bg-gray-50/50"
                                 options={Array.from(new Set(submissions.map((s: any) => getLookupValue(s, 'branch_lookup', branches))))
                                     .filter(v => v !== '-')
                                     .sort()
@@ -276,17 +304,93 @@ export default function MySubmissions({
                             />
                         )}
 
+                        {/* Date Range Filter */}
+                        <div className="flex items-center gap-2 bg-gray-50/90 px-3 py-1 rounded-lg border border-gray-200 shadow-2xs">
+                            <Calendar className="w-4 h-4 text-amber-700 shrink-0" />
+                            <div className="flex items-center gap-1.5">
+                                <div className="relative flex items-center">
+                                    <Input
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                        onClick={(e) => {
+                                            try {
+                                                e.currentTarget.showPicker();
+                                            } catch {}
+                                        }}
+                                        className="h-8 w-[155px] cursor-pointer bg-white text-xs border-gray-200 focus:border-amber-400 px-2.5 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 hover:[&::-webkit-calendar-picker-indicator]:opacity-100"
+                                        title="Start Date (click to pick)"
+                                        aria-label="Start Date"
+                                    />
+                                </div>
+                                <span className="text-gray-400 text-xs font-semibold px-0.5">to</span>
+                                <div className="relative flex items-center">
+                                    <Input
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        onClick={(e) => {
+                                            try {
+                                                e.currentTarget.showPicker();
+                                            } catch {}
+                                        }}
+                                        className="h-8 w-[155px] cursor-pointer bg-white text-xs border-gray-200 focus:border-amber-400 px-2.5 [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-80 hover:[&::-webkit-calendar-picker-indicator]:opacity-100"
+                                        title="End Date (click to pick)"
+                                        aria-label="End Date"
+                                    />
+                                </div>
+                                {(startDate || endDate) && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setStartDate('');
+                                            setEndDate('');
+                                        }}
+                                        className="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-gray-100 transition-colors ml-0.5"
+                                        title="Clear date range"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
                         {hasActiveFilters && (
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={resetFilters}
-                                className="text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                                className="text-gray-500 hover:text-gray-900 hover:bg-gray-100 h-9"
                             >
                                 <FilterX className="w-4 h-4 mr-1.5" /> Reset Filters
                             </Button>
                         )}
                     </div>
+
+                    {/* Active Date Range Indicator */}
+                    {(startDate || endDate) && (
+                        <div className="flex items-center gap-2 pt-1 border-t border-gray-100 text-xs text-amber-950">
+                            <span className="font-semibold flex items-center gap-1 text-gray-600">
+                                <Calendar className="w-3.5 h-3.5 text-amber-700" />
+                                Date Range:
+                            </span>
+                            <span className="bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded-full font-medium border border-amber-200 inline-flex items-center gap-1.5">
+                                {`${startDate ? new Date(startDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Beginning'} - ${endDate ? new Date(endDate + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Latest'}`}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setStartDate('');
+                                        setEndDate('');
+                                    }}
+                                    className="hover:text-amber-950"
+                                    title="Remove date filter"
+                                >
+                                    <X className="w-3 h-3" />
+                                </button>
+                            </span>
+                            <span className="text-muted-foreground font-medium">({filteredSubmissions.length} submissions found)</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Submissions Table */}

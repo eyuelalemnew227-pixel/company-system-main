@@ -68,10 +68,17 @@ export default function Index({ forms }: { forms: any[] }) {
                                     </div>
                                 </CardContent>
 
-                                <CardFooter className="flex flex-col gap-2 pt-4 border-t mt-auto">
-                                    <Button asChild className="w-full justify-between" variant="outline">
+                                <CardFooter className="grid grid-cols-2 gap-2 pt-4 border-t mt-auto">
+                                    <Button asChild className="w-full justify-center text-xs font-semibold hover:bg-amber-50/50 hover:text-amber-900 border-gray-200" variant="outline">
                                         <Link href={`/submissions/form/${form.id}`}>
-                                            View Data <ChevronRight className="w-4 h-4" />
+                                            <FileText className="w-3.5 h-3.5 mr-1.5 text-gray-500" />
+                                            View Data
+                                        </Link>
+                                    </Button>
+                                    <Button asChild className="w-full justify-center text-xs font-semibold bg-amber-800 hover:bg-amber-900 text-white shadow-xs">
+                                        <Link href={`/submissions/form/${form.id}/tracking`}>
+                                            <BarChart2 className="w-3.5 h-3.5 mr-1.5" />
+                                            Tracking
                                         </Link>
                                     </Button>
                                 </CardFooter>

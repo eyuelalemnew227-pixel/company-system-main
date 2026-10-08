@@ -115,15 +115,21 @@ export default function FormSubmissions({ form, submissions, branches = {}, depa
                         <h2 className="text-2xl font-bold tracking-tight text-amber-900">{form.title} Submissions</h2>
                         <p className="text-muted-foreground">Manage {submissions.length} collected records for this checklist.</p>
                     </div>
-                    {submissions.length > 0 && (
-                        <div className="flex space-x-3">
+                    <div className="flex items-center space-x-3">
+                        <Button asChild variant="outline" className="text-amber-900 border-amber-300 hover:bg-amber-50 shadow-xs">
+                            <Link href={`/submissions/form/${form.id}/tracking`}>
+                                <BarChart3 className="mr-2 w-4 h-4 text-amber-700" />
+                                Submission Tracking
+                            </Link>
+                        </Button>
+                        {submissions.length > 0 && (
                             <Button asChild variant="outline" className="text-blue-700 border-blue-200 hover:bg-blue-50 shadow-sm">
                                 <a href={`/submissions/form/${form.id}/export`} target="_blank" rel="noreferrer">
                                     <Download className="mr-2 w-4 h-4" /> Export CSV
                                 </a>
                             </Button>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
 
                 <div className="bg-white rounded-lg shadow-sm border border-amber-900/10 p-4">

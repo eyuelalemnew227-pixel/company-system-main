@@ -229,6 +229,151 @@ class FormSubmissionAdminController extends Controller
     }
 
     /**
+     * Submission tracking dashboard with branch visit metrics, charts, and fiscal & date filters.
+     */
+    public function form_tracking(Form $form)
+    {
+        $user = auth()->user();
+        if ($form->created_by !== $user->id) {
+            $hasAccess = $form->user_permissions()->where('user_id', $user->id)->where('can_view_submissions', true)->exists();
+            if (!$hasAccess) {
+                abort(403, 'You must be granted explicit form-level access to view tracking for this form.');
+            }
+        }
+
+        $allBranches = \App\Models\Branch::where('is_sales_generating', true)->orderBy('name')->get(['id', 'name', 'branch_code', 'location']);
+        $branchMap = $allBranches->keyBy('id');
+
+        $submissions = FormSubmission::whereHas('formVersion', function ($q) use ($form) {
+                $q->where('form_id', $form->id);
+            })
+            ->with([
+                'user:id,name,email',
+                'user.employee.branch:id,name',
+                'answers.question.inputType:id,type_identifier'
+            ])
+            ->orderByDesc('created_at')
+            ->get();
+
+        $fiscalYears = \App\Models\FiscalYear::orderBy('gregorian_start_date')->get(['id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+        $fiscalMonths = \App\Models\FiscalMonth::orderBy('gregorian_start_date')->get(['id', 'fiscal_year_id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+
+        $today = \Carbon\Carbon::today();
+        $currentFiscalYear = $fiscalYears->first(fn($fy) => $today->between(
+            \Carbon\Carbon::parse($fy->gregorian_start_date),
+            \Carbon\Carbon::parse($fy->gregorian_end_date)
+        ));
+        $currentFiscalMonth = $fiscalMonths->first(fn($fm) => $today->between(
+            \Carbon\Carbon::parse($fm->gregorian_start_date),
+            \Carbon\Carbon::parse($fm->gregorian_end_date)
+        ));
+
+        $resolvedSubmissions = $submissions->map(function ($sub) use ($branchMap, $allBranches, $fiscalYears, $fiscalMonths) {
+            $branchAns = $sub->answers->first(function ($a) {
+                return ($a->question?->inputType?->type_identifier ?? '') === 'branch_lookup';
+            });
+
+            $branchId = null;
+            $branchName = null;
+
+            if ($branchAns && $branchAns->value_text) {
+                $val = trim($branchAns->value_text);
+                if (is_numeric($val) && isset($branchMap[(int)$val])) {
+                    $branchId = (int)$val;
+                    $branchName = $branchMap[(int)$val]->name;
+                } else {
+                    $matched = $allBranches->first(fn($b) => strcasecmp($b->name, $val) === 0);
+                    if ($matched) {
+                        $branchId = $matched->id;
+                        $branchName = $matched->name;
+                    } else {
+                        $branchName = $val;
+                        $branchId = 'custom_' . md5($val);
+                    }
+                }
+            }
+
+            if (!$branchId) {
+                $empBranch = $sub->user?->employee?->branch;
+                if ($empBranch) {
+                    $branchId = $empBranch->id;
+                    $branchName = $empBranch->name;
+                } else {
+                    $branchId = 'unassigned';
+                    $branchName = 'Unassigned';
+                }
+            }
+
+            $submittedAt = \Carbon\Carbon::parse($sub->created_at);
+            $matchedYear = $fiscalYears->first(fn($fy) => $submittedAt->between(
+                \Carbon\Carbon::parse($fy->gregorian_start_date),
+                \Carbon\Carbon::parse($fy->gregorian_end_date)
+            ));
+            $matchedMonth = $fiscalMonths->first(fn($fm) => $submittedAt->between(
+                \Carbon\Carbon::parse($fm->gregorian_start_date),
+                \Carbon\Carbon::parse($fm->gregorian_end_date)
+            ));
+
+            return [
+                'id' => $sub->id,
+                'branch_id' => $branchId,
+                'branch_name' => $branchName,
+                'user_id' => $sub->user_id,
+                'user_name' => $sub->user?->name ?? 'Unknown',
+                'status' => $sub->status ?: 'pending',
+                'created_at' => $sub->created_at->toIso8601String(),
+                'date' => $sub->created_at->format('Y-m-d'),
+                'fiscal_year_id' => $matchedYear?->id,
+                'fiscal_year_name' => $matchedYear?->name,
+                'fiscal_month_id' => $matchedMonth?->id,
+                'fiscal_month_name' => $matchedMonth?->name,
+            ];
+        });
+
+        // Other forms the user can view, allowing quick switching from the tracking page
+        $availableForms = Form::where(function ($query) use ($user) {
+                $query->where('created_by', $user->id)
+                    ->orWhereHas('user_permissions', function ($q) use ($user) {
+                        $q->where('user_id', $user->id)->where('can_view_submissions', true);
+                    });
+            })
+            ->orderBy('title')
+            ->get(['id', 'title']);
+
+        return Inertia::render('Forms/Submissions/Tracking', [
+            'form' => [
+                'id' => $form->id,
+                'title' => $form->title,
+                'description' => $form->description,
+                'status' => $form->status,
+            ],
+            'availableForms' => $availableForms,
+            'allBranches' => $allBranches->map(fn($b) => [
+                'id' => $b->id,
+                'name' => $b->name,
+                'branch_code' => $b->branch_code,
+                'location' => $b->location,
+            ]),
+            'submissions' => $resolvedSubmissions,
+            'fiscalYears' => $fiscalYears->map(fn($fy) => [
+                'id' => $fy->id,
+                'name' => $fy->name,
+                'start_date' => $fy->gregorian_start_date,
+                'end_date' => $fy->gregorian_end_date,
+            ])->values(),
+            'fiscalMonths' => $fiscalMonths->map(fn($fm) => [
+                'id' => $fm->id,
+                'fiscal_year_id' => $fm->fiscal_year_id,
+                'name' => $fm->name,
+                'start_date' => $fm->gregorian_start_date,
+                'end_date' => $fm->gregorian_end_date,
+            ])->values(),
+            'currentFiscalYearId' => $currentFiscalYear?->id,
+            'currentFiscalMonthId' => $currentFiscalMonth?->id,
+        ]);
+    }
+
+    /**
      * List only the authenticated user's own submissions.
      */
     public function my_submissions()

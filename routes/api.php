@@ -42,3 +42,35 @@ Route::prefix('forms')->middleware('forms.api')->group(function () {
     Route::get('/{id}/submissions', [\App\Http\Controllers\FormApiController::class, 'submissions']);
     Route::get('/{id}/analytics', [\App\Http\Controllers\FormApiController::class, 'analytics']);
 });
+
+// KPI Library API Endpoints (Secured by FormsApiAuthMiddleware: API key or session/token)
+Route::prefix('kpi-library')->middleware('forms.api')->group(function () {
+    Route::get('/', [\App\Http\Controllers\KpiLibraryApiController::class, 'index']);
+    Route::post('/', [\App\Http\Controllers\KpiLibraryApiController::class, 'store']);
+    Route::get('/meta', [\App\Http\Controllers\KpiLibraryApiController::class, 'meta']);
+    Route::get('/roles', [\App\Http\Controllers\KpiLibraryApiController::class, 'roles']);
+    Route::post('/roles', [\App\Http\Controllers\KpiLibraryApiController::class, 'storeRole']);
+    Route::get('/items', [\App\Http\Controllers\KpiLibraryApiController::class, 'items']);
+    Route::post('/items', [\App\Http\Controllers\KpiLibraryApiController::class, 'storeItem']);
+    Route::get('/{id}', [\App\Http\Controllers\KpiLibraryApiController::class, 'show']);
+    Route::match(['put', 'patch'], '/{id}', [\App\Http\Controllers\KpiLibraryApiController::class, 'update']);
+    Route::delete('/{id}', [\App\Http\Controllers\KpiLibraryApiController::class, 'destroy']);
+    Route::post('/{id}/forms', [\App\Http\Controllers\KpiLibraryApiController::class, 'attachForms']);
+    Route::delete('/{id}/forms', [\App\Http\Controllers\KpiLibraryApiController::class, 'detachForms']);
+});
+
+// Plural alias /api/kpi-libraries
+Route::prefix('kpi-libraries')->middleware('forms.api')->group(function () {
+    Route::get('/', [\App\Http\Controllers\KpiLibraryApiController::class, 'index']);
+    Route::post('/', [\App\Http\Controllers\KpiLibraryApiController::class, 'store']);
+    Route::get('/meta', [\App\Http\Controllers\KpiLibraryApiController::class, 'meta']);
+    Route::get('/roles', [\App\Http\Controllers\KpiLibraryApiController::class, 'roles']);
+    Route::post('/roles', [\App\Http\Controllers\KpiLibraryApiController::class, 'storeRole']);
+    Route::get('/items', [\App\Http\Controllers\KpiLibraryApiController::class, 'items']);
+    Route::post('/items', [\App\Http\Controllers\KpiLibraryApiController::class, 'storeItem']);
+    Route::get('/{id}', [\App\Http\Controllers\KpiLibraryApiController::class, 'show']);
+    Route::match(['put', 'patch'], '/{id}', [\App\Http\Controllers\KpiLibraryApiController::class, 'update']);
+    Route::delete('/{id}', [\App\Http\Controllers\KpiLibraryApiController::class, 'destroy']);
+    Route::post('/{id}/forms', [\App\Http\Controllers\KpiLibraryApiController::class, 'attachForms']);
+    Route::delete('/{id}/forms', [\App\Http\Controllers\KpiLibraryApiController::class, 'detachForms']);
+});

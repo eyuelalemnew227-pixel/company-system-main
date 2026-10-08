@@ -228,6 +228,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['auth', 'permission:view form submissions'])->group(function () {
         Route::get('submissions', [\App\Http\Controllers\FormSubmissionAdminController::class, 'all_index'])->name('forms.submissions.index');
         Route::get('submissions/form/{form}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'form_submissions'])->name('forms.submissions.by_form');
+        Route::get('submissions/form/{form}/tracking', [\App\Http\Controllers\FormSubmissionAdminController::class, 'form_tracking'])->name('forms.submissions.tracking');
         Route::get('/submissions/{id}/edit', [\App\Http\Controllers\FormSubmissionAdminController::class, 'edit'])->name('submissions.edit');
         Route::put('/submissions/{id}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update'])->name('submissions.update');
         Route::patch('/submissions/{id}/status', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update_status'])->name('submissions.update_status');
