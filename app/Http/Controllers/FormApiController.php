@@ -148,9 +148,24 @@ class FormApiController extends Controller
         // Pre-fetch reference dictionaries to optimize resolution
         $branches = Branch::pluck('name', 'id')->toArray();
         $departments = Department::pluck('name', 'id')->toArray();
-        $employees = Employee::get()->mapWithKeys(function ($e) {
+        $employeeModels = Employee::with(['branch:id,name', 'department:id,name'])->get();
+        $employees = $employeeModels->mapWithKeys(function ($e) {
             return [$e->id => trim($e->first_name . ' ' . $e->last_name) ?: $e->employee_code];
         })->toArray();
+        $employeesLookup = [
+            'byId' => $employeeModels->keyBy('id'),
+            'byName' => [],
+            'byEmail' => [],
+        ];
+        foreach ($employeeModels as $e) {
+            $fullName = strtolower(trim($e->first_name . ' ' . $e->last_name));
+            if ($fullName && !isset($employeesLookup['byName'][$fullName])) {
+                $employeesLookup['byName'][$fullName] = $e;
+            }
+            if ($e->email && !isset($employeesLookup['byEmail'][strtolower($e->email)])) {
+                $employeesLookup['byEmail'][strtolower($e->email)] = $e;
+            }
+        }
 
         // Base query
         $query = FormSubmission::with([
@@ -170,7 +185,11 @@ class FormApiController extends Controller
         }
 
         if ($submittedByIdFilter && $submittedByIdFilter !== 'all') {
-            $query->where('user_id', $submittedByIdFilter);
+            $query->where(function ($q) use ($submittedByIdFilter) {
+                $q->whereHas('user', function ($uq) use ($submittedByIdFilter) {
+                    $uq->where('employee_id', $submittedByIdFilter);
+                })->orWhere('user_id', $submittedByIdFilter);
+            });
         }
 
         if ($statusFilter && $statusFilter !== 'all') {
@@ -213,8 +232,8 @@ class FormApiController extends Controller
         }
 
         // Transform submissions into analytics-ready format
-        $data = collect($submissions)->map(function ($sub) use ($branches, $departments, $employees) {
-            return $this->formatSubmissionRow($sub, $branches, $departments, $employees);
+        $data = collect($submissions)->map(function ($sub) use ($branches, $departments, $employees, $employeesLookup) {
+            return $this->formatSubmissionRow($sub, $branches, $departments, $employees, $employeesLookup);
         });
 
         // Apply branch filter if provided
@@ -239,6 +258,7 @@ class FormApiController extends Controller
         if ($employeeIdFilter && $employeeIdFilter !== 'all') {
             $data = $data->filter(function ($row) use ($employeeIdFilter, $employees) {
                 return (string) $row['employee_id'] === (string) $employeeIdFilter
+                    || (string) $row['submitted_by_id'] === (string) $employeeIdFilter
                     || (isset($employees[$row['employee_id']]) && strcasecmp($employees[$row['employee_id']], $employeeIdFilter) === 0)
                     || collect($row['employees'])->contains(fn($e) => (string) $e['id'] === (string) $employeeIdFilter);
             })->values();
@@ -493,19 +513,34 @@ class FormApiController extends Controller
     /**
      * Format a single submission row into analytics-ready structure.
      */
-    private function formatSubmissionRow($sub, array $branches, array $departments, array $employees): array
+    private function formatSubmissionRow($sub, array $branches, array $departments, array $employees, array $employeesLookup = []): array
     {
-        $submittedById = $sub->user_id ? (int) $sub->user_id : ($sub->user?->id ? (int) $sub->user->id : null);
+        $submittedByUserId = $sub->user_id ? (int) $sub->user_id : ($sub->user?->id ? (int) $sub->user->id : null);
         $submittedByName = $sub->user?->name ?? 'Unknown';
         $submitterEmail = $sub->user?->email;
 
         $submitterEmp = $sub->user?->employee;
-        $submitterEmployeeId = $submitterEmp?->id;
+        if (!$submitterEmp && $sub->user && !empty($employeesLookup)) {
+            $userEmail = strtolower((string)$sub->user->email);
+            $userName = strtolower(trim((string)$sub->user->name));
+            if ($sub->user->employee_id && isset($employeesLookup['byId'][$sub->user->employee_id])) {
+                $submitterEmp = $employeesLookup['byId'][$sub->user->employee_id];
+            } elseif ($userEmail && isset($employeesLookup['byEmail'][$userEmail])) {
+                $submitterEmp = $employeesLookup['byEmail'][$userEmail];
+            } elseif ($userName && isset($employeesLookup['byName'][$userName])) {
+                $submitterEmp = $employeesLookup['byName'][$userName];
+            }
+        }
+
+        $submitterEmployeeId = $submitterEmp?->id ?? ($sub->user?->employee_id ? (int) $sub->user->employee_id : null);
         $submitterEmployeeName = $submitterEmp ? trim($submitterEmp->first_name . ' ' . $submitterEmp->last_name) : null;
         $submitterDeptId = $submitterEmp?->department?->id;
         $submitterDeptName = $submitterEmp?->department?->name;
         $submitterBranchId = $submitterEmp?->branch?->id;
         $submitterBranchName = $submitterEmp?->branch?->name;
+
+        // Submitted by ID is now the EMPLOYEE ID (falls back to user_id only if no employee record exists)
+        $submittedById = $submitterEmployeeId ?? $submittedByUserId;
 
         $branchId = null;
         $branchName = null;
@@ -693,14 +728,18 @@ class FormApiController extends Controller
 
             // Submitter
             'submitted_by_id' => $submittedById,
+            'submitted_by_employee_id' => $submitterEmployeeId,
+            'submitted_by_user_id' => $submittedByUserId,
             'submitted_by' => $submittedByName,
             'submitted_by_email' => $submitterEmail,
             'submitter' => [
                 'id' => $submittedById,
+                'employee_id' => $submitterEmployeeId,
+                'user_id' => $submittedByUserId,
                 'name' => $submittedByName,
                 'email' => $submitterEmail,
-                'employee_id' => $submitterEmployeeId,
                 'employee_name' => $submitterEmployeeName,
+                'employee_code' => $submitterEmp?->employee_code,
                 'department_id' => $submitterDeptId,
                 'department_name' => $submitterDeptName,
                 'branch_id' => $submitterBranchId,
@@ -771,6 +810,7 @@ class FormApiController extends Controller
                 'form_title',
                 'status',
                 'submitted_by_id',
+                'submitted_by_user_id',
                 'submitted_by',
                 'branch_id',
                 'branch_name',
@@ -798,6 +838,7 @@ class FormApiController extends Controller
                     $row['form_title'],
                     $row['status'],
                     $row['submitted_by_id'],
+                    $row['submitted_by_user_id'],
                     $row['submitted_by'],
                     $row['branch_id'],
                     $row['branch_name'],
