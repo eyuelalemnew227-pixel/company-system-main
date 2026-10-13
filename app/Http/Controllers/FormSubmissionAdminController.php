@@ -898,7 +898,7 @@ class FormSubmissionAdminController extends Controller
     /**
      * Employee-level results for the Training post-assessment pass rate KPI.
      */
-    public function post_assessment_results()
+    public function evaluation_results()
     {
         $kpiName = 'Training post-assessment pass rate';
         $needle = strtolower($kpiName);
@@ -1029,7 +1029,7 @@ class FormSubmissionAdminController extends Controller
             'not_scored' => collect($rows)->where('status', 'not_scored')->count(),
         ];
 
-        return Inertia::render('Forms/PostAssessmentResults', [
+        return Inertia::render('Forms/EvaluationResults', [
             'kpiName' => $kpiName,
             'pageState' => $pageState,
             'linkedForms' => $linkedForms->map(fn ($form) => [
@@ -1045,6 +1045,11 @@ class FormSubmissionAdminController extends Controller
                 'name' => $month->name,
             ])->values(),
         ]);
+    }
+
+    public function post_assessment_results()
+    {
+        return $this->evaluation_results();
     }
 
     /**

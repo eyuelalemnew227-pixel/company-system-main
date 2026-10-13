@@ -70,8 +70,8 @@ export default function Index({ forms }: { forms: any[] }) {
                         )}
                         {can('view form submissions') && (
                             <Button variant="outline" asChild className="bg-white text-amber-900 border-amber-200 hover:bg-amber-50">
-                                <Link href="/forms/post-assessment-results">
-                                    <ClipboardList className="mr-2 h-4 w-4 text-amber-700" /> Post-assessment results
+                                <Link href="/forms/evaluation-results">
+                                    <ClipboardList className="mr-2 h-4 w-4 text-amber-700" /> Evaluation Results
                                 </Link>
                             </Button>
                         )}

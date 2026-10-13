@@ -43,7 +43,7 @@ type PageState = 'ready' | 'missing_kpi' | 'no_forms';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Form', href: '/forms' },
-    { title: 'Post-assessment results', href: '/forms/post-assessment-results' },
+    { title: 'Evaluation Results', href: '/forms/evaluation-results' },
 ];
 
 function statusClass(status: ResultRow['status']) {
@@ -59,7 +59,7 @@ function actionClass(action: ResultRow['next_action']) {
     return 'bg-gray-100 text-gray-700 border-gray-200';
 }
 
-export default function PostAssessmentResults({
+export default function EvaluationResults({
     kpiName,
     pageState,
     linkedForms = [],
@@ -123,10 +123,10 @@ export default function PostAssessmentResults({
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Post-assessment results" />
+            <Head title="Evaluation Results" />
             <div className="max-w-[90rem] mx-auto space-y-6 pb-12">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-amber-900">Post-assessment results</h2>
+                    <h2 className="text-2xl font-bold tracking-tight text-amber-900">Evaluation Results</h2>
                     <p className="text-muted-foreground">
                         Employees scored on approved forms linked to <span className="font-medium text-gray-800">{kpiName}</span>.
                         Pass is 75 or above. A fail from 60 to 74.9 is a warning. Below 60 is training.
