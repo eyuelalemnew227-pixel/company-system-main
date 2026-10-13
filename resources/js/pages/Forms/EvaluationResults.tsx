@@ -67,6 +67,8 @@ export default function EvaluationResults({
     summary,
     fiscalYears = [],
     fiscalMonths = [],
+    currentFiscalYearId = null,
+    currentFiscalMonthId = null,
 }: {
     kpiName: string;
     pageState: PageState;
@@ -75,13 +77,17 @@ export default function EvaluationResults({
     summary: Summary;
     fiscalYears: FiscalOption[];
     fiscalMonths: FiscalOption[];
+    currentFiscalYearId?: number | null;
+    currentFiscalMonthId?: number | null;
 }) {
+    const defaultYearFilter = currentFiscalYearId ? String(currentFiscalYearId) : 'all';
+    const defaultMonthFilter = currentFiscalMonthId ? String(currentFiscalMonthId) : 'all';
     const [search, setSearch] = useState('');
     const [formFilter, setFormFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
     const [actionFilter, setActionFilter] = useState('all');
-    const [yearFilter, setYearFilter] = useState('all');
-    const [monthFilter, setMonthFilter] = useState('all');
+    const [yearFilter, setYearFilter] = useState(defaultYearFilter);
+    const [monthFilter, setMonthFilter] = useState(defaultMonthFilter);
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 25;
 
@@ -117,8 +123,8 @@ export default function EvaluationResults({
         setFormFilter('all');
         setStatusFilter('all');
         setActionFilter('all');
-        setYearFilter('all');
-        setMonthFilter('all');
+        setYearFilter(defaultYearFilter);
+        setMonthFilter(defaultMonthFilter);
     };
 
     return (
@@ -128,7 +134,7 @@ export default function EvaluationResults({
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-amber-900">Evaluation Results</h2>
                     <p className="text-muted-foreground">
-                        Employees scored on approved forms linked to <span className="font-medium text-gray-800">{kpiName}</span>.
+                        Employees scored on forms linked to <span className="font-medium text-gray-800">{kpiName}</span>.
                         Pass is 75 or above. A fail from 60 to 74.9 is a warning. Below 60 is training.
                     </p>
                 </div>
@@ -271,7 +277,7 @@ export default function EvaluationResults({
                                         <TableRow>
                                             <TableCell colSpan={8} className="py-12 text-center text-gray-500">
                                                 {rows.length === 0
-                                                    ? 'No employees have an approved assessment on the linked forms yet.'
+                                                    ? 'No employees have an assessment on the linked forms yet.'
                                                     : 'No rows match these filters.'}
                                             </TableCell>
                                         </TableRow>

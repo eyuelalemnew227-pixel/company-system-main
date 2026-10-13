@@ -934,7 +934,6 @@ class FormSubmissionAdminController extends Controller
         if ($pageState === 'ready') {
             $formIds = $linkedForms->pluck('id')->all();
             $submissions = FormSubmission::query()
-                ->whereRaw('LOWER(status) = ?', ['approved'])
                 ->whereHas('formVersion', function ($query) use ($formIds) {
                     $query->whereIn('form_id', $formIds);
                 })
@@ -1029,6 +1028,16 @@ class FormSubmissionAdminController extends Controller
             'not_scored' => collect($rows)->where('status', 'not_scored')->count(),
         ];
 
+        $today = \Carbon\Carbon::today();
+        $currentFiscalYear = $fiscalYears->first(fn ($year) => $today->between(
+            \Carbon\Carbon::parse($year->gregorian_start_date),
+            \Carbon\Carbon::parse($year->gregorian_end_date)
+        ));
+        $currentFiscalMonth = $fiscalMonths->first(fn ($month) => $today->between(
+            \Carbon\Carbon::parse($month->gregorian_start_date),
+            \Carbon\Carbon::parse($month->gregorian_end_date)
+        ));
+
         return Inertia::render('Forms/EvaluationResults', [
             'kpiName' => $kpiName,
             'pageState' => $pageState,
@@ -1044,6 +1053,8 @@ class FormSubmissionAdminController extends Controller
                 'fiscal_year_id' => $month->fiscal_year_id,
                 'name' => $month->name,
             ])->values(),
+            'currentFiscalYearId' => $currentFiscalYear?->id,
+            'currentFiscalMonthId' => $currentFiscalMonth?->id,
         ]);
     }
 
