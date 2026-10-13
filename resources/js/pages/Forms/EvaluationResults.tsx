@@ -64,7 +64,6 @@ export default function EvaluationResults({
     pageState,
     linkedForms = [],
     rows = [],
-    summary,
     fiscalYears = [],
     fiscalMonths = [],
     currentFiscalYearId = null,
@@ -74,7 +73,7 @@ export default function EvaluationResults({
     pageState: PageState;
     linkedForms: LinkedForm[];
     rows: ResultRow[];
-    summary: Summary;
+    summary?: Summary;
     fiscalYears: FiscalOption[];
     fiscalMonths: FiscalOption[];
     currentFiscalYearId?: number | null;
@@ -110,6 +109,16 @@ export default function EvaluationResults({
             return true;
         });
     }, [rows, search, formFilter, statusFilter, actionFilter, yearFilter, monthFilter]);
+
+    const filteredSummary = useMemo((): Summary => ({
+        rows: filteredRows.length,
+        employees: new Set(filteredRows.map((row) => row.employee_id)).size,
+        pass: filteredRows.filter((row) => row.status === 'pass').length,
+        fail: filteredRows.filter((row) => row.status === 'fail').length,
+        warning: filteredRows.filter((row) => row.next_action === 'warning').length,
+        training: filteredRows.filter((row) => row.next_action === 'training').length,
+        not_scored: filteredRows.filter((row) => row.status === 'not_scored').length,
+    }), [filteredRows]);
 
     useEffect(() => {
         setCurrentPage(1);
@@ -169,13 +178,13 @@ export default function EvaluationResults({
                     <>
                         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
                             {[
-                                ['Rows', summary.rows],
-                                ['Employees', summary.employees],
-                                ['Pass', summary.pass],
-                                ['Fail', summary.fail],
-                                ['Warning', summary.warning],
-                                ['Training', summary.training],
-                                ['Not scored', summary.not_scored],
+                                ['Rows', filteredSummary.rows],
+                                ['Employees', filteredSummary.employees],
+                                ['Pass', filteredSummary.pass],
+                                ['Fail', filteredSummary.fail],
+                                ['Warning', filteredSummary.warning],
+                                ['Training', filteredSummary.training],
+                                ['Not scored', filteredSummary.not_scored],
                             ].map(([label, value]) => (
                                 <div key={String(label)} className="rounded-lg border bg-white px-4 py-3">
                                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
