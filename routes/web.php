@@ -176,6 +176,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('my-submissions/{submission}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'show'])->name('forms.submissions.my_show');
     });
 
+    // Registered before the forms resource so "post-assessment-results" is not captured as a form id.
+    Route::middleware(['auth', 'permission:view form submissions'])->group(function () {
+        Route::get('forms/post-assessment-results', [\App\Http\Controllers\FormSubmissionAdminController::class, 'post_assessment_results'])
+            ->name('forms.post-assessment-results');
+    });
+
     // Forms Builder - Management (Controller-level ACL handled)
     Route::middleware(['auth', 'permission:view forms'])->group(function () {
         Route::resource('forms', FormController::class)->except(['destroy']);

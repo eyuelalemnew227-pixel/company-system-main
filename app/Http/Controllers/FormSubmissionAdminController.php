@@ -11,7 +11,7 @@ class FormSubmissionAdminController extends Controller
     private function _calculateEmployeeScores($submission, $employeesCollection)
     {
         $rosterAnswer = $submission->answers->first(function ($a) {
-            return ($a->question->inputType->type_identifier ?? '') === 'employee_attendance_roster';
+            return ($a->question?->inputType?->type_identifier ?? '') === 'employee_attendance_roster';
         });
 
         $yesAnswers = 0;
@@ -41,7 +41,7 @@ class FormSubmissionAdminController extends Controller
         }
 
         foreach ($submission->answers as $ans) {
-            $qType = $ans->question->inputType->type_identifier ?? 'text';
+            $qType = $ans->question?->inputType?->type_identifier ?? 'text';
             if ($qType === 'select_one') {
                 $isScored = false;
                 $isYes = false;
@@ -893,5 +893,235 @@ class FormSubmissionAdminController extends Controller
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Employee-level results for the Training post-assessment pass rate KPI.
+     */
+    public function post_assessment_results()
+    {
+        $kpiName = 'Training post-assessment pass rate';
+        $needle = strtolower($kpiName);
+
+        $kpiRows = \App\Models\KpiLibrary::with(['forms:id,title', 'kpiItem:id,name'])
+            ->where(function ($query) use ($needle) {
+                $query->whereRaw('LOWER(TRIM(name)) = ?', [$needle])
+                    ->orWhereHas('kpiItem', function ($itemQuery) use ($needle) {
+                        $itemQuery->whereRaw('LOWER(TRIM(name)) = ?', [$needle]);
+                    });
+            })
+            ->get();
+
+        $linkedForms = $kpiRows
+            ->flatMap(fn ($kpi) => $kpi->forms)
+            ->unique('id')
+            ->sortBy('title')
+            ->values();
+
+        $pageState = 'ready';
+        if ($kpiRows->isEmpty()) {
+            $pageState = 'missing_kpi';
+        } elseif ($linkedForms->isEmpty()) {
+            $pageState = 'no_forms';
+        }
+
+        $fiscalYears = \App\Models\FiscalYear::orderBy('gregorian_start_date')->get(['id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+        $fiscalMonths = \App\Models\FiscalMonth::orderBy('gregorian_start_date')->get(['id', 'fiscal_year_id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+        $departments = \App\Models\Department::pluck('name', 'id');
+        $employees = \App\Models\Employee::get();
+
+        $rows = [];
+        if ($pageState === 'ready') {
+            $formIds = $linkedForms->pluck('id')->all();
+            $submissions = FormSubmission::query()
+                ->whereRaw('LOWER(status) = ?', ['approved'])
+                ->whereHas('formVersion', function ($query) use ($formIds) {
+                    $query->whereIn('form_id', $formIds);
+                })
+                ->with([
+                    'formVersion:id,form_id',
+                    'formVersion.form:id,title',
+                    'answers.question.inputType',
+                    'answers.question.choices',
+                    'answers.question.section:id,order_index',
+                ])
+                ->orderByDesc('id')
+                ->get();
+
+            $seen = [];
+            foreach ($submissions as $submission) {
+                $this->_calculateEmployeeScores($submission, $employees);
+                $this->attachLookupSubjectScore($submission, $employees);
+
+                $submittedAt = \Carbon\Carbon::parse($submission->created_at);
+                $matchedYear = $fiscalYears->first(
+                    fn ($year) => $submittedAt->between(
+                        \Carbon\Carbon::parse($year->gregorian_start_date),
+                        \Carbon\Carbon::parse($year->gregorian_end_date)
+                    )
+                );
+                $matchedMonth = $fiscalMonths->first(
+                    fn ($month) => $submittedAt->between(
+                        \Carbon\Carbon::parse($month->gregorian_start_date),
+                        \Carbon\Carbon::parse($month->gregorian_end_date)
+                    )
+                );
+
+                $formId = $submission->formVersion?->form_id;
+                $formTitle = $submission->formVersion?->form?->title ?? 'Unknown form';
+                $monthKey = $matchedMonth?->id ?? 'none';
+
+                foreach ($submission->employee_scores ?? [] as $score) {
+                    $employeeId = $score['id'] ?? null;
+                    if (!$employeeId || !$formId) {
+                        continue;
+                    }
+
+                    $dedupeKey = $employeeId . '|' . $formId . '|' . $monthKey;
+                    if (isset($seen[$dedupeKey])) {
+                        continue;
+                    }
+                    $seen[$dedupeKey] = true;
+
+                    $percentage = $score['percentage'];
+                    $outcome = $this->postAssessmentOutcome($percentage === null ? null : (float) $percentage);
+                    $departmentId = $score['department_id'] ?? null;
+
+                    $rows[] = [
+                        'employee_id' => $employeeId,
+                        'employee_name' => $score['name'] ?? 'Unknown employee',
+                        'department_id' => $departmentId,
+                        'department_name' => $departmentId ? ($departments[$departmentId] ?? 'Unknown department') : '—',
+                        'form_id' => $formId,
+                        'form_title' => $formTitle,
+                        'submission_id' => $submission->id,
+                        'fiscal_year_id' => $matchedYear?->id,
+                        'fiscal_year_name' => $matchedYear?->name,
+                        'fiscal_month_id' => $matchedMonth?->id,
+                        'fiscal_month_name' => $matchedMonth?->name ?? 'Outside fiscal calendar',
+                        'score' => $percentage === null ? null : (float) $percentage,
+                        'status' => $outcome['status'],
+                        'status_label' => $outcome['status_label'],
+                        'next_action' => $outcome['next_action'],
+                        'next_action_label' => $outcome['next_action_label'],
+                        'submitted_at' => $submission->created_at?->toDateTimeString(),
+                    ];
+                }
+            }
+
+            usort($rows, function ($a, $b) {
+                $byName = strcasecmp($a['employee_name'], $b['employee_name']);
+                if ($byName !== 0) {
+                    return $byName;
+                }
+
+                return strcasecmp($a['form_title'], $b['form_title']);
+            });
+        }
+
+        $summary = [
+            'rows' => count($rows),
+            'employees' => collect($rows)->pluck('employee_id')->unique()->count(),
+            'pass' => collect($rows)->where('status', 'pass')->count(),
+            'fail' => collect($rows)->where('status', 'fail')->count(),
+            'warning' => collect($rows)->where('next_action', 'warning')->count(),
+            'training' => collect($rows)->where('next_action', 'training')->count(),
+            'not_scored' => collect($rows)->where('status', 'not_scored')->count(),
+        ];
+
+        return Inertia::render('Forms/PostAssessmentResults', [
+            'kpiName' => $kpiName,
+            'pageState' => $pageState,
+            'linkedForms' => $linkedForms->map(fn ($form) => [
+                'id' => $form->id,
+                'title' => $form->title,
+            ])->values(),
+            'rows' => $rows,
+            'summary' => $summary,
+            'fiscalYears' => $fiscalYears->map(fn ($year) => ['id' => $year->id, 'name' => $year->name])->values(),
+            'fiscalMonths' => $fiscalMonths->map(fn ($month) => [
+                'id' => $month->id,
+                'fiscal_year_id' => $month->fiscal_year_id,
+                'name' => $month->name,
+            ])->values(),
+        ]);
+    }
+
+    /**
+     * Checklists identify the assessed person with an employee lookup, not a roster.
+     * The first lookup is the subject. Later lookups are sign-off names and are skipped.
+     */
+    private function attachLookupSubjectScore($submission, $employeesCollection): void
+    {
+        if (!empty($submission->employee_scores)) {
+            return;
+        }
+
+        $lookup = $submission->answers
+            ->filter(function ($answer) {
+                $type = $answer->question?->inputType?->type_identifier ?? '';
+
+                return $type === 'employee_lookup' && is_numeric($answer->value_text);
+            })
+            ->sortBy(function ($answer) {
+                $sectionOrder = $answer->question?->section?->order_index ?? 9999;
+                $questionOrder = $answer->question?->order_index ?? 9999;
+
+                return sprintf('%05d-%05d-%08d', $sectionOrder, $questionOrder, $answer->id);
+            })
+            ->first();
+
+        if (!$lookup) {
+            return;
+        }
+
+        $employee = $employeesCollection->firstWhere('id', (int) $lookup->value_text);
+        if (!$employee) {
+            return;
+        }
+
+        $submission->employee_scores = [[
+            'id' => $employee->id,
+            'name' => trim($employee->first_name . ' ' . $employee->last_name) ?: $employee->employee_code,
+            'department_id' => $employee->department_id,
+            'percentage' => $submission->calculated_score,
+        ]];
+    }
+
+    private function postAssessmentOutcome(?float $score): array
+    {
+        if ($score === null) {
+            return [
+                'status' => 'not_scored',
+                'status_label' => 'Not scored',
+                'next_action' => 'not_scored',
+                'next_action_label' => 'Not scored',
+            ];
+        }
+
+        if ($score >= 75) {
+            return [
+                'status' => 'pass',
+                'status_label' => 'Pass',
+                'next_action' => 'na',
+                'next_action_label' => 'NA',
+            ];
+        }
+
+        if ($score >= 60) {
+            return [
+                'status' => 'fail',
+                'status_label' => 'Fail',
+                'next_action' => 'warning',
+                'next_action_label' => 'Warning',
+            ];
+        }
+
+        return [
+            'status' => 'fail',
+            'status_label' => 'Fail',
+            'next_action' => 'training',
+            'next_action_label' => 'Training',
+        ];
     }
 }
