@@ -137,8 +137,12 @@ class FormApiController extends Controller
         $targetFormId = $id ?? $request->query('form_id');
         $branchIdFilter = $request->query('branch_id');
         $departmentIdFilter = $request->query('department_id');
-        $employeeIdFilter = $request->query('employee_id');
-        $submittedByIdFilter = $request->query('submitted_by_id') ?? $request->query('user_id');
+        $employeeIdFilter = $request->query('employee_id') ?? $request->query('employee_code');
+        $submittedByIdFilter = $request->query('submitted_by_employee_code')
+            ?? $request->query('submitted_by_employee_id')
+            ?? $request->query('submitted_by_id')
+            ?? $request->query('employee_code')
+            ?? $request->query('user_id');
         $statusFilter = $request->query('status');
         $dateFrom = $request->query('date_from');
         $dateTo = $request->query('date_to');
@@ -152,10 +156,13 @@ class FormApiController extends Controller
         $employees = $employeeModels->mapWithKeys(function ($e) {
             return [$e->id => trim($e->first_name . ' ' . $e->last_name) ?: $e->employee_code];
         })->toArray();
+        $employeeCodes = $employeeModels->pluck('employee_code', 'id')->toArray();
         $employeesLookup = [
             'byId' => $employeeModels->keyBy('id'),
+            'byCode' => $employeeModels->keyBy('employee_code'),
             'byName' => [],
             'byEmail' => [],
+            'codes' => $employeeCodes,
         ];
         foreach ($employeeModels as $e) {
             $fullName = strtolower(trim($e->first_name . ' ' . $e->last_name));
@@ -187,7 +194,10 @@ class FormApiController extends Controller
         if ($submittedByIdFilter && $submittedByIdFilter !== 'all') {
             $query->where(function ($q) use ($submittedByIdFilter) {
                 $q->whereHas('user', function ($uq) use ($submittedByIdFilter) {
-                    $uq->where('employee_id', $submittedByIdFilter);
+                    $uq->where('employee_id', $submittedByIdFilter)
+                       ->orWhereHas('employee', function ($eq) use ($submittedByIdFilter) {
+                           $eq->where('employee_code', $submittedByIdFilter);
+                       });
                 })->orWhere('user_id', $submittedByIdFilter);
             });
         }
@@ -262,7 +272,8 @@ class FormApiController extends Controller
         if ($employeeIdFilter && $employeeIdFilter !== 'all') {
             $empName = $employees[$employeeIdFilter] ?? null;
             $data = $data->filter(function ($row) use ($employeeIdFilter, $empName) {
-                return (string) ($row['submitted_by_employee_id'] ?? '') === (string) $employeeIdFilter
+                return (string) ($row['submitted_by_employee_code'] ?? '') === (string) $employeeIdFilter
+                    || (string) ($row['submitted_by_employee_id'] ?? '') === (string) $employeeIdFilter
                     || collect($row['answers_flat'])->contains(function ($val, $key) use ($employeeIdFilter, $empName) {
                         return (string) $val === (string) $employeeIdFilter
                             || ($empName && strcasecmp((string) $val, (string) $empName) === 0);
@@ -534,7 +545,8 @@ class FormApiController extends Controller
             }
         }
 
-        $submitterEmployeeId = $submitterEmp?->id ?? ($sub->user?->employee_id ? (int) $sub->user->employee_id : null);
+        $submitterEmployeeCode = $submitterEmp?->employee_code
+            ?? ($employeesLookup['codes'][$sub->user?->employee_id ?? ''] ?? null);
 
         $answersFlat = [];
 
@@ -544,6 +556,7 @@ class FormApiController extends Controller
             $type = $question?->inputType?->type_identifier ?? 'text';
             $val = $ans->value_text;
             $rawId = null;
+            $empCode = null;
 
             // Resolve lookups & choices
             if ($type === 'branch_lookup') {
@@ -555,6 +568,7 @@ class FormApiController extends Controller
             } elseif ($type === 'employee_lookup') {
                 $rawId = $val;
                 $resolvedVal = isset($employees[$val]) ? $employees[$val] : $val;
+                $empCode = $employeesLookup['codes'][$val] ?? $val;
             } elseif ($type === 'number') {
                 $resolvedVal = ($ans->value_text !== null && $ans->value_text !== '') ? $ans->value_text : ($ans->value_boolean !== null ? (string) (int) $ans->value_boolean : $val);
             } elseif ($question && $question->choices->isNotEmpty()) {
@@ -586,7 +600,10 @@ class FormApiController extends Controller
             }
 
             $answersFlat[$qLabel] = $flatVal;
-            if (in_array($type, ['branch_lookup', 'department_lookup', 'employee_lookup']) && $rawId !== null) {
+            if ($type === 'employee_lookup') {
+                $answersFlat[$qLabel . ' (Code)'] = $empCode;
+                $answersFlat[$qLabel . ' (ID)'] = $empCode;
+            } elseif (in_array($type, ['branch_lookup', 'department_lookup']) && $rawId !== null) {
                 $answersFlat[$qLabel . ' (ID)'] = is_numeric($rawId) ? (int) $rawId : $rawId;
             }
         }
@@ -596,7 +613,8 @@ class FormApiController extends Controller
             'form_id' => $sub->formVersion?->form_id,
             'form_title' => $sub->formVersion?->form?->title ?? 'Unknown Form',
             'status' => $sub->status ?: 'pending',
-            'submitted_by_employee_id' => $submitterEmployeeId,
+            'submitted_by_employee_code' => $submitterEmployeeCode,
+            'submitted_by_employee_id' => $submitterEmployeeCode,
             'submitted_at' => $sub->created_at ? $sub->created_at->toDateTimeString() : null,
             'answers_flat' => $answersFlat,
         ];
@@ -632,7 +650,7 @@ class FormApiController extends Controller
                 'form_id',
                 'form_title',
                 'status',
-                'submitted_by_employee_id',
+                'submitted_by_employee_code',
                 'submitted_at',
             ];
             $questionHeaders = [];
@@ -652,7 +670,7 @@ class FormApiController extends Controller
                     $row['form_id'],
                     $row['form_title'],
                     $row['status'],
-                    $row['submitted_by_employee_id'],
+                    $row['submitted_by_employee_code'] ?? ($row['submitted_by_employee_id'] ?? ''),
                     $row['submitted_at'],
                 ];
                 foreach ($questionHeaders as $q) {
