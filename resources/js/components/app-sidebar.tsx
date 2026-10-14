@@ -289,6 +289,18 @@ const baseSections: NavSection[] = [
           { title: 'LMS Reports', href: '/training/reports', icon: BarChart3, permission: 'training.online.reports.view' },
         ],
       },
+      {
+        label: 'TD KPI',
+        icon: Target,
+        items: [
+          {
+            title: 'Questions',
+            href: '/training/td-kpi/questions',
+            icon: FileQuestion,
+            permission: 'training.td_kpi.questions.view',
+          },
+        ],
+      },
     ],
   },
   {

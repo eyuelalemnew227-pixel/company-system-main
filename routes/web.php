@@ -717,7 +717,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Training Management System
-    Route::prefix('training')->name('training.')->middleware(['permission:training.online.view|training.agendas.view|training.agendas.create|training.master_schedule.view|training.master_schedule.create|training.evaluations.manage|training.settings.manage'])->group(function () {
+    Route::prefix('training')->name('training.')->middleware(['permission:training.online.view|training.agendas.view|training.agendas.create|training.master_schedule.view|training.master_schedule.create|training.evaluations.manage|training.settings.manage|training.td_kpi.questions.view|training.td_kpi.questions.create|training.td_kpi.questions.update|training.td_kpi.questions.delete'])->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Training\TrainingDashboardController::class, 'index'])->name('dashboard');
 
         // Courses & Lessons
@@ -808,6 +808,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         // Reports
         Route::get('/reports', [\App\Http\Controllers\Training\ReportController::class, 'index'])->middleware('permission:training.reports.view|training.reports.export|training.online.reports.view')->name('reports.index');
+
+        // TD KPI Questions
+        Route::prefix('td-kpi')->name('td-kpi.')->group(function () {
+            Route::get('questions', [\App\Http\Controllers\Training\TdKpiQuestionController::class, 'index'])
+                ->middleware('permission:training.td_kpi.questions.view')
+                ->name('questions.index');
+            Route::get('questions/create', [\App\Http\Controllers\Training\TdKpiQuestionController::class, 'create'])
+                ->middleware('permission:training.td_kpi.questions.create')
+                ->name('questions.create');
+            Route::post('questions', [\App\Http\Controllers\Training\TdKpiQuestionController::class, 'store'])
+                ->middleware('permission:training.td_kpi.questions.create')
+                ->name('questions.store');
+            Route::get('questions/{tdKpiQuestion}/edit', [\App\Http\Controllers\Training\TdKpiQuestionController::class, 'edit'])
+                ->middleware('permission:training.td_kpi.questions.update')
+                ->name('questions.edit');
+            Route::put('questions/{tdKpiQuestion}', [\App\Http\Controllers\Training\TdKpiQuestionController::class, 'update'])
+                ->middleware('permission:training.td_kpi.questions.update')
+                ->name('questions.update');
+            Route::delete('questions/{tdKpiQuestion}', [\App\Http\Controllers\Training\TdKpiQuestionController::class, 'destroy'])
+                ->middleware('permission:training.td_kpi.questions.delete')
+                ->name('questions.destroy');
+        });
     });
 });
 

@@ -301,6 +301,12 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'training.evaluations.view_own']);
         Permission::firstOrCreate(['name' => 'training.evaluations.manage']);
 
+        // TD KPI Questions
+        Permission::firstOrCreate(['name' => 'training.td_kpi.questions.view']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.questions.create']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.questions.update']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.questions.delete']);
+
         // Internal Memorandum & Documents (11 total Memos & Documents permissions)
         Permission::firstOrCreate(['name' => 'memo.view']);
         Permission::firstOrCreate(['name' => 'memo.view.all']);
