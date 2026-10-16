@@ -10,15 +10,17 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class KpiLibraryApiController extends Controller
 {
     /**
-     * List all KPIs with filtering, search, and pagination.
+     * List all KPIs with clean, flat records:
+     * kpi_role, kpi_indicator, weight, forms_id
      * GET /api/kpi-library
      * GET /api/kpi-libraries
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): JsonResponse|StreamedResponse
     {
         $search = $request->query('search');
         $roleId = $request->query('kpi_role_id') ?? $request->query('role_id');
@@ -29,15 +31,18 @@ class KpiLibraryApiController extends Controller
         $maxWeight = $request->query('max_weight');
         $sortBy = $request->query('sort_by', 'created_at');
         $order = strtolower($request->query('order', 'desc')) === 'asc' ? 'asc' : 'desc';
-        $perPage = (int) $request->query('per_page', 15);
-        $shouldPaginate = !filter_var($request->query('all', false), FILTER_VALIDATE_BOOLEAN)
-            && filter_var($request->query('paginate', true), FILTER_VALIDATE_BOOLEAN);
+        $perPageParam = $request->query('per_page');
+        $format = strtolower((string) $request->query('format', 'json'));
+        $rawOrFlat = filter_var($request->query('flat', false), FILTER_VALIDATE_BOOLEAN)
+            || filter_var($request->query('raw', false), FILTER_VALIDATE_BOOLEAN);
+
+        // Paginate only if specifically requested via page or numeric per_page
+        $shouldPaginate = $request->has('page') || ($perPageParam && $perPageParam !== 'all');
 
         $query = KpiLibrary::with([
-            'kpiRole:id,name,description',
-            'kpiItem:id,name,description',
-            'forms:id,title,status',
-            'creator:id,name',
+            'kpiRole:id,name',
+            'kpiItem:id,name',
+            'forms:id',
         ]);
 
         // 1. Search filter (Name, Description, Role Name, Master Item Name)
@@ -96,55 +101,42 @@ class KpiLibraryApiController extends Controller
             $query->latest();
         }
 
-        // 7. Overall Summary Stats
-        $totalKpisCount = KpiLibrary::count();
-        $totalRolesCount = KpiRole::count();
-        $totalMasterItemsCount = KpiItem::count();
-        $avgWeight = (float) (KpiLibrary::avg('weight') ?? 0);
-
         if ($shouldPaginate) {
-            $perPage = max(1, min(100, $perPage));
+            $perPage = max(1, min(200, (int) ($perPageParam ?: 50)));
             $paginated = $query->paginate($perPage)->withQueryString();
-
-            $data = collect($paginated->items())->map(fn($kpi) => $this->formatKpi($kpi));
-
-            return response()->json([
-                'status' => 'success',
-                'count' => $data->count(),
+            $data = collect($paginated->items())->map(fn($kpi) => $this->formatKpi($kpi))->values();
+            $pagination = [
                 'total' => $paginated->total(),
-                'summary' => [
-                    'total_kpis' => $totalKpisCount,
-                    'total_roles' => $totalRolesCount,
-                    'total_master_items' => $totalMasterItemsCount,
-                    'average_weight' => round($avgWeight, 2),
-                ],
-                'data' => $data,
-                'pagination' => [
-                    'current_page' => $paginated->currentPage(),
-                    'last_page' => $paginated->lastPage(),
-                    'per_page' => $paginated->perPage(),
-                    'total' => $paginated->total(),
-                    'from' => $paginated->firstItem(),
-                    'to' => $paginated->lastItem(),
-                    'has_more' => $paginated->hasMorePages(),
-                ],
-            ]);
+                'per_page' => $paginated->perPage(),
+                'current_page' => $paginated->currentPage(),
+                'last_page' => $paginated->lastPage(),
+            ];
+        } else {
+            $data = $query->get()->map(fn($kpi) => $this->formatKpi($kpi))->values();
+            $pagination = null;
         }
 
-        $allKpis = $query->get()->map(fn($kpi) => $this->formatKpi($kpi));
+        // Return CSV if requested
+        if ($format === 'csv') {
+            return $this->streamCsvResponse($data, "kpi_library_" . date('Y_m_d_His') . ".csv");
+        }
 
-        return response()->json([
+        // Return raw array if flat=true or raw=true requested
+        if ($rawOrFlat) {
+            return response()->json($data);
+        }
+
+        $response = [
             'status' => 'success',
-            'count' => $allKpis->count(),
-            'total' => $allKpis->count(),
-            'summary' => [
-                'total_kpis' => $totalKpisCount,
-                'total_roles' => $totalRolesCount,
-                'total_master_items' => $totalMasterItemsCount,
-                'average_weight' => round($avgWeight, 2),
-            ],
-            'data' => $allKpis,
-        ]);
+            'count' => $data->count(),
+            'data' => $data,
+        ];
+
+        if ($pagination) {
+            $response['pagination'] = $pagination;
+        }
+
+        return response()->json($response);
     }
 
     /**
@@ -587,36 +579,48 @@ class KpiLibraryApiController extends Controller
 
     /**
      * Standardized formatting for KPI Library objects.
+     * Returns clean, flat records: kpi_role, kpi_indicator, weight, forms_id
      */
     protected function formatKpi(KpiLibrary $kpi): array
     {
         return [
-            'id' => $kpi->id,
-            'name' => $kpi->name,
+            'kpi_role' => $kpi->kpiRole?->name ?? 'Unassigned',
+            'kpi_indicator' => $kpi->name ?: ($kpi->kpiItem?->name ?? ''),
             'weight' => (float) $kpi->weight,
-            'description' => $kpi->description,
-            'role' => $kpi->kpiRole ? [
-                'id' => $kpi->kpiRole->id,
-                'name' => $kpi->kpiRole->name,
-                'description' => $kpi->kpiRole->description ?? null,
-            ] : null,
-            'master_item' => $kpi->kpiItem ? [
-                'id' => $kpi->kpiItem->id,
-                'name' => $kpi->kpiItem->name,
-                'description' => $kpi->kpiItem->description ?? null,
-            ] : null,
-            'forms' => $kpi->forms ? $kpi->forms->map(fn($f) => [
-                'id' => $f->id,
-                'title' => $f->title,
-                'status' => $f->status,
-            ])->values()->all() : [],
-            'forms_count' => $kpi->forms ? $kpi->forms->count() : 0,
-            'creator' => $kpi->creator ? [
-                'id' => $kpi->creator->id,
-                'name' => $kpi->creator->name,
-            ] : null,
-            'created_at' => $kpi->created_at ? $kpi->created_at->toIso8601String() : null,
-            'updated_at' => $kpi->updated_at ? $kpi->updated_at->toIso8601String() : null,
+            'forms_id' => $kpi->forms ? $kpi->forms->pluck('id')->implode(', ') : '',
         ];
+    }
+
+    /**
+     * Stream CSV response for KPI Library.
+     */
+    protected function streamCsvResponse($rows, string $filename): StreamedResponse
+    {
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ];
+
+        return response()->stream(function () use ($rows) {
+            $handle = fopen('php://output', 'w');
+            // Write UTF-8 BOM for Excel
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            fputcsv($handle, ['kpi_role', 'kpi_indicator', 'weight', 'forms_id']);
+
+            foreach ($rows as $row) {
+                fputcsv($handle, [
+                    $row['kpi_role'],
+                    $row['kpi_indicator'],
+                    $row['weight'],
+                    $row['forms_id'],
+                ]);
+            }
+
+            fclose($handle);
+        }, 200, $headers);
     }
 }
