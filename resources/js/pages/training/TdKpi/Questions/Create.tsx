@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { type TdKpiInputTypeOption, type TdKpiRoleOption } from '@/types/td-kpi-question';
+import { type TdKpiAssessmentOption, type TdKpiInputTypeOption } from '@/types/td-kpi-question';
 import { Head, Link, useForm } from '@inertiajs/react';
 import React from 'react';
 import { QuestionFormFields } from './QuestionFormFields';
@@ -14,16 +14,17 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function CreateTdKpiQuestion({
-	kpiRoles,
+	assessments,
 	formInputTypes,
 }: {
-	kpiRoles: TdKpiRoleOption[];
+	assessments: TdKpiAssessmentOption[];
 	formInputTypes: TdKpiInputTypeOption[];
 }) {
 	const { data, setData, post, errors, processing } = useForm({
 		label: '',
-		kpi_role_id: '',
+		assessment_id: '',
 		form_input_type_id: '',
+		answer: '',
 		status: 'active',
 		choices: [] as Array<{ label: string; value: string }>,
 	});
@@ -53,7 +54,7 @@ export default function CreateTdKpiQuestion({
 								data={data}
 								setData={setData}
 								errors={errors}
-								kpiRoles={kpiRoles}
+								assessments={assessments}
 								formInputTypes={formInputTypes}
 							/>
 							<div className="flex justify-end">

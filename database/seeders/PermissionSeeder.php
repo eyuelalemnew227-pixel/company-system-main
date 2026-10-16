@@ -306,6 +306,21 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'training.td_kpi.questions.create']);
         Permission::firstOrCreate(['name' => 'training.td_kpi.questions.update']);
         Permission::firstOrCreate(['name' => 'training.td_kpi.questions.delete']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.assignments.view']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.assignments.create']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.assignments.delete']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.training_types.view']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.training_types.create']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.training_types.update']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.training_types.delete']);
+        Permission::firstOrCreate(['name' => 'training.recurring_modules.view']);
+        Permission::firstOrCreate(['name' => 'training.recurring_modules.create']);
+        Permission::firstOrCreate(['name' => 'training.recurring_modules.update']);
+        Permission::firstOrCreate(['name' => 'training.recurring_modules.delete']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.assessments.view']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.assessments.create']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.assessments.update']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.assessments.delete']);
 
         // Internal Memorandum & Documents (11 total Memos & Documents permissions)
         Permission::firstOrCreate(['name' => 'memo.view']);

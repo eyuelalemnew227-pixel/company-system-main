@@ -180,6 +180,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['auth', 'permission:view form submissions'])->group(function () {
         Route::get('forms/evaluation-results', [\App\Http\Controllers\FormSubmissionAdminController::class, 'evaluation_results'])
             ->name('forms.evaluation-results');
+        Route::put('forms/evaluation-results/override', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update_evaluation_result_override'])
+            ->name('forms.evaluation-results.override');
         Route::redirect('forms/post-assessment-results', '/forms/evaluation-results');
     });
 
@@ -717,7 +719,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Training Management System
-    Route::prefix('training')->name('training.')->middleware(['permission:training.online.view|training.agendas.view|training.agendas.create|training.master_schedule.view|training.master_schedule.create|training.evaluations.manage|training.settings.manage|training.td_kpi.questions.view|training.td_kpi.questions.create|training.td_kpi.questions.update|training.td_kpi.questions.delete'])->group(function () {
+    Route::prefix('training')->name('training.')->middleware(['permission:training.online.view|training.agendas.view|training.agendas.create|training.master_schedule.view|training.master_schedule.create|training.evaluations.manage|training.settings.manage|training.td_kpi.questions.view|training.td_kpi.questions.create|training.td_kpi.questions.update|training.td_kpi.questions.delete|training.td_kpi.assignments.view|training.td_kpi.assignments.create|training.td_kpi.assignments.delete|training.td_kpi.training_types.view|training.td_kpi.training_types.create|training.td_kpi.training_types.update|training.td_kpi.training_types.delete|training.recurring_modules.view|training.recurring_modules.create|training.recurring_modules.update|training.recurring_modules.delete|training.td_kpi.assessments.view|training.td_kpi.assessments.create|training.td_kpi.assessments.update|training.td_kpi.assessments.delete'])->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Training\TrainingDashboardController::class, 'index'])->name('dashboard');
 
         // Courses & Lessons
@@ -829,6 +831,70 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('questions/{tdKpiQuestion}', [\App\Http\Controllers\Training\TdKpiQuestionController::class, 'destroy'])
                 ->middleware('permission:training.td_kpi.questions.delete')
                 ->name('questions.destroy');
+
+            Route::get('assignments', [\App\Http\Controllers\Training\TdKpiAssignmentController::class, 'index'])
+                ->middleware('permission:training.td_kpi.assignments.view')
+                ->name('assignments.index');
+            Route::put('assignments/upsert', [\App\Http\Controllers\Training\TdKpiAssignmentController::class, 'upsert'])
+                ->middleware('permission:training.td_kpi.assignments.create|training.td_kpi.assignments.view')
+                ->name('assignments.upsert');
+
+            Route::get('training-types', [\App\Http\Controllers\Training\TrainingTypeController::class, 'index'])
+                ->middleware('permission:training.td_kpi.training_types.view')
+                ->name('training-types.index');
+            Route::get('training-types/create', [\App\Http\Controllers\Training\TrainingTypeController::class, 'create'])
+                ->middleware('permission:training.td_kpi.training_types.create')
+                ->name('training-types.create');
+            Route::post('training-types', [\App\Http\Controllers\Training\TrainingTypeController::class, 'store'])
+                ->middleware('permission:training.td_kpi.training_types.create')
+                ->name('training-types.store');
+            Route::get('training-types/{trainingType}/edit', [\App\Http\Controllers\Training\TrainingTypeController::class, 'edit'])
+                ->middleware('permission:training.td_kpi.training_types.update')
+                ->name('training-types.edit');
+            Route::put('training-types/{trainingType}', [\App\Http\Controllers\Training\TrainingTypeController::class, 'update'])
+                ->middleware('permission:training.td_kpi.training_types.update')
+                ->name('training-types.update');
+            Route::delete('training-types/{trainingType}', [\App\Http\Controllers\Training\TrainingTypeController::class, 'destroy'])
+                ->middleware('permission:training.td_kpi.training_types.delete')
+                ->name('training-types.destroy');
+
+            Route::get('recurring-modules', [\App\Http\Controllers\Training\RecurringTrainingModuleController::class, 'index'])
+                ->middleware('permission:training.recurring_modules.view')
+                ->name('recurring-modules.index');
+            Route::get('recurring-modules/create', [\App\Http\Controllers\Training\RecurringTrainingModuleController::class, 'create'])
+                ->middleware('permission:training.recurring_modules.create')
+                ->name('recurring-modules.create');
+            Route::post('recurring-modules', [\App\Http\Controllers\Training\RecurringTrainingModuleController::class, 'store'])
+                ->middleware('permission:training.recurring_modules.create')
+                ->name('recurring-modules.store');
+            Route::get('recurring-modules/{recurringTrainingModule}/edit', [\App\Http\Controllers\Training\RecurringTrainingModuleController::class, 'edit'])
+                ->middleware('permission:training.recurring_modules.update')
+                ->name('recurring-modules.edit');
+            Route::put('recurring-modules/{recurringTrainingModule}', [\App\Http\Controllers\Training\RecurringTrainingModuleController::class, 'update'])
+                ->middleware('permission:training.recurring_modules.update')
+                ->name('recurring-modules.update');
+            Route::delete('recurring-modules/{recurringTrainingModule}', [\App\Http\Controllers\Training\RecurringTrainingModuleController::class, 'destroy'])
+                ->middleware('permission:training.recurring_modules.delete')
+                ->name('recurring-modules.destroy');
+
+            Route::get('assessments', [\App\Http\Controllers\Training\TdKpiAssessmentController::class, 'index'])
+                ->middleware('permission:training.td_kpi.assessments.view')
+                ->name('assessments.index');
+            Route::get('assessments/create', [\App\Http\Controllers\Training\TdKpiAssessmentController::class, 'create'])
+                ->middleware('permission:training.td_kpi.assessments.create')
+                ->name('assessments.create');
+            Route::post('assessments', [\App\Http\Controllers\Training\TdKpiAssessmentController::class, 'store'])
+                ->middleware('permission:training.td_kpi.assessments.create')
+                ->name('assessments.store');
+            Route::get('assessments/{assessment}/edit', [\App\Http\Controllers\Training\TdKpiAssessmentController::class, 'edit'])
+                ->middleware('permission:training.td_kpi.assessments.update')
+                ->name('assessments.edit');
+            Route::put('assessments/{assessment}', [\App\Http\Controllers\Training\TdKpiAssessmentController::class, 'update'])
+                ->middleware('permission:training.td_kpi.assessments.update')
+                ->name('assessments.update');
+            Route::delete('assessments/{assessment}', [\App\Http\Controllers\Training\TdKpiAssessmentController::class, 'destroy'])
+                ->middleware('permission:training.td_kpi.assessments.delete')
+                ->name('assessments.destroy');
         });
     });
 });

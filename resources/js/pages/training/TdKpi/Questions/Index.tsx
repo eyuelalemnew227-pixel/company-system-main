@@ -73,8 +73,9 @@ export default function TdKpiQuestionsIndex({ questions }: { questions: TdKpiQue
 								<TableRow>
 									<TableHead className="font-bold text-white">ID</TableHead>
 									<TableHead className="font-bold text-white">Label</TableHead>
-									<TableHead className="font-bold text-white">Role</TableHead>
+									<TableHead className="font-bold text-white">Assessment</TableHead>
 									<TableHead className="font-bold text-white">Input Type</TableHead>
+									<TableHead className="font-bold text-white">Answer</TableHead>
 									<TableHead className="font-bold text-white">Status</TableHead>
 									<TableHead className="font-bold text-white">Actions</TableHead>
 								</TableRow>
@@ -84,8 +85,13 @@ export default function TdKpiQuestionsIndex({ questions }: { questions: TdKpiQue
 									<TableRow key={question.id} className="odd:bg-slate-100 dark:odd:bg-slate-800">
 										<TableCell>{question.id}</TableCell>
 										<TableCell className="max-w-md truncate">{question.label}</TableCell>
-										<TableCell>{question.role?.name ?? '-'}</TableCell>
+										<TableCell>
+											{(question.assessment as any)?.assessment_name ??
+												question.assessment?.name ??
+												'-'}
+										</TableCell>
 										<TableCell>{question.input_type?.name ?? '-'}</TableCell>
+										<TableCell className="max-w-xs truncate">{question.answer ?? '—'}</TableCell>
 										<TableCell>
 											<span
 												className={`rounded-full px-2 py-1 text-xs font-semibold ${

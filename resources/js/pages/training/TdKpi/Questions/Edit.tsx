@@ -3,9 +3,9 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/componen
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import {
+	type TdKpiAssessmentOption,
 	type TdKpiInputTypeOption,
 	type TdKpiQuestion,
-	type TdKpiRoleOption,
 } from '@/types/td-kpi-question';
 import { Head, Link, useForm } from '@inertiajs/react';
 import React from 'react';
@@ -19,17 +19,18 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function EditTdKpiQuestion({
 	question,
-	kpiRoles,
+	assessments,
 	formInputTypes,
 }: {
 	question: TdKpiQuestion;
-	kpiRoles: TdKpiRoleOption[];
+	assessments: TdKpiAssessmentOption[];
 	formInputTypes: TdKpiInputTypeOption[];
 }) {
 	const { data, setData, put, errors, processing } = useForm({
 		label: question.label || '',
-		kpi_role_id: question.kpi_role_id ? String(question.kpi_role_id) : '',
+		assessment_id: question.assessment_id ? String(question.assessment_id) : '',
 		form_input_type_id: question.form_input_type_id ? String(question.form_input_type_id) : '',
+		answer: question.answer ?? '',
 		status: question.status || 'active',
 		choices: (question.choices ?? []).map((choice) => ({
 			label: choice.label,
@@ -62,7 +63,7 @@ export default function EditTdKpiQuestion({
 								data={data}
 								setData={setData}
 								errors={errors}
-								kpiRoles={kpiRoles}
+								assessments={assessments}
 								formInputTypes={formInputTypes}
 							/>
 							<div className="flex justify-end">

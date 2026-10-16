@@ -1,15 +1,20 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import InputError from '@/components/input-error';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { FilterX, GraduationCap } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 
 type LinkedForm = { id: number; title: string };
 type FiscalOption = { id: number; name: string; fiscal_year_id?: number };
+type TrainingTypeOption = { id: number; name: string };
 
 type ResultRow = {
     employee_id: number;
@@ -27,6 +32,8 @@ type ResultRow = {
     status_label: string;
     next_action: 'na' | 'warning' | 'training' | 'not_scored';
     next_action_label: string;
+    training_type_id: number | null;
+    training_type_name: string | null;
 };
 
 type Summary = {
@@ -65,6 +72,7 @@ export default function EvaluationResults({
     linkedForms = [],
     rows = [],
     summary,
+    trainingTypes = [],
     fiscalYears = [],
     fiscalMonths = [],
 }: {
@@ -73,9 +81,11 @@ export default function EvaluationResults({
     linkedForms: LinkedForm[];
     rows: ResultRow[];
     summary: Summary;
+    trainingTypes: TrainingTypeOption[];
     fiscalYears: FiscalOption[];
     fiscalMonths: FiscalOption[];
 }) {
+    const { flash } = usePage<{ flash: { message?: string } }>().props;
     const [search, setSearch] = useState('');
     const [formFilter, setFormFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
@@ -83,7 +93,21 @@ export default function EvaluationResults({
     const [yearFilter, setYearFilter] = useState('all');
     const [monthFilter, setMonthFilter] = useState('all');
     const [currentPage, setCurrentPage] = useState(1);
+    const [editRow, setEditRow] = useState<ResultRow | null>(null);
     const itemsPerPage = 25;
+
+    const { data, setData, put, processing, errors, reset, clearErrors } = useForm({
+        employee_id: '',
+        form_id: '',
+        fiscal_year_id: '',
+        fiscal_month_id: '',
+        next_action: 'na',
+        training_type_id: '',
+    });
+
+    useEffect(() => {
+        if (flash?.message) toast.success(flash.message);
+    }, [flash?.message]);
 
     const monthsForYear = useMemo(() => {
         if (yearFilter === 'all') return fiscalMonths;
@@ -121,6 +145,34 @@ export default function EvaluationResults({
         setMonthFilter('all');
     };
 
+    function openEditDialog(row: ResultRow) {
+        if (!row.fiscal_year_id || !row.fiscal_month_id) return;
+        clearErrors();
+        setEditRow(row);
+        setData({
+            employee_id: String(row.employee_id),
+            form_id: String(row.form_id),
+            fiscal_year_id: String(row.fiscal_year_id),
+            fiscal_month_id: String(row.fiscal_month_id),
+            next_action: row.next_action,
+            training_type_id: row.training_type_id ? String(row.training_type_id) : '',
+        });
+    }
+
+    function closeEditDialog() {
+        setEditRow(null);
+        reset();
+        clearErrors();
+    }
+
+    function submitEdit(e: React.FormEvent) {
+        e.preventDefault();
+        put('/forms/evaluation-results/override', {
+            preserveScroll: true,
+            onSuccess: () => closeEditDialog(),
+        });
+    }
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Evaluation Results" />
@@ -128,8 +180,8 @@ export default function EvaluationResults({
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-amber-900">Evaluation Results</h2>
                     <p className="text-muted-foreground">
-                        Employees scored on approved forms linked to <span className="font-medium text-gray-800">{kpiName}</span>.
-                        Pass is 75 or above. A fail from 60 to 74.9 is a warning. Below 60 is training.
+                        Employees scored on forms linked to <span className="font-medium text-gray-800">{kpiName}</span>.
+                        Pass is 75 or above. Next action defaults to NA and can be edited per row.
                     </p>
                 </div>
 
@@ -263,15 +315,16 @@ export default function EvaluationResults({
                                         <TableHead className="text-right">Score</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Next action</TableHead>
+                                        <TableHead>Training type</TableHead>
                                         <TableHead />
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                     {pageRows.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="py-12 text-center text-gray-500">
+                                            <TableCell colSpan={9} className="py-12 text-center text-gray-500">
                                                 {rows.length === 0
-                                                    ? 'No employees have an approved assessment on the linked forms yet.'
+                                                    ? 'No employees have an assessment on the linked forms yet.'
                                                     : 'No rows match these filters.'}
                                             </TableCell>
                                         </TableRow>
@@ -302,10 +355,22 @@ export default function EvaluationResults({
                                                         {row.next_action_label}
                                                     </span>
                                                 </TableCell>
+                                                <TableCell>{row.training_type_name || '—'}</TableCell>
                                                 <TableCell className="text-right">
-                                                    <Link href={`/submissions/${row.submission_id}`} className="text-sm font-medium text-amber-800 hover:underline">
-                                                        View
-                                                    </Link>
+                                                    <div className="flex items-center justify-end gap-3">
+                                                        {row.fiscal_year_id && row.fiscal_month_id && (
+                                                            <button
+                                                                type="button"
+                                                                className="text-sm font-medium text-amber-800 hover:underline"
+                                                                onClick={() => openEditDialog(row)}
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                        )}
+                                                        <Link href={`/submissions/${row.submission_id}`} className="text-sm font-medium text-amber-800 hover:underline">
+                                                            View
+                                                        </Link>
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         ))
@@ -332,6 +397,77 @@ export default function EvaluationResults({
                     </>
                 )}
             </div>
+
+            <Dialog open={!!editRow} onOpenChange={(open) => !open && closeEditDialog()}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Edit Next Action</DialogTitle>
+                    </DialogHeader>
+                    <form onSubmit={submitEdit} className="space-y-4">
+                        <div>
+                            <p className="text-sm text-muted-foreground">Employee</p>
+                            <p className="font-medium">{editRow?.employee_name}</p>
+                        </div>
+                        <div>
+                            <p className="text-sm text-muted-foreground">Form / Period</p>
+                            <p className="font-medium">
+                                {editRow?.form_title} — {editRow?.fiscal_month_name}
+                                {editRow?.fiscal_year_name ? ` / ${editRow.fiscal_year_name}` : ''}
+                            </p>
+                        </div>
+                        <div>
+                            <Label htmlFor="next_action">Next action</Label>
+                            <Select
+                                value={data.next_action}
+                                onValueChange={(value) => {
+                                    setData('next_action', value);
+                                    if (value !== 'training') setData('training_type_id', '');
+                                }}
+                            >
+                                <SelectTrigger id="next_action">
+                                    <SelectValue placeholder="Select next action" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="na">NA</SelectItem>
+                                    <SelectItem value="warning">Warning</SelectItem>
+                                    <SelectItem value="training">Training</SelectItem>
+                                    <SelectItem value="not_scored">Not scored</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <InputError message={errors.next_action} />
+                        </div>
+                        <div>
+                            <Label htmlFor="training_type_id">Training type</Label>
+                            <Select
+                                value={data.training_type_id || 'none'}
+                                onValueChange={(value) => setData('training_type_id', value === 'none' ? '' : value)}
+                                disabled={data.next_action !== 'training'}
+                            >
+                                <SelectTrigger id="training_type_id">
+                                    <SelectValue placeholder="Select training type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">None</SelectItem>
+                                    {trainingTypes.map((type) => (
+                                        <SelectItem key={type.id} value={String(type.id)}>
+                                            {type.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <InputError message={errors.training_type_id} />
+                        </div>
+                        <DialogFooter>
+                            <Button type="button" variant="outline" onClick={closeEditDialog}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={processing}>
+                                Save
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

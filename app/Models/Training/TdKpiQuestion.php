@@ -3,7 +3,6 @@
 namespace App\Models\Training;
 
 use App\Models\FormInputType;
-use App\Models\KpiRole;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,14 +16,15 @@ class TdKpiQuestion extends Model
 
     protected $fillable = [
         'label',
-        'kpi_role_id',
+        'assessment_id',
         'form_input_type_id',
+        'answer',
         'status',
     ];
 
-    public function role(): BelongsTo
+    public function assessment(): BelongsTo
     {
-        return $this->belongsTo(KpiRole::class, 'kpi_role_id');
+        return $this->belongsTo(TdKpiAssessment::class, 'assessment_id');
     }
 
     public function inputType(): BelongsTo
@@ -47,5 +47,17 @@ class TdKpiQuestion extends Model
             || $typeIdentifier === 'radio'
             || $typeIdentifier === 'checkbox'
             || $typeIdentifier === 'employee_evaluation_grid';
+    }
+
+    public static function inputTypeRequiresAnswer(?string $typeIdentifier): bool
+    {
+        if (!$typeIdentifier) {
+            return false;
+        }
+
+        return $typeIdentifier === 'select_one'
+            || $typeIdentifier === 'select_multiple'
+            || $typeIdentifier === 'radio'
+            || $typeIdentifier === 'checkbox';
     }
 }

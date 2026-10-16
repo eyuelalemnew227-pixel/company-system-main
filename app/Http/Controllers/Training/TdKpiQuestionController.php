@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Training;
 
 use App\Http\Controllers\Controller;
 use App\Models\FormInputType;
-use App\Models\KpiRole;
+use App\Models\Training\TdKpiAssessment;
 use App\Models\Training\TdKpiQuestion;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,14 +20,15 @@ class TdKpiQuestionController extends Controller
     public function index(Request $request): Response
     {
         $query = TdKpiQuestion::query()
-            ->with(['role:id,name', 'inputType:id,name,type_identifier'])
+            ->with(['assessment:id,assessment_name', 'inputType:id,name,type_identifier'])
             ->latest();
 
         if ($request->filled('search')) {
             $search = $request->string('search')->toString();
             $query->where(function ($q) use ($search) {
                 $q->where('label', 'like', '%' . $search . '%')
-                    ->orWhereHas('role', fn ($roleQuery) => $roleQuery->where('name', 'like', '%' . $search . '%'))
+                    ->orWhere('answer', 'like', '%' . $search . '%')
+                    ->orWhereHas('assessment', fn ($a) => $a->where('assessment_name', 'like', '%' . $search . '%'))
                     ->orWhereHas('inputType', fn ($typeQuery) => $typeQuery->where('name', 'like', '%' . $search . '%'));
             });
         }
@@ -41,7 +42,7 @@ class TdKpiQuestionController extends Controller
     public function create(): Response
     {
         return Inertia::render('training/TdKpi/Questions/Create', [
-            'kpiRoles' => $this->kpiRoles(),
+            'assessments' => $this->assessments(),
             'formInputTypes' => $this->formInputTypes(),
         ]);
     }
@@ -53,8 +54,9 @@ class TdKpiQuestionController extends Controller
         DB::transaction(function () use ($validated) {
             $question = TdKpiQuestion::create([
                 'label' => $validated['label'],
-                'kpi_role_id' => $validated['kpi_role_id'],
+                'assessment_id' => $validated['assessment_id'],
                 'form_input_type_id' => $validated['form_input_type_id'],
+                'answer' => $validated['answer'] ?? null,
                 'status' => $validated['status'],
             ]);
 
@@ -62,16 +64,16 @@ class TdKpiQuestionController extends Controller
         });
 
         return Redirect::route('training.td-kpi.questions.index')
-            ->with('flash.message', 'Question created successfully!');
+            ->with('message', 'Question created successfully!');
     }
 
     public function edit(TdKpiQuestion $tdKpiQuestion): Response
     {
-        $tdKpiQuestion->load(['role:id,name', 'inputType:id,name,type_identifier', 'choices']);
+        $tdKpiQuestion->load(['assessment:id,assessment_name', 'inputType:id,name,type_identifier', 'choices']);
 
         return Inertia::render('training/TdKpi/Questions/Edit', [
             'question' => $tdKpiQuestion,
-            'kpiRoles' => $this->kpiRoles(),
+            'assessments' => $this->assessments(),
             'formInputTypes' => $this->formInputTypes(),
         ]);
     }
@@ -83,8 +85,9 @@ class TdKpiQuestionController extends Controller
         DB::transaction(function () use ($tdKpiQuestion, $validated) {
             $tdKpiQuestion->update([
                 'label' => $validated['label'],
-                'kpi_role_id' => $validated['kpi_role_id'],
+                'assessment_id' => $validated['assessment_id'],
                 'form_input_type_id' => $validated['form_input_type_id'],
+                'answer' => $validated['answer'] ?? null,
                 'status' => $validated['status'],
             ]);
 
@@ -92,7 +95,7 @@ class TdKpiQuestionController extends Controller
         });
 
         return Redirect::route('training.td-kpi.questions.index')
-            ->with('flash.message', 'Question updated successfully!');
+            ->with('message', 'Question updated successfully!');
     }
 
     public function destroy(TdKpiQuestion $tdKpiQuestion): RedirectResponse
@@ -100,15 +103,20 @@ class TdKpiQuestionController extends Controller
         $tdKpiQuestion->delete();
 
         return Redirect::route('training.td-kpi.questions.index')
-            ->with('flash.message', 'Question deleted successfully!');
+            ->with('message', 'Question deleted successfully!');
     }
 
     private function validateQuestion(Request $request): array
     {
+        if ($request->input('answer') === '') {
+            $request->merge(['answer' => null]);
+        }
+
         $validated = $request->validate([
             'label' => ['required', 'string'],
-            'kpi_role_id' => ['required', 'exists:kpi_roles,id'],
+            'assessment_id' => ['required', 'exists:td_kpi_assessments,id'],
             'form_input_type_id' => ['required', 'exists:form_input_types,id'],
+            'answer' => ['nullable', 'string'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'choices' => ['nullable', 'array'],
             'choices.*.label' => ['nullable', 'string', 'max:255'],
@@ -117,6 +125,7 @@ class TdKpiQuestionController extends Controller
 
         $inputType = FormInputType::find($validated['form_input_type_id']);
         $needsChoices = TdKpiQuestion::inputTypeNeedsChoices($inputType?->type_identifier);
+        $requiresAnswer = TdKpiQuestion::inputTypeRequiresAnswer($inputType?->type_identifier);
 
         $choices = collect($validated['choices'] ?? [])
             ->map(function ($choice, $index) {
@@ -140,6 +149,14 @@ class TdKpiQuestionController extends Controller
             $choices = [];
         }
 
+        $answer = isset($validated['answer']) ? trim((string) $validated['answer']) : '';
+        if ($requiresAnswer && $answer === '') {
+            throw ValidationException::withMessages([
+                'answer' => 'Answer is required for single and multiple choice questions.',
+            ]);
+        }
+
+        $validated['answer'] = $answer === '' ? null : $answer;
         $validated['choices'] = $choices;
 
         return $validated;
@@ -154,9 +171,15 @@ class TdKpiQuestionController extends Controller
         }
     }
 
-    private function kpiRoles()
+    private function assessments()
     {
-        return KpiRole::query()->orderBy('name')->get(['id', 'name']);
+        return TdKpiAssessment::query()
+            ->orderBy('assessment_name')
+            ->get(['id', 'assessment_name'])
+            ->map(fn (TdKpiAssessment $assessment) => [
+                'id' => $assessment->id,
+                'name' => $assessment->assessment_name,
+            ]);
     }
 
     private function formInputTypes()

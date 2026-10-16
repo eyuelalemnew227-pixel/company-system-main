@@ -4,6 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Form;
 use App\Models\FormSubmission;
+use App\Models\Training\EvaluationResultOverride;
+use App\Models\Training\TrainingType;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Redirect;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class FormSubmissionAdminController extends Controller
@@ -931,10 +937,14 @@ class FormSubmissionAdminController extends Controller
         $employees = \App\Models\Employee::get();
 
         $rows = [];
+        $trainingTypes = TrainingType::query()
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         if ($pageState === 'ready') {
             $formIds = $linkedForms->pluck('id')->all();
             $submissions = FormSubmission::query()
-                ->whereRaw('LOWER(status) = ?', ['approved'])
                 ->whereHas('formVersion', function ($query) use ($formIds) {
                     $query->whereIn('form_id', $formIds);
                 })
@@ -947,6 +957,12 @@ class FormSubmissionAdminController extends Controller
                 ])
                 ->orderByDesc('id')
                 ->get();
+
+            $overrides = EvaluationResultOverride::query()
+                ->with('trainingType:id,name')
+                ->whereIn('form_id', $formIds)
+                ->get()
+                ->keyBy(fn (EvaluationResultOverride $override) => $override->employee_id . '|' . $override->form_id . '|' . $override->fiscal_month_id);
 
             $seen = [];
             foreach ($submissions as $submission) {
@@ -987,6 +1003,21 @@ class FormSubmissionAdminController extends Controller
                     $outcome = $this->postAssessmentOutcome($percentage === null ? null : (float) $percentage);
                     $departmentId = $score['department_id'] ?? null;
 
+                    $nextAction = 'na';
+                    $nextActionLabel = $this->nextActionLabel($nextAction);
+                    $trainingTypeId = null;
+                    $trainingTypeName = null;
+
+                    if ($matchedMonth) {
+                        $override = $overrides->get($employeeId . '|' . $formId . '|' . $matchedMonth->id);
+                        if ($override) {
+                            $nextAction = $override->next_action;
+                            $nextActionLabel = $this->nextActionLabel($nextAction);
+                            $trainingTypeId = $override->training_type_id;
+                            $trainingTypeName = $override->trainingType?->name;
+                        }
+                    }
+
                     $rows[] = [
                         'employee_id' => $employeeId,
                         'employee_name' => $score['name'] ?? 'Unknown employee',
@@ -1002,8 +1033,10 @@ class FormSubmissionAdminController extends Controller
                         'score' => $percentage === null ? null : (float) $percentage,
                         'status' => $outcome['status'],
                         'status_label' => $outcome['status_label'],
-                        'next_action' => $outcome['next_action'],
-                        'next_action_label' => $outcome['next_action_label'],
+                        'next_action' => $nextAction,
+                        'next_action_label' => $nextActionLabel,
+                        'training_type_id' => $trainingTypeId,
+                        'training_type_name' => $trainingTypeName,
                         'submitted_at' => $submission->created_at?->toDateTimeString(),
                     ];
                 }
@@ -1038,6 +1071,7 @@ class FormSubmissionAdminController extends Controller
             ])->values(),
             'rows' => $rows,
             'summary' => $summary,
+            'trainingTypes' => $trainingTypes,
             'fiscalYears' => $fiscalYears->map(fn ($year) => ['id' => $year->id, 'name' => $year->name])->values(),
             'fiscalMonths' => $fiscalMonths->map(fn ($month) => [
                 'id' => $month->id,
@@ -1045,6 +1079,52 @@ class FormSubmissionAdminController extends Controller
                 'name' => $month->name,
             ])->values(),
         ]);
+    }
+
+    public function update_evaluation_result_override(Request $request): RedirectResponse
+    {
+        if ($request->input('training_type_id') === '' || $request->input('training_type_id') === 'none') {
+            $request->merge(['training_type_id' => null]);
+        }
+
+        $validated = $request->validate([
+            'employee_id' => ['required', 'exists:employees,id'],
+            'form_id' => ['required', 'exists:forms,id'],
+            'fiscal_year_id' => ['required', 'exists:fiscal_years,id'],
+            'fiscal_month_id' => [
+                'required',
+                'exists:fiscal_months,id',
+                Rule::exists('fiscal_months', 'id')->where(
+                    fn ($q) => $q->where('fiscal_year_id', $request->input('fiscal_year_id'))
+                ),
+            ],
+            'next_action' => ['required', Rule::in(['na', 'warning', 'training', 'not_scored'])],
+            'training_type_id' => [
+                Rule::requiredIf($request->input('next_action') === 'training'),
+                'nullable',
+                'exists:training_types,id',
+            ],
+        ]);
+
+        if ($validated['next_action'] !== 'training') {
+            $validated['training_type_id'] = null;
+        }
+
+        EvaluationResultOverride::updateOrCreate(
+            [
+                'employee_id' => $validated['employee_id'],
+                'form_id' => $validated['form_id'],
+                'fiscal_month_id' => $validated['fiscal_month_id'],
+            ],
+            [
+                'fiscal_year_id' => $validated['fiscal_year_id'],
+                'next_action' => $validated['next_action'],
+                'training_type_id' => $validated['training_type_id'] ?? null,
+                'updated_by' => auth()->id(),
+            ]
+        );
+
+        return Redirect::back()->with('message', 'Evaluation result updated successfully!');
     }
 
     public function post_assessment_results()
@@ -1099,8 +1179,6 @@ class FormSubmissionAdminController extends Controller
             return [
                 'status' => 'not_scored',
                 'status_label' => 'Not scored',
-                'next_action' => 'not_scored',
-                'next_action_label' => 'Not scored',
             ];
         }
 
@@ -1108,25 +1186,23 @@ class FormSubmissionAdminController extends Controller
             return [
                 'status' => 'pass',
                 'status_label' => 'Pass',
-                'next_action' => 'na',
-                'next_action_label' => 'NA',
-            ];
-        }
-
-        if ($score >= 60) {
-            return [
-                'status' => 'fail',
-                'status_label' => 'Fail',
-                'next_action' => 'warning',
-                'next_action_label' => 'Warning',
             ];
         }
 
         return [
             'status' => 'fail',
             'status_label' => 'Fail',
-            'next_action' => 'training',
-            'next_action_label' => 'Training',
         ];
+    }
+
+    private function nextActionLabel(string $nextAction): string
+    {
+        return match ($nextAction) {
+            'na' => 'NA',
+            'warning' => 'Warning',
+            'training' => 'Training',
+            'not_scored' => 'Not scored',
+            default => ucfirst(str_replace('_', ' ', $nextAction)),
+        };
     }
 }

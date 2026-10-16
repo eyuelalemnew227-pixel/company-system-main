@@ -2,10 +2,16 @@ import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { type TdKpiInputTypeOption, type TdKpiQuestionChoice, type TdKpiRoleOption } from '@/types/td-kpi-question';
+import {
+	type TdKpiAssessmentOption,
+	type TdKpiInputTypeOption,
+	type TdKpiQuestionChoice,
+} from '@/types/td-kpi-question';
 import { Plus, Trash2 } from 'lucide-react';
+import { useMemo } from 'react';
 
 export function inputTypeNeedsChoices(typeIdentifier?: string | null): boolean {
 	if (!typeIdentifier) return false;
@@ -17,10 +23,21 @@ export function inputTypeNeedsChoices(typeIdentifier?: string | null): boolean {
 	);
 }
 
+export function inputTypeRequiresAnswer(typeIdentifier?: string | null): boolean {
+	if (!typeIdentifier) return false;
+	return (
+		typeIdentifier === 'select_one' ||
+		typeIdentifier === 'select_multiple' ||
+		typeIdentifier === 'radio' ||
+		typeIdentifier === 'checkbox'
+	);
+}
+
 type QuestionFormData = {
 	label: string;
-	kpi_role_id: string;
+	assessment_id: string;
 	form_input_type_id: string;
+	answer: string;
 	status: string;
 	choices: TdKpiQuestionChoice[];
 };
@@ -29,13 +46,25 @@ type QuestionFormFieldsProps = {
 	data: QuestionFormData;
 	setData: <K extends keyof QuestionFormData>(key: K, value: QuestionFormData[K]) => void;
 	errors: Partial<Record<string, string>>;
-	kpiRoles: TdKpiRoleOption[];
+	assessments: TdKpiAssessmentOption[];
 	formInputTypes: TdKpiInputTypeOption[];
 };
 
-export function QuestionFormFields({ data, setData, errors, kpiRoles, formInputTypes }: QuestionFormFieldsProps) {
+export function QuestionFormFields({
+	data,
+	setData,
+	errors,
+	assessments,
+	formInputTypes,
+}: QuestionFormFieldsProps) {
 	const selectedType = formInputTypes.find((type) => String(type.id) === data.form_input_type_id);
 	const showChoices = inputTypeNeedsChoices(selectedType?.type_identifier);
+	const answerRequired = inputTypeRequiresAnswer(selectedType?.type_identifier);
+
+	const sortedAssessments = useMemo(
+		() => [...assessments].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+		[assessments],
+	);
 
 	function handleInputTypeChange(value: string) {
 		const nextType = formInputTypes.find((type) => String(type.id) === value);
@@ -85,20 +114,16 @@ export function QuestionFormFields({ data, setData, errors, kpiRoles, formInputT
 			</div>
 
 			<div className="mb-4">
-				<Label htmlFor="kpi_role_id">Role</Label>
-				<Select value={data.kpi_role_id} onValueChange={(value) => setData('kpi_role_id', value)}>
-					<SelectTrigger id="kpi_role_id">
-						<SelectValue placeholder="Select KPI role" />
-					</SelectTrigger>
-					<SelectContent>
-						{kpiRoles.map((role) => (
-							<SelectItem key={role.id} value={String(role.id)}>
-								{role.name}
-							</SelectItem>
-						))}
-					</SelectContent>
-				</Select>
-				<InputError message={errors.kpi_role_id} />
+				<Label>Assessment</Label>
+				<SearchableSelect
+					options={sortedAssessments}
+					value={data.assessment_id}
+					onValueChange={(value) => setData('assessment_id', value)}
+					placeholder="Select assessment"
+					searchPlaceholder="Search assessments..."
+					emptyText="No assessments found."
+				/>
+				<InputError message={errors.assessment_id} />
 			</div>
 
 			<div className="mb-4">
@@ -146,6 +171,50 @@ export function QuestionFormFields({ data, setData, errors, kpiRoles, formInputT
 					<InputError message={errors.choices} />
 				</div>
 			)}
+
+			<div className="mb-4">
+				<Label htmlFor="answer">
+					Answer {answerRequired ? <span className="text-red-600">*</span> : <span className="text-muted-foreground">(optional)</span>}
+				</Label>
+				{showChoices && data.choices.some((c) => c.value) ? (
+					selectedType?.type_identifier === 'select_multiple' || selectedType?.type_identifier === 'checkbox' ? (
+						<>
+							<Input
+								id="answer"
+								value={data.answer}
+								onChange={(e) => setData('answer', e.target.value)}
+								placeholder="Enter correct choice value(s), comma-separated for multiple"
+							/>
+							<p className="mt-1 text-xs text-muted-foreground">
+								For multiple answers, enter choice values separated by commas.
+							</p>
+						</>
+					) : (
+						<Select value={data.answer || undefined} onValueChange={(value) => setData('answer', value)}>
+							<SelectTrigger id="answer">
+								<SelectValue placeholder="Select correct answer" />
+							</SelectTrigger>
+							<SelectContent>
+								{data.choices
+									.filter((choice) => choice.value)
+									.map((choice, index) => (
+										<SelectItem key={`${choice.value}-${index}`} value={choice.value}>
+											{choice.label || choice.value}
+										</SelectItem>
+									))}
+							</SelectContent>
+						</Select>
+					)
+				) : (
+					<Input
+						id="answer"
+						value={data.answer}
+						onChange={(e) => setData('answer', e.target.value)}
+						placeholder={answerRequired ? 'Enter the correct answer' : 'Optional answer'}
+					/>
+				)}
+				<InputError message={errors.answer} />
+			</div>
 
 			<div className="mb-4">
 				<Label htmlFor="status">Status</Label>

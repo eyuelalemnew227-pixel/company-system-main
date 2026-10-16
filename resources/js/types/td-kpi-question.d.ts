@@ -1,4 +1,4 @@
-export type TdKpiRoleOption = {
+export type TdKpiAssessmentOption = {
 	id: number;
 	name: string;
 };
@@ -19,12 +19,13 @@ export type TdKpiQuestionChoice = {
 export type TdKpiQuestion = {
 	id: number;
 	label: string;
-	kpi_role_id: number;
+	assessment_id: number;
 	form_input_type_id: number;
+	answer: string | null;
 	status: 'active' | 'inactive';
 	created_at: string;
 	updated_at: string;
-	role?: TdKpiRoleOption;
+	assessment?: TdKpiAssessmentOption & { assessment_name?: string };
 	input_type?: TdKpiInputTypeOption;
 	choices?: TdKpiQuestionChoice[];
 };
