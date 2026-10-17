@@ -15,6 +15,7 @@ type ResultRow = {
     employee_id: number;
     employee_name: string;
     department_name: string;
+    branch_name: string;
     form_id: number;
     form_title: string;
     submission_id: number;
@@ -151,6 +152,7 @@ export default function EvaluationResults({
             'employee_id',
             'Employee',
             'Department',
+            'Branch',
             'Form',
             'Fiscal month',
             'Score',
@@ -163,6 +165,7 @@ export default function EvaluationResults({
                     row.employee_id,
                     row.employee_name,
                     row.department_name,
+                    row.branch_name,
                     row.form_title,
                     row.fiscal_year_name
                         ? `${row.fiscal_month_name} / ${row.fiscal_year_name}`

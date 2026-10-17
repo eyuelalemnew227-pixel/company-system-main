@@ -33,6 +33,7 @@ class FormSubmissionAdminController extends Controller
                     'id' => $emp->id,
                     'name' => trim($emp->first_name . ' ' . $emp->last_name) ?: $emp->employee_code,
                     'department_id' => $emp->department_id,
+                    'branch_id' => $emp->branch_id,
                     'total_points' => 0,
                     'earned_points' => 0,
                     'percentage' => null,
@@ -928,6 +929,7 @@ class FormSubmissionAdminController extends Controller
         $fiscalYears = \App\Models\FiscalYear::orderBy('gregorian_start_date')->get(['id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
         $fiscalMonths = \App\Models\FiscalMonth::orderBy('gregorian_start_date')->get(['id', 'fiscal_year_id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
         $departments = \App\Models\Department::pluck('name', 'id');
+        $branches = \App\Models\Branch::pluck('name', 'id');
         $employees = \App\Models\Employee::get();
 
         $rows = [];
@@ -985,12 +987,15 @@ class FormSubmissionAdminController extends Controller
                     $percentage = $score['percentage'];
                     $outcome = $this->postAssessmentOutcome($percentage === null ? null : (float) $percentage);
                     $departmentId = $score['department_id'] ?? null;
+                    $branchId = $score['branch_id'] ?? null;
 
                     $rows[] = [
                         'employee_id' => $employeeId,
                         'employee_name' => $score['name'] ?? 'Unknown employee',
                         'department_id' => $departmentId,
                         'department_name' => $departmentId ? ($departments[$departmentId] ?? 'Unknown department') : '—',
+                        'branch_id' => $branchId,
+                        'branch_name' => $branchId ? ($branches[$branchId] ?? 'Unknown branch') : '—',
                         'form_id' => $formId,
                         'form_title' => $formTitle,
                         'submission_id' => $submission->id,
@@ -1100,6 +1105,7 @@ class FormSubmissionAdminController extends Controller
             'id' => $employee->id,
             'name' => trim($employee->first_name . ' ' . $employee->last_name) ?: $employee->employee_code,
             'department_id' => $employee->department_id,
+            'branch_id' => $employee->branch_id,
             'percentage' => $submission->calculated_score,
         ]];
     }
