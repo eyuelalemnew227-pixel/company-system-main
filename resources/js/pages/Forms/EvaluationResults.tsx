@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FilterX, GraduationCap } from 'lucide-react';
+import { Download, FilterX, GraduationCap } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 
 type LinkedForm = { id: number; title: string };
@@ -136,6 +136,56 @@ export default function EvaluationResults({
         setMonthFilter(defaultMonthFilter);
     };
 
+    const escapeCsvCell = (value: string | number | null | undefined) => {
+        const cell = value === null || value === undefined ? '' : String(value);
+        if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+            return `"${cell.replace(/"/g, '""')}"`;
+        }
+        return cell;
+    };
+
+    const exportCsv = () => {
+        if (filteredRows.length === 0) return;
+
+        const headers = [
+            'employee_id',
+            'Employee',
+            'Department',
+            'Form',
+            'Fiscal month',
+            'Score',
+        ];
+
+        const csvContent = [
+            headers.join(','),
+            ...filteredRows.map((row) =>
+                [
+                    row.employee_id,
+                    row.employee_name,
+                    row.department_name,
+                    row.form_title,
+                    row.fiscal_year_name
+                        ? `${row.fiscal_month_name} / ${row.fiscal_year_name}`
+                        : row.fiscal_month_name,
+                    row.score === null ? '' : row.score.toFixed(1),
+                ]
+                    .map(escapeCsvCell)
+                    .join(',')
+            ),
+        ].join('\n');
+
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `evaluation_results_${new Date().toISOString().slice(0, 10)}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Evaluation Results" />
@@ -264,6 +314,15 @@ export default function EvaluationResults({
                             </Select>
                             <Button type="button" variant="ghost" onClick={resetFilters} className="text-gray-600">
                                 <FilterX className="mr-2 h-4 w-4" /> Reset
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={exportCsv}
+                                disabled={filteredRows.length === 0}
+                                className="lg:ml-auto"
+                            >
+                                <Download className="mr-2 h-4 w-4" /> Export CSV
                             </Button>
                         </div>
 
