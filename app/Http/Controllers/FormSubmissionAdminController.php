@@ -1209,10 +1209,36 @@ class FormSubmissionAdminController extends Controller
             }, 200, $headers);
         }
 
-        // Default: Native OpenXML Excel (.xlsx)
-        $xlsxFilename = "{$cleanTitle}_Detail_Submissions_{$timestamp}.xlsx";
-        $xlsxWriter = new SimpleXlsxWriter();
-        return $xlsxWriter->download($xlsxFilename, $allHeaders, $rows, substr($cleanTitle, 0, 31));
+        // Default: Native OpenXML Excel (.xlsx) with automatic fallback to CSV
+        try {
+            $xlsxFilename = "{$cleanTitle}_Detail_Submissions_{$timestamp}.xlsx";
+            $xlsxWriter = new SimpleXlsxWriter();
+            return $xlsxWriter->download($xlsxFilename, $allHeaders, $rows, substr($cleanTitle, 0, 31));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('XLSX export failed, falling back to CSV: ' . $e->getMessage());
+
+            $csvFilename = "{$cleanTitle}_Detail_Submissions_{$timestamp}.csv";
+            $asciiFallback = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $csvFilename) ?: "form_{$form->id}_submissions.csv";
+            $encodedFilename = rawurlencode($csvFilename);
+            $csvHeaders = [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$asciiFallback}\"; filename*=UTF-8''{$encodedFilename}",
+                'Pragma' => 'no-cache',
+                'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+                'Expires' => '0',
+            ];
+
+            return response()->stream(function () use ($allHeaders, $rows) {
+                $file = fopen('php://output', 'w');
+                // UTF-8 BOM for Excel
+                fputs($file, "\xEF\xBB\xBF");
+                fputcsv($file, $allHeaders);
+                foreach ($rows as $row) {
+                    fputcsv($file, $row);
+                }
+                fclose($file);
+            }, 200, $csvHeaders);
+        }
     }
 
     /**

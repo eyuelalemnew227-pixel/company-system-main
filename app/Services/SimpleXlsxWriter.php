@@ -4,12 +4,12 @@ namespace App\Services;
 
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
-use ZipArchive;
 
 class SimpleXlsxWriter
 {
     /**
      * Generate an Excel (.xlsx) file and return a StreamedResponse for direct download.
+     * Compatible with environments with or without the PHP ext-zip (ZipArchive) extension.
      *
      * @param string $filename Download filename (e.g. "Inspection_Detail.xlsx")
      * @param array $headers List of column header titles
@@ -56,50 +56,45 @@ class SimpleXlsxWriter
 
     /**
      * Create OpenXML .xlsx archive in temp directory and return the path.
+     * Uses ZipArchive if available, or falls back to pure-PHP ZIP encoding.
      */
     public function createXlsxFile(array $headers, iterable $rows, string $sheetName = 'Submissions'): string
     {
-        $tempFile = tempnam(sys_get_temp_dir(), 'xlsx_');
-        $zip = new ZipArchive();
-
-        if ($zip->open($tempFile, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
-            throw new RuntimeException("Unable to create zip archive for Excel workbook.");
-        }
+        $safeSheetName = htmlspecialchars(substr(preg_replace('/[\\\\\/*?:\[\]]/', '', $sheetName) ?: 'Submissions', 0, 31), ENT_XML1, 'UTF-8');
 
         // 1. [Content_Types].xml
-        $zip->addFromString('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        $contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
     <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
     <Default Extension="xml" ContentType="application/xml"/>
     <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
     <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
     <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
-</Types>');
+</Types>';
 
         // 2. _rels/.rels
-        $zip->addFromString('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        $rels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
     <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
-</Relationships>');
+</Relationships>';
 
         // 3. xl/_rels/workbook.xml.rels
-        $zip->addFromString('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        $wbRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
     <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
     <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-</Relationships>');
+</Relationships>';
 
         // 4. xl/workbook.xml
-        $safeSheetName = htmlspecialchars(substr(preg_replace('/[\\\\\/*?:\[\]]/', '', $sheetName) ?: 'Submissions', 0, 31), ENT_XML1, 'UTF-8');
-        $zip->addFromString('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        $workbook = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
     <sheets>
         <sheet name="' . $safeSheetName . '" sheetId="1" r:id="rId1"/>
     </sheets>
-</workbook>');
+</workbook>';
 
         // 5. xl/styles.xml (Professional theme: Amber-900 header, clean grid borders)
-        $zip->addFromString('xl/styles.xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        $styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
     <fonts count="2">
         <font><sz val="10"/><name val="Segoe UI"/></font>
@@ -126,15 +121,120 @@ class SimpleXlsxWriter
         <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
         <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
     </cellXfs>
-</styleSheet>');
+</styleSheet>';
 
         // 6. xl/worksheets/sheet1.xml
         $sheetXml = $this->buildSheetXml($headers, $rows);
-        $zip->addFromString('xl/worksheets/sheet1.xml', $sheetXml);
 
-        $zip->close();
+        $files = [
+            '[Content_Types].xml' => $contentTypes,
+            '_rels/.rels' => $rels,
+            'xl/_rels/workbook.xml.rels' => $wbRels,
+            'xl/workbook.xml' => $workbook,
+            'xl/styles.xml' => $styles,
+            'xl/worksheets/sheet1.xml' => $sheetXml,
+        ];
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'xlsx_');
+
+        // Approach 1: Use PHP's native ZipArchive if extension is loaded
+        if (class_exists(\ZipArchive::class)) {
+            $zip = new \ZipArchive();
+            if ($zip->open($tempFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+                foreach ($files as $name => $content) {
+                    $zip->addFromString($name, $content);
+                }
+                $zip->close();
+                return $tempFile;
+            }
+        }
+
+        // Approach 2: Pure PHP ZIP packaging (zero extension dependencies)
+        $binaryZip = $this->buildPureZip($files);
+        file_put_contents($tempFile, $binaryZip);
 
         return $tempFile;
+    }
+
+    /**
+     * Build standard ZIP archive string entirely in pure PHP without ZipArchive.
+     */
+    protected function buildPureZip(array $files): string
+    {
+        $data = '';
+        $cd = '';
+        $offset = 0;
+
+        foreach ($files as $name => $content) {
+            $uncompressedSize = strlen($content);
+            $crc = crc32($content);
+
+            if (function_exists('gzdeflate')) {
+                $compressed = gzdeflate($content);
+                $method = 8; // DEFLATE
+                $compressedSize = strlen($compressed);
+            } else {
+                $compressed = $content;
+                $method = 0; // STORE
+                $compressedSize = $uncompressedSize;
+            }
+
+            $nameLen = strlen($name);
+            $localHeader = pack(
+                'VvvvvvVVVvv',
+                0x04034b50, // Local file header signature
+                20,         // Version needed to extract (2.0)
+                0,          // General purpose bit flag
+                $method,    // Compression method
+                0,          // Last mod file time
+                0,          // Last mod file date
+                $crc,       // CRC-32
+                $compressedSize,
+                $uncompressedSize,
+                $nameLen,
+                0           // Extra field length
+            ) . $name;
+
+            $cdHeader = pack(
+                'VvvvvvvVVVvvvvvVV',
+                0x02014b50, // Central directory header signature
+                20,         // Version made by
+                20,         // Version needed to extract
+                0,          // General purpose bit flag
+                $method,    // Compression method
+                0,          // Last mod file time
+                0,          // Last mod file date
+                $crc,       // CRC-32
+                $compressedSize,
+                $uncompressedSize,
+                $nameLen,
+                0,          // Extra field length
+                0,          // File comment length
+                0,          // Disk number start
+                0,          // Internal file attributes
+                0x20,       // File attributes (archive)
+                $offset
+            ) . $name;
+
+            $data .= $localHeader . $compressed;
+            $cd .= $cdHeader;
+            $offset += strlen($localHeader) + $compressedSize;
+        }
+
+        $cdLen = strlen($cd);
+        $eocd = pack(
+            'VvvvvVVv',
+            0x06054b50, // End of central directory signature
+            0,          // Number of this disk
+            0,          // Disk where central directory starts
+            count($files), // Number of central directory records on this disk
+            count($files), // Total number of central directory records
+            $cdLen,     // Size of central directory
+            $offset,    // Offset of start of central directory
+            0           // ZIP file comment length
+        );
+
+        return $data . $cd . $eocd;
     }
 
     /**
