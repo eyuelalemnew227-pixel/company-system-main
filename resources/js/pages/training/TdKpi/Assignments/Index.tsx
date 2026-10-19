@@ -11,7 +11,7 @@ import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { type TdKpiAssignmentRow, type TdKpiOption } from '@/types/td-kpi-assignment';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -196,7 +196,18 @@ export default function AssignmentsIndex({
 											<TableCell>{row.proposed_training_date || '—'}</TableCell>
 											<TableCell>{yesNo(row.is_training_held)}</TableCell>
 											<TableCell>{yesNo(row.attendance)}</TableCell>
-											<TableCell>{row.assessment_name || '—'}</TableCell>
+											<TableCell>
+												{row.assignment_id && row.assessment_id && row.assessment_name ? (
+													<Link
+														href={`/training/td-kpi/assignments/${row.assignment_id}/take`}
+														className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+													>
+														{row.assessment_name}
+													</Link>
+												) : (
+													row.assessment_name || '—'
+												)}
+											</TableCell>
 											<TableCell>
 												{row.post_assessment_score !== null && row.post_assessment_score !== undefined
 													? `${Number(row.post_assessment_score).toFixed(1)}%`

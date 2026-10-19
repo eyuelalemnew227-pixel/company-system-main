@@ -16,6 +16,7 @@ class TdKpiAssignmentQuestion extends Model
         'td_kpi_assignment_id',
         'td_kpi_question_id',
         'order_index',
+        'response',
     ];
 
     public function assignment(): BelongsTo

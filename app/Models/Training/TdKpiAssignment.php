@@ -33,6 +33,8 @@ class TdKpiAssignment extends Model
         'attendance',
         'assessment_id',
         'post_assessment_score',
+        'submitted_at',
+        'submitted_by',
         'assigned_by',
     ];
 
@@ -41,6 +43,7 @@ class TdKpiAssignment extends Model
         'is_training_held' => 'boolean',
         'attendance' => 'boolean',
         'post_assessment_score' => 'decimal:2',
+        'submitted_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -100,8 +103,18 @@ class TdKpiAssignment extends Model
         return $this->belongsTo(User::class, 'assigned_by');
     }
 
+    public function submitter(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
     public function assignmentQuestions(): HasMany
     {
         return $this->hasMany(TdKpiAssignmentQuestion::class, 'td_kpi_assignment_id')->orderBy('order_index');
+    }
+
+    public function isSubmitted(): bool
+    {
+        return $this->submitted_at !== null;
     }
 }

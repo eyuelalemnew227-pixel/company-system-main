@@ -7,6 +7,8 @@ use App\Models\Training\EvaluationResultOverride;
 use App\Models\Training\RecurringTrainingModule;
 use App\Models\Training\TdKpiAssessment;
 use App\Models\Training\TdKpiAssignment;
+use App\Models\Training\TdKpiAssignmentQuestion;
+use App\Models\Training\TdKpiQuestion;
 use App\Models\Training\TrainingType;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -162,7 +164,6 @@ class TdKpiAssignmentController extends Controller
             'proposed_training_date' => $validated['proposed_training_date'] ?? null,
             'is_training_held' => $isHeld,
             'attendance' => $attendance,
-            'post_assessment_score' => null,
             'assigned_by' => auth()->id(),
         ];
 
@@ -179,6 +180,7 @@ class TdKpiAssignmentController extends Controller
                 $this->syncDraftAssignment($override, $existing, [
                     ...$shared,
                     'assessment_id' => null,
+                    'post_assessment_score' => null,
                 ]);
 
                 return Redirect::back()->withErrors([
@@ -204,14 +206,19 @@ class TdKpiAssignmentController extends Controller
                         ...$shared,
                         'evaluation_result_override_id' => $override->id,
                         'assessment_id' => $assessment->id,
-                        'post_assessment_score' => null,
                     ];
 
                     if ($row) {
+                        if ($row->isSubmitted()) {
+                            unset($payload['is_training_held'], $payload['attendance'], $payload['assigned_training_content_id']);
+                        }
                         $usedIds[] = $row->id;
                         $row->update($payload);
                     } else {
-                        $created = TdKpiAssignment::create($payload);
+                        $created = TdKpiAssignment::create([
+                            ...$payload,
+                            'post_assessment_score' => null,
+                        ]);
                         $usedIds[] = $created->id;
                     }
                 }
@@ -227,9 +234,265 @@ class TdKpiAssignmentController extends Controller
         $this->syncDraftAssignment($override, $existing, [
             ...$shared,
             'assessment_id' => null,
+            'post_assessment_score' => null,
         ]);
 
         return Redirect::back()->with('message', 'Assignment updated successfully!');
+    }
+
+    public function take(TdKpiAssignment $assignment): Response
+    {
+        abort_unless($assignment->assessment_id, 404);
+
+        $assignment->load([
+            'employee:id,employee_code,first_name,last_name,branch_id,department_id',
+            'employee.branch:id,name',
+            'employee.department:id,name',
+            'trainingType:id,name',
+            'assignedTrainingContent:id,training_name',
+            'assessment:id,assessment_name,randomization_questions_number',
+            'fiscalYear:id,name',
+            'fiscalMonth:id,name',
+            'assignmentQuestions.question.inputType:id,type_identifier,name',
+            'assignmentQuestions.question.choices',
+        ]);
+
+        if (! $assignment->isSubmitted() && $assignment->assignmentQuestions->isEmpty()) {
+            $this->assignRandomQuestions($assignment);
+            $assignment->load([
+                'assignmentQuestions.question.inputType:id,type_identifier,name',
+                'assignmentQuestions.question.choices',
+            ]);
+        }
+
+        $submitted = $assignment->isSubmitted();
+
+        return Inertia::render('training/TdKpi/Assignments/Take', [
+            'assignment' => [
+                'id' => $assignment->id,
+                'submitted' => $submitted,
+                'submitted_at' => $assignment->submitted_at?->toDateTimeString(),
+                'post_assessment_score' => $assignment->post_assessment_score !== null
+                    ? (float) $assignment->post_assessment_score
+                    : null,
+                'employee_name' => trim(($assignment->employee?->first_name ?? '') . ' ' . ($assignment->employee?->last_name ?? '')),
+                'employee_code' => $assignment->employee?->employee_code,
+                'branch' => $assignment->employee?->branch?->name,
+                'department' => $assignment->employee?->department?->name,
+                'training_type' => $assignment->trainingType?->name,
+                'assigned_training_content' => $assignment->assignedTrainingContent?->training_name,
+                'proposed_training_date' => $assignment->proposed_training_date?->format('Y-m-d'),
+                'is_training_held' => (bool) $assignment->is_training_held,
+                'attendance' => (bool) $assignment->attendance,
+                'assessment_name' => $assignment->assessment?->assessment_name,
+                'fiscal_year_name' => $assignment->fiscalYear?->name,
+                'fiscal_month_name' => $assignment->fiscalMonth?->name,
+            ],
+            'questions' => $assignment->assignmentQuestions->map(function (TdKpiAssignmentQuestion $pivot) use ($submitted) {
+                $question = $pivot->question;
+                $type = $question?->inputType?->type_identifier ?? 'text';
+                $payload = [
+                    'id' => $pivot->id,
+                    'question_id' => $question?->id,
+                    'label' => $question?->label,
+                    'type_identifier' => $type,
+                    'choices' => ($question?->choices ?? collect())->map(fn ($c) => [
+                        'label' => $c->label,
+                        'value' => $c->value,
+                    ])->values()->all(),
+                    'response' => $this->decodeResponse($pivot->response, $type),
+                ];
+
+                if ($submitted) {
+                    $bankAnswer = $question?->answer;
+                    $payload['is_correct'] = $bankAnswer !== null && $bankAnswer !== ''
+                        ? $this->responsesMatch($pivot->response, $bankAnswer, $type)
+                        : null;
+                }
+
+                return $payload;
+            })->values()->all(),
+        ]);
+    }
+
+    public function submit(Request $request, TdKpiAssignment $assignment): RedirectResponse
+    {
+        abort_unless($assignment->assessment_id, 404);
+
+        if ($assignment->isSubmitted()) {
+            return Redirect::route('training.td-kpi.assignments.take', $assignment)
+                ->withErrors(['submit' => 'This assessment has already been submitted.']);
+        }
+
+        $assignment->load([
+            'assignmentQuestions.question.inputType:id,type_identifier',
+            'assignmentQuestions.question',
+        ]);
+
+        if ($assignment->assignmentQuestions->isEmpty()) {
+            return Redirect::route('training.td-kpi.assignments.take', $assignment)
+                ->withErrors(['submit' => 'No questions are assigned for this assessment.']);
+        }
+
+        $validated = $request->validate([
+            'responses' => ['required', 'array'],
+            'responses.*.id' => ['required', 'integer'],
+            'responses.*.value' => ['nullable'],
+        ]);
+
+        $responseMap = collect($validated['responses'])->keyBy('id');
+        $assignedIds = $assignment->assignmentQuestions->pluck('id')->all();
+
+        foreach ($responseMap->keys() as $pivotId) {
+            if (! in_array((int) $pivotId, $assignedIds, true)) {
+                return Redirect::back()->withErrors(['responses' => 'Invalid question response.'])->withInput();
+            }
+        }
+
+        DB::transaction(function () use ($assignment, $responseMap) {
+            $correct = 0;
+            $scorable = 0;
+
+            foreach ($assignment->assignmentQuestions as $pivot) {
+                $question = $pivot->question;
+                $type = $question?->inputType?->type_identifier ?? 'text';
+                $rawValue = $responseMap->get($pivot->id)['value'] ?? null;
+                $encoded = $this->encodeResponse($rawValue, $type);
+
+                $pivot->update(['response' => $encoded]);
+
+                $bankAnswer = $question?->answer;
+                if ($bankAnswer !== null && $bankAnswer !== '') {
+                    $scorable++;
+                    if ($this->responsesMatch($encoded, $bankAnswer, $type)) {
+                        $correct++;
+                    }
+                }
+            }
+
+            $score = $scorable > 0
+                ? round(($correct / $scorable) * 100, 2)
+                : ($assignment->assignmentQuestions->isNotEmpty() ? 0.0 : 0.0);
+
+            $assignment->update([
+                'post_assessment_score' => $score,
+                'submitted_at' => now(),
+                'submitted_by' => auth()->id(),
+            ]);
+        });
+
+        return Redirect::route('training.td-kpi.assignments.take', $assignment)
+            ->with('message', 'Assessment submitted successfully!');
+    }
+
+    private function assignRandomQuestions(TdKpiAssignment $assignment): void
+    {
+        $assessment = $assignment->assessment
+            ?? TdKpiAssessment::query()->find($assignment->assessment_id);
+
+        if (! $assessment) {
+            return;
+        }
+
+        $limit = max(1, (int) $assessment->randomization_questions_number);
+
+        $questions = TdKpiQuestion::query()
+            ->where('assessment_id', $assessment->id)
+            ->where('status', 'active')
+            ->inRandomOrder()
+            ->limit($limit)
+            ->get();
+
+        DB::transaction(function () use ($assignment, $questions) {
+            foreach ($questions as $index => $question) {
+                TdKpiAssignmentQuestion::create([
+                    'td_kpi_assignment_id' => $assignment->id,
+                    'td_kpi_question_id' => $question->id,
+                    'order_index' => $index,
+                    'response' => null,
+                ]);
+            }
+        });
+    }
+
+    private function encodeResponse(mixed $value, string $type): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ($this->isMultiValueType($type)) {
+            $values = is_array($value)
+                ? $value
+                : (preg_split('/\s*,\s*/', (string) $value) ?: []);
+            $values = array_values(array_filter(array_map(fn ($v) => trim((string) $v), $values), fn ($v) => $v !== ''));
+
+            return $values === [] ? null : json_encode($values);
+        }
+
+        return trim((string) $value);
+    }
+
+    private function decodeResponse(?string $response, string $type): string|array|null
+    {
+        if ($response === null || $response === '') {
+            return $this->isMultiValueType($type) ? [] : '';
+        }
+
+        if ($this->isMultiValueType($type)) {
+            $decoded = json_decode($response, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+
+            return array_values(array_filter(array_map('trim', preg_split('/\s*,\s*/', $response) ?: [])));
+        }
+
+        return $response;
+    }
+
+    private function responsesMatch(?string $encodedResponse, string $bankAnswer, string $type): bool
+    {
+        if ($encodedResponse === null || $encodedResponse === '') {
+            return false;
+        }
+
+        if ($this->isMultiValueType($type)) {
+            $given = $this->normalizeValueSet($this->decodeResponse($encodedResponse, $type));
+            $expected = $this->normalizeValueSet(
+                preg_split('/\s*,\s*/', $bankAnswer) ?: []
+            );
+
+            return $given === $expected;
+        }
+
+        return mb_strtolower(trim($encodedResponse)) === mb_strtolower(trim($bankAnswer));
+    }
+
+    /**
+     * @param  array<int, mixed>|string|null  $values
+     * @return array<int, string>
+     */
+    private function normalizeValueSet(array|string|null $values): array
+    {
+        if ($values === null) {
+            return [];
+        }
+
+        if (! is_array($values)) {
+            $values = preg_split('/\s*,\s*/', (string) $values) ?: [];
+        }
+
+        $normalized = array_map(fn ($v) => mb_strtolower(trim((string) $v)), $values);
+        $normalized = array_values(array_filter($normalized, fn ($v) => $v !== ''));
+        sort($normalized);
+
+        return $normalized;
+    }
+
+    private function isMultiValueType(string $type): bool
+    {
+        return $type === 'select_multiple' || $type === 'checkbox';
     }
 
     /**

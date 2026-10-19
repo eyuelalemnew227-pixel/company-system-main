@@ -838,6 +838,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::put('assignments/upsert', [\App\Http\Controllers\Training\TdKpiAssignmentController::class, 'upsert'])
                 ->middleware('permission:training.td_kpi.assignments.create|training.td_kpi.assignments.view')
                 ->name('assignments.upsert');
+            Route::get('assignments/{assignment}/take', [\App\Http\Controllers\Training\TdKpiAssignmentController::class, 'take'])
+                ->middleware('permission:training.td_kpi.assignments.view')
+                ->name('assignments.take');
+            Route::post('assignments/{assignment}/submit', [\App\Http\Controllers\Training\TdKpiAssignmentController::class, 'submit'])
+                ->middleware('permission:training.td_kpi.assignments.view')
+                ->name('assignments.submit');
 
             Route::get('training-types', [\App\Http\Controllers\Training\TrainingTypeController::class, 'index'])
                 ->middleware('permission:training.td_kpi.training_types.view')

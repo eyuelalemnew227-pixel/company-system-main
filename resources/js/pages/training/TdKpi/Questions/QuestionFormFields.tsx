@@ -1,5 +1,6 @@
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -12,6 +13,18 @@ import {
 } from '@/types/td-kpi-question';
 import { Plus, Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
+
+function parseMultiAnswer(answer: string): string[] {
+	if (!answer.trim()) return [];
+	return answer
+		.split(',')
+		.map((value) => value.trim())
+		.filter(Boolean);
+}
+
+function serializeMultiAnswer(values: string[]): string {
+	return values.join(',');
+}
 
 export function inputTypeNeedsChoices(typeIdentifier?: string | null): boolean {
 	if (!typeIdentifier) return false;
@@ -60,6 +73,9 @@ export function QuestionFormFields({
 	const selectedType = formInputTypes.find((type) => String(type.id) === data.form_input_type_id);
 	const showChoices = inputTypeNeedsChoices(selectedType?.type_identifier);
 	const answerRequired = inputTypeRequiresAnswer(selectedType?.type_identifier);
+	const isMultiAnswerType =
+		selectedType?.type_identifier === 'select_multiple' || selectedType?.type_identifier === 'checkbox';
+	const selectedAnswers = useMemo(() => parseMultiAnswer(data.answer), [data.answer]);
 
 	const sortedAssessments = useMemo(
 		() => [...assessments].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
@@ -69,6 +85,7 @@ export function QuestionFormFields({
 	function handleInputTypeChange(value: string) {
 		const nextType = formInputTypes.find((type) => String(type.id) === value);
 		setData('form_input_type_id', value);
+		setData('answer', '');
 
 		if (inputTypeNeedsChoices(nextType?.type_identifier)) {
 			if (!data.choices.length) {
@@ -80,10 +97,18 @@ export function QuestionFormFields({
 	}
 
 	function updateChoice(index: number, field: 'label' | 'value', value: string) {
+		const previousValue = data.choices[index]?.value;
 		const next = data.choices.map((choice, choiceIndex) =>
 			choiceIndex === index ? { ...choice, [field]: value } : choice,
 		);
 		setData('choices', next);
+
+		if (field === 'value' && isMultiAnswerType && previousValue) {
+			const nextAnswers = selectedAnswers.map((answer) => (answer === previousValue ? value.trim() : answer)).filter(Boolean);
+			setData('answer', serializeMultiAnswer(nextAnswers));
+		} else if (field === 'value' && !isMultiAnswerType && data.answer === previousValue) {
+			setData('answer', value.trim());
+		}
 	}
 
 	function addChoice() {
@@ -92,10 +117,28 @@ export function QuestionFormFields({
 	}
 
 	function removeChoice(index: number) {
+		const removedValue = data.choices[index]?.value;
 		setData(
 			'choices',
 			data.choices.filter((_, choiceIndex) => choiceIndex !== index),
 		);
+
+		if (removedValue && isMultiAnswerType) {
+			setData(
+				'answer',
+				serializeMultiAnswer(selectedAnswers.filter((answer) => answer !== removedValue)),
+			);
+		} else if (removedValue && data.answer === removedValue) {
+			setData('answer', '');
+		}
+	}
+
+	function toggleCorrectAnswer(choiceValue: string, checked: boolean) {
+		if (!choiceValue) return;
+		const next = checked
+			? [...selectedAnswers.filter((answer) => answer !== choiceValue), choiceValue]
+			: selectedAnswers.filter((answer) => answer !== choiceValue);
+		setData('answer', serializeMultiAnswer(next));
 	}
 
 	return (
@@ -177,18 +220,26 @@ export function QuestionFormFields({
 					Answer {answerRequired ? <span className="text-red-600">*</span> : <span className="text-muted-foreground">(optional)</span>}
 				</Label>
 				{showChoices && data.choices.some((c) => c.value) ? (
-					selectedType?.type_identifier === 'select_multiple' || selectedType?.type_identifier === 'checkbox' ? (
-						<>
-							<Input
-								id="answer"
-								value={data.answer}
-								onChange={(e) => setData('answer', e.target.value)}
-								placeholder="Enter correct choice value(s), comma-separated for multiple"
-							/>
-							<p className="mt-1 text-xs text-muted-foreground">
-								For multiple answers, enter choice values separated by commas.
-							</p>
-						</>
+					isMultiAnswerType ? (
+						<div className="space-y-2 rounded-lg border p-3">
+							<p className="text-xs text-muted-foreground">Check the correct answer(s).</p>
+							{data.choices
+								.filter((choice) => choice.value.trim())
+								.map((choice, index) => {
+									const checked = selectedAnswers.includes(choice.value.trim());
+									return (
+										<label key={`${choice.value}-${index}`} className="flex items-center gap-2 text-sm">
+											<Checkbox
+												checked={checked}
+												onCheckedChange={(state) =>
+													toggleCorrectAnswer(choice.value.trim(), state === true)
+												}
+											/>
+											<span>{choice.label || choice.value}</span>
+										</label>
+									);
+								})}
+						</div>
 					) : (
 						<Select value={data.answer || undefined} onValueChange={(value) => setData('answer', value)}>
 							<SelectTrigger id="answer">
