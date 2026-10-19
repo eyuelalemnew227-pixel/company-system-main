@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Form;
 use App\Models\FormSubmission;
+use App\Services\SimpleXlsxWriter;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class FormSubmissionAdminController extends Controller
@@ -894,6 +897,322 @@ class FormSubmissionAdminController extends Controller
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Detailed Export of all questions and answers for a given form into an Excel (.xlsx) or CSV file.
+     * Supports optional fiscal year, fiscal month, date range, branch, and status filters.
+     */
+    public function export_detail(Request $request, Form $form)
+    {
+        $user = auth()->user();
+        if ($form->created_by !== $user->id) {
+            $hasAccess = $form->user_permissions()->where('user_id', $user->id)->where('can_view_submissions', true)->exists();
+            if (!$hasAccess) {
+                abort(403, 'You must be granted explicit form-level access to view/export submissions for this form.');
+            }
+        }
+
+        $format = strtolower((string) $request->query('format', 'xlsx'));
+
+        // 1. Reference lookups
+        $allBranches = \App\Models\Branch::get(['id', 'name', 'branch_code', 'is_sales_generating']);
+        $branchMap = $allBranches->keyBy('id');
+        $branches = $allBranches->pluck('name', 'id')->toArray();
+        $branchCodes = $allBranches->pluck('branch_code', 'id')->toArray();
+
+        $departments = \App\Models\Department::pluck('name', 'id')->toArray();
+        $employeeModels = \App\Models\Employee::get(['id', 'first_name', 'last_name', 'employee_code']);
+        $employees = $employeeModels->mapWithKeys(function ($e) {
+            $name = trim($e->first_name . ' ' . $e->last_name) ?: $e->employee_code;
+            return [$e->id => $name];
+        })->toArray();
+        $employeeCodes = $employeeModels->pluck('employee_code', 'id')->toArray();
+
+        $fiscalYears = \App\Models\FiscalYear::orderBy('gregorian_start_date')->get(['id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+        $fiscalMonths = \App\Models\FiscalMonth::orderBy('gregorian_start_date')->get(['id', 'fiscal_year_id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+
+        // 2. Extract all distinct questions across all versions of this form, preserving section & question order
+        $sections = \App\Models\FormSection::whereHas('formVersion', function ($q) use ($form) {
+                $q->where('form_id', $form->id);
+            })
+            ->with(['questions' => function ($q) {
+                $q->orderBy('order_index')->with(['inputType', 'choices']);
+            }])
+            ->orderBy('order_index')
+            ->get();
+
+        $headersMap = [];
+        foreach ($sections as $sec) {
+            foreach ($sec->questions as $q) {
+                $tId = $q->inputType?->type_identifier ?? 'text';
+                if ($tId === 'title') {
+                    continue; // Skip static section title elements
+                }
+
+                $key = $q->local_id ?: ('q_' . $q->id);
+                if (!isset($headersMap[$key])) {
+                    $choiceMap = [];
+                    foreach ($q->choices as $choice) {
+                        $choiceMap[(string) $choice->value] = $choice->label;
+                        $choiceMap[(string) $choice->id] = $choice->label;
+                    }
+
+                    $headersMap[$key] = [
+                        'id' => $q->id,
+                        'local_id' => $q->local_id,
+                        'label' => rtrim($q->label, '? '),
+                        'type' => $tId,
+                        'choices' => $choiceMap,
+                    ];
+                }
+            }
+        }
+
+        // 3. Query submissions
+        $subQuery = FormSubmission::whereHas('formVersion', function ($q) use ($form) {
+                $q->where('form_id', $form->id);
+            })
+            ->with([
+                'user:id,name,employee_id',
+                'user.employee.branch:id,name,branch_code',
+                'answers.question.inputType',
+                'answers.question.choices',
+            ])
+            ->orderByDesc('created_at');
+
+        // Apply date & status filters at query level
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+        $status = $request->query('status');
+
+        if ($startDate) {
+            $subQuery->whereDate('created_at', '>=', $startDate);
+        }
+        if ($endDate) {
+            $subQuery->whereDate('created_at', '<=', $endDate);
+        }
+        if ($status && $status !== 'all') {
+            $subQuery->where('status', $status);
+        }
+
+        $submissions = $subQuery->get();
+
+        // 4. Resolve branch and fiscal periods for each submission
+        $fiscalYearId = $request->query('fiscal_year_id');
+        $fiscalMonthId = $request->query('fiscal_month_id');
+        $branchIdFilter = $request->query('branch_id');
+
+        $rows = [];
+        foreach ($submissions as $sub) {
+            // Resolve branch
+            $branchAns = $sub->answers->first(function ($a) {
+                return ($a->question?->inputType?->type_identifier ?? '') === 'branch_lookup';
+            });
+
+            $branchId = null;
+            $branchName = null;
+            $branchCode = null;
+
+            if ($branchAns && $branchAns->value_text) {
+                $val = trim($branchAns->value_text);
+                if (is_numeric($val) && isset($branchMap[(int) $val])) {
+                    $branchId = (int) $val;
+                    $branchName = $branchMap[(int) $val]->name;
+                    $branchCode = $branchMap[(int) $val]->branch_code;
+                } else {
+                    $matched = $allBranches->first(fn($b) => strcasecmp($b->name, $val) === 0);
+                    if ($matched) {
+                        $branchId = $matched->id;
+                        $branchName = $matched->name;
+                        $branchCode = $matched->branch_code;
+                    } else {
+                        $branchName = $val;
+                        $branchId = 'custom_' . md5($val);
+                    }
+                }
+            }
+
+            if (!$branchId) {
+                $empBranch = $sub->user?->employee?->branch;
+                if ($empBranch) {
+                    $branchId = $empBranch->id;
+                    $branchName = $empBranch->name;
+                    $branchCode = $empBranch->branch_code;
+                } else {
+                    $branchId = 'unassigned';
+                    $branchName = 'Unassigned';
+                }
+            }
+
+            // Resolve fiscal periods
+            $submittedAt = Carbon::parse($sub->created_at);
+            $matchedYear = $fiscalYears->first(fn($fy) => $submittedAt->between(
+                Carbon::parse($fy->gregorian_start_date),
+                Carbon::parse($fy->gregorian_end_date)
+            ));
+            $matchedMonth = $fiscalMonths->first(fn($fm) => $submittedAt->between(
+                Carbon::parse($fm->gregorian_start_date),
+                Carbon::parse($fm->gregorian_end_date)
+            ));
+
+            // Apply in-memory fiscal & branch filters if requested
+            if ($fiscalYearId && $fiscalYearId !== 'all') {
+                if (!$matchedYear || (string) $matchedYear->id !== (string) $fiscalYearId) {
+                    continue;
+                }
+            }
+
+            if ($fiscalMonthId && $fiscalMonthId !== 'all') {
+                if (!$matchedMonth || (string) $matchedMonth->id !== (string) $fiscalMonthId) {
+                    continue;
+                }
+            }
+
+            if ($branchIdFilter && $branchIdFilter !== 'all') {
+                if ((string) $branchId !== (string) $branchIdFilter) {
+                    continue;
+                }
+            }
+
+            // Submitter details
+            $submitterName = $sub->user?->name ?? 'Unknown';
+            $submitterCode = $employeeCodes[$sub->user?->employee_id ?? ''] ?? '';
+
+            // Map answers by local_id and by question_id
+            $ansByLocalId = [];
+            $ansByQId = [];
+            foreach ($sub->answers as $ans) {
+                if ($ans->question) {
+                    if ($ans->question->local_id) {
+                        $ansByLocalId[$ans->question->local_id] = $ans;
+                    }
+                    $ansByQId[$ans->question->id] = $ans;
+                }
+            }
+
+            // Base row columns
+            $row = [
+                '#' . $sub->id,
+                strtoupper($sub->status ?: 'PENDING'),
+                $branchName ?? 'Unassigned',
+                $branchCode ?? '',
+                $submitterName,
+                $submitterCode,
+                $sub->created_at ? $sub->created_at->format('Y-m-d H:i:s') : '',
+                $matchedYear?->name ?? '',
+                $matchedMonth?->name ?? '',
+            ];
+
+            // Append each question's answer
+            foreach ($headersMap as $key => $qMeta) {
+                $ans = $ansByLocalId[$key] ?? ($ansByQId[$qMeta['id']] ?? null);
+                if (!$ans) {
+                    $row[] = '';
+                    continue;
+                }
+
+                $type = $qMeta['type'];
+
+                if ($type === 'number') {
+                    $row[] = ($ans->value_text !== null && $ans->value_text !== '')
+                        ? $ans->value_text
+                        : ($ans->value_boolean !== null ? (string) (int) $ans->value_boolean : '');
+                } elseif ($type === 'boolean') {
+                    if ($ans->value_text && !in_array($ans->value_text, ['0', '1', 'yes', 'no'], true)) {
+                        $row[] = $ans->value_text;
+                    } else {
+                        $row[] = ($ans->value_boolean !== null)
+                            ? ($ans->value_boolean ? 'Yes' : 'No')
+                            : ($ans->value_text === '1' ? 'Yes' : ($ans->value_text === '0' ? 'No' : $ans->value_text));
+                    }
+                } elseif ($type === 'branch_lookup') {
+                    $val = trim((string) $ans->value_text);
+                    $row[] = $branches[$val] ?? $val;
+                } elseif ($type === 'department_lookup') {
+                    $val = trim((string) $ans->value_text);
+                    $row[] = $departments[$val] ?? $val;
+                } elseif ($type === 'employee_lookup') {
+                    $val = trim((string) $ans->value_text);
+                    $row[] = $employees[$val] ?? $val;
+                } elseif (str_starts_with((string) $ans->value_text, 'data:image/')) {
+                    $row[] = '[Signature Attached]';
+                } else {
+                    $val = trim((string) $ans->value_text);
+                    // Check if question has defined choices
+                    if (!empty($qMeta['choices'])) {
+                        // Check if answer is a JSON array of choice keys
+                        $decodedChoices = json_decode($val, true);
+                        if (is_array($decodedChoices)) {
+                            $labels = array_map(fn($c) => $qMeta['choices'][(string) $c] ?? (string) $c, $decodedChoices);
+                            $row[] = implode(', ', $labels);
+                        } elseif (isset($qMeta['choices'][$val])) {
+                            $row[] = $qMeta['choices'][$val];
+                        } else {
+                            $row[] = $val;
+                        }
+                    } else {
+                        $row[] = $val;
+                    }
+                }
+            }
+
+            $rows[] = $row;
+        }
+
+        // 5. Header row
+        $baseHeaders = [
+            'Record ID',
+            'Status',
+            'Branch',
+            'Branch Code',
+            'Submitted By',
+            'Employee Code',
+            'Submission Date',
+            'Fiscal Year',
+            'Fiscal Month',
+        ];
+
+        $questionHeaders = [];
+        foreach ($headersMap as $qMeta) {
+            $questionHeaders[] = $qMeta['label'];
+        }
+
+        $allHeaders = array_merge($baseHeaders, $questionHeaders);
+
+        // 6. Generate filename
+        $cleanTitle = trim(preg_replace('/[\\\\\/:\*\?"<>\|]/', '_', $form->title)) ?: 'Form_' . $form->id;
+        $timestamp = date('Y_m_d_His');
+
+        // CSV export
+        if ($format === 'csv') {
+            $filename = "{$cleanTitle}_Detail_Submissions_{$timestamp}.csv";
+            $asciiFallback = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $filename) ?: "form_{$form->id}_submissions.csv";
+            $encodedFilename = rawurlencode($filename);
+            $headers = [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$asciiFallback}\"; filename*=UTF-8''{$encodedFilename}",
+                'Pragma' => 'no-cache',
+                'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+                'Expires' => '0',
+            ];
+
+            return response()->stream(function () use ($allHeaders, $rows) {
+                $file = fopen('php://output', 'w');
+                // UTF-8 BOM for Excel
+                fputs($file, "\xEF\xBB\xBF");
+                fputcsv($file, $allHeaders);
+                foreach ($rows as $row) {
+                    fputcsv($file, $row);
+                }
+                fclose($file);
+            }, 200, $headers);
+        }
+
+        // Default: Native OpenXML Excel (.xlsx)
+        $xlsxFilename = "{$cleanTitle}_Detail_Submissions_{$timestamp}.xlsx";
+        $xlsxWriter = new SimpleXlsxWriter();
+        return $xlsxWriter->download($xlsxFilename, $allHeaders, $rows, substr($cleanTitle, 0, 31));
     }
 
     /**
