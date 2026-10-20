@@ -826,17 +826,25 @@ class FormSubmissionAdminController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        // 4. Stream response
+        // 4. Stream response (UTF-8 + BOM so Excel shows Amharic/other Unicode correctly)
+        $cleanTitle = trim(preg_replace('/[\\\\\/:\*\?"<>\|]/', '_', $form->title)) ?: 'Form_' . $form->id;
+        $filename = "{$cleanTitle}_Submissions.csv";
+        $asciiFallback = preg_replace('/[^A-Za-z0-9_\-\.]/', '_', $filename) ?: "form_{$form->id}_submissions.csv";
+        $encodedFilename = rawurlencode($filename);
+
         $headers = [
-            "Content-type" => "text/csv",
-            "Content-Disposition" => "attachment; filename=\"{$form->title}_Submissions.csv\"",
-            "Pragma" => "no-cache",
-            "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
-            "Expires" => "0"
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$asciiFallback}\"; filename*=UTF-8''{$encodedFilename}",
+            'Pragma' => 'no-cache',
+            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
         ];
 
         $callback = function () use ($submissions, $headersMap, $branches, $departments, $employees) {
             $file = fopen('php://output', 'w');
+
+            // UTF-8 BOM — same approach as Evaluation Results / detailed form export
+            fputs($file, "\xEF\xBB\xBF");
 
             // Build CSV Header
             $headerRow = ['Record ID', 'Status', 'Submitted By', 'Submission Date'];
