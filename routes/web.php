@@ -245,6 +245,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware('auth')->group(function () {
         Route::get('submissions/form/{form}/export', [\App\Http\Controllers\FormSubmissionAdminController::class, 'export_csv'])->name('forms.submissions.export');
+        Route::get('submissions/form/{form}/export-detail', [\App\Http\Controllers\FormSubmissionAdminController::class, 'export_detail'])->name('forms.submissions.export_detail');
     });
 
     Route::middleware('permission:delete form submissions')->group(function () {

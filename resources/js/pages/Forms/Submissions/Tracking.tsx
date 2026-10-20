@@ -31,6 +31,14 @@ import {
     LabelList
 } from 'recharts';
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
     Building2,
     Calendar,
     CheckCircle2,
@@ -51,7 +59,8 @@ import {
     AlertCircle,
     X,
     ExternalLink,
-    RefreshCw
+    RefreshCw,
+    ChevronDown
 } from 'lucide-react';
 
 interface BranchItem {
@@ -339,6 +348,20 @@ export default function Tracking({
         endDate !== '' ||
         searchQuery !== '';
 
+    // Helper to generate URL for Detailed Export with all questions and answers
+    const getDetailExportUrl = (format = 'xlsx', applyFilters = true) => {
+        const params = new URLSearchParams();
+        if (applyFilters) {
+            if (fiscalYearFilter !== 'all') params.append('fiscal_year_id', fiscalYearFilter);
+            if (fiscalMonthFilter !== 'all') params.append('fiscal_month_id', fiscalMonthFilter);
+            if (startDate) params.append('start_date', startDate);
+            if (endDate) params.append('end_date', endDate);
+        }
+        if (format) params.append('format', format);
+        const qs = params.toString();
+        return `/submissions/form/${form.id}/export-detail${qs ? `?${qs}` : ''}`;
+    };
+
     // Export CSV report of branch tracking
     const exportTrackingCSV = () => {
         const headers = ['Branch Name', 'Branch Code', 'Visit Status', 'Total Visits', 'Latest Visit Date'];
@@ -420,14 +443,76 @@ export default function Tracking({
                             </Link>
                         </Button>
 
-                        <Button
-                            onClick={exportTrackingCSV}
-                            variant="outline"
-                            className="text-amber-900 border-amber-300 hover:bg-amber-50 shadow-2xs"
-                        >
-                            <Download className="w-4 h-4 mr-1.5 text-amber-700" />
-                            Export Report
-                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    className="bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs font-medium gap-1.5"
+                                >
+                                    <FileSpreadsheet className="w-4 h-4" />
+                                    <span>Detail Export (Excel)</span>
+                                    <ChevronDown className="w-3.5 h-3.5 opacity-80 ml-0.5" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-64">
+                                <DropdownMenuLabel className="text-xs text-muted-foreground uppercase tracking-wider">
+                                    Detail Submissions Export
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem asChild>
+                                    <a
+                                        href={getDetailExportUrl('xlsx', true)}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="flex items-center cursor-pointer w-full py-1.5"
+                                    >
+                                        <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-600 shrink-0" />
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-sm">Export Detailed Excel (.xlsx)</span>
+                                            <span className="text-[11px] text-muted-foreground">
+                                                {hasActiveFilters ? 'With active filters applied' : 'All questions & answers'}
+                                            </span>
+                                        </div>
+                                    </a>
+                                </DropdownMenuItem>
+                                {hasActiveFilters && (
+                                    <DropdownMenuItem asChild>
+                                        <a
+                                            href={getDetailExportUrl('xlsx', false)}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="flex items-center cursor-pointer w-full py-1.5"
+                                        >
+                                            <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-700 shrink-0" />
+                                            <div className="flex flex-col">
+                                                <span className="font-medium text-sm">Export All Time (Excel)</span>
+                                                <span className="text-[11px] text-muted-foreground">Ignore current active filters</span>
+                                            </div>
+                                        </a>
+                                    </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem asChild>
+                                    <a
+                                        href={getDetailExportUrl('csv', true)}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="flex items-center cursor-pointer w-full py-1.5"
+                                    >
+                                        <FileText className="w-4 h-4 mr-2 text-blue-600 shrink-0" />
+                                        <div className="flex flex-col">
+                                            <span className="font-medium text-sm">Export Detailed CSV</span>
+                                            <span className="text-[11px] text-muted-foreground">All questions & answers (CSV)</span>
+                                        </div>
+                                    </a>
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={exportTrackingCSV} className="cursor-pointer py-1.5">
+                                    <Download className="w-4 h-4 mr-2 text-amber-700 shrink-0" />
+                                    <div className="flex flex-col">
+                                        <span className="font-medium text-sm">Export Summary Report</span>
+                                        <span className="text-[11px] text-muted-foreground">Branch visit statistics only</span>
+                                    </div>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                 </div>
 

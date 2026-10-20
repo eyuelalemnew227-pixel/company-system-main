@@ -8,7 +8,7 @@ import InputError from '@/components/input-error';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FilterX, GraduationCap } from 'lucide-react';
+import { Download, FilterX, GraduationCap } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -20,6 +20,7 @@ type ResultRow = {
     employee_id: number;
     employee_name: string;
     department_name: string;
+    branch_name: string;
     form_id: number;
     form_title: string;
     submission_id: number;
@@ -75,6 +76,8 @@ export default function EvaluationResults({
     trainingTypes = [],
     fiscalYears = [],
     fiscalMonths = [],
+    currentFiscalYearId = null,
+    currentFiscalMonthId = null,
 }: {
     kpiName: string;
     pageState: PageState;
@@ -84,14 +87,18 @@ export default function EvaluationResults({
     trainingTypes: TrainingTypeOption[];
     fiscalYears: FiscalOption[];
     fiscalMonths: FiscalOption[];
+    currentFiscalYearId?: number | null;
+    currentFiscalMonthId?: number | null;
 }) {
     const { flash } = usePage<{ flash: { message?: string } }>().props;
+    const defaultYearFilter = currentFiscalYearId ? String(currentFiscalYearId) : 'all';
+    const defaultMonthFilter = currentFiscalMonthId ? String(currentFiscalMonthId) : 'all';
     const [search, setSearch] = useState('');
     const [formFilter, setFormFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
     const [actionFilter, setActionFilter] = useState('all');
-    const [yearFilter, setYearFilter] = useState('all');
-    const [monthFilter, setMonthFilter] = useState('all');
+    const [yearFilter, setYearFilter] = useState(defaultYearFilter);
+    const [monthFilter, setMonthFilter] = useState(defaultMonthFilter);
     const [currentPage, setCurrentPage] = useState(1);
     const [editRow, setEditRow] = useState<ResultRow | null>(null);
     const itemsPerPage = 25;
@@ -129,6 +136,16 @@ export default function EvaluationResults({
         });
     }, [rows, search, formFilter, statusFilter, actionFilter, yearFilter, monthFilter]);
 
+    const filteredSummary = useMemo((): Summary => ({
+        rows: filteredRows.length,
+        employees: new Set(filteredRows.map((row) => row.employee_id)).size,
+        pass: filteredRows.filter((row) => row.status === 'pass').length,
+        fail: filteredRows.filter((row) => row.status === 'fail').length,
+        warning: filteredRows.filter((row) => row.next_action === 'warning').length,
+        training: filteredRows.filter((row) => row.next_action === 'training').length,
+        not_scored: filteredRows.filter((row) => row.status === 'not_scored').length,
+    }), [filteredRows]);
+
     useEffect(() => {
         setCurrentPage(1);
     }, [filteredRows.length, search, formFilter, statusFilter, actionFilter, yearFilter, monthFilter]);
@@ -141,8 +158,60 @@ export default function EvaluationResults({
         setFormFilter('all');
         setStatusFilter('all');
         setActionFilter('all');
-        setYearFilter('all');
-        setMonthFilter('all');
+        setYearFilter(defaultYearFilter);
+        setMonthFilter(defaultMonthFilter);
+    };
+
+    const escapeCsvCell = (value: string | number | null | undefined) => {
+        const cell = value === null || value === undefined ? '' : String(value);
+        if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+            return `"${cell.replace(/"/g, '""')}"`;
+        }
+        return cell;
+    };
+
+    const exportCsv = () => {
+        if (filteredRows.length === 0) return;
+
+        const headers = [
+            'employee_id',
+            'Employee',
+            'Department',
+            'Branch',
+            'Form',
+            'Fiscal month',
+            'Score',
+        ];
+
+        const csvContent = [
+            headers.join(','),
+            ...filteredRows.map((row) =>
+                [
+                    row.employee_id,
+                    row.employee_name,
+                    row.department_name,
+                    row.branch_name,
+                    row.form_title,
+                    row.fiscal_year_name
+                        ? `${row.fiscal_month_name} / ${row.fiscal_year_name}`
+                        : row.fiscal_month_name,
+                    row.score === null ? '' : row.score.toFixed(1),
+                ]
+                    .map(escapeCsvCell)
+                    .join(',')
+            ),
+        ].join('\n');
+
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `evaluation_results_${new Date().toISOString().slice(0, 10)}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
 
     function openEditDialog(row: ResultRow) {
@@ -181,7 +250,8 @@ export default function EvaluationResults({
                     <h2 className="text-2xl font-bold tracking-tight text-amber-900">Evaluation Results</h2>
                     <p className="text-muted-foreground">
                         Employees scored on forms linked to <span className="font-medium text-gray-800">{kpiName}</span>.
-                        Pass is 75 or above. Next action defaults to NA and can be edited per row.
+                        Pass is 75 or above. A fail from 60 to 74.9 is a warning. Below 60 is training.
+                        Next action defaults to NA and can be edited per row.
                     </p>
                 </div>
 
@@ -215,13 +285,13 @@ export default function EvaluationResults({
                     <>
                         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
                             {[
-                                ['Rows', summary.rows],
-                                ['Employees', summary.employees],
-                                ['Pass', summary.pass],
-                                ['Fail', summary.fail],
-                                ['Warning', summary.warning],
-                                ['Training', summary.training],
-                                ['Not scored', summary.not_scored],
+                                ['Rows', filteredSummary.rows],
+                                ['Employees', filteredSummary.employees],
+                                ['Pass', filteredSummary.pass],
+                                ['Fail', filteredSummary.fail],
+                                ['Warning', filteredSummary.warning],
+                                ['Training', filteredSummary.training],
+                                ['Not scored', filteredSummary.not_scored],
                             ].map(([label, value]) => (
                                 <div key={String(label)} className="rounded-lg border bg-white px-4 py-3">
                                     <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
@@ -301,6 +371,15 @@ export default function EvaluationResults({
                             </Select>
                             <Button type="button" variant="ghost" onClick={resetFilters} className="text-gray-600">
                                 <FilterX className="mr-2 h-4 w-4" /> Reset
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={exportCsv}
+                                disabled={filteredRows.length === 0}
+                                className="lg:ml-auto"
+                            >
+                                <Download className="mr-2 h-4 w-4" /> Export CSV
                             </Button>
                         </div>
 
