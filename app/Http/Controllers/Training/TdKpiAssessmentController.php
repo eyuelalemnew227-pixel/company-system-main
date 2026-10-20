@@ -59,6 +59,8 @@ class TdKpiAssessmentController extends Controller
 
     public function edit(TdKpiAssessment $assessment): Response
     {
+        $questionsCount = $assessment->questions()->where('status', 'active')->count();
+
         return Inertia::render('training/TdKpi/Assessments/Edit', [
             'assessment' => [
                 'id' => $assessment->id,
@@ -66,6 +68,7 @@ class TdKpiAssessmentController extends Controller
                 'training_module_id' => $assessment->training_module_id,
                 'randomization_questions_number' => $assessment->randomization_questions_number,
                 'status' => $assessment->status,
+                'questions_count' => $questionsCount,
             ],
             'trainingModules' => $this->trainingModules(),
         ]);
@@ -73,7 +76,7 @@ class TdKpiAssessmentController extends Controller
 
     public function update(Request $request, TdKpiAssessment $assessment): RedirectResponse
     {
-        $validated = $this->validateAssessment($request);
+        $validated = $this->validateAssessment($request, $assessment);
 
         $assessment->update($validated);
 
@@ -89,13 +92,25 @@ class TdKpiAssessmentController extends Controller
             ->with('message', 'Assessment deleted successfully!');
     }
 
-    private function validateAssessment(Request $request): array
+    private function validateAssessment(Request $request, ?TdKpiAssessment $assessment = null): array
     {
-        return $request->validate([
+        $rules = [
             'assessment_name' => ['required', 'string', 'max:255'],
             'training_module_id' => ['required', 'exists:recurring_training_modules,id'],
             'randomization_questions_number' => ['required', 'integer', 'min:1'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
+        ];
+
+        $questionsCount = null;
+        if ($assessment) {
+            $questionsCount = $assessment->questions()->where('status', 'active')->count();
+            $rules['randomization_questions_number'][] = 'max:' . $questionsCount;
+        }
+
+        return $request->validate($rules, [
+            'randomization_questions_number.max' => $questionsCount !== null
+                ? "Randomization questions number cannot exceed the number of active questions for this assessment ({$questionsCount})."
+                : 'Randomization questions number is too high.',
         ]);
     }
 

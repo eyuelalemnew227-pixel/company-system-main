@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 type Option = { id: number; name: string };
 
@@ -18,6 +18,7 @@ type AssessmentForm = {
 	training_module_id: number;
 	randomization_questions_number: number;
 	status: string;
+	questions_count: number;
 };
 
 export default function AssessmentEdit({
@@ -38,6 +39,9 @@ export default function AssessmentEdit({
 		[trainingModules],
 	);
 
+	const questionsCount = assessment.questions_count ?? 0;
+	const [clientError, setClientError] = useState('');
+
 	const { data, setData, put, processing, errors } = useForm({
 		assessment_name: assessment.assessment_name,
 		training_module_id: String(assessment.training_module_id),
@@ -45,8 +49,29 @@ export default function AssessmentEdit({
 		status: assessment.status,
 	});
 
+	function validateRandomCount(value: string): string {
+		const number = Number(value);
+		if (!value || Number.isNaN(number) || number < 1) {
+			return 'Randomization questions number must be at least 1.';
+		}
+		if (number > questionsCount) {
+			return `Randomization questions number cannot exceed the number of active questions for this assessment (${questionsCount}).`;
+		}
+		return '';
+	}
+
+	function onRandomCountChange(value: string) {
+		setData('randomization_questions_number', value);
+		setClientError(validateRandomCount(value));
+	}
+
 	function submit(e: React.FormEvent) {
 		e.preventDefault();
+		const message = validateRandomCount(data.randomization_questions_number);
+		if (message) {
+			setClientError(message);
+			return;
+		}
 		put(`/training/td-kpi/assessments/${assessment.id}`);
 	}
 
@@ -93,10 +118,14 @@ export default function AssessmentEdit({
 									id="randomization_questions_number"
 									type="number"
 									min={1}
+									max={Math.max(questionsCount, 1)}
 									value={data.randomization_questions_number}
-									onChange={(e) => setData('randomization_questions_number', e.target.value)}
+									onChange={(e) => onRandomCountChange(e.target.value)}
 								/>
-								<InputError message={errors.randomization_questions_number} />
+								<p className="mt-1 text-xs text-muted-foreground">
+									Active questions for this assessment: {questionsCount}
+								</p>
+								<InputError message={clientError || errors.randomization_questions_number} />
 							</div>
 							<div>
 								<Label htmlFor="status">Status</Label>
@@ -117,7 +146,7 @@ export default function AssessmentEdit({
 										Cancel
 									</Button>
 								</Link>
-								<Button type="submit" disabled={processing}>
+								<Button type="submit" disabled={processing || !!clientError}>
 									Update
 								</Button>
 							</div>
