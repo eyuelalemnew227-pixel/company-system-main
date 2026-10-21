@@ -1,6 +1,6 @@
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import InputError from '@/components/input-error';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import TablePagination from '@/components/table-pagination';
 import { Download, FilterX, GraduationCap } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -17,536 +18,511 @@ type FiscalOption = { id: number; name: string; fiscal_year_id?: number };
 type TrainingTypeOption = { id: number; name: string };
 
 type ResultRow = {
-    employee_id: number;
-    employee_name: string;
-    department_name: string;
-    branch_name: string;
-    form_id: number;
-    form_title: string;
-    submission_id: number;
-    fiscal_year_id: number | null;
-    fiscal_year_name: string | null;
-    fiscal_month_id: number | null;
-    fiscal_month_name: string;
-    score: number | null;
-    status: 'pass' | 'fail' | 'not_scored';
-    status_label: string;
-    next_action: 'na' | 'warning' | 'training' | 'not_scored';
-    next_action_label: string;
-    training_type_id: number | null;
-    training_type_name: string | null;
+	employee_id: number;
+	employee_name: string;
+	department_name: string;
+	branch_name: string;
+	form_id: number;
+	form_title: string;
+	submission_id: number;
+	fiscal_year_id: number | null;
+	fiscal_year_name: string | null;
+	fiscal_month_id: number | null;
+	fiscal_month_name: string;
+	score: number | null;
+	status: 'pass' | 'fail' | 'not_scored';
+	status_label: string;
+	next_action: 'na' | 'warning' | 'training' | 'not_scored';
+	next_action_label: string;
+	training_type_id: number | null;
+	training_type_name: string | null;
 };
 
 type Summary = {
-    rows: number;
-    employees: number;
-    pass: number;
-    fail: number;
-    warning: number;
-    training: number;
-    not_scored: number;
+	rows: number;
+	employees: number;
+	pass: number;
+	fail: number;
+	warning: number;
+	training: number;
+	not_scored: number;
+};
+
+type Filters = {
+	search: string;
+	form_id: string;
+	status: string;
+	next_action: string;
+	fiscal_year_id: string;
+	fiscal_month_id: string;
 };
 
 type PageState = 'ready' | 'missing_kpi' | 'no_forms';
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Form', href: '/forms' },
-    { title: 'Evaluation Results', href: '/forms/evaluation-results' },
+	{ title: 'Form', href: '/forms' },
+	{ title: 'Evaluation Results', href: '/forms/evaluation-results' },
 ];
 
 function statusClass(status: ResultRow['status']) {
-    if (status === 'pass') return 'bg-green-100 text-green-800 border-green-200';
-    if (status === 'fail') return 'bg-red-100 text-red-800 border-red-200';
-    return 'bg-gray-100 text-gray-700 border-gray-200';
+	if (status === 'pass') return 'bg-green-100 text-green-800 border-green-200';
+	if (status === 'fail') return 'bg-red-100 text-red-800 border-red-200';
+	return 'bg-gray-100 text-gray-700 border-gray-200';
 }
 
 function actionClass(action: ResultRow['next_action']) {
-    if (action === 'na') return 'bg-green-50 text-green-800 border-green-200';
-    if (action === 'warning') return 'bg-amber-100 text-amber-900 border-amber-200';
-    if (action === 'training') return 'bg-red-50 text-red-800 border-red-200';
-    return 'bg-gray-100 text-gray-700 border-gray-200';
+	if (action === 'na') return 'bg-green-50 text-green-800 border-green-200';
+	if (action === 'warning') return 'bg-amber-100 text-amber-900 border-amber-200';
+	if (action === 'training') return 'bg-red-50 text-red-800 border-red-200';
+	return 'bg-gray-100 text-gray-700 border-gray-200';
 }
 
 export default function EvaluationResults({
-    kpiName,
-    pageState,
-    linkedForms = [],
-    rows = [],
-    summary,
-    trainingTypes = [],
-    fiscalYears = [],
-    fiscalMonths = [],
-    currentFiscalYearId = null,
-    currentFiscalMonthId = null,
+	kpiName,
+	pageState,
+	linkedForms = [],
+	rows,
+	summary,
+	trainingTypes = [],
+	fiscalYears = [],
+	fiscalMonths = [],
+	filters,
 }: {
-    kpiName: string;
-    pageState: PageState;
-    linkedForms: LinkedForm[];
-    rows: ResultRow[];
-    summary: Summary;
-    trainingTypes: TrainingTypeOption[];
-    fiscalYears: FiscalOption[];
-    fiscalMonths: FiscalOption[];
-    currentFiscalYearId?: number | null;
-    currentFiscalMonthId?: number | null;
+	kpiName: string;
+	pageState: PageState;
+	linkedForms: LinkedForm[];
+	rows: {
+		data: ResultRow[];
+		total: number;
+		from: number;
+		to: number;
+		links: any[];
+	};
+	summary: Summary;
+	trainingTypes: TrainingTypeOption[];
+	fiscalYears: FiscalOption[];
+	fiscalMonths: FiscalOption[];
+	filters: Filters;
 }) {
-    const { flash } = usePage<{ flash: { message?: string } }>().props;
-    const defaultYearFilter = currentFiscalYearId ? String(currentFiscalYearId) : 'all';
-    const defaultMonthFilter = currentFiscalMonthId ? String(currentFiscalMonthId) : 'all';
-    const [search, setSearch] = useState('');
-    const [formFilter, setFormFilter] = useState('all');
-    const [statusFilter, setStatusFilter] = useState('all');
-    const [actionFilter, setActionFilter] = useState('all');
-    const [yearFilter, setYearFilter] = useState(defaultYearFilter);
-    const [monthFilter, setMonthFilter] = useState(defaultMonthFilter);
-    const [currentPage, setCurrentPage] = useState(1);
-    const [editRow, setEditRow] = useState<ResultRow | null>(null);
-    const itemsPerPage = 25;
+	const { flash } = usePage<{ flash: { message?: string } }>().props;
+	const [searchInput, setSearchInput] = useState(filters.search);
+	const [editRow, setEditRow] = useState<ResultRow | null>(null);
 
-    const { data, setData, put, processing, errors, reset, clearErrors } = useForm({
-        employee_id: '',
-        form_id: '',
-        fiscal_year_id: '',
-        fiscal_month_id: '',
-        next_action: 'na',
-        training_type_id: '',
-    });
+	const { data, setData, put, processing, errors, reset, clearErrors } = useForm({
+		employee_id: '',
+		form_id: '',
+		fiscal_year_id: '',
+		fiscal_month_id: '',
+		next_action: 'na',
+		training_type_id: '',
+	});
 
-    useEffect(() => {
-        if (flash?.message) toast.success(flash.message);
-    }, [flash?.message]);
+	useEffect(() => {
+		if (flash?.message) toast.success(flash.message);
+	}, [flash?.message]);
 
-    const monthsForYear = useMemo(() => {
-        if (yearFilter === 'all') return fiscalMonths;
-        return fiscalMonths.filter((month) => String(month.fiscal_year_id) === yearFilter);
-    }, [fiscalMonths, yearFilter]);
+	useEffect(() => {
+		setSearchInput(filters.search);
+	}, [filters.search]);
 
-    const filteredRows = useMemo(() => {
-        const query = search.trim().toLowerCase();
-        return rows.filter((row) => {
-            if (query && !row.employee_name.toLowerCase().includes(query) && !row.department_name.toLowerCase().includes(query)) {
-                return false;
-            }
-            if (formFilter !== 'all' && String(row.form_id) !== formFilter) return false;
-            if (statusFilter !== 'all' && row.status !== statusFilter) return false;
-            if (actionFilter !== 'all' && row.next_action !== actionFilter) return false;
-            if (yearFilter !== 'all' && String(row.fiscal_year_id) !== yearFilter) return false;
-            if (monthFilter !== 'all' && String(row.fiscal_month_id) !== monthFilter) return false;
-            return true;
-        });
-    }, [rows, search, formFilter, statusFilter, actionFilter, yearFilter, monthFilter]);
+	const monthsForYear = useMemo(() => {
+		if (filters.fiscal_year_id === 'all') return fiscalMonths;
+		return fiscalMonths.filter((month) => String(month.fiscal_year_id) === filters.fiscal_year_id);
+	}, [fiscalMonths, filters.fiscal_year_id]);
 
-    const filteredSummary = useMemo((): Summary => ({
-        rows: filteredRows.length,
-        employees: new Set(filteredRows.map((row) => row.employee_id)).size,
-        pass: filteredRows.filter((row) => row.status === 'pass').length,
-        fail: filteredRows.filter((row) => row.status === 'fail').length,
-        warning: filteredRows.filter((row) => row.next_action === 'warning').length,
-        training: filteredRows.filter((row) => row.next_action === 'training').length,
-        not_scored: filteredRows.filter((row) => row.status === 'not_scored').length,
-    }), [filteredRows]);
+	function applyFilters(next: Partial<Filters>) {
+		const params: Record<string, string> = {
+			search: next.search ?? filters.search,
+			form_id: next.form_id ?? filters.form_id,
+			status: next.status ?? filters.status,
+			next_action: next.next_action ?? filters.next_action,
+			fiscal_year_id: next.fiscal_year_id ?? filters.fiscal_year_id,
+			fiscal_month_id: next.fiscal_month_id ?? filters.fiscal_month_id,
+		};
 
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [filteredRows.length, search, formFilter, statusFilter, actionFilter, yearFilter, monthFilter]);
+		router.get('/forms/evaluation-results', params, {
+			preserveState: true,
+			preserveScroll: true,
+			replace: true,
+		});
+	}
 
-    const totalPages = Math.max(1, Math.ceil(filteredRows.length / itemsPerPage));
-    const pageRows = filteredRows.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+	function resetFilters() {
+		router.get(
+			'/forms/evaluation-results',
+			{
+				search: '',
+				form_id: 'all',
+				status: 'all',
+				next_action: 'all',
+				fiscal_year_id: 'all',
+				fiscal_month_id: 'all',
+			},
+			{ preserveState: true, preserveScroll: true, replace: true },
+		);
+	}
 
-    const resetFilters = () => {
-        setSearch('');
-        setFormFilter('all');
-        setStatusFilter('all');
-        setActionFilter('all');
-        setYearFilter(defaultYearFilter);
-        setMonthFilter(defaultMonthFilter);
-    };
+	function exportCsv() {
+		const params = new URLSearchParams({
+			search: filters.search,
+			form_id: filters.form_id,
+			status: filters.status,
+			next_action: filters.next_action,
+			fiscal_year_id: filters.fiscal_year_id,
+			fiscal_month_id: filters.fiscal_month_id,
+			export: 'csv',
+		});
+		window.location.href = `/forms/evaluation-results?${params.toString()}`;
+	}
 
-    const escapeCsvCell = (value: string | number | null | undefined) => {
-        const cell = value === null || value === undefined ? '' : String(value);
-        if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
-            return `"${cell.replace(/"/g, '""')}"`;
-        }
-        return cell;
-    };
+	function openEditDialog(row: ResultRow) {
+		if (!row.fiscal_year_id || !row.fiscal_month_id) return;
+		clearErrors();
+		setEditRow(row);
+		setData({
+			employee_id: String(row.employee_id),
+			form_id: String(row.form_id),
+			fiscal_year_id: String(row.fiscal_year_id),
+			fiscal_month_id: String(row.fiscal_month_id),
+			next_action: row.next_action,
+			training_type_id: row.training_type_id ? String(row.training_type_id) : '',
+		});
+	}
 
-    const exportCsv = () => {
-        if (filteredRows.length === 0) return;
+	function closeEditDialog() {
+		setEditRow(null);
+		reset();
+		clearErrors();
+	}
 
-        const headers = [
-            'employee_id',
-            'Employee',
-            'Department',
-            'Branch',
-            'Form',
-            'Fiscal month',
-            'Score',
-        ];
+	function submitEdit(e: React.FormEvent) {
+		e.preventDefault();
+		put('/forms/evaluation-results/override', {
+			preserveScroll: true,
+			onSuccess: () => closeEditDialog(),
+		});
+	}
 
-        const csvContent = [
-            headers.join(','),
-            ...filteredRows.map((row) =>
-                [
-                    row.employee_id,
-                    row.employee_name,
-                    row.department_name,
-                    row.branch_name,
-                    row.form_title,
-                    row.fiscal_year_name
-                        ? `${row.fiscal_month_name} / ${row.fiscal_year_name}`
-                        : row.fiscal_month_name,
-                    row.score === null ? '' : row.score.toFixed(1),
-                ]
-                    .map(escapeCsvCell)
-                    .join(',')
-            ),
-        ].join('\n');
+	return (
+		<AppLayout breadcrumbs={breadcrumbs}>
+			<Head title="Evaluation Results" />
+			<div className="mx-auto max-w-[90rem] space-y-6 pb-12">
+				<div>
+					<h2 className="text-2xl font-bold tracking-tight text-amber-900">Evaluation Results</h2>
+					<p className="text-muted-foreground">
+						Employees scored on forms linked to <span className="font-medium text-gray-800">{kpiName}</span>.
+						Pass is 75 or above. A fail from 60 to 74.9 is a warning. Below 60 is training. Next action
+						defaults to NA and can be edited per row.
+					</p>
+				</div>
 
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.setAttribute('href', url);
-        link.setAttribute('download', `evaluation_results_${new Date().toISOString().slice(0, 10)}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    };
+				{pageState === 'missing_kpi' && (
+					<div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/60 p-8 text-center">
+						<GraduationCap className="mx-auto mb-3 h-10 w-10 text-amber-500" />
+						<h3 className="text-lg font-medium text-gray-900">KPI not found</h3>
+						<p className="mx-auto mt-1 max-w-xl text-gray-600">
+							Add a KPI Library entry named "{kpiName}", then link the assessment forms to it.
+						</p>
+						<Button asChild className="mt-4" variant="outline">
+							<Link href="/kpi-libraries">Open KPI Library</Link>
+						</Button>
+					</div>
+				)}
 
-    function openEditDialog(row: ResultRow) {
-        if (!row.fiscal_year_id || !row.fiscal_month_id) return;
-        clearErrors();
-        setEditRow(row);
-        setData({
-            employee_id: String(row.employee_id),
-            form_id: String(row.form_id),
-            fiscal_year_id: String(row.fiscal_year_id),
-            fiscal_month_id: String(row.fiscal_month_id),
-            next_action: row.next_action,
-            training_type_id: row.training_type_id ? String(row.training_type_id) : '',
-        });
-    }
+				{pageState === 'no_forms' && (
+					<div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/60 p-8 text-center">
+						<GraduationCap className="mx-auto mb-3 h-10 w-10 text-amber-500" />
+						<h3 className="text-lg font-medium text-gray-900">No forms linked</h3>
+						<p className="mx-auto mt-1 max-w-xl text-gray-600">
+							"{kpiName}" exists, but it is not linked to any form yet.
+						</p>
+						<Button asChild className="mt-4" variant="outline">
+							<Link href="/kpi-libraries">Link forms in KPI Library</Link>
+						</Button>
+					</div>
+				)}
 
-    function closeEditDialog() {
-        setEditRow(null);
-        reset();
-        clearErrors();
-    }
+				{pageState === 'ready' && (
+					<>
+						<div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
+							{[
+								['Rows', summary.rows],
+								['Employees', summary.employees],
+								['Pass', summary.pass],
+								['Fail', summary.fail],
+								['Warning', summary.warning],
+								['Training', summary.training],
+								['Not scored', summary.not_scored],
+							].map(([label, value]) => (
+								<div key={String(label)} className="rounded-lg border bg-white px-4 py-3">
+									<p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+									<p className="mt-1 text-2xl font-bold text-amber-950">{value}</p>
+								</div>
+							))}
+						</div>
 
-    function submitEdit(e: React.FormEvent) {
-        e.preventDefault();
-        put('/forms/evaluation-results/override', {
-            preserveScroll: true,
-            onSuccess: () => closeEditDialog(),
-        });
-    }
+						<div className="flex flex-col gap-3 rounded-lg border bg-white p-4 lg:flex-row lg:flex-wrap lg:items-center">
+							<form
+								className="lg:max-w-xs"
+								onSubmit={(e) => {
+									e.preventDefault();
+									applyFilters({ search: searchInput });
+								}}
+							>
+								<Input
+									value={searchInput}
+									onChange={(e) => setSearchInput(e.target.value)}
+									placeholder="Search employee or department"
+								/>
+							</form>
+							<Select value={filters.form_id} onValueChange={(value) => applyFilters({ form_id: value })}>
+								<SelectTrigger className="lg:w-56">
+									<SelectValue placeholder="Form" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All linked forms</SelectItem>
+									{linkedForms.map((form) => (
+										<SelectItem key={form.id} value={String(form.id)}>
+											{form.title}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<Select value={filters.status} onValueChange={(value) => applyFilters({ status: value })}>
+								<SelectTrigger className="lg:w-40">
+									<SelectValue placeholder="Status" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All statuses</SelectItem>
+									<SelectItem value="pass">Pass</SelectItem>
+									<SelectItem value="fail">Fail</SelectItem>
+									<SelectItem value="not_scored">Not scored</SelectItem>
+								</SelectContent>
+							</Select>
+							<Select
+								value={filters.next_action}
+								onValueChange={(value) => applyFilters({ next_action: value })}
+							>
+								<SelectTrigger className="lg:w-44">
+									<SelectValue placeholder="Next action" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All actions</SelectItem>
+									<SelectItem value="na">NA</SelectItem>
+									<SelectItem value="warning">Warning</SelectItem>
+									<SelectItem value="training">Training</SelectItem>
+									<SelectItem value="not_scored">Not scored</SelectItem>
+								</SelectContent>
+							</Select>
+							<Select
+								value={filters.fiscal_year_id}
+								onValueChange={(value) => applyFilters({ fiscal_year_id: value, fiscal_month_id: 'all' })}
+							>
+								<SelectTrigger className="lg:w-44">
+									<SelectValue placeholder="Fiscal year" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All years</SelectItem>
+									{fiscalYears.map((year) => (
+										<SelectItem key={year.id} value={String(year.id)}>
+											{year.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<Select
+								value={filters.fiscal_month_id}
+								onValueChange={(value) => applyFilters({ fiscal_month_id: value })}
+							>
+								<SelectTrigger className="lg:w-44">
+									<SelectValue placeholder="Fiscal month" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="all">All months</SelectItem>
+									{monthsForYear.map((month) => (
+										<SelectItem key={month.id} value={String(month.id)}>
+											{month.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<Button type="button" variant="ghost" onClick={resetFilters} className="text-gray-600">
+								<FilterX className="mr-2 h-4 w-4" /> Reset
+							</Button>
+							<Button
+								type="button"
+								variant="outline"
+								onClick={exportCsv}
+								disabled={summary.rows === 0}
+								className="lg:ml-auto"
+							>
+								<Download className="mr-2 h-4 w-4" /> Export CSV
+							</Button>
+						</div>
 
-    return (
-        <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Evaluation Results" />
-            <div className="max-w-[90rem] mx-auto space-y-6 pb-12">
-                <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-amber-900">Evaluation Results</h2>
-                    <p className="text-muted-foreground">
-                        Employees scored on forms linked to <span className="font-medium text-gray-800">{kpiName}</span>.
-                        Pass is 75 or above. A fail from 60 to 74.9 is a warning. Below 60 is training.
-                        Next action defaults to NA and can be edited per row.
-                    </p>
-                </div>
+						<div className="overflow-hidden rounded-lg border bg-white">
+							<Table>
+								<TableHeader>
+									<TableRow>
+										<TableHead>Employee</TableHead>
+										<TableHead>Department</TableHead>
+										<TableHead>Form</TableHead>
+										<TableHead>Fiscal month</TableHead>
+										<TableHead className="text-right">Score</TableHead>
+										<TableHead>Status</TableHead>
+										<TableHead>Next action</TableHead>
+										<TableHead>Training type</TableHead>
+										<TableHead />
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{rows.data.length === 0 ? (
+										<TableRow>
+											<TableCell colSpan={9} className="py-12 text-center text-gray-500">
+												{summary.rows === 0
+													? 'No employees have an assessment matching these filters.'
+													: 'No rows match these filters.'}
+											</TableCell>
+										</TableRow>
+									) : (
+										rows.data.map((row) => (
+											<TableRow
+												key={`${row.employee_id}-${row.form_id}-${row.fiscal_month_id ?? 'none'}-${row.submission_id}`}
+											>
+												<TableCell className="font-medium text-gray-900">{row.employee_name}</TableCell>
+												<TableCell>{row.department_name}</TableCell>
+												<TableCell>{row.form_title}</TableCell>
+												<TableCell>
+													<div className="flex flex-col">
+														<span>{row.fiscal_month_name}</span>
+														{row.fiscal_year_name && (
+															<span className="text-xs text-muted-foreground">
+																{row.fiscal_year_name}
+															</span>
+														)}
+													</div>
+												</TableCell>
+												<TableCell className="text-right font-semibold">
+													{row.score === null ? '—' : `${row.score.toFixed(1)}`}
+												</TableCell>
+												<TableCell>
+													<span
+														className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClass(row.status)}`}
+													>
+														{row.status_label}
+													</span>
+												</TableCell>
+												<TableCell>
+													<span
+														className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${actionClass(row.next_action)}`}
+													>
+														{row.next_action_label}
+													</span>
+												</TableCell>
+												<TableCell>{row.training_type_name || '—'}</TableCell>
+												<TableCell className="text-right">
+													<div className="flex items-center justify-end gap-3">
+														{row.fiscal_year_id && row.fiscal_month_id && (
+															<button
+																type="button"
+																className="text-sm font-medium text-amber-800 hover:underline"
+																onClick={() => openEditDialog(row)}
+															>
+																Edit
+															</button>
+														)}
+														<Link
+															href={`/submissions/${row.submission_id}`}
+															className="text-sm font-medium text-amber-800 hover:underline"
+														>
+															View
+														</Link>
+													</div>
+												</TableCell>
+											</TableRow>
+										))
+									)}
+								</TableBody>
+							</Table>
 
-                {pageState === 'missing_kpi' && (
-                    <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/60 p-8 text-center">
-                        <GraduationCap className="mx-auto mb-3 h-10 w-10 text-amber-500" />
-                        <h3 className="text-lg font-medium text-gray-900">KPI not found</h3>
-                        <p className="mx-auto mt-1 max-w-xl text-gray-600">
-                            Add a KPI Library entry named "{kpiName}", then link the assessment forms to it.
-                        </p>
-                        <Button asChild className="mt-4" variant="outline">
-                            <Link href="/kpi-libraries">Open KPI Library</Link>
-                        </Button>
-                    </div>
-                )}
+							{rows.data.length > 0 && (
+								<TablePagination total={rows.total} from={rows.from} to={rows.to} links={rows.links} />
+							)}
+						</div>
+					</>
+				)}
+			</div>
 
-                {pageState === 'no_forms' && (
-                    <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/60 p-8 text-center">
-                        <GraduationCap className="mx-auto mb-3 h-10 w-10 text-amber-500" />
-                        <h3 className="text-lg font-medium text-gray-900">No forms linked</h3>
-                        <p className="mx-auto mt-1 max-w-xl text-gray-600">
-                            "{kpiName}" exists, but it is not linked to any form yet.
-                        </p>
-                        <Button asChild className="mt-4" variant="outline">
-                            <Link href="/kpi-libraries">Link forms in KPI Library</Link>
-                        </Button>
-                    </div>
-                )}
-
-                {pageState === 'ready' && (
-                    <>
-                        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
-                            {[
-                                ['Rows', filteredSummary.rows],
-                                ['Employees', filteredSummary.employees],
-                                ['Pass', filteredSummary.pass],
-                                ['Fail', filteredSummary.fail],
-                                ['Warning', filteredSummary.warning],
-                                ['Training', filteredSummary.training],
-                                ['Not scored', filteredSummary.not_scored],
-                            ].map(([label, value]) => (
-                                <div key={String(label)} className="rounded-lg border bg-white px-4 py-3">
-                                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-                                    <p className="mt-1 text-2xl font-bold text-amber-950">{value}</p>
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="flex flex-col gap-3 rounded-lg border bg-white p-4 lg:flex-row lg:flex-wrap lg:items-center">
-                            <Input
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search employee or department"
-                                className="lg:max-w-xs"
-                            />
-                            <Select value={formFilter} onValueChange={setFormFilter}>
-                                <SelectTrigger className="lg:w-56">
-                                    <SelectValue placeholder="Form" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All linked forms</SelectItem>
-                                    {linkedForms.map((form) => (
-                                        <SelectItem key={form.id} value={String(form.id)}>{form.title}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                <SelectTrigger className="lg:w-40">
-                                    <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All statuses</SelectItem>
-                                    <SelectItem value="pass">Pass</SelectItem>
-                                    <SelectItem value="fail">Fail</SelectItem>
-                                    <SelectItem value="not_scored">Not scored</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Select value={actionFilter} onValueChange={setActionFilter}>
-                                <SelectTrigger className="lg:w-44">
-                                    <SelectValue placeholder="Next action" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All actions</SelectItem>
-                                    <SelectItem value="na">NA</SelectItem>
-                                    <SelectItem value="warning">Warning</SelectItem>
-                                    <SelectItem value="training">Training</SelectItem>
-                                    <SelectItem value="not_scored">Not scored</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Select
-                                value={yearFilter}
-                                onValueChange={(value) => {
-                                    setYearFilter(value);
-                                    setMonthFilter('all');
-                                }}
-                            >
-                                <SelectTrigger className="lg:w-44">
-                                    <SelectValue placeholder="Fiscal year" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All years</SelectItem>
-                                    {fiscalYears.map((year) => (
-                                        <SelectItem key={year.id} value={String(year.id)}>{year.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Select value={monthFilter} onValueChange={setMonthFilter}>
-                                <SelectTrigger className="lg:w-44">
-                                    <SelectValue placeholder="Fiscal month" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All months</SelectItem>
-                                    {monthsForYear.map((month) => (
-                                        <SelectItem key={month.id} value={String(month.id)}>{month.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Button type="button" variant="ghost" onClick={resetFilters} className="text-gray-600">
-                                <FilterX className="mr-2 h-4 w-4" /> Reset
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={exportCsv}
-                                disabled={filteredRows.length === 0}
-                                className="lg:ml-auto"
-                            >
-                                <Download className="mr-2 h-4 w-4" /> Export CSV
-                            </Button>
-                        </div>
-
-                        <div className="overflow-hidden rounded-lg border bg-white">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Employee</TableHead>
-                                        <TableHead>Department</TableHead>
-                                        <TableHead>Form</TableHead>
-                                        <TableHead>Fiscal month</TableHead>
-                                        <TableHead className="text-right">Score</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Next action</TableHead>
-                                        <TableHead>Training type</TableHead>
-                                        <TableHead />
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {pageRows.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={9} className="py-12 text-center text-gray-500">
-                                                {rows.length === 0
-                                                    ? 'No employees have an assessment on the linked forms yet.'
-                                                    : 'No rows match these filters.'}
-                                            </TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        pageRows.map((row) => (
-                                            <TableRow key={`${row.employee_id}-${row.form_id}-${row.fiscal_month_id ?? 'none'}`}>
-                                                <TableCell className="font-medium text-gray-900">{row.employee_name}</TableCell>
-                                                <TableCell>{row.department_name}</TableCell>
-                                                <TableCell>{row.form_title}</TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-col">
-                                                        <span>{row.fiscal_month_name}</span>
-                                                        {row.fiscal_year_name && (
-                                                            <span className="text-xs text-muted-foreground">{row.fiscal_year_name}</span>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-right font-semibold">
-                                                    {row.score === null ? '—' : `${row.score.toFixed(1)}`}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClass(row.status)}`}>
-                                                        {row.status_label}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${actionClass(row.next_action)}`}>
-                                                        {row.next_action_label}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell>{row.training_type_name || '—'}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <div className="flex items-center justify-end gap-3">
-                                                        {row.fiscal_year_id && row.fiscal_month_id && (
-                                                            <button
-                                                                type="button"
-                                                                className="text-sm font-medium text-amber-800 hover:underline"
-                                                                onClick={() => openEditDialog(row)}
-                                                            >
-                                                                Edit
-                                                            </button>
-                                                        )}
-                                                        <Link href={`/submissions/${row.submission_id}`} className="text-sm font-medium text-amber-800 hover:underline">
-                                                            View
-                                                        </Link>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
-
-                        {filteredRows.length > itemsPerPage && (
-                            <div className="flex items-center justify-between text-sm text-gray-600">
-                                <span>
-                                    Showing {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, filteredRows.length)} of {filteredRows.length}
-                                </span>
-                                <div className="flex gap-2">
-                                    <Button type="button" variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => page - 1)}>
-                                        Previous
-                                    </Button>
-                                    <Button type="button" variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((page) => page + 1)}>
-                                        Next
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-                    </>
-                )}
-            </div>
-
-            <Dialog open={!!editRow} onOpenChange={(open) => !open && closeEditDialog()}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>Edit Next Action</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={submitEdit} className="space-y-4">
-                        <div>
-                            <p className="text-sm text-muted-foreground">Employee</p>
-                            <p className="font-medium">{editRow?.employee_name}</p>
-                        </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Form / Period</p>
-                            <p className="font-medium">
-                                {editRow?.form_title} — {editRow?.fiscal_month_name}
-                                {editRow?.fiscal_year_name ? ` / ${editRow.fiscal_year_name}` : ''}
-                            </p>
-                        </div>
-                        <div>
-                            <Label htmlFor="next_action">Next action</Label>
-                            <Select
-                                value={data.next_action}
-                                onValueChange={(value) => {
-                                    setData('next_action', value);
-                                    if (value !== 'training') setData('training_type_id', '');
-                                }}
-                            >
-                                <SelectTrigger id="next_action">
-                                    <SelectValue placeholder="Select next action" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="na">NA</SelectItem>
-                                    <SelectItem value="warning">Warning</SelectItem>
-                                    <SelectItem value="training">Training</SelectItem>
-                                    <SelectItem value="not_scored">Not scored</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.next_action} />
-                        </div>
-                        <div>
-                            <Label htmlFor="training_type_id">Training type</Label>
-                            <Select
-                                value={data.training_type_id || 'none'}
-                                onValueChange={(value) => setData('training_type_id', value === 'none' ? '' : value)}
-                                disabled={data.next_action !== 'training'}
-                            >
-                                <SelectTrigger id="training_type_id">
-                                    <SelectValue placeholder="Select training type" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">None</SelectItem>
-                                    {trainingTypes.map((type) => (
-                                        <SelectItem key={type.id} value={String(type.id)}>
-                                            {type.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.training_type_id} />
-                        </div>
-                        <DialogFooter>
-                            <Button type="button" variant="outline" onClick={closeEditDialog}>
-                                Cancel
-                            </Button>
-                            <Button type="submit" disabled={processing}>
-                                Save
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
-        </AppLayout>
-    );
+			<Dialog open={!!editRow} onOpenChange={(open) => !open && closeEditDialog()}>
+				<DialogContent className="sm:max-w-md">
+					<DialogHeader>
+						<DialogTitle>Edit Next Action</DialogTitle>
+					</DialogHeader>
+					<form onSubmit={submitEdit} className="space-y-4">
+						<div>
+							<p className="text-sm text-muted-foreground">Employee</p>
+							<p className="font-medium">{editRow?.employee_name}</p>
+						</div>
+						<div>
+							<p className="text-sm text-muted-foreground">Form / Period</p>
+							<p className="font-medium">
+								{editRow?.form_title} — {editRow?.fiscal_month_name}
+								{editRow?.fiscal_year_name ? ` / ${editRow.fiscal_year_name}` : ''}
+							</p>
+						</div>
+						<div>
+							<Label htmlFor="next_action">Next action</Label>
+							<Select
+								value={data.next_action}
+								onValueChange={(value) => {
+									setData('next_action', value);
+									if (value !== 'training') setData('training_type_id', '');
+								}}
+							>
+								<SelectTrigger id="next_action">
+									<SelectValue placeholder="Select next action" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="na">NA</SelectItem>
+									<SelectItem value="warning">Warning</SelectItem>
+									<SelectItem value="training">Training</SelectItem>
+									<SelectItem value="not_scored">Not scored</SelectItem>
+								</SelectContent>
+							</Select>
+							<InputError message={errors.next_action} />
+						</div>
+						<div>
+							<Label htmlFor="training_type_id">Training type</Label>
+							<Select
+								value={data.training_type_id || 'none'}
+								onValueChange={(value) => setData('training_type_id', value === 'none' ? '' : value)}
+								disabled={data.next_action !== 'training'}
+							>
+								<SelectTrigger id="training_type_id">
+									<SelectValue placeholder="Select training type" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="none">None</SelectItem>
+									{trainingTypes.map((type) => (
+										<SelectItem key={type.id} value={String(type.id)}>
+											{type.name}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+							<InputError message={errors.training_type_id} />
+						</div>
+						<DialogFooter>
+							<Button type="button" variant="outline" onClick={closeEditDialog}>
+								Cancel
+							</Button>
+							<Button type="submit" disabled={processing}>
+								Save
+							</Button>
+						</DialogFooter>
+					</form>
+				</DialogContent>
+			</Dialog>
+		</AppLayout>
+	);
 }
