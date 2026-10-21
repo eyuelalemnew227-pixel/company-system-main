@@ -1705,25 +1705,24 @@ class FormSubmissionAdminController extends Controller
             $file = fopen('php://output', 'w');
             fputs($file, "\xEF\xBB\xBF");
             fputcsv($file, [
+                'branch',
+                'department',
                 'employee_id',
-                'Employee',
-                'Department',
-                'Branch',
-                'Form',
-                'Fiscal month',
-                'Score',
+                'employee_name',
+                'form',
+                'fiscal_year',
+                'fiscal_month',
+                'score',
             ]);
             foreach ($rows as $row) {
-                $fiscal = $row['fiscal_year_name']
-                    ? ($row['fiscal_month_name'] . ' / ' . $row['fiscal_year_name'])
-                    : $row['fiscal_month_name'];
                 fputcsv($file, [
+                    $row['branch_name'],
+                    $row['department_name'],
                     $row['employee_id'],
                     $row['employee_name'],
-                    $row['department_name'],
-                    $row['branch_name'],
                     $row['form_title'],
-                    $fiscal,
+                    $row['fiscal_year_name'] ?? '',
+                    $row['fiscal_month_name'] ?? '',
                     $row['score'] === null ? '' : number_format((float) $row['score'], 1, '.', ''),
                 ]);
             }
