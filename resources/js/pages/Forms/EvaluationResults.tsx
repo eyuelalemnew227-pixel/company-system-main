@@ -364,8 +364,9 @@ export default function EvaluationResults({
 							<Table>
 								<TableHeader>
 									<TableRow>
-										<TableHead>Employee</TableHead>
+										<TableHead>Branch</TableHead>
 										<TableHead>Department</TableHead>
+										<TableHead>Employee Name</TableHead>
 										<TableHead>Form</TableHead>
 										<TableHead>Fiscal month</TableHead>
 										<TableHead className="text-right">Score</TableHead>
@@ -378,7 +379,7 @@ export default function EvaluationResults({
 								<TableBody>
 									{rows.data.length === 0 ? (
 										<TableRow>
-											<TableCell colSpan={9} className="py-12 text-center text-gray-500">
+											<TableCell colSpan={10} className="py-12 text-center text-gray-500">
 												{summary.rows === 0
 													? 'No employees have an assessment matching these filters.'
 													: 'No rows match these filters.'}
@@ -389,8 +390,9 @@ export default function EvaluationResults({
 											<TableRow
 												key={`${row.employee_id}-${row.form_id}-${row.fiscal_month_id ?? 'none'}-${row.submission_id}`}
 											>
-												<TableCell className="font-medium text-gray-900">{row.employee_name}</TableCell>
+												<TableCell>{row.branch_name}</TableCell>
 												<TableCell>{row.department_name}</TableCell>
+												<TableCell className="font-medium text-gray-900">{row.employee_name}</TableCell>
 												<TableCell>{row.form_title}</TableCell>
 												<TableCell>
 													<div className="flex flex-col">
