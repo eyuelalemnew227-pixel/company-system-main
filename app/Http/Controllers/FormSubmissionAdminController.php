@@ -10,9 +10,11 @@ use App\Services\SimpleXlsxWriter;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FormSubmissionAdminController extends Controller
 {
@@ -155,9 +157,9 @@ class FormSubmissionAdminController extends Controller
     }
 
     /**
-     * Show isolated submissions strictly bound to one Form.
+     * Show isolated submissions strictly bound to one Form (server-paginated, slim rows).
      */
-    public function form_submissions(Form $form)
+    public function form_submissions(Request $request, Form $form)
     {
         $user = auth()->user();
         if ($form->created_by !== $user->id) {
@@ -167,73 +169,239 @@ class FormSubmissionAdminController extends Controller
             }
         }
 
-        $submissions = FormSubmission::whereHas('formVersion', function ($q) use ($form) {
-            $q->where('form_id', $form->id);
-        })
-            ->with(['user:id,name', 'formVersion:id,version_number', 'answers.question.inputType'])
-            ->orderByDesc('id')
-            ->get();
+        $fiscalYears = \App\Models\FiscalYear::orderBy('gregorian_start_date')
+            ->get(['id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+        $fiscalMonths = \App\Models\FiscalMonth::orderBy('gregorian_start_date')
+            ->get(['id', 'fiscal_year_id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
 
-        $fullEmployeesCollection = \App\Models\Employee::get();
-        $submissions->each(function ($sub) use ($fullEmployeesCollection) {
-            $this->_calculateEmployeeScores($sub, $fullEmployeesCollection);
-        });
+        $today = Carbon::today();
+        $currentFiscalYear = $fiscalYears->first(fn ($fy) => $today->between(
+            Carbon::parse($fy->gregorian_start_date),
+            Carbon::parse($fy->gregorian_end_date)
+        ));
+        $currentFiscalMonth = $fiscalMonths->first(fn ($fm) => $today->between(
+            Carbon::parse($fm->gregorian_start_date),
+            Carbon::parse($fm->gregorian_end_date)
+        ));
 
-        $branches = \App\Models\Branch::pluck('name', 'id')->toArray();
-        $departments = \App\Models\Department::pluck('name', 'id')->toArray();
-        $employees = \App\Models\Employee::get()->mapWithKeys(function ($e) {
-            $name = trim($e->first_name . ' ' . $e->last_name) ?: $e->employee_code;
-            return [$e->id => $name];
-        })->toArray();
+        $lookupMeta = \App\Models\FormQuestion::query()
+            ->whereHas('section.formVersion', fn ($q) => $q->where('form_id', $form->id))
+            ->whereHas('inputType', fn ($q) => $q->whereIn('type_identifier', ['branch_lookup', 'employee_lookup']))
+            ->with('inputType:id,type_identifier')
+            ->get(['id', 'label', 'form_input_type_id']);
 
-        // Load fiscal periods and resolve each submission
-        $fiscalYears = \App\Models\FiscalYear::orderBy('gregorian_start_date')->get(['id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
-        $fiscalMonths = \App\Models\FiscalMonth::orderBy('gregorian_start_date')->get(['id', 'fiscal_year_id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+        $hasBranch = $lookupMeta->contains(fn ($q) => ($q->inputType->type_identifier ?? '') === 'branch_lookup');
+        $hasEmployee = $lookupMeta->contains(fn ($q) => ($q->inputType->type_identifier ?? '') === 'employee_lookup');
+        $branchLabel = $lookupMeta->first(fn ($q) => ($q->inputType->type_identifier ?? '') === 'branch_lookup')?->label ?? 'Branch';
+        $employeeLabel = $lookupMeta->first(fn ($q) => ($q->inputType->type_identifier ?? '') === 'employee_lookup')?->label ?? 'Evaluated Employee';
 
-        $submissions->each(function ($sub) use ($fiscalYears, $fiscalMonths) {
-            $submittedAt = \Carbon\Carbon::parse($sub->created_at);
+        $statusFilter = $request->input('status', 'all');
+        $submittedByFilter = $request->input('submitted_by', 'all');
+        $branchFilter = $request->input('branch_id', 'all');
+        $employeeFilter = $request->input('employee_id', 'all');
+        // Default to current fiscal period only on first visit (no filter query params).
+        $fiscalYearFilter = $request->has('fiscal_year_id')
+            ? (string) $request->input('fiscal_year_id', 'all')
+            : ($currentFiscalYear?->id ? (string) $currentFiscalYear->id : 'all');
+        $fiscalMonthFilter = $request->has('fiscal_month_id')
+            ? (string) $request->input('fiscal_month_id', 'all')
+            : ($currentFiscalMonth?->id ? (string) $currentFiscalMonth->id : 'all');
 
+        $query = FormSubmission::query()
+            ->select(['id', 'form_version_id', 'user_id', 'status', 'created_at'])
+            ->whereHas('formVersion', fn ($q) => $q->where('form_id', $form->id))
+            ->with(['user:id,name'])
+            ->orderByDesc('id');
+
+        if ($statusFilter !== 'all') {
+            $query->where('status', $statusFilter);
+        }
+
+        if ($submittedByFilter !== 'all' && ctype_digit($submittedByFilter)) {
+            $query->where('user_id', (int) $submittedByFilter);
+        }
+
+        if ($fiscalMonthFilter !== 'all' && ctype_digit($fiscalMonthFilter)) {
+            $month = $fiscalMonths->firstWhere('id', (int) $fiscalMonthFilter);
+            if ($month) {
+                $query->whereBetween('created_at', [
+                    Carbon::parse($month->gregorian_start_date)->startOfDay(),
+                    Carbon::parse($month->gregorian_end_date)->endOfDay(),
+                ]);
+            }
+        } elseif ($fiscalYearFilter !== 'all' && ctype_digit($fiscalYearFilter)) {
+            $year = $fiscalYears->firstWhere('id', (int) $fiscalYearFilter);
+            if ($year) {
+                $query->whereBetween('created_at', [
+                    Carbon::parse($year->gregorian_start_date)->startOfDay(),
+                    Carbon::parse($year->gregorian_end_date)->endOfDay(),
+                ]);
+            }
+        }
+
+        if ($hasBranch && $branchFilter !== 'all' && ctype_digit($branchFilter)) {
+            $query->whereHas('answers', function ($q) use ($branchFilter) {
+                $q->where('value_text', (string) $branchFilter)
+                    ->whereHas('question.inputType', fn ($t) => $t->where('type_identifier', 'branch_lookup'));
+            });
+        }
+
+        if ($hasEmployee && $employeeFilter !== 'all' && ctype_digit($employeeFilter)) {
+            $query->whereHas('answers', function ($q) use ($employeeFilter) {
+                $q->where('value_text', (string) $employeeFilter)
+                    ->whereHas('question.inputType', fn ($t) => $t->where('type_identifier', 'employee_lookup'));
+            });
+        }
+
+        $paginator = $query->paginate(25)->withQueryString();
+
+        $pageIds = $paginator->getCollection()->pluck('id')->all();
+        $lookupAnswers = collect();
+        if ($pageIds !== [] && ($hasBranch || $hasEmployee)) {
+            $types = array_values(array_filter([
+                $hasBranch ? 'branch_lookup' : null,
+                $hasEmployee ? 'employee_lookup' : null,
+            ]));
+
+            $lookupAnswers = \App\Models\FormSubmissionAnswer::query()
+                ->whereIn('form_submission_id', $pageIds)
+                ->whereHas('question.inputType', fn ($q) => $q->whereIn('type_identifier', $types))
+                ->with(['question.inputType:id,type_identifier'])
+                ->get(['id', 'form_submission_id', 'form_question_id', 'value_text'])
+                ->groupBy('form_submission_id');
+        }
+
+        $pageBranchIds = [];
+        $pageEmployeeIds = [];
+        foreach ($lookupAnswers as $answers) {
+            foreach ($answers as $answer) {
+                $type = $answer->question?->inputType?->type_identifier ?? '';
+                if ($type === 'branch_lookup' && is_numeric($answer->value_text)) {
+                    $pageBranchIds[] = (int) $answer->value_text;
+                }
+                if ($type === 'employee_lookup' && is_numeric($answer->value_text)) {
+                    $pageEmployeeIds[] = (int) $answer->value_text;
+                }
+            }
+        }
+
+        $branchNames = $pageBranchIds === []
+            ? collect()
+            : \App\Models\Branch::whereIn('id', array_unique($pageBranchIds))->pluck('name', 'id');
+        $employeeNames = $pageEmployeeIds === []
+            ? collect()
+            : \App\Models\Employee::query()
+                ->whereIn('id', array_unique($pageEmployeeIds))
+                ->get(['id', 'first_name', 'last_name', 'employee_code'])
+                ->mapWithKeys(fn ($e) => [
+                    $e->id => trim($e->first_name . ' ' . $e->last_name) ?: $e->employee_code,
+                ]);
+
+        $rows = $paginator->getCollection()->map(function (FormSubmission $sub) use (
+            $fiscalYears,
+            $fiscalMonths,
+            $lookupAnswers,
+            $hasBranch,
+            $hasEmployee,
+            $branchNames,
+            $employeeNames
+        ) {
+            $submittedAt = Carbon::parse($sub->created_at);
             $matchedYear = $fiscalYears->first(
-                fn($fy) =>
-                $submittedAt->between(
-                    \Carbon\Carbon::parse($fy->gregorian_start_date),
-                    \Carbon\Carbon::parse($fy->gregorian_end_date)
+                fn ($fy) => $submittedAt->between(
+                    Carbon::parse($fy->gregorian_start_date),
+                    Carbon::parse($fy->gregorian_end_date)
                 )
             );
-            $sub->fiscal_year_id = $matchedYear?->id;
-            $sub->fiscal_year_name = $matchedYear?->name;
-
             $matchedMonth = $fiscalMonths->first(
-                fn($fm) =>
-                $submittedAt->between(
-                    \Carbon\Carbon::parse($fm->gregorian_start_date),
-                    \Carbon\Carbon::parse($fm->gregorian_end_date)
+                fn ($fm) => $submittedAt->between(
+                    Carbon::parse($fm->gregorian_start_date),
+                    Carbon::parse($fm->gregorian_end_date)
                 )
             );
-            $sub->fiscal_month_id = $matchedMonth?->id;
-            $sub->fiscal_month_name = $matchedMonth?->name;
+
+            $answers = $lookupAnswers->get($sub->id, collect());
+            $branchAnswer = $hasBranch
+                ? $answers->first(fn ($a) => ($a->question?->inputType?->type_identifier ?? '') === 'branch_lookup')
+                : null;
+            $employeeAnswer = $hasEmployee
+                ? $answers->first(fn ($a) => ($a->question?->inputType?->type_identifier ?? '') === 'employee_lookup')
+                : null;
+
+            $branchId = $branchAnswer && is_numeric($branchAnswer->value_text) ? (int) $branchAnswer->value_text : null;
+            $employeeId = $employeeAnswer && is_numeric($employeeAnswer->value_text) ? (int) $employeeAnswer->value_text : null;
+
+            return [
+                'id' => $sub->id,
+                'status' => $sub->status ?? 'pending',
+                'submitted_by' => $sub->user?->name ?? 'Unknown User',
+                'created_at' => $sub->created_at?->toDateTimeString(),
+                'branch_name' => $branchId ? ($branchNames[$branchId] ?? (string) $branchId) : null,
+                'employee_name' => $employeeId ? ($employeeNames[$employeeId] ?? (string) $employeeId) : null,
+                'fiscal_year_id' => $matchedYear?->id,
+                'fiscal_month_id' => $matchedMonth?->id,
+            ];
         });
 
-        $today = \Carbon\Carbon::today();
-        $currentFiscalYear = $fiscalYears->first(fn($fy) => $today->between(
-            \Carbon\Carbon::parse($fy->gregorian_start_date),
-            \Carbon\Carbon::parse($fy->gregorian_end_date)
-        ));
-        $currentFiscalMonth = $fiscalMonths->first(fn($fm) => $today->between(
-            \Carbon\Carbon::parse($fm->gregorian_start_date),
-            \Carbon\Carbon::parse($fm->gregorian_end_date)
-        ));
+        $paginator->setCollection($rows);
+
+        $submitterOptions = FormSubmission::query()
+            ->whereHas('formVersion', fn ($q) => $q->where('form_id', $form->id))
+            ->with('user:id,name')
+            ->select('user_id')
+            ->distinct()
+            ->get()
+            ->map(fn ($s) => [
+                'id' => $s->user_id,
+                'name' => $s->user?->name ?? 'Unknown User',
+            ])
+            ->filter(fn ($s) => $s['id'])
+            ->unique('id')
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+
+        $branchOptions = $hasBranch
+            ? \App\Models\Branch::orderBy('name')->get(['id', 'name'])->map(fn ($b) => ['id' => $b->id, 'name' => $b->name])
+            : collect();
+
+        $employeeOptions = $hasEmployee
+            ? \App\Models\Employee::query()
+                ->where('status', 'active')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get(['id', 'first_name', 'last_name', 'employee_code'])
+                ->map(fn ($e) => [
+                    'id' => $e->id,
+                    'name' => trim($e->first_name . ' ' . $e->last_name) ?: $e->employee_code,
+                ])
+            : collect();
 
         return Inertia::render('Forms/Submissions/FormSubmissions', [
-            'form' => $form,
-            'submissions' => $submissions,
-            'branches' => $branches,
-            'departments' => $departments,
-            'employees' => $employees,
-            'fiscalYears' => $fiscalYears->map(fn($fy) => ['id' => $fy->id, 'name' => $fy->name])->values(),
-            'fiscalMonths' => $fiscalMonths->map(fn($fm) => ['id' => $fm->id, 'fiscal_year_id' => $fm->fiscal_year_id, 'name' => $fm->name])->values(),
+            'form' => ['id' => $form->id, 'title' => $form->title],
+            'submissions' => $paginator,
+            'hasBranch' => $hasBranch,
+            'hasEmployee' => $hasEmployee,
+            'branchLabel' => $branchLabel,
+            'employeeLabel' => $employeeLabel,
+            'branchOptions' => $branchOptions,
+            'employeeOptions' => $employeeOptions,
+            'submitterOptions' => $submitterOptions,
+            'fiscalYears' => $fiscalYears->map(fn ($fy) => ['id' => $fy->id, 'name' => $fy->name])->values(),
+            'fiscalMonths' => $fiscalMonths->map(fn ($fm) => [
+                'id' => $fm->id,
+                'fiscal_year_id' => $fm->fiscal_year_id,
+                'name' => $fm->name,
+            ])->values(),
             'currentFiscalYearId' => $currentFiscalYear?->id,
             'currentFiscalMonthId' => $currentFiscalMonth?->id,
+            'filters' => [
+                'status' => $statusFilter,
+                'submitted_by' => $submittedByFilter,
+                'branch_id' => $branchFilter,
+                'employee_id' => $employeeFilter,
+                'fiscal_year_id' => (string) $fiscalYearFilter,
+                'fiscal_month_id' => (string) $fiscalMonthFilter,
+            ],
         ]);
     }
 
@@ -1256,8 +1424,9 @@ class FormSubmissionAdminController extends Controller
 
     /**
      * Employee-level results for the Training post-assessment pass rate KPI.
+     * Filters submissions by fiscal period early; returns slim paginated rows.
      */
-    public function evaluation_results()
+    public function evaluation_results(Request $request): \Inertia\Response|StreamedResponse
     {
         $kpiName = 'Training post-assessment pass rate';
         $needle = strtolower($kpiName);
@@ -1284,33 +1453,81 @@ class FormSubmissionAdminController extends Controller
             $pageState = 'no_forms';
         }
 
-        $fiscalYears = \App\Models\FiscalYear::orderBy('gregorian_start_date')->get(['id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
-        $fiscalMonths = \App\Models\FiscalMonth::orderBy('gregorian_start_date')->get(['id', 'fiscal_year_id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
-        $departments = \App\Models\Department::pluck('name', 'id');
-        $branches = \App\Models\Branch::pluck('name', 'id');
-        $employees = \App\Models\Employee::get();
+        $fiscalYears = \App\Models\FiscalYear::orderBy('gregorian_start_date')
+            ->get(['id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
+        $fiscalMonths = \App\Models\FiscalMonth::orderBy('gregorian_start_date')
+            ->get(['id', 'fiscal_year_id', 'name', 'gregorian_start_date', 'gregorian_end_date']);
 
-        $rows = [];
+        $today = Carbon::today();
+        $currentFiscalYear = $fiscalYears->first(fn ($year) => $today->between(
+            Carbon::parse($year->gregorian_start_date),
+            Carbon::parse($year->gregorian_end_date)
+        ));
+        $currentFiscalMonth = $fiscalMonths->first(fn ($month) => $today->between(
+            Carbon::parse($month->gregorian_start_date),
+            Carbon::parse($month->gregorian_end_date)
+        ));
+
+        $search = trim((string) $request->input('search', ''));
+        $formFilter = (string) $request->input('form_id', 'all');
+        $statusFilter = (string) $request->input('status', 'all');
+        $actionFilter = (string) $request->input('next_action', 'all');
+        $yearFilter = $request->has('fiscal_year_id')
+            ? (string) $request->input('fiscal_year_id', 'all')
+            : ($currentFiscalYear?->id ? (string) $currentFiscalYear->id : 'all');
+        $monthFilter = $request->has('fiscal_month_id')
+            ? (string) $request->input('fiscal_month_id', 'all')
+            : ($currentFiscalMonth?->id ? (string) $currentFiscalMonth->id : 'all');
+
         $trainingTypes = TrainingType::query()
             ->where('status', 'active')
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        $rows = collect();
+
         if ($pageState === 'ready') {
             $formIds = $linkedForms->pluck('id')->all();
-            $submissions = FormSubmission::query()
-                ->whereHas('formVersion', function ($query) use ($formIds) {
-                    $query->whereIn('form_id', $formIds);
-                })
+            if ($formFilter !== 'all' && ctype_digit($formFilter) && in_array((int) $formFilter, $formIds, true)) {
+                $formIds = [(int) $formFilter];
+            }
+
+            $submissionsQuery = FormSubmission::query()
+                ->whereHas('formVersion', fn ($query) => $query->whereIn('form_id', $formIds));
+
+            if ($monthFilter !== 'all' && ctype_digit($monthFilter)) {
+                $month = $fiscalMonths->firstWhere('id', (int) $monthFilter);
+                if ($month) {
+                    $submissionsQuery->whereBetween('created_at', [
+                        Carbon::parse($month->gregorian_start_date)->startOfDay(),
+                        Carbon::parse($month->gregorian_end_date)->endOfDay(),
+                    ]);
+                }
+            } elseif ($yearFilter !== 'all' && ctype_digit($yearFilter)) {
+                $year = $fiscalYears->firstWhere('id', (int) $yearFilter);
+                if ($year) {
+                    $submissionsQuery->whereBetween('created_at', [
+                        Carbon::parse($year->gregorian_start_date)->startOfDay(),
+                        Carbon::parse($year->gregorian_end_date)->endOfDay(),
+                    ]);
+                }
+            }
+
+            $submissions = $submissionsQuery
                 ->with([
                     'formVersion:id,form_id',
                     'formVersion.form:id,title',
                     'answers.question.inputType',
                     'answers.question.choices',
-                    'answers.question.section:id,order_index',
+                    'answers.question.section',
                 ])
                 ->orderByDesc('id')
                 ->get();
+
+            $employees = \App\Models\Employee::query()
+                ->get(['id', 'first_name', 'last_name', 'employee_code', 'department_id', 'branch_id']);
+            $departments = \App\Models\Department::pluck('name', 'id');
+            $branches = \App\Models\Branch::pluck('name', 'id');
 
             $overrides = EvaluationResultOverride::query()
                 ->with('trainingType:id,name')
@@ -1319,21 +1536,22 @@ class FormSubmissionAdminController extends Controller
                 ->keyBy(fn (EvaluationResultOverride $override) => $override->employee_id . '|' . $override->form_id . '|' . $override->fiscal_month_id);
 
             $seen = [];
+            $built = [];
             foreach ($submissions as $submission) {
                 $this->_calculateEmployeeScores($submission, $employees);
                 $this->attachLookupSubjectScore($submission, $employees);
 
-                $submittedAt = \Carbon\Carbon::parse($submission->created_at);
+                $submittedAt = Carbon::parse($submission->created_at);
                 $matchedYear = $fiscalYears->first(
                     fn ($year) => $submittedAt->between(
-                        \Carbon\Carbon::parse($year->gregorian_start_date),
-                        \Carbon\Carbon::parse($year->gregorian_end_date)
+                        Carbon::parse($year->gregorian_start_date),
+                        Carbon::parse($year->gregorian_end_date)
                     )
                 );
                 $matchedMonth = $fiscalMonths->first(
                     fn ($month) => $submittedAt->between(
-                        \Carbon\Carbon::parse($month->gregorian_start_date),
-                        \Carbon\Carbon::parse($month->gregorian_end_date)
+                        Carbon::parse($month->gregorian_start_date),
+                        Carbon::parse($month->gregorian_end_date)
                     )
                 );
 
@@ -1343,7 +1561,7 @@ class FormSubmissionAdminController extends Controller
 
                 foreach ($submission->employee_scores ?? [] as $score) {
                     $employeeId = $score['id'] ?? null;
-                    if (!$employeeId || !$formId) {
+                    if (! $employeeId || ! $formId) {
                         continue;
                     }
 
@@ -1373,12 +1591,10 @@ class FormSubmissionAdminController extends Controller
                         }
                     }
 
-                    $rows[] = [
+                    $built[] = [
                         'employee_id' => $employeeId,
                         'employee_name' => $score['name'] ?? 'Unknown employee',
-                        'department_id' => $departmentId,
                         'department_name' => $departmentId ? ($departments[$departmentId] ?? 'Unknown department') : '—',
-                        'branch_id' => $branchId,
                         'branch_name' => $branchId ? ($branches[$branchId] ?? 'Unknown branch') : '—',
                         'form_id' => $formId,
                         'form_title' => $formTitle,
@@ -1394,40 +1610,60 @@ class FormSubmissionAdminController extends Controller
                         'next_action_label' => $nextActionLabel,
                         'training_type_id' => $trainingTypeId,
                         'training_type_name' => $trainingTypeName,
-                        'submitted_at' => $submission->created_at?->toDateTimeString(),
                     ];
                 }
             }
 
-            usort($rows, function ($a, $b) {
-                $byName = strcasecmp($a['employee_name'], $b['employee_name']);
-                if ($byName !== 0) {
-                    return $byName;
-                }
+            $rows = collect($built)
+                ->filter(function (array $row) use ($search, $statusFilter, $actionFilter) {
+                    if ($search !== '') {
+                        $haystack = mb_strtolower($row['employee_name'] . ' ' . $row['department_name']);
+                        if (! str_contains($haystack, mb_strtolower($search))) {
+                            return false;
+                        }
+                    }
+                    if ($statusFilter !== 'all' && $row['status'] !== $statusFilter) {
+                        return false;
+                    }
+                    if ($actionFilter !== 'all' && $row['next_action'] !== $actionFilter) {
+                        return false;
+                    }
 
-                return strcasecmp($a['form_title'], $b['form_title']);
-            });
+                    return true;
+                })
+                ->sortBy([
+                    ['employee_name', 'asc'],
+                    ['form_title', 'asc'],
+                ])
+                ->values();
         }
 
         $summary = [
-            'rows' => count($rows),
-            'employees' => collect($rows)->pluck('employee_id')->unique()->count(),
-            'pass' => collect($rows)->where('status', 'pass')->count(),
-            'fail' => collect($rows)->where('status', 'fail')->count(),
-            'warning' => collect($rows)->where('next_action', 'warning')->count(),
-            'training' => collect($rows)->where('next_action', 'training')->count(),
-            'not_scored' => collect($rows)->where('status', 'not_scored')->count(),
+            'rows' => $rows->count(),
+            'employees' => $rows->pluck('employee_id')->unique()->count(),
+            'pass' => $rows->where('status', 'pass')->count(),
+            'fail' => $rows->where('status', 'fail')->count(),
+            'warning' => $rows->where('next_action', 'warning')->count(),
+            'training' => $rows->where('next_action', 'training')->count(),
+            'not_scored' => $rows->where('status', 'not_scored')->count(),
         ];
 
-        $today = \Carbon\Carbon::today();
-        $currentFiscalYear = $fiscalYears->first(fn ($year) => $today->between(
-            \Carbon\Carbon::parse($year->gregorian_start_date),
-            \Carbon\Carbon::parse($year->gregorian_end_date)
-        ));
-        $currentFiscalMonth = $fiscalMonths->first(fn ($month) => $today->between(
-            \Carbon\Carbon::parse($month->gregorian_start_date),
-            \Carbon\Carbon::parse($month->gregorian_end_date)
-        ));
+        if ($request->input('export') === 'csv') {
+            return $this->streamEvaluationResultsCsv($rows);
+        }
+
+        $perPage = 25;
+        $page = max(1, (int) $request->input('page', 1));
+        $paginator = new LengthAwarePaginator(
+            $rows->forPage($page, $perPage)->values(),
+            $rows->count(),
+            $perPage,
+            $page,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
 
         return Inertia::render('Forms/EvaluationResults', [
             'kpiName' => $kpiName,
@@ -1436,7 +1672,7 @@ class FormSubmissionAdminController extends Controller
                 'id' => $form->id,
                 'title' => $form->title,
             ])->values(),
-            'rows' => $rows,
+            'rows' => $paginator,
             'summary' => $summary,
             'trainingTypes' => $trainingTypes,
             'fiscalYears' => $fiscalYears->map(fn ($year) => ['id' => $year->id, 'name' => $year->name])->values(),
@@ -1447,6 +1683,53 @@ class FormSubmissionAdminController extends Controller
             ])->values(),
             'currentFiscalYearId' => $currentFiscalYear?->id,
             'currentFiscalMonthId' => $currentFiscalMonth?->id,
+            'filters' => [
+                'search' => $search,
+                'form_id' => $formFilter,
+                'status' => $statusFilter,
+                'next_action' => $actionFilter,
+                'fiscal_year_id' => $yearFilter,
+                'fiscal_month_id' => $monthFilter,
+            ],
+        ]);
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int, array<string, mixed>>  $rows
+     */
+    private function streamEvaluationResultsCsv($rows): StreamedResponse
+    {
+        $filename = 'evaluation_results_' . date('Y-m-d') . '.csv';
+
+        return response()->streamDownload(function () use ($rows) {
+            $file = fopen('php://output', 'w');
+            fputs($file, "\xEF\xBB\xBF");
+            fputcsv($file, [
+                'employee_id',
+                'Employee',
+                'Department',
+                'Branch',
+                'Form',
+                'Fiscal month',
+                'Score',
+            ]);
+            foreach ($rows as $row) {
+                $fiscal = $row['fiscal_year_name']
+                    ? ($row['fiscal_month_name'] . ' / ' . $row['fiscal_year_name'])
+                    : $row['fiscal_month_name'];
+                fputcsv($file, [
+                    $row['employee_id'],
+                    $row['employee_name'],
+                    $row['department_name'],
+                    $row['branch_name'],
+                    $row['form_title'],
+                    $fiscal,
+                    $row['score'] === null ? '' : number_format((float) $row['score'], 1, '.', ''),
+                ]);
+            }
+            fclose($file);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 
@@ -1496,9 +1779,9 @@ class FormSubmissionAdminController extends Controller
         return Redirect::back()->with('message', 'Evaluation result updated successfully!');
     }
 
-    public function post_assessment_results()
+    public function post_assessment_results(Request $request): \Inertia\Response|StreamedResponse
     {
-        return $this->evaluation_results();
+        return $this->evaluation_results($request);
     }
 
     /**
