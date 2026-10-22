@@ -37,6 +37,16 @@ class TdKpiQuestion extends Model
         return $this->hasMany(TdKpiQuestionChoice::class, 'td_kpi_question_id')->orderBy('order_index');
     }
 
+    public function assignmentQuestions(): HasMany
+    {
+        return $this->hasMany(TdKpiAssignmentQuestion::class, 'td_kpi_question_id');
+    }
+
+    public function isAssigned(): bool
+    {
+        return $this->assignmentQuestions()->exists();
+    }
+
     public static function inputTypeNeedsChoices(?string $typeIdentifier): bool
     {
         if (!$typeIdentifier) {

@@ -100,7 +100,20 @@ class TdKpiQuestionController extends Controller
 
     public function destroy(TdKpiQuestion $tdKpiQuestion): RedirectResponse
     {
-        $tdKpiQuestion->delete();
+        // Assignment snapshots keep a restrict FK to the question bank.
+        // Deleting would break take-assessment history, so block with a clear message.
+        if ($tdKpiQuestion->isAssigned()) {
+            return Redirect::route('training.td-kpi.questions.index')
+                ->with(
+                    'error',
+                    'This question cannot be deleted because it is already used in one or more TD KPI assignments. Set its status to Inactive instead.'
+                );
+        }
+
+        DB::transaction(function () use ($tdKpiQuestion) {
+            $tdKpiQuestion->choices()->delete();
+            $tdKpiQuestion->delete();
+        });
 
         return Redirect::route('training.td-kpi.questions.index')
             ->with('message', 'Question deleted successfully!');

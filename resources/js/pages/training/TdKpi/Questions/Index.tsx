@@ -17,7 +17,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function TdKpiQuestionsIndex({ questions }: { questions: TdKpiQuestionPagination }) {
-	const { flash } = usePage<{ flash: { message?: string } }>().props;
+	const { flash } = usePage<{ flash: { message?: string; error?: string } }>().props;
 	const initialSearch = ((usePage().props as any)?.request?.search) ?? '';
 	const [search, setSearch] = useState<string>(initialSearch);
 	const { can } = usePermission();
@@ -26,7 +26,10 @@ export default function TdKpiQuestionsIndex({ questions }: { questions: TdKpiQue
 		if (flash?.message) {
 			toast.success(flash.message);
 		}
-	}, [flash?.message]);
+		if (flash?.error) {
+			toast.error(flash.error);
+		}
+	}, [flash?.message, flash?.error]);
 
 	function handleSearch() {
 		router.get('/training/td-kpi/questions', { search: search ?? '' }, { preserveState: true, replace: true });
