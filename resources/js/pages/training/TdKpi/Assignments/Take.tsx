@@ -16,11 +16,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { usePopup } from '@/hooks/use-popup';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 
 type Choice = { label: string; value: string };
 
@@ -76,7 +76,11 @@ function MetaItem({ label, value }: { label: string; value: string | number | nu
 }
 
 export default function TakeAssessment({ assignment, questions }: PageProps) {
-	const { flash, errors } = usePage<{ flash: { message?: string }; errors: Record<string, string> }>().props;
+	const { flash, errors } = usePage<{
+		flash: { message?: string; error?: string };
+		errors: Record<string, string>;
+	}>().props;
+	const { triggerPopup, PopupComponent } = usePopup();
 	const readOnly = assignment.submitted;
 	const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -104,8 +108,9 @@ export default function TakeAssessment({ assignment, questions }: PageProps) {
 	];
 
 	useEffect(() => {
-		if (flash?.message) toast.success(flash.message);
-	}, [flash?.message]);
+		if (flash?.message) triggerPopup('Success', flash.message, 'success');
+		if (flash?.error) triggerPopup('Error', flash.error, 'error');
+	}, [flash, triggerPopup]);
 
 	function getResponse(questionId: number) {
 		return data.responses.find((r) => r.id === questionId);
@@ -341,6 +346,7 @@ export default function TakeAssessment({ assignment, questions }: PageProps) {
 					</AlertDialogFooter>
 				</AlertDialogContent>
 			</AlertDialog>
+			<PopupComponent />
 		</AppLayout>
 	);
 }

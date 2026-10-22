@@ -9,9 +9,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import TablePagination from '@/components/table-pagination';
+import { usePopup } from '@/hooks/use-popup';
 import { Download, FilterX, GraduationCap } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
 
 type LinkedForm = { id: number; title: string };
 type FiscalOption = { id: number; name: string; fiscal_year_id?: number };
@@ -104,7 +104,8 @@ export default function EvaluationResults({
 	fiscalMonths: FiscalOption[];
 	filters: Filters;
 }) {
-	const { flash } = usePage<{ flash: { message?: string } }>().props;
+	const { flash } = usePage<{ flash: { message?: string; error?: string } }>().props;
+	const { triggerPopup, PopupComponent } = usePopup();
 	const [searchInput, setSearchInput] = useState(filters.search);
 	const [editRow, setEditRow] = useState<ResultRow | null>(null);
 
@@ -118,8 +119,9 @@ export default function EvaluationResults({
 	});
 
 	useEffect(() => {
-		if (flash?.message) toast.success(flash.message);
-	}, [flash?.message]);
+		if (flash?.message) triggerPopup('Success', flash.message, 'success');
+		if (flash?.error) triggerPopup('Error', flash.error, 'error');
+	}, [flash, triggerPopup]);
 
 	useEffect(() => {
 		setSearchInput(filters.search);
@@ -525,6 +527,7 @@ export default function EvaluationResults({
 					</form>
 				</DialogContent>
 			</Dialog>
+			<PopupComponent />
 		</AppLayout>
 	);
 }

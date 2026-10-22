@@ -3,13 +3,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { usePopup } from '@/hooks/use-popup';
 import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { type TdKpiQuestionPagination } from '@/types/td-kpi-question';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 
 const breadcrumbs: BreadcrumbItem[] = [
 	{ title: 'TD KPI', href: '/training/td-kpi/questions' },
@@ -18,18 +18,15 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 export default function TdKpiQuestionsIndex({ questions }: { questions: TdKpiQuestionPagination }) {
 	const { flash } = usePage<{ flash: { message?: string; error?: string } }>().props;
+	const { triggerPopup, PopupComponent } = usePopup();
 	const initialSearch = ((usePage().props as any)?.request?.search) ?? '';
 	const [search, setSearch] = useState<string>(initialSearch);
 	const { can } = usePermission();
 
 	useEffect(() => {
-		if (flash?.message) {
-			toast.success(flash.message);
-		}
-		if (flash?.error) {
-			toast.error(flash.error);
-		}
-	}, [flash?.message, flash?.error]);
+		if (flash?.message) triggerPopup('Success', flash.message, 'success');
+		if (flash?.error) triggerPopup('Error', flash.error, 'error');
+	}, [flash, triggerPopup]);
 
 	function handleSearch() {
 		router.get('/training/td-kpi/questions', { search: search ?? '' }, { preserveState: true, replace: true });
@@ -137,6 +134,7 @@ export default function TdKpiQuestionsIndex({ questions }: { questions: TdKpiQue
 					)}
 				</Card>
 			</div>
+			<PopupComponent />
 		</AppLayout>
 	);
 }

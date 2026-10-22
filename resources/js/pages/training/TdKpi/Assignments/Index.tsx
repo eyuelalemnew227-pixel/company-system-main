@@ -7,13 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { usePopup } from '@/hooks/use-popup';
 import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { type TdKpiAssignmentRow, type TdKpiOption } from '@/types/td-kpi-assignment';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
 
 const breadcrumbs: BreadcrumbItem[] = [
 	{ title: 'TD KPI', href: '/training/td-kpi/assignments' },
@@ -46,7 +46,8 @@ export default function AssignmentsIndex({
 	trainingModules = [],
 	request,
 }: PageProps) {
-	const { flash } = usePage<{ flash: { message?: string } }>().props;
+	const { flash } = usePage<{ flash: { message?: string; error?: string } }>().props;
+	const { triggerPopup, PopupComponent } = usePopup();
 	const { can } = usePermission();
 	const [search, setSearch] = useState(request?.search ?? '');
 	const [editRow, setEditRow] = useState<TdKpiAssignmentRow | null>(null);
@@ -73,8 +74,9 @@ export default function AssignmentsIndex({
 	const contentLocked = Boolean(editRow?.content_locked);
 
 	useEffect(() => {
-		if (flash?.message) toast.success(flash.message);
-	}, [flash?.message]);
+		if (flash?.message) triggerPopup('Success', flash.message, 'success');
+		if (flash?.error) triggerPopup('Error', flash.error, 'error');
+	}, [flash, triggerPopup]);
 
 	function handleSearch() {
 		const params: Record<string, string> = {};
@@ -367,6 +369,7 @@ export default function AssignmentsIndex({
 					</form>
 				</DialogContent>
 			</Dialog>
+			<PopupComponent />
 		</AppLayout>
 	);
 }

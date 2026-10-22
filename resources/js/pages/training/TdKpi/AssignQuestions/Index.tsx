@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { usePopup } from '@/hooks/use-popup';
 import { usePermission } from '@/hooks/user-permissions';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
@@ -19,7 +20,6 @@ import {
 } from '@/types/td-kpi-assignment';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
 
 const breadcrumbs: BreadcrumbItem[] = [
 	{ title: 'TD KPI', href: '/training/td-kpi/assign-questions' },
@@ -65,7 +65,8 @@ export default function AssignQuestionsIndex({
 	currentFiscalMonthId = null,
 	request,
 }: PageProps) {
-	const { flash } = usePage<{ flash: { message?: string } }>().props;
+	const { flash } = usePage<{ flash: { message?: string; error?: string } }>().props;
+	const { triggerPopup, PopupComponent } = usePopup();
 	const { can } = usePermission();
 	const [search, setSearch] = useState(request?.search ?? '');
 	const [selectedBranch, setSelectedBranch] = useState(request?.branch_id ?? 'all');
@@ -86,8 +87,9 @@ export default function AssignQuestionsIndex({
 		: roleQuestionCounts;
 
 	useEffect(() => {
-		if (flash?.message) toast.success(flash.message);
-	}, [flash?.message]);
+		if (flash?.message) triggerPopup('Success', flash.message, 'success');
+		if (flash?.error) triggerPopup('Error', flash.error, 'error');
+	}, [flash, triggerPopup]);
 
 	const filteredDepartments = useMemo(() => {
 		if (selectedBranch === 'all') return departments;
@@ -377,6 +379,7 @@ export default function AssignQuestionsIndex({
 					</form>
 				</DialogContent>
 			</Dialog>
+			<PopupComponent />
 		</AppLayout>
 	);
 }
