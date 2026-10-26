@@ -21,14 +21,16 @@ type PageProps = {
   evaluationNames: string[]
   branches: { id: number; name: string }[]
   departments: { id: number; name: string }[]
-  periods: { id: number; evaluation_period_name: string }[]
-  request?: { branch_id?: string; department_id?: string; period_id?: string }
+  fiscalYears: { id: number; name: string }[]
+  periods: { id: number; evaluation_period_name: string; fiscal_year_id?: number }[]
+  request?: { branch_id?: string; department_id?: string; fiscal_year_id?: string; period_id?: string }
 }
 
 
-export default function EvaluationSummaryPage({ rows, evaluationNames, branches, departments, periods, request }: PageProps) {
+export default function EvaluationSummaryPage({ rows, evaluationNames, branches, departments, fiscalYears, periods, request }: PageProps) {
   const [branchId, setBranchId] = React.useState<string>(request?.branch_id ?? '')
   const [departmentId, setDepartmentId] = React.useState<string>(request?.department_id ?? '')
+  const [fiscalYearId, setFiscalYearId] = React.useState<string>(request?.fiscal_year_id ?? '')
   const [periodId, setPeriodId] = React.useState<string>(request?.period_id ?? (periods.length > 0 ? String(periods[0].id) : ''))
   const [visible, setVisible] = React.useState<Record<string, boolean>>(
     () => evaluationNames.reduce((acc, name) => { acc[name] = true; return acc }, {} as Record<string, boolean>)
@@ -37,10 +39,16 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
   const [selectedDetails, setSelectedDetails] = React.useState<any>(null)
   const [loadingDetails, setLoadingDetails] = React.useState(false)
 
+  const filteredPeriods = React.useMemo(() => {
+    if (!fiscalYearId || fiscalYearId === 'all') return periods
+    return periods.filter((p) => String(p.fiscal_year_id) === fiscalYearId)
+  }, [periods, fiscalYearId])
+
   const buildQuery = () => {
     const params = new URLSearchParams()
     if (branchId && branchId !== 'all') params.set('branch_id', branchId)
     if (departmentId && departmentId !== 'all') params.set('department_id', departmentId)
+    if (fiscalYearId && fiscalYearId !== 'all') params.set('fiscal_year_id', fiscalYearId)
     if (periodId) params.set('period_id', periodId)
     const s = params.toString()
     return s ? `?${s}` : ''
@@ -72,9 +80,11 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
       const params = new URLSearchParams({
         evaluation_name: evalName,
         employee_id: String(row.employee_id),
-        department_id: String(row.department_id),
-        period_id: periodId
+        department_id: String(row.department_id)
       })
+      if (periodId) params.set('period_id', periodId)
+      if (fiscalYearId && fiscalYearId !== 'all') params.set('fiscal_year_id', fiscalYearId)
+
       const res = await fetch(`/reports/evaluation-summary/details?${params.toString()}`, {
         headers: {
           'Accept': 'application/json',
@@ -144,6 +154,35 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
                 </Select>
               </div>
               <div className="w-56">
+                <label className="text-sm font-medium mb-2 block">Fiscal Year</label>
+                <Select
+                  value={fiscalYearId || 'all'}
+                  onValueChange={(v) => {
+                    setFiscalYearId(v)
+                    if (v === 'all') {
+                      // Keep current period or allow all
+                    } else {
+                      const yearPeriods = periods.filter((p) => String(p.fiscal_year_id) === v)
+                      if (yearPeriods.length > 0) {
+                        setPeriodId(String(yearPeriods[0].id))
+                      } else {
+                        setPeriodId('all')
+                      }
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Years" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Years</SelectItem>
+                    {fiscalYears.map((fy) => (
+                      <SelectItem key={fy.id} value={String(fy.id)}>{fy.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-56">
                 <label className="text-sm font-medium mb-2 block">Period</label>
                 <Select value={periodId || 'all'} onValueChange={setPeriodId}>
                   <SelectTrigger>
@@ -151,7 +190,7 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All</SelectItem>
-                    {periods.map((p) => (
+                    {filteredPeriods.map((p) => (
                       <SelectItem key={p.id} value={String(p.id)}>{p.evaluation_period_name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -164,6 +203,7 @@ export default function EvaluationSummaryPage({ rows, evaluationNames, branches,
                   const params = new URLSearchParams()
                   if (branchId) params.set('branch_id', branchId)
                   if (departmentId) params.set('department_id', departmentId)
+                  if (fiscalYearId && fiscalYearId !== 'all') params.set('fiscal_year_id', fiscalYearId)
                   if (periodId) params.set('period_id', periodId)
                   const selected = evaluationNames.filter(n => visible[n])
                   if (selected.length > 0 && selected.length < evaluationNames.length) {

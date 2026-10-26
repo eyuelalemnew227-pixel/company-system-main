@@ -18,17 +18,24 @@ type PageProps = {
     }>
     staffNames: string[]
     branches: { id: number; name: string }[]
-    periods: { id: number; evaluation_period_name: string }[]
-    request?: { branch_id?: string; period_id?: string }
+    fiscalYears: { id: number; name: string }[]
+    periods: { id: number; evaluation_period_name: string; fiscal_year_id?: number }[]
+    request?: { branch_id?: string; fiscal_year_id?: string; period_id?: string }
 }
 
-export default function ConsolidatedEvaluationSummaryPage({ rows, staffNames, branches, periods, request }: PageProps) {
+export default function ConsolidatedEvaluationSummaryPage({ rows, staffNames, branches, fiscalYears, periods, request }: PageProps) {
     const [branchId, setBranchId] = React.useState<string>(request?.branch_id ?? '')
+    const [fiscalYearId, setFiscalYearId] = React.useState<string>(request?.fiscal_year_id ?? '')
     const [periodId, setPeriodId] = React.useState<string>(request?.period_id ?? (periods.length > 0 ? String(periods[0].id) : ''))
     const [staffFilter, setStaffFilter] = React.useState<string>('')
     const [modalOpen, setModalOpen] = React.useState(false)
     const [selectedDetails, setSelectedDetails] = React.useState<any>(null)
     const [loadingDetails, setLoadingDetails] = React.useState(false)
+
+    const filteredPeriods = React.useMemo(() => {
+        if (!fiscalYearId || fiscalYearId === 'all') return periods
+        return periods.filter((p) => String(p.fiscal_year_id) === fiscalYearId)
+    }, [periods, fiscalYearId])
 
     const openDetails = async (evaluatorId: string, evaluatorName: string, staffName: string, row: any) => {
         if (row[staffName] === null || row[staffName] === '-') return
@@ -41,8 +48,9 @@ export default function ConsolidatedEvaluationSummaryPage({ rows, staffNames, br
             const params = new URLSearchParams({
                 evaluator_id: evaluatorId,
                 staff_name: staffName,
-                period_id: periodId
             })
+            if (periodId) params.set('period_id', periodId)
+            if (fiscalYearId && fiscalYearId !== 'all') params.set('fiscal_year_id', fiscalYearId)
             const res = await fetch(`/reports/regional-production-maintenance-summary/details?${params.toString()}`, {
                 headers: {
                     'Accept': 'application/json',
@@ -75,6 +83,7 @@ export default function ConsolidatedEvaluationSummaryPage({ rows, staffNames, br
     const buildQuery = () => {
         const params = new URLSearchParams()
         if (branchId && branchId !== 'all') params.set('branch_id', branchId)
+        if (fiscalYearId && fiscalYearId !== 'all') params.set('fiscal_year_id', fiscalYearId)
         if (periodId) params.set('period_id', periodId)
         const s = params.toString()
         return s ? `?${s}` : ''
@@ -129,6 +138,35 @@ export default function ConsolidatedEvaluationSummaryPage({ rows, staffNames, br
                                 </Select>
                             </div>
                             <div className="w-56">
+                                <label className="text-sm font-medium mb-2 block">Fiscal Year</label>
+                                <Select
+                                    value={fiscalYearId || 'all'}
+                                    onValueChange={(v) => {
+                                        setFiscalYearId(v)
+                                        if (v === 'all') {
+                                            // Keep current period or allow all
+                                        } else {
+                                            const yearPeriods = periods.filter((p) => String(p.fiscal_year_id) === v)
+                                            if (yearPeriods.length > 0) {
+                                                setPeriodId(String(yearPeriods[0].id))
+                                            } else {
+                                                setPeriodId('all')
+                                            }
+                                        }
+                                    }}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="All Years" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Years</SelectItem>
+                                        {fiscalYears.map((fy) => (
+                                            <SelectItem key={fy.id} value={String(fy.id)}>{fy.name}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="w-56">
                                 <label className="text-sm font-medium mb-2 block">Period</label>
                                 <Select value={periodId || 'all'} onValueChange={setPeriodId}>
                                     <SelectTrigger>
@@ -136,7 +174,7 @@ export default function ConsolidatedEvaluationSummaryPage({ rows, staffNames, br
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All</SelectItem>
-                                        {periods.map((p) => (
+                                        {filteredPeriods.map((p) => (
                                             <SelectItem key={p.id} value={String(p.id)}>{p.evaluation_period_name}</SelectItem>
                                         ))}
                                     </SelectContent>
@@ -162,6 +200,7 @@ export default function ConsolidatedEvaluationSummaryPage({ rows, staffNames, br
                                 onClick={() => {
                                     const params = new URLSearchParams()
                                     if (branchId) params.set('branch_id', branchId)
+                                    if (fiscalYearId && fiscalYearId !== 'all') params.set('fiscal_year_id', fiscalYearId)
                                     if (periodId) params.set('period_id', periodId)
                                     if (visibleStaffNames.length > 0 && visibleStaffNames.length < staffNames.length) {
                                         params.set('columns', visibleStaffNames.join(','))

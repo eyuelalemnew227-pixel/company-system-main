@@ -9,6 +9,7 @@ use Inertia\Inertia;
 use App\Models\Branch;
 use App\Models\Department;
 use App\Models\EvaluationPeriod;
+use App\Models\FiscalYear;
 use App\Models\Evaluation;
 use App\Models\EvaluationCategory;
 use App\Models\EvaluationResponse;
@@ -33,12 +34,20 @@ class EvaluationReportController extends Controller
             Department::select('id', 'name')->orderBy('name')->get()
         );
 
+        // Cache fiscal years for 10 minutes
+        $fiscalYears = Cache::remember(
+            'fiscal_years_all',
+            600,
+            fn() =>
+            FiscalYear::select('id', 'name')->orderByDesc('id')->get()
+        );
+
         // Cache evaluation periods for 10 minutes
         $periods = Cache::remember(
             'evaluation_periods_all',
             600,
             fn() =>
-            EvaluationPeriod::select('id', 'evaluation_period_name')->orderByDesc('id')->get()
+            EvaluationPeriod::select('id', 'evaluation_period_name', 'fiscal_year_id')->orderByDesc('id')->get()
         );
 
         $evalCategories = EvaluationCategory::where('is_active', true)->get();
@@ -70,6 +79,7 @@ class EvaluationReportController extends Controller
 
         $branchId = $request->query('branch_id');
         $departmentId = $request->query('department_id');
+        $fiscalYearId = $request->query('fiscal_year_id');
         $periodId = $request->query('period_id');
 
         if ($branchId === 'all' || $branchId === '') {
@@ -78,12 +88,23 @@ class EvaluationReportController extends Controller
         if ($departmentId === 'all' || $departmentId === '') {
             $departmentId = null;
         }
-
-        // Default to latest period if not specified
-        if ($periodId === null) {
-            $periodId = $periods->first()?->id;
-        } elseif ($periodId === 'all' || $periodId === '') {
+        if ($fiscalYearId === 'all' || $fiscalYearId === '') {
+            $fiscalYearId = null;
+        }
+        if ($periodId === 'all' || $periodId === '') {
             $periodId = null;
+        }
+
+        // If neither fiscal_year_id nor period_id was explicitly supplied, default to the latest period and its fiscal year
+        if (!$request->has('fiscal_year_id') && !$request->has('period_id')) {
+            $selectedPeriod = $periods->first();
+            $periodId = $selectedPeriod?->id;
+            $fiscalYearId = $selectedPeriod?->fiscal_year_id;
+        } elseif ($fiscalYearId && !$request->has('period_id')) {
+            $selectedPeriod = $periods->firstWhere('fiscal_year_id', $fiscalYearId);
+            $periodId = $selectedPeriod?->id;
+        } elseif ($periodId && !$fiscalYearId) {
+            $fiscalYearId = $periods->firstWhere('id', $periodId)?->fiscal_year_id;
         }
 
         [$result, $evaluationNames] = $this->computeSummaryRows(
@@ -92,7 +113,9 @@ class EvaluationReportController extends Controller
             $branchId,
             $departmentId,
             $periodId,
-            $categoryWeights
+            $fiscalYearId,
+            $categoryWeights,
+            $periods
         );
 
         // keep rows only if at least one evaluation has a value
@@ -110,11 +133,13 @@ class EvaluationReportController extends Controller
             'evaluationNames' => $evaluationNames,
             'branches' => $branches,
             'departments' => $departments,
+            'fiscalYears' => $fiscalYears,
             'periods' => $periods,
             'request' => [
                 'branch_id' => $request->query('branch_id'),
                 'department_id' => $request->query('department_id'),
-                'period_id' => $request->query('period_id') === null ? (string) $periods->first()?->id : $request->query('period_id'),
+                'fiscal_year_id' => $fiscalYearId ? (string) $fiscalYearId : ($request->query('fiscal_year_id') === 'all' ? 'all' : ''),
+                'period_id' => $periodId ? (string) $periodId : ($request->query('period_id') === 'all' ? 'all' : ''),
             ],
         ]);
     }
@@ -127,9 +152,17 @@ class EvaluationReportController extends Controller
         $evaluationName = $request->query('evaluation_name');
         $employeeId = $request->query('employee_id');
         $departmentId = $request->query('department_id');
+        $fiscalYearId = $request->query('fiscal_year_id');
         $periodId = $request->query('period_id');
 
-        if (!$evaluationName || !$periodId) {
+        if ($periodId === 'all' || $periodId === '') {
+            $periodId = null;
+        }
+        if ($fiscalYearId === 'all' || $fiscalYearId === '') {
+            $fiscalYearId = null;
+        }
+
+        if (!$evaluationName || (!$periodId && !$fiscalYearId)) {
             return response()->json(['error' => 'Missing required parameters'], 400);
         }
 
@@ -141,12 +174,27 @@ class EvaluationReportController extends Controller
         }
 
         try {
+            $periodIds = [];
+            if (!$periodId && $fiscalYearId) {
+                $periodIds = EvaluationPeriod::where('fiscal_year_id', $fiscalYearId)->pluck('id')->toArray();
+            }
+
             $responses = DB::table('evaluation_responses as er')
                 ->join('evaluations as e', 'e.id', '=', 'er.evaluation_id')
                 ->where('e.name', $evaluationName)
                 ->where('er.evaluate_id', $evaluateId)
                 ->where('er.evaluable_type', $evaluableType)
-                ->where('er.evaluation_period_id', $periodId)
+                ->when($periodId, function ($q) use ($periodId) {
+                    $q->where('er.evaluation_period_id', $periodId);
+                }, function ($q) use ($fiscalYearId, $periodIds) {
+                    if ($fiscalYearId) {
+                        if (!empty($periodIds)) {
+                            $q->whereIn('er.evaluation_period_id', $periodIds);
+                        } else {
+                            $q->whereRaw('1 = 0');
+                        }
+                    }
+                })
                 ->leftJoin('users as u', 'u.id', '=', 'er.evaluator_id')
                 ->select('er.id as response_id', 'u.name as evaluator_name')
                 ->get();
@@ -208,6 +256,7 @@ class EvaluationReportController extends Controller
 
         $branchId = $request->query('branch_id');
         $departmentId = $request->query('department_id');
+        $fiscalYearId = $request->query('fiscal_year_id');
         $periodId = $request->query('period_id');
         if ($branchId === 'all' || $branchId === '') {
             $branchId = null;
@@ -215,18 +264,29 @@ class EvaluationReportController extends Controller
         if ($departmentId === 'all' || $departmentId === '') {
             $departmentId = null;
         }
+        if ($fiscalYearId === 'all' || $fiscalYearId === '') {
+            $fiscalYearId = null;
+        }
+        if ($periodId === 'all' || $periodId === '') {
+            $periodId = null;
+        }
 
         $periods = Cache::remember(
             'evaluation_periods_all',
             600,
             fn() =>
-            EvaluationPeriod::select('id', 'evaluation_period_name')->orderByDesc('id')->get()
+            EvaluationPeriod::select('id', 'evaluation_period_name', 'fiscal_year_id')->orderByDesc('id')->get()
         );
 
-        if ($periodId === null) {
-            $periodId = $periods->first()?->id;
-        } elseif ($periodId === 'all' || $periodId === '') {
-            $periodId = null;
+        if (!$request->has('fiscal_year_id') && !$request->has('period_id')) {
+            $selectedPeriod = $periods->first();
+            $periodId = $selectedPeriod?->id;
+            $fiscalYearId = $selectedPeriod?->fiscal_year_id;
+        } elseif ($fiscalYearId && !$request->has('period_id')) {
+            $selectedPeriod = $periods->firstWhere('fiscal_year_id', $fiscalYearId);
+            $periodId = $selectedPeriod?->id;
+        } elseif ($periodId && !$fiscalYearId) {
+            $fiscalYearId = $periods->firstWhere('id', $periodId)?->fiscal_year_id;
         }
 
         [$rows, $evaluationNames] = $this->computeSummaryRows(
@@ -235,7 +295,9 @@ class EvaluationReportController extends Controller
             $branchId,
             $departmentId,
             $periodId,
-            $categoryWeights
+            $fiscalYearId,
+            $categoryWeights,
+            $periods
         );
 
         // Apply same row filter: require at least one evaluation has a value
@@ -293,9 +355,18 @@ class EvaluationReportController extends Controller
         }, 200, $headers);
     }
 
-    private function computeSummaryRows(array $employeeEvalNames, string $departmentEvalName, $branchId, $departmentId, $periodId, array $categoryWeights): array
+    private function computeSummaryRows(array $employeeEvalNames, string $departmentEvalName, $branchId, $departmentId, $periodId, $fiscalYearId = null, array $categoryWeights = [], $periods = null): array
     {
         $evaluationNames = array_merge($employeeEvalNames, [$departmentEvalName]);
+
+        $periodIds = [];
+        if (!$periodId && $fiscalYearId) {
+            if ($periods) {
+                $periodIds = $periods->where('fiscal_year_id', $fiscalYearId)->pluck('id')->toArray();
+            } else {
+                $periodIds = EvaluationPeriod::where('fiscal_year_id', $fiscalYearId)->pluck('id')->toArray();
+            }
+        }
 
         // Base employees
         $employees = DB::table('employees as emp')
@@ -323,6 +394,14 @@ class EvaluationReportController extends Controller
             ->whereIn('e.name', $employeeEvalNames)
             ->when($periodId, function ($q) use ($periodId) {
                 $q->where('er.evaluation_period_id', $periodId);
+            }, function ($q) use ($fiscalYearId, $periodIds) {
+                if ($fiscalYearId) {
+                    if (!empty($periodIds)) {
+                        $q->whereIn('er.evaluation_period_id', $periodIds);
+                    } else {
+                        $q->whereRaw('1 = 0');
+                    }
+                }
             })
             ->when($branchId, function ($q) use ($branchId) {
                 $q->where('emp.branch_id', $branchId);
@@ -355,6 +434,14 @@ class EvaluationReportController extends Controller
             ->where('e.name', $departmentEvalName)
             ->when($periodId, function ($q) use ($periodId) {
                 $q->where('er.evaluation_period_id', $periodId);
+            }, function ($q) use ($fiscalYearId, $periodIds) {
+                if ($fiscalYearId) {
+                    if (!empty($periodIds)) {
+                        $q->whereIn('er.evaluation_period_id', $periodIds);
+                    } else {
+                        $q->whereRaw('1 = 0');
+                    }
+                }
             })
             ->groupBy('er.id', 'er.evaluate_id')
             ->selectRaw('er.evaluate_id as department_id, SUM(qr.score * COALESCE(qgq.weight, 1.0)) / NULLIF(SUM(COALESCE(qgq.weight, 1.0)), 0) as response_avg')

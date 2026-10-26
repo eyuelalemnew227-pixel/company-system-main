@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use App\Models\Branch;
 use App\Models\EvaluationPeriod;
+use App\Models\FiscalYear;
 
 class ConsolidatedEvaluationSummaryController extends Controller
 {
@@ -21,38 +22,59 @@ class ConsolidatedEvaluationSummaryController extends Controller
             Branch::select('id', 'name')->orderBy('name')->get()
         );
 
+        // Cache fiscal years for 10 minutes
+        $fiscalYears = Cache::remember(
+            'fiscal_years_all',
+            600,
+            fn() =>
+            FiscalYear::select('id', 'name')->orderByDesc('id')->get()
+        );
+
         // Cache evaluation periods for 10 minutes
         $periods = Cache::remember(
             'evaluation_periods_all',
             600,
             fn() =>
-            EvaluationPeriod::select('id', 'evaluation_period_name')->orderByDesc('id')->get()
+            EvaluationPeriod::select('id', 'evaluation_period_name', 'fiscal_year_id')->orderByDesc('id')->get()
         );
 
         $branchId = $request->query('branch_id');
+        $fiscalYearId = $request->query('fiscal_year_id');
         $periodId = $request->query('period_id');
 
         if ($branchId === 'all' || $branchId === '') {
             $branchId = null;
         }
-
-        // Default to latest period if not specified
-        if ($periodId === null) {
-            $periodId = $periods->first()?->id;
-        } elseif ($periodId === 'all' || $periodId === '') {
+        if ($fiscalYearId === 'all' || $fiscalYearId === '') {
+            $fiscalYearId = null;
+        }
+        if ($periodId === 'all' || $periodId === '') {
             $periodId = null;
         }
 
-        [$result, $staffNames] = $this->computeSummaryRows($branchId, $periodId);
+        if (!$request->has('fiscal_year_id') && !$request->has('period_id')) {
+            $selectedPeriod = $periods->first();
+            $periodId = $selectedPeriod?->id;
+            $fiscalYearId = $selectedPeriod?->fiscal_year_id;
+        } elseif ($fiscalYearId && !$request->has('period_id')) {
+            $selectedPeriod = $periods->firstWhere('fiscal_year_id', $fiscalYearId);
+            $periodId = $selectedPeriod?->id;
+        } elseif ($periodId && !$fiscalYearId) {
+            $fiscalYearId = $periods->firstWhere('id', $periodId)?->fiscal_year_id;
+        }
+
+        [$result, $staffNames] = $this->computeSummaryRows($branchId, $periodId, $fiscalYearId, $periods);
 
         return Inertia::render('reports/consolidated-evaluation-summary', [
             'rows' => $result,
             'staffNames' => $staffNames,
             'branches' => $branches,
+            'fiscalYears' => $fiscalYears,
             'periods' => $periods,
             'request' => [
                 'branch_id' => $request->query('branch_id'),
-                'period_id' => $request->query('period_id') === null ? (string) $periods->first()?->id : $request->query('period_id'),
+                'fiscal_year_id' => $fiscalYearId ? (string) $fiscalYearId : ($request->query('fiscal_year_id') === 'all' ? 'all' : ''),
+                'period_id' => $periodId ? (string) $periodId : ($request->query('period_id') === 'all' ? 'all' : ''),
             ],
         ]);
     }
@@ -60,25 +82,37 @@ class ConsolidatedEvaluationSummaryController extends Controller
     public function export(Request $request)
     {
         $branchId = $request->query('branch_id');
+        $fiscalYearId = $request->query('fiscal_year_id');
         $periodId = $request->query('period_id');
         if ($branchId === 'all' || $branchId === '') {
             $branchId = null;
+        }
+        if ($fiscalYearId === 'all' || $fiscalYearId === '') {
+            $fiscalYearId = null;
+        }
+        if ($periodId === 'all' || $periodId === '') {
+            $periodId = null;
         }
 
         $periods = Cache::remember(
             'evaluation_periods_all',
             600,
             fn() =>
-            \App\Models\EvaluationPeriod::select('id', 'evaluation_period_name')->orderByDesc('id')->get()
+            \App\Models\EvaluationPeriod::select('id', 'evaluation_period_name', 'fiscal_year_id')->orderByDesc('id')->get()
         );
 
-        if ($periodId === null) {
-            $periodId = $periods->first()?->id;
-        } elseif ($periodId === 'all' || $periodId === '') {
-            $periodId = null;
+        if (!$request->has('fiscal_year_id') && !$request->has('period_id')) {
+            $selectedPeriod = $periods->first();
+            $periodId = $selectedPeriod?->id;
+            $fiscalYearId = $selectedPeriod?->fiscal_year_id;
+        } elseif ($fiscalYearId && !$request->has('period_id')) {
+            $selectedPeriod = $periods->firstWhere('fiscal_year_id', $fiscalYearId);
+            $periodId = $selectedPeriod?->id;
+        } elseif ($periodId && !$fiscalYearId) {
+            $fiscalYearId = $periods->firstWhere('id', $periodId)?->fiscal_year_id;
         }
 
-        [$rows, $staffNames] = $this->computeSummaryRows($branchId, $periodId);
+        [$rows, $staffNames] = $this->computeSummaryRows($branchId, $periodId, $fiscalYearId, $periods);
 
         $columnsParam = (string) $request->query('columns', '');
         $visibleNames = $staffNames;
@@ -152,7 +186,7 @@ class ConsolidatedEvaluationSummaryController extends Controller
         }, 200, $headers);
     }
 
-    private function computeSummaryRows($branchId, $periodId): array
+    private function computeSummaryRows($branchId, $periodId, $fiscalYearId = null, $periods = null): array
     {
         // Select all Branch Manager -> [Regional/Maintenance/Productions] evaluation components
         $evaluations = DB::table('evaluations')
@@ -177,6 +211,15 @@ class ConsolidatedEvaluationSummaryController extends Controller
             return [[], []];
         }
 
+        $periodIds = [];
+        if (!$periodId && $fiscalYearId) {
+            if ($periods) {
+                $periodIds = $periods->where('fiscal_year_id', $fiscalYearId)->pluck('id')->toArray();
+            } else {
+                $periodIds = EvaluationPeriod::where('fiscal_year_id', $fiscalYearId)->pluck('id')->toArray();
+            }
+        }
+
         // Gather the responses mapped with Evaluators and Evaluatee (Staff) detail
         $evaluationResponses = DB::table('evaluation_responses as er')
             ->join('employees as staff', 'staff.id', '=', 'er.evaluate_id')
@@ -187,6 +230,14 @@ class ConsolidatedEvaluationSummaryController extends Controller
             ->where('er.evaluable_type', 'employee')
             ->when($periodId, function ($q) use ($periodId) {
                 $q->where('er.evaluation_period_id', $periodId);
+            }, function ($q) use ($fiscalYearId, $periodIds) {
+                if ($fiscalYearId) {
+                    if (!empty($periodIds)) {
+                        $q->whereIn('er.evaluation_period_id', $periodIds);
+                    } else {
+                        $q->whereRaw('1 = 0');
+                    }
+                }
             })
             ->when($branchId, function ($q) use ($branchId) {
                 $q->where('evaluator_emp.branch_id', $branchId);
@@ -283,13 +334,26 @@ class ConsolidatedEvaluationSummaryController extends Controller
     {
         $evaluatorId = $request->query('evaluator_id');
         $staffName = $request->query('staff_name');
+        $fiscalYearId = $request->query('fiscal_year_id');
         $periodId = $request->query('period_id');
 
-        if (!$evaluatorId || !$staffName || !$periodId) {
+        if ($periodId === 'all' || $periodId === '') {
+            $periodId = null;
+        }
+        if ($fiscalYearId === 'all' || $fiscalYearId === '') {
+            $fiscalYearId = null;
+        }
+
+        if (!$evaluatorId || !$staffName || (!$periodId && !$fiscalYearId)) {
             return response()->json(['error' => 'Missing required parameters'], 400);
         }
 
         try {
+            $periodIds = [];
+            if (!$periodId && $fiscalYearId) {
+                $periodIds = EvaluationPeriod::where('fiscal_year_id', $fiscalYearId)->pluck('id')->toArray();
+            }
+
             $responses = DB::table('evaluation_responses as er')
                 ->join('evaluations as e', 'e.id', '=', 'er.evaluation_id')
                 ->join('employees as staff', 'staff.id', '=', 'er.evaluate_id')
@@ -309,7 +373,17 @@ class ConsolidatedEvaluationSummaryController extends Controller
                 ])
                 ->where('er.evaluator_id', $evaluatorId)
                 ->where('er.evaluable_type', 'employee')
-                ->where('er.evaluation_period_id', $periodId)
+                ->when($periodId, function ($q) use ($periodId) {
+                    $q->where('er.evaluation_period_id', $periodId);
+                }, function ($q) use ($fiscalYearId, $periodIds) {
+                    if ($fiscalYearId) {
+                        if (!empty($periodIds)) {
+                            $q->whereIn('er.evaluation_period_id', $periodIds);
+                        } else {
+                            $q->whereRaw('1 = 0');
+                        }
+                    }
+                })
                 ->whereRaw('CONCAT(staff.first_name, " ", staff.last_name) = ?', [$staffName])
                 ->leftJoin('users as u', 'u.id', '=', 'er.evaluator_id')
                 ->select('er.id as response_id', 'u.name as evaluator_name')
