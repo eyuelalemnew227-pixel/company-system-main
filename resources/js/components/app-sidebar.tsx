@@ -201,10 +201,10 @@ const baseSections: NavSection[] = [
     items: [
       { title: 'All Forms', href: '/forms', icon: ListChecks, permission: 'view forms' },
       { title: 'KPI Library', href: '/kpi-libraries', icon: Target, permission: 'view kpi libraries' },
-      { title: 'Evaluation Results', href: '/forms/evaluation-results', icon: GraduationCap, permission: 'view form submissions' },
+      { title: 'Evaluation Results', href: '/forms/evaluation-results', icon: GraduationCap, permission: 'view form submissions|view inspector checklist submissions' },
       { title: 'Fill Forms', href: '/available-forms', icon: ClipboardCheck, permission: 'fill forms' },
       { title: 'My Submissions', href: '/my-submissions', icon: FileCheck, permission: 'view my form submissions' },
-      { title: 'All Submissions', href: '/submissions', icon: ClipboardList, permission: 'view form submissions' },
+      { title: 'All Submissions', href: '/submissions', icon: ClipboardList, permission: 'view form submissions|view inspector checklist submissions' },
     ],
   },
   {

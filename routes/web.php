@@ -178,7 +178,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Registered before the forms resource so "evaluation-results" is not captured as a form id.
-    Route::middleware(['auth', 'permission:view form submissions'])->group(function () {
+    // Operation Champions may open Evaluation Results scoped to their inspector checklist forms.
+    Route::middleware(['auth', 'permission:view form submissions|view inspector checklist submissions'])->group(function () {
         Route::get('forms/evaluation-results', [\App\Http\Controllers\FormSubmissionAdminController::class, 'evaluation_results'])
             ->name('forms.evaluation-results');
         Route::put('forms/evaluation-results/override', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update_evaluation_result_override'])
@@ -235,7 +236,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Global Submissions Viewer (Controller-level ACL handled)
-    Route::middleware(['auth', 'permission:view form submissions'])->group(function () {
+    // Operation Champions use "view inspector checklist submissions" (scoped to their checklist forms).
+    Route::middleware(['auth', 'permission:view form submissions|view inspector checklist submissions'])->group(function () {
         Route::get('submissions', [\App\Http\Controllers\FormSubmissionAdminController::class, 'all_index'])->name('forms.submissions.index');
         Route::get('submissions/form/{form}', [\App\Http\Controllers\FormSubmissionAdminController::class, 'form_submissions'])->name('forms.submissions.by_form');
         Route::get('submissions/form/{form}/tracking', [\App\Http\Controllers\FormSubmissionAdminController::class, 'form_tracking'])->name('forms.submissions.tracking');

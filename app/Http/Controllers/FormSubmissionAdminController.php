@@ -6,6 +6,8 @@ use App\Models\Form;
 use App\Models\FormSubmission;
 use App\Models\Training\EvaluationResultOverride;
 use App\Models\Training\TrainingType;
+use App\Models\User;
+use App\Services\Forms\InspectorChecklistChampionAccess;
 use App\Services\SimpleXlsxWriter;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -18,6 +20,45 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FormSubmissionAdminController extends Controller
 {
+    private function userCanViewFormSubmissions(User $user, Form $form): bool
+    {
+        if ((int) ($form->created_by ?? 0) === (int) $user->id) {
+            return true;
+        }
+
+        if ($form->user_permissions()
+            ->where('user_id', $user->id)
+            ->where('can_view_submissions', true)
+            ->exists()) {
+            return true;
+        }
+
+        // Position match alone is not enough — require the champion permission.
+        return $user->can(InspectorChecklistChampionAccess::PERMISSION_NAME)
+            && InspectorChecklistChampionAccess::canViewForm($user, $form);
+    }
+
+    /**
+     * Forms the user may open under All Submissions.
+     */
+    private function formsQueryableForSubmissions(User $user)
+    {
+        $championFormIds = $user->can(InspectorChecklistChampionAccess::PERMISSION_NAME)
+            ? InspectorChecklistChampionAccess::accessibleFormIds($user)
+            : [];
+
+        return Form::query()->where(function ($query) use ($user, $championFormIds) {
+            $query->where('created_by', $user->id)
+                ->orWhereHas('user_permissions', function ($q) use ($user) {
+                    $q->where('user_id', $user->id)->where('can_view_submissions', true);
+                });
+
+            if (! empty($championFormIds)) {
+                $query->orWhereIn('id', $championFormIds);
+            }
+        });
+    }
+
     private function _calculateEmployeeScores($submission, $employeesCollection)
     {
         $rosterAnswer = $submission->answers->first(function ($a) {
@@ -140,14 +181,8 @@ class FormSubmissionAdminController extends Controller
     public function all_index()
     {
         $user = auth()->user();
-        $user = auth()->user();
-        $forms = Form::withCount('submissions')
-            ->where(function ($query) use ($user) {
-                $query->where('created_by', $user->id)
-                    ->orWhereHas('user_permissions', function ($q) use ($user) {
-                        $q->where('user_id', $user->id)->where('can_view_submissions', true);
-                    });
-            })
+        $forms = $this->formsQueryableForSubmissions($user)
+            ->withCount('submissions')
             ->orderBy('title')
             ->get();
 
@@ -162,11 +197,8 @@ class FormSubmissionAdminController extends Controller
     public function form_submissions(Request $request, Form $form)
     {
         $user = auth()->user();
-        if ($form->created_by !== $user->id) {
-            $hasAccess = $form->user_permissions()->where('user_id', $user->id)->where('can_view_submissions', true)->exists();
-            if (!$hasAccess) {
-                abort(403, 'You must be granted explicit form-level access to view submissions for this form.');
-            }
+        if (! $this->userCanViewFormSubmissions($user, $form)) {
+            abort(403, 'You must be granted explicit form-level access to view submissions for this form.');
         }
 
         $fiscalYears = \App\Models\FiscalYear::orderBy('gregorian_start_date')
@@ -411,11 +443,8 @@ class FormSubmissionAdminController extends Controller
     public function form_tracking(Form $form)
     {
         $user = auth()->user();
-        if ($form->created_by !== $user->id) {
-            $hasAccess = $form->user_permissions()->where('user_id', $user->id)->where('can_view_submissions', true)->exists();
-            if (!$hasAccess) {
-                abort(403, 'You must be granted explicit form-level access to view tracking for this form.');
-            }
+        if (! $this->userCanViewFormSubmissions($user, $form)) {
+            abort(403, 'You must be granted explicit form-level access to view tracking for this form.');
         }
 
         $allBranches = \App\Models\Branch::where('is_sales_generating', true)->orderBy('name')->get(['id', 'name', 'branch_code', 'location']);
@@ -508,12 +537,7 @@ class FormSubmissionAdminController extends Controller
         });
 
         // Other forms the user can view, allowing quick switching from the tracking page
-        $availableForms = Form::where(function ($query) use ($user) {
-                $query->where('created_by', $user->id)
-                    ->orWhereHas('user_permissions', function ($q) use ($user) {
-                        $q->where('user_id', $user->id)->where('can_view_submissions', true);
-                    });
-            })
+        $availableForms = $this->formsQueryableForSubmissions($user)
             ->orderBy('title')
             ->get(['id', 'title']);
 
@@ -653,9 +677,9 @@ class FormSubmissionAdminController extends Controller
         $user = auth()->user();
         $isSubmitter = ((int) $submission->user_id === (int) $user->id);
         $isCreator = ((int) ($submission->formVersion->form->created_by ?? 0) === (int) $user->id);
-        $hasViewPermission = $submission->formVersion->form->user_permissions()->where('user_id', $user->id)->where('can_view_submissions', true)->exists();
+        $hasViewPermission = $this->userCanViewFormSubmissions($user, $submission->formVersion->form);
 
-        if (!$isSubmitter && !$isCreator && !$hasViewPermission) {
+        if (!$isSubmitter && !$hasViewPermission) {
             abort(403, 'You must be granted explicit form-level access to view submissions for this form.');
         }
 
@@ -955,10 +979,8 @@ class FormSubmissionAdminController extends Controller
     public function export_csv(Form $form)
     {
         $user = auth()->user();
-        if ($form->created_by !== $user->id) {
-            if (!$form->user_permissions()->where('user_id', $user->id)->where('can_view_submissions', true)->exists()) {
-                abort(403, 'You must be granted explicit form-level access to view/export submissions for this form.');
-            }
+        if (! $this->userCanViewFormSubmissions($user, $form)) {
+            abort(403, 'You must be granted explicit form-level access to view/export submissions for this form.');
         }
         // 1. Fetch lookups for decoding relational data types
         $branches = \App\Models\Branch::pluck('name', 'id')->toArray();
@@ -1087,11 +1109,8 @@ class FormSubmissionAdminController extends Controller
     public function export_detail(Request $request, Form $form)
     {
         $user = auth()->user();
-        if ($form->created_by !== $user->id) {
-            $hasAccess = $form->user_permissions()->where('user_id', $user->id)->where('can_view_submissions', true)->exists();
-            if (!$hasAccess) {
-                abort(403, 'You must be granted explicit form-level access to view/export submissions for this form.');
-            }
+        if (! $this->userCanViewFormSubmissions($user, $form)) {
+            abort(403, 'You must be granted explicit form-level access to view/export submissions for this form.');
         }
 
         $format = strtolower((string) $request->query('format', 'xlsx'));
@@ -1446,6 +1465,19 @@ class FormSubmissionAdminController extends Controller
             ->sortBy('title')
             ->values();
 
+        $user = auth()->user();
+        // Champions without full submission access only see their role's checklist forms.
+        if (
+            $user
+            && ! $user->can('view form submissions')
+            && $user->can(InspectorChecklistChampionAccess::PERMISSION_NAME)
+        ) {
+            $championFormIds = InspectorChecklistChampionAccess::accessibleFormIds($user);
+            $linkedForms = $linkedForms
+                ->filter(fn ($form) => in_array((int) $form->id, $championFormIds, true))
+                ->values();
+        }
+
         $pageState = 'ready';
         if ($kpiRows->isEmpty()) {
             $pageState = 'missing_kpi';
@@ -1759,6 +1791,16 @@ class FormSubmissionAdminController extends Controller
 
         if ($validated['next_action'] !== 'training') {
             $validated['training_type_id'] = null;
+        }
+
+        $user = auth()->user();
+        if (
+            $user
+            && ! $user->can('view form submissions')
+            && $user->can(InspectorChecklistChampionAccess::PERMISSION_NAME)
+            && ! InspectorChecklistChampionAccess::canViewForm($user, (int) $validated['form_id'])
+        ) {
+            abort(403, 'You can only update evaluation results for your assigned inspector checklist forms.');
         }
 
         EvaluationResultOverride::updateOrCreate(
