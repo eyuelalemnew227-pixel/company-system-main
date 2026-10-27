@@ -31,6 +31,12 @@ interface BranchItem {
     name: string;
 }
 
+interface BotItem {
+    id: number;
+    slug: string;
+    name: string;
+}
+
 interface BroadcastHistoryItem {
     id: number;
     sender_name: string;
@@ -50,6 +56,7 @@ interface Props {
     branches?: BranchItem[];
     linkedBranchesCount: number;
     linkedUsersCount: number;
+    availableBots?: BotItem[];
     broadcastHistory?: BroadcastHistoryItem[];
 }
 
@@ -59,6 +66,7 @@ export default function BroadcastAnnouncementsIndex({
     branches = [],
     linkedBranchesCount,
     linkedUsersCount,
+    availableBots = [],
     broadcastHistory = [],
 }: Props) {
     const [selectedBroadcast, setSelectedBroadcast] = useState<BroadcastHistoryItem | null>(null);
@@ -70,6 +78,7 @@ export default function BroadcastAnnouncementsIndex({
         target: 'all',
         department_id: '',
         branch_id: '',
+        bot_slug: 'auto',
     });
 
     const activeDeptName =
@@ -200,6 +209,32 @@ export default function BroadcastAnnouncementsIndex({
 
                     <CardContent className="p-6">
                         <form onSubmit={handleSubmit} className="space-y-6">
+                            {/* Bot Selection */}
+                            {availableBots && availableBots.length > 0 && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="bot_slug" className="font-semibold text-slate-800 dark:text-slate-200">
+                                        Telegram Bot Channel
+                                    </Label>
+                                    <select
+                                        id="bot_slug"
+                                        value={data.bot_slug}
+                                        onChange={(e) => setData('bot_slug', e.target.value)}
+                                        className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                    >
+                                        <option value="auto">Auto (First Active Bot)</option>
+                                        {availableBots.map((b) => (
+                                            <option key={b.id} value={b.slug}>
+                                                {b.name} ({b.slug})
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Select which active Telegram bot will dispatch this broadcast announcement.
+                                    </p>
+                                    {errors.bot_slug && <p className="text-xs font-medium text-red-500">{errors.bot_slug}</p>}
+                                </div>
+                            )}
+
                             {/* Department Selection */}
                             <div className="space-y-2">
                                 <Label htmlFor="department_id" className="font-semibold text-slate-800 dark:text-slate-200">
@@ -241,7 +276,7 @@ export default function BroadcastAnnouncementsIndex({
                                 <Label className="font-semibold text-slate-800 dark:text-slate-200">
                                     Target Audience <span className="text-red-500">*</span>
                                 </Label>
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                                     <label
                                         className={`flex cursor-pointer flex-col rounded-lg border p-4 transition-all ${
                                             data.target === 'all'
@@ -281,7 +316,7 @@ export default function BroadcastAnnouncementsIndex({
                                             />
                                             <span className="font-bold text-slate-900 dark:text-slate-100">All Branch Channels</span>
                                         </div>
-                                        <span className="mt-1 text-xs text-muted-foreground">Broadcast to official branch channels only</span>
+                                        <span className="mt-1 text-xs text-muted-foreground">Broadcast to all branch staff & channels</span>
                                     </label>
 
                                     <label
@@ -302,7 +337,28 @@ export default function BroadcastAnnouncementsIndex({
                                             />
                                             <span className="font-bold text-slate-900 dark:text-slate-100">Selected Branch Only</span>
                                         </div>
-                                        <span className="mt-1 text-xs text-muted-foreground">Target a single specific branch channel</span>
+                                        <span className="mt-1 text-xs text-muted-foreground">Target a single specific branch</span>
+                                    </label>
+
+                                    <label
+                                        className={`flex cursor-pointer flex-col rounded-lg border p-4 transition-all ${
+                                            data.target === 'department_users'
+                                                ? 'border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-600 dark:border-indigo-500 dark:bg-indigo-950/40'
+                                                : 'border-slate-200 hover:border-slate-300 dark:border-slate-800'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="radio"
+                                                name="target"
+                                                value="department_users"
+                                                checked={data.target === 'department_users'}
+                                                onChange={(e) => setData('target', e.target.value)}
+                                                className="h-4 w-4 text-indigo-600"
+                                            />
+                                            <span className="font-bold text-slate-900 dark:text-slate-100">Department Staff</span>
+                                        </div>
+                                        <span className="mt-1 text-xs text-muted-foreground">Target publishing department only</span>
                                     </label>
 
                                     <label

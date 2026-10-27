@@ -43,6 +43,7 @@ use App\Http\Controllers\{
     TelecomPhoneNumberController,
     TelecomBroadbandController,
     TelecomProviderController,
+    TelegramGroupController,
     FormController
 
 };
@@ -716,6 +717,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             'store' => 'telecom.providers.store',
             'update' => 'telecom.providers.update',
             'destroy' => 'telecom.providers.destroy',
+        ]);
+
+        // Telegram Groups Management
+        Route::post('telegram-groups/{telegramGroup}/generate-link', [TelegramGroupController::class, 'generateLink'])
+            ->name('telecom.telegram-groups.generate-link');
+        Route::resource('telegram-groups', TelegramGroupController::class)->names([
+            'index'   => 'telecom.telegram-groups.index',
+            'create'  => 'telecom.telegram-groups.create',
+            'store'   => 'telecom.telegram-groups.store',
+            'show'    => 'telecom.telegram-groups.show',
+            'edit'    => 'telecom.telegram-groups.edit',
+            'update'  => 'telecom.telegram-groups.update',
+            'destroy' => 'telecom.telegram-groups.destroy',
         ]);
     });
 

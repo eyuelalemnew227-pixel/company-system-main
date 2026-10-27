@@ -50,6 +50,11 @@ class Branch extends Model
         return $this->belongsToMany(Department::class);
     }
 
+    public function employees()
+    {
+        return $this->hasMany(Employee::class);
+    }
+
     public function preOrders()
     {
         return $this->hasMany(PreOrder::class, 'collection_branch_id');

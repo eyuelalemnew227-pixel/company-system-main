@@ -477,6 +477,7 @@ class TicketController extends Controller
             'productRequests.sparePart.category',
             'fiscalYear:id,name',
             'fiscalMonth:id,name,fiscal_year_id',
+            'telegramGroup',
         ]);
         $currentAssignment = $ticket->assignments()->where('is_current', true)->with('assignee')->first();
         $staffOptions = User::where('users.is_active', true)
@@ -532,6 +533,10 @@ class TicketController extends Controller
             'assetOptions' => $assetOptions,
             'abilities' => array_merge($ticket->getAbilities($user), [
                 'canAssign' => $this->canUserAssignTicket($user, $ticket),
+                'canManageTelegram' => $user->can('view telecom management')
+                    || $user->hasRole('Super Admin')
+                    || $isManager
+                    || $isAssignee,
             ]),
         ]);
     }
@@ -919,7 +924,14 @@ class TicketController extends Controller
         );
 
         // Send Web In-App Notifications
-        $branchUserIds = $ticket->requestor_branch_id ? User::whereHas('employee', fn($q) => $q->where('branch_id', $ticket->requestor_branch_id))->pluck('id')->all() : [];
+        $branchIds = array_filter(array_unique([
+            $ticket->requestor_branch_id,
+            $ticket->beneficiary_branch_id,
+            $ticket->requestor?->employee?->branch_id,
+        ]));
+        $branchUserIds = !empty($branchIds)
+            ? User::whereHas('employee', fn($q) => $q->whereIn('branch_id', $branchIds))->pluck('id')->all()
+            : [];
         $recipients = array_unique(array_merge(
             array_filter([$ticket->user_id]),
             $branchUserIds,

@@ -108,8 +108,8 @@ class TelegramBotService
         }
 
         $token = $this->getBotTokenBySlug($slug);
-        if (empty($token)) {
-            Log::warning("sendBotMessage failed: Bot token not configured for slug '{$slug}'");
+        if (empty($token) || strlen(trim($token)) < 15) {
+            Log::warning("sendBotMessage failed: Bot token not configured or invalid for slug '{$slug}'");
             return false;
         }
 
@@ -136,7 +136,7 @@ class TelegramBotService
     private function baseUrl(): ?string
     {
         $token = $this->getHelpdeskBotToken();
-        if (empty($token)) {
+        if (empty($token) || strlen(trim($token)) < 15) {
             return null;
         }
 
@@ -252,8 +252,9 @@ class TelegramBotService
         string $title,
         string $message,
         ?int $departmentId = null,
-        ?int $branchId = null
-    ): int {
+        ?int $branchId = null,
+        ?string $botSlug = null
+    ): array {
         $senderName = e($sender->name);
         $cleanTitle = e($title);
         $cleanMessage = e($message);
@@ -267,6 +268,7 @@ class TelegramBotService
                          "{$cleanMessage}";
 
         $chatIds = [];
+        $targetUserIds = [];
 
         if (in_array($targetAudience, ['everything', 'all_branches'], true)) {
             $branchChatIds = Branch::whereNotNull('telegram_chat_id')
@@ -275,37 +277,43 @@ class TelegramBotService
                 ->toArray();
             $chatIds = array_merge($chatIds, $branchChatIds);
 
-            $branchUserChatIds = User::query()
+            $branchUsers = User::query()
                 ->whereHas('employee', function ($q) {
                     $q->whereNotNull('branch_id');
                 })
                 ->where('is_active', true)
-                ->whereNotNull('telegram_chat_id')
-                ->where('telegram_chat_id', '!=', '')
-                ->pluck('telegram_chat_id')
-                ->toArray();
-            $chatIds = array_merge($chatIds, $branchUserChatIds);
+                ->get(['id', 'telegram_chat_id']);
+
+            foreach ($branchUsers as $u) {
+                $targetUserIds[] = $u->id;
+                if (!empty($u->telegram_chat_id)) {
+                    $chatIds[] = $u->telegram_chat_id;
+                }
+            }
         }
 
         if (in_array($targetAudience, ['everything', 'all_users'], true)) {
-            $userChatIds = User::whereNotNull('telegram_chat_id')
-                ->where('telegram_chat_id', '!=', '')
-                ->where('is_active', true)
-                ->pluck('telegram_chat_id')
-                ->toArray();
-            $chatIds = array_merge($chatIds, $userChatIds);
+            $allUsers = User::where('is_active', true)->get(['id', 'telegram_chat_id']);
+            foreach ($allUsers as $u) {
+                $targetUserIds[] = $u->id;
+                if (!empty($u->telegram_chat_id)) {
+                    $chatIds[] = $u->telegram_chat_id;
+                }
+            }
         }
 
         if ($targetAudience === 'department_users' && $departmentId) {
-            $deptUserChatIds = User::query()
-                ->join('employees', 'users.employee_id', '=', 'employees.id')
-                ->where('employees.department_id', $departmentId)
-                ->where('users.is_active', true)
-                ->whereNotNull('users.telegram_chat_id')
-                ->where('users.telegram_chat_id', '!=', '')
-                ->pluck('users.telegram_chat_id')
-                ->toArray();
-            $chatIds = array_merge($chatIds, $deptUserChatIds);
+            $deptUsers = User::query()
+                ->whereHas('employee', fn($q) => $q->where('department_id', $departmentId))
+                ->where('is_active', true)
+                ->get(['id', 'telegram_chat_id']);
+
+            foreach ($deptUsers as $u) {
+                $targetUserIds[] = $u->id;
+                if (!empty($u->telegram_chat_id)) {
+                    $chatIds[] = $u->telegram_chat_id;
+                }
+            }
         }
 
         if ($targetAudience === 'specific_branch' && $branchId) {
@@ -314,23 +322,69 @@ class TelegramBotService
                 $chatIds[] = $branch->telegram_chat_id;
             }
 
-            $branchUserChatIds = User::query()
+            $branchUsers = User::query()
                 ->whereHas('employee', function ($q) use ($branchId) {
                     $q->where('branch_id', $branchId);
                 })
                 ->where('is_active', true)
-                ->whereNotNull('telegram_chat_id')
-                ->where('telegram_chat_id', '!=', '')
-                ->pluck('telegram_chat_id')
-                ->toArray();
-            $chatIds = array_merge($chatIds, $branchUserChatIds);
+                ->get(['id', 'telegram_chat_id']);
+
+            foreach ($branchUsers as $u) {
+                $targetUserIds[] = $u->id;
+                if (!empty($u->telegram_chat_id)) {
+                    $chatIds[] = $u->telegram_chat_id;
+                }
+            }
         }
 
-        $chatIds = array_unique(array_filter($chatIds));
+        // 1. Dispatch In-App Web Notifications
+        $targetUserIds = array_values(array_unique(array_filter($targetUserIds)));
+        $inAppCount = 0;
+        if (!empty($targetUserIds)) {
+            $now = now();
+            $notificationRows = [];
+            foreach ($targetUserIds as $uid) {
+                $notificationRows[] = [
+                    'user_id' => $uid,
+                    'ticket_id' => null,
+                    'type' => 'ticket.broadcast',
+                    'title' => "📢 Announcement: {$title}",
+                    'body' => $message,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                    'read_at' => null,
+                ];
+            }
+            foreach (array_chunk($notificationRows, 500) as $chunk) {
+                \App\Models\TicketNotification::insert($chunk);
+            }
+            $inAppCount = count($targetUserIds);
+        }
+
+        // 2. Dispatch Telegram Bot Notifications
+        $chatIds = array_values(array_unique(array_filter($chatIds)));
         $sentCount = 0;
 
+        // Resolve active bot to use
+        $resolvedSlug = $botSlug;
+        if (empty($resolvedSlug) || $resolvedSlug === 'auto') {
+            $resolvedSlug = 'helpdesk';
+        }
+
+        $token = $this->getBotTokenBySlug($resolvedSlug);
+        if (empty($token) || strlen(trim($token)) < 15) {
+            // Fallback to any active bot with a valid token
+            $fallbackBot = TelegramBot::where('is_active', true)
+                ->whereNotNull('bot_token')
+                ->whereRaw('LENGTH(bot_token) >= 15')
+                ->first();
+            if ($fallbackBot) {
+                $resolvedSlug = $fallbackBot->slug;
+            }
+        }
+
         foreach ($chatIds as $cid) {
-            if ($this->sendMessage($cid, $formattedText)) {
+            if ($this->sendBotMessage($resolvedSlug, $cid, $formattedText)) {
                 $sentCount++;
             }
         }
@@ -358,7 +412,11 @@ class TelegramBotService
             Log::error("Failed to record TelegramBroadcastHistory: " . $e->getMessage());
         }
 
-        return $sentCount;
+        return [
+            'sent_count' => $sentCount,
+            'recipients_count' => count($chatIds),
+            'in_app_count' => $inAppCount,
+        ];
     }
 
     /**
@@ -1808,8 +1866,18 @@ class TelegramBotService
         $actionService->logActivity($ticket, $user, 'chat_comment', $ticket->status->value, $ticket->status->value, $commentText);
 
         // Send Web In-App Notifications
+        $branchIds = array_filter(array_unique([
+            $ticket->requestor_branch_id,
+            $ticket->beneficiary_branch_id,
+            $ticket->requestor?->employee?->branch_id,
+        ]));
+        $branchUserIds = !empty($branchIds)
+            ? User::whereHas('employee', fn($q) => $q->whereIn('branch_id', $branchIds))->pluck('id')->all()
+            : [];
+
         $recipients = array_unique(array_merge(
-            [$ticket->user_id],
+            array_filter([$ticket->user_id]),
+            $branchUserIds,
             $ticket->assignments()->where('is_current', true)->pluck('assigned_to')->all(),
             $actionService->departmentManagerUserIds($ticket->department_id)
         ));

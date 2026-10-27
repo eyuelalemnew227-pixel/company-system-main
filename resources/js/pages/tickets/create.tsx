@@ -12,7 +12,7 @@ import { type BreadcrumbItem } from '@/types';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { useMemo, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Trash2, ChevronDown, ChevronUp, Layers, Package, ShoppingCart, Check, ChevronsUpDown, Warehouse, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Layers, Package, ShoppingCart, Check, ChevronsUpDown, Warehouse, AlertCircle, Loader2, MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -131,9 +131,49 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
 
   const isAnyPurchaseMode = isPurchaseMode || isSparePartMode;
 
+  const isTelegramMode = useMemo(() => {
+    const selectedSub = subCategories.find((s) => String(s.id) === String(data.ticket_sub_category_id));
+    const selectedMain = mainCategories.find((m) => String(m.id) === String(data.ticket_main_category_id));
+    return (
+      (selectedSub?.name?.toLowerCase().includes('telegram') ?? false) ||
+      (selectedMain?.name?.toLowerCase().includes('telecom') ?? false)
+    );
+  }, [data.ticket_sub_category_id, data.ticket_main_category_id, subCategories, mainCategories]);
+
   const [assetOpen, setAssetOpen] = useState(false);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [productSearch, setProductSearch] = useState('');
+
+  // Auto-prefill when requested with ?type=telegram_group
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('type') === 'telegram_group' || params.get('request') === 'telegram') {
+      const itDept = departments.find(
+        (d) => d.name === 'IT' || d.name.toLowerCase().includes('information tech')
+      );
+      if (itDept) {
+        const telecomMain = mainCategories.find(
+          (m) =>
+            m.name.toLowerCase().includes('telecom') ||
+            m.name.toLowerCase().includes('telegram')
+        );
+        const telegramSub = subCategories.find(
+          (s) => s.name.toLowerCase().includes('telegram')
+        );
+
+        setData((prev) => ({
+          ...prev,
+          department_id: String(itDept.id),
+          ticket_main_category_id: telecomMain ? String(telecomMain.id) : prev.ticket_main_category_id,
+          ticket_sub_category_id: telegramSub ? String(telegramSub.id) : prev.ticket_sub_category_id,
+          description:
+            prev.description ||
+            `Proposed Group Name: \nGroup Type: [Group / Supergroup / Channel]\nTarget Audience & Purpose: \nIntended Group Admins / Managers: \nExpected Member Count: \nAdditional Notes: `,
+        }));
+      }
+    }
+  }, [departments, mainCategories, subCategories]);
 
   // Store Balance
   const [balanceItems, setBalanceItems] = useState<BalanceItem[]>([]);
@@ -563,11 +603,27 @@ export default function TicketCreate({ departments, mainCategories, subCategorie
 
               {!isAnyPurchaseMode && (
                 <>
-                  <Field label="Description" error={errors.description}>
+                  {isTelegramMode && (
+                    <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-4 text-xs text-blue-900 shadow-sm dark:border-blue-900/60 dark:bg-blue-950/40 dark:text-blue-200 flex items-start gap-3">
+                      <div className="p-1.5 rounded-lg bg-blue-600 text-white shrink-0 mt-0.5 shadow-xs">
+                        <MessageCircle className="h-4 w-4" />
+                      </div>
+                      <div className="space-y-1">
+                        <span className="font-bold text-sm">Telegram Group Request Guide</span>
+                        <p className="text-blue-700 dark:text-blue-300 leading-relaxed">
+                          Please provide the proposed group name, purpose, group type (Group, Supergroup, or Channel), and who will administer or manage it in the description below.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <Field label="Description *" error={errors.description}>
                     <Textarea
-                      rows={4}
+                      rows={5}
                       value={data.description}
+                      placeholder={isTelegramMode ? "Proposed Group Name: ...\nGroup Type: ...\nPurpose: ..." : "Describe your request..."}
                       onChange={(e) => setData('description', e.target.value)}
+                      required
                     />
                   </Field>
                   <Field label="Attach Photo (Optional)" error={(errors as any).image}>

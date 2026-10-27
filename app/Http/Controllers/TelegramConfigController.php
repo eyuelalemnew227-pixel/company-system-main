@@ -30,11 +30,23 @@ class TelegramConfigController extends Controller
         $user->loadMissing(['employee.department']);
         $senderDept = $user->employee?->department?->name ?? 'Company Management';
 
-        $linkedBranchesCount = Branch::whereNotNull('telegram_chat_id')->where('telegram_chat_id', '!=', '')->count();
+        $departments = \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        $branches = Branch::orderBy('name')->get(['id', 'name']);
+
+        $linkedBranchesCount = Branch::where(function ($q) {
+            $q->whereNotNull('telegram_chat_id')->where('telegram_chat_id', '!=', '')
+              ->orWhereHas('employees.user', function ($qu) {
+                  $qu->whereNotNull('telegram_chat_id')->where('telegram_chat_id', '!=', '');
+              });
+        })->count();
+
         $linkedUsersCount = User::whereNotNull('telegram_chat_id')->where('telegram_chat_id', '!=', '')->count();
 
-        $departments = \App\Models\Department::where('is_active', true)->orderBy('name')->get(['id', 'name']);
-        $branches = Branch::whereNotNull('telegram_chat_id')->where('telegram_chat_id', '!=', '')->orderBy('name')->get(['id', 'name']);
+        $availableBots = TelegramBot::where('is_active', true)
+            ->whereNotNull('bot_token')
+            ->whereRaw('LENGTH(bot_token) >= 15')
+            ->orderBy('name')
+            ->get(['id', 'slug', 'name']);
 
         $broadcastHistory = \App\Models\TelegramBroadcastHistory::with(['sender:id,name', 'department:id,name', 'branch:id,name'])
             ->orderByDesc('created_at')
@@ -47,6 +59,7 @@ class TelegramConfigController extends Controller
             'branches' => $branches,
             'linkedBranchesCount' => $linkedBranchesCount,
             'linkedUsersCount' => $linkedUsersCount,
+            'availableBots' => $availableBots,
             'broadcastHistory' => $broadcastHistory,
         ]);
     }
@@ -858,20 +871,30 @@ class TelegramConfigController extends Controller
             'target_audience' => ['required', 'string', 'in:all_users,all_branches,department_users,specific_branch,everything'],
             'department_id' => ['nullable'],
             'branch_id' => ['nullable'],
+            'bot_slug' => ['nullable', 'string'],
             'title' => ['required', 'string', 'max:255'],
             'message' => ['required', 'string', 'max:2000'],
         ]);
 
-        $botService->sendBroadcastAnnouncement(
+        $result = $botService->sendBroadcastAnnouncement(
             $user,
             $validated['target_audience'],
             $validated['title'],
             $validated['message'],
             !empty($validated['department_id']) ? (int) $validated['department_id'] : null,
-            !empty($validated['branch_id']) ? (int) $validated['branch_id'] : null
+            !empty($validated['branch_id']) ? (int) $validated['branch_id'] : null,
+            $validated['bot_slug'] ?? null
         );
 
-        return redirect()->back()->with('success', 'Broadcast announcement queued and dispatched successfully.');
+        $sentCount = $result['sent_count'] ?? 0;
+        $inAppCount = $result['in_app_count'] ?? 0;
+        $recipientsCount = $result['recipients_count'] ?? 0;
+
+        if ($sentCount === 0 && $recipientsCount > 0) {
+            return redirect()->back()->with('warning', "Announcement created and sent to {$inAppCount} in-app user(s), but 0 Telegram messages could be delivered. Please check Telegram Bot token status in Telegram Settings.");
+        }
+
+        return redirect()->back()->with('success', "Broadcast announcement sent successfully to {$sentCount} Telegram recipient(s) and {$inAppCount} in-app user(s).");
     }
 
     public function setBotWebhook(Request $request, TelegramBot $bot): RedirectResponse

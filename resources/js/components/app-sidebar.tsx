@@ -65,6 +65,7 @@ import {
   BookOpen,
   Trophy,
   HelpCircle,
+  MessageCircle,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 
@@ -108,6 +109,7 @@ const iconMap = {
   Plus,
   List,
   ClipboardCheck,
+  MessageCircle,
 } as const;
 
 const baseSections: NavSection[] = [
@@ -252,6 +254,7 @@ const baseSections: NavSection[] = [
       { title: 'Phone Numbers', href: '/telecom/phone-numbers', icon: Phone, permission: 'telecom.phone_numbers.manage|view telecom management' },
       { title: 'Broadband & WTTx', href: '/telecom/broadbands', icon: Wifi, permission: 'telecom.broadbands.manage|view telecom management' },
       { title: 'Service Providers', href: '/telecom/providers', icon: Building2, permission: 'telecom.providers.manage|view telecom management' },
+      { title: 'Telegram Groups', href: '/telecom/telegram-groups', icon: MessageCircle, permission: 'telecom.telegram_groups.view|view telecom management' },
     ],
   },
   {

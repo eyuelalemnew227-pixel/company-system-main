@@ -38,7 +38,7 @@ class TicketStoreRequest extends FormRequest
             'ticket_main_category_id' => ['required', 'exists:ticket_main_categories,id'],
             'ticket_sub_category_id' => ['required', 'exists:ticket_sub_categories,id'],
             'ticket_asset_id' => ['nullable', 'exists:ticket_assets,id'],
-            'description' => ['nullable', 'string'],
+            'description' => [in_array(request('ticket_main_category_id'), [26, 27]) ? 'nullable' : 'required', 'string'],
             'severity' => [(request('ticket_main_category_id') == 22 ? 'nullable' : 'required'), Rule::in(array_column(TicketSeverity::cases(), 'value'))],
             'preferred_deadline' => ['nullable', 'date', 'after_or_equal:today'],
             'products' => ['nullable', 'array'],

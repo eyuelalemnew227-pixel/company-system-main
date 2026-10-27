@@ -43,6 +43,9 @@ import {
   Wrench,
   Users,
   Lock,
+  Copy,
+  ExternalLink,
+  MessageCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -127,6 +130,17 @@ type Ticket = {
     quantity: string;
     uom?: string | null;
   }[];
+  telegram_group?: {
+    id: number;
+    name: string;
+    chat_id?: string | null;
+    username?: string | null;
+    group_type: string;
+    category?: string | null;
+    status: string;
+    invite_link?: string | null;
+    qr_code_path?: string | null;
+  } | null;
 };
 
 type AssetOption = {
@@ -144,7 +158,21 @@ type PageProps = {
   staffOptions: { id: number; name: string; email: string }[];
   priorityOptions: string[];
   assetOptions: AssetOption[];
-  abilities: { canAssign: boolean; canUpdateStatus: boolean; canRate: boolean; hasRated: boolean; isRequestor: boolean; canApproveReject: boolean; canDelete: boolean; canUpdateAsset: boolean; canUpdateDeadline: boolean; canUpdatePriority: boolean; hasManagerPower: boolean; canRequestSparePart: boolean };
+  abilities: {
+    canAssign: boolean;
+    canUpdateStatus: boolean;
+    canRate: boolean;
+    hasRated: boolean;
+    isRequestor: boolean;
+    canApproveReject: boolean;
+    canDelete: boolean;
+    canUpdateAsset: boolean;
+    canUpdateDeadline: boolean;
+    canUpdatePriority: boolean;
+    hasManagerPower: boolean;
+    canRequestSparePart: boolean;
+    canManageTelegram?: boolean;
+  };
   flash: { message: string | null; just_created?: boolean | null };
 };
 
@@ -160,6 +188,13 @@ export default function TicketShow() {
       (log) => log.action !== 'chat_comment' && log.action !== 'commented'
     );
   }, [ticket.activity_logs]);
+
+  const isTelegramRequest = React.useMemo(() => {
+    const sub = (ticket.sub_category?.name ?? ticket.subCategory?.name ?? '').toLowerCase();
+    const main = (ticket.main_category?.name ?? ticket.mainCategory?.name ?? '').toLowerCase();
+    const title = (ticket.title ?? '').toLowerCase();
+    return sub.includes('telegram') || main.includes('telegram') || title.includes('telegram') || !!ticket.telegram_group;
+  }, [ticket]);
 
   const { data: updateData, setData: setUpdateData, post: postQuickUpdate, processing: updatingQuick, errors: updateErrors } = useForm({
     status: (statuses ?? []).filter((s) => s !== ticket.status)[0] ?? '',
@@ -829,6 +864,113 @@ export default function TicketShow() {
                   <p className="whitespace-pre-wrap text-base font-bold leading-relaxed text-emerald-700 dark:text-emerald-400">
                     {ticket.description}
                   </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {isTelegramRequest && (
+              <Card className="overflow-hidden border shadow-md bg-gradient-to-br from-blue-50/60 via-background to-sky-50/30 border-blue-200/80 dark:border-blue-900/50 dark:from-blue-950/20 dark:via-background dark:to-sky-950/20">
+                <CardHeader className="bg-blue-50/40 dark:bg-blue-950/30 border-b border-blue-100 dark:border-blue-900/40 pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-sky-400 text-white shadow-sm">
+                        <MessageCircle className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-base font-bold text-foreground">
+                          Telegram Group Service
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          {ticket.telegram_group
+                            ? 'Official Telegram group registered for this request'
+                            : 'Telegram group creation request'}
+                        </CardDescription>
+                      </div>
+                    </div>
+                    {ticket.telegram_group ? (
+                      <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-300">
+                        Registered
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-blue-300 text-blue-700 dark:text-blue-300">
+                        Pending Registration
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-4 space-y-4">
+                  {ticket.telegram_group ? (
+                    <div className="space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-background/80 shadow-xs">
+                        <div>
+                          <p className="text-[11px] text-muted-foreground uppercase tracking-wider font-bold">Group Name</p>
+                          <p className="font-bold text-base text-foreground mt-0.5">{ticket.telegram_group.name}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="secondary" className="text-[10px]">
+                              {ticket.telegram_group.group_type}
+                            </Badge>
+                            {ticket.telegram_group.chat_id && (
+                              <span className="text-xs font-mono text-muted-foreground">ID: {ticket.telegram_group.chat_id}</span>
+                            )}
+                          </div>
+                        </div>
+                        {ticket.telegram_group.invite_link && (
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                navigator.clipboard.writeText(ticket.telegram_group!.invite_link!);
+                                toast.success('Invite link copied to clipboard!');
+                              }}
+                              className="gap-1.5 text-xs font-semibold"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                              Copy Link
+                            </Button>
+                            <Button
+                              size="sm"
+                              asChild
+                              className="gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs"
+                            >
+                              <a href={ticket.telegram_group.invite_link} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                Open Group
+                              </a>
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                      {(abilities.canManageTelegram || abilities.hasManagerPower) && (
+                        <div className="flex justify-end pt-1">
+                          <Link
+                            href="/telecom/telegram-groups"
+                            className="text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400"
+                          >
+                            Manage in Telecom Module →
+                          </Link>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        {abilities.canManageTelegram || abilities.canUpdateStatus || abilities.hasManagerPower
+                          ? 'This ticket requests a new Telegram Group. As authorized staff, you can click below to automatically pre-fill the Telecom registration form and register the group with its invite link and QR code.'
+                          : 'Your Telegram Group creation request is in progress with the IT / Telecom department. Once configured, your invite link and QR code will appear here.'}
+                      </p>
+                      {(abilities.canManageTelegram || abilities.canUpdateStatus || abilities.hasManagerPower) && (
+                        <div className="pt-1">
+                          <Button asChild className="gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm">
+                            <Link href={`/telecom/telegram-groups/create?ticket_id=${ticket.id}`}>
+                              <MessageCircle className="h-4 w-4" />
+                              Create Telegram Group from Ticket
+                            </Link>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}

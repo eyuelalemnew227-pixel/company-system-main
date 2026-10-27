@@ -217,26 +217,58 @@ class TelegramTicketNotificationService
     private function sendToBranchOrRequestor(Ticket $ticket, string $text, ?array $replyMarkup = null, array $excludeChatIds = []): void
     {
         $requestorUser = $ticket->requestor ?? ($ticket->user_id ? User::find($ticket->user_id) : null);
-        $branch = $ticket->requestorBranch
+        $requestorBranch = $ticket->requestorBranch
             ?? ($ticket->requestor_branch_id ? \App\Models\Branch::find($ticket->requestor_branch_id) : null)
             ?? ($requestorUser?->employee?->branch_id ? \App\Models\Branch::find($requestorUser->employee->branch_id) : null);
+        $beneficiaryBranch = $ticket->beneficiaryBranch
+            ?? ($ticket->beneficiary_branch_id ? \App\Models\Branch::find($ticket->beneficiary_branch_id) : null);
+
         $markup = $replyMarkup ?? $this->buildTicketInlineButton($ticket);
 
         $sentChatIds = array_map(fn($id) => (string) $id, $excludeChatIds);
 
-        if ($branch && !empty($branch->telegram_chat_id)) {
-            $branchChatId = (string) $branch->telegram_chat_id;
-            if (!in_array($branchChatId, $sentChatIds, true)) {
-                $this->botService->sendToBranch($branch, $text, $markup);
-                $sentChatIds[] = $branchChatId;
+        // 1. Direct branch telegram chat IDs (if configured on the Branch model)
+        foreach ([$requestorBranch, $beneficiaryBranch] as $b) {
+            if ($b && !empty($b->telegram_chat_id)) {
+                $branchChatId = (string) $b->telegram_chat_id;
+                if (!in_array($branchChatId, $sentChatIds, true)) {
+                    $this->botService->sendToBranch($b, $text, $markup);
+                    $sentChatIds[] = $branchChatId;
+                }
             }
         }
 
+        // 2. Requestor user's direct chat ID
         if ($requestorUser && !empty($requestorUser->telegram_chat_id)) {
             $userChatId = (string) $requestorUser->telegram_chat_id;
             if (!in_array($userChatId, $sentChatIds, true)) {
                 $this->botService->sendToUser($requestorUser, $text, $markup);
                 $sentChatIds[] = $userChatId;
+            }
+        }
+
+        // 3. Branch users/staff with telegram_chat_id belonging to requestor or beneficiary branch
+        $branchIds = array_filter(array_unique([
+            $ticket->requestor_branch_id,
+            $ticket->beneficiary_branch_id,
+            $requestorBranch?->id,
+            $beneficiaryBranch?->id,
+            $requestorUser?->employee?->branch_id,
+        ]));
+
+        if (!empty($branchIds)) {
+            $branchUsers = User::whereHas('employee', fn($q) => $q->whereIn('branch_id', $branchIds))
+                ->where('is_active', true)
+                ->whereNotNull('telegram_chat_id')
+                ->where('telegram_chat_id', '!=', '')
+                ->get();
+
+            foreach ($branchUsers as $bUser) {
+                $bChatId = (string) $bUser->telegram_chat_id;
+                if (!in_array($bChatId, $sentChatIds, true)) {
+                    $this->botService->sendToUser($bUser, $text, $markup);
+                    $sentChatIds[] = $bChatId;
+                }
             }
         }
     }
@@ -559,11 +591,15 @@ class TelegramTicketNotificationService
         $cleanMessage = e(mb_strimwidth($messageText, 0, 300, '...'));
         
         $appUrl = $this->getAppUrl();
+        $buttonRow = [
+            ['text' => "👁️ View Ticket & Reply", 'callback_data' => "t_view_{$ticket->id}"],
+        ];
+        if (str_starts_with($appUrl, 'https://')) {
+            $buttonRow[] = ['text' => "🌐 Open in Web", 'url' => "{$appUrl}/tickets/{$ticket->id}"];
+        }
         $buttons = [
             'inline_keyboard' => [
-                [
-                    ['text' => "👁️ View Ticket & Reply", 'url' => "{$appUrl}/tickets/{$ticket->id}"],
-                ]
+                $buttonRow
             ]
         ];
 

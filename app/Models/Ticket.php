@@ -147,6 +147,11 @@ class Ticket extends Model
         return $this->hasMany(TicketProductRequest::class);
     }
 
+    public function telegramGroup(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(TelegramGroup::class);
+    }
+
     public function getAbilities(User $user): array
     {
         $currentAssignment = $this->assignments()->where('is_current', true)->first();
