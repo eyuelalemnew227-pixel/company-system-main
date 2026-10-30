@@ -281,6 +281,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('inventory-completion-tracking/{branch}/{period}/missing-categories', [\App\Http\Controllers\InventoryCompletionTrackingController::class, 'getMissingChildCategories'])->name('inventory-completion-tracking.missing-categories');
     });
 
+    // Purchase Inspection Module
+    Route::middleware('permission:view purchase inspections')->group(function () {
+        Route::get('purchase-inspections/{purchase_inspection}/export', [\App\Http\Controllers\PurchaseInspectionController::class, 'export'])->name('purchase-inspections.export');
+        Route::post('purchase-inspections/{purchase_inspection}/submit', [\App\Http\Controllers\PurchaseInspectionController::class, 'submit'])->name('purchase-inspections.submit');
+        Route::post('purchase-inspections/{purchase_inspection}/approve', [\App\Http\Controllers\PurchaseInspectionController::class, 'approve'])->name('purchase-inspections.approve');
+        Route::post('purchase-inspections/{purchase_inspection}/reject', [\App\Http\Controllers\PurchaseInspectionController::class, 'reject'])->name('purchase-inspections.reject');
+        Route::resource('purchase-inspections', \App\Http\Controllers\PurchaseInspectionController::class);
+    });
+
 
 
 

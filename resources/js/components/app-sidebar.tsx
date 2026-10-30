@@ -186,6 +186,14 @@ const baseSections: NavSection[] = [
     ],
   },
   {
+    label: 'Purchase Inspection',
+    icon: FileCheck,
+    items: [
+      { title: 'All Inspections', href: '/purchase-inspections', icon: ListChecks, permission: 'view purchase inspections' },
+      { title: 'New Inspection', href: '/purchase-inspections/create', icon: Plus, permission: 'create purchase inspections' },
+    ],
+  },
+  {
     label: 'Internal Memorandum',
     icon: FileText,
     items: [
