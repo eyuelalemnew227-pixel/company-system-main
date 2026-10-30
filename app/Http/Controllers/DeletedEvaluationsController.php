@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\DeletedEvaluation;
 use App\Models\Evaluation;
 use App\Models\EvaluationPeriod;
+use App\Models\FiscalYear;
 use App\Models\User;
 use App\Models\EvaluationResponse;
 use App\Models\QuestionResponse;
@@ -16,6 +17,16 @@ class DeletedEvaluationsController extends Controller
 {
     public function index(Request $request)
     {
+        $fiscalYearId = $request->fiscal_year_id;
+        $periodId = $request->period_id;
+
+        if ($fiscalYearId === 'all' || $fiscalYearId === '') {
+            $fiscalYearId = null;
+        }
+        if ($periodId === 'all' || $periodId === '') {
+            $periodId = null;
+        }
+
         $deletedEvaluations = DeletedEvaluation::query()
             ->with(['deletedBy', 'evaluator', 'evaluation', 'evaluationPeriod'])
             ->when($request->search, function ($query, $search) {
@@ -64,8 +75,13 @@ class DeletedEvaluationsController extends Controller
                     $q->where('name', 'like', "%{$name}%");
                 });
             })
-            ->when($request->period_id, function ($query, $id) {
+            ->when($periodId, function ($query, $id) {
                 $query->where('evaluation_period_id', $id);
+            }, function ($query) use ($fiscalYearId) {
+                if ($fiscalYearId) {
+                    $periodIds = EvaluationPeriod::where('fiscal_year_id', $fiscalYearId)->pluck('id');
+                    $query->whereIn('evaluation_period_id', $periodIds);
+                }
             })
             ->when($request->deleted_by, function ($query, $id) {
                 $query->where('deleted_by', $id);
@@ -115,8 +131,9 @@ class DeletedEvaluationsController extends Controller
 
         return Inertia::render('deleted-evaluations/index', [
             'deletedEvaluations' => $deletedEvaluations,
-            'filters' => $request->only(['search', 'period_id', 'deleted_by', 'date_from', 'date_to', 'evaluation_name']),
-            'periods' => EvaluationPeriod::select('id', 'evaluation_period_name')->get(),
+            'filters' => $request->only(['search', 'fiscal_year_id', 'period_id', 'deleted_by', 'date_from', 'date_to', 'evaluation_name']),
+            'fiscalYears' => FiscalYear::select('id', 'name')->orderByDesc('id')->get(),
+            'periods' => EvaluationPeriod::select('id', 'evaluation_period_name', 'fiscal_year_id')->orderByDesc('id')->get(),
             'users' => User::select('id', 'name')->get(),
         ]);
     }

@@ -1,5 +1,5 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -16,26 +16,44 @@ type Props = PageProps & {
     };
     filters: {
         search?: string;
+        fiscal_year_id?: string;
         period_id?: string;
         evaluable_type?: string;
         branch_id?: string;
         department_id?: string;
         evaluation_name?: string;
     };
+    fiscalYears: { id: number; name: string }[];
     periods: any[];
     branches: any[];
     departments: any[];
     evaluationCategories: { id: number; name: string }[];
 };
 
-export default function Index({ auth, evaluationResponses, filters, periods, branches, departments, evaluationCategories, flash }: Props) {
+export default function Index({ auth, evaluationResponses, filters, fiscalYears = [], periods, branches, departments, evaluationCategories, flash }: Props) {
 
     const [searchQuery, setSearchQuery] = useState(filters.search || '');
+    const [selectedFiscalYear, setSelectedFiscalYear] = useState(filters.fiscal_year_id || 'all');
     const [selectedPeriod, setSelectedPeriod] = useState(filters.period_id || 'all');
     const [selectedType, setSelectedType] = useState(filters.evaluable_type || 'all');
     const [selectedBranch, setSelectedBranch] = useState(filters.branch_id || 'all');
     const [selectedDepartment, setSelectedDepartment] = useState(filters.department_id || 'all');
     const [templateFilter, setTemplateFilter] = useState(filters.evaluation_name || 'all');
+
+    const filteredPeriods = useMemo(() => {
+        if (!selectedFiscalYear || selectedFiscalYear === 'all') return periods;
+        return periods.filter((p: any) => String(p.fiscal_year_id) === String(selectedFiscalYear));
+    }, [periods, selectedFiscalYear]);
+
+    const handleFiscalYearChange = (yearId: string) => {
+        setSelectedFiscalYear(yearId);
+        if (yearId !== 'all') {
+            const inYear = periods.some((p: any) => String(p.fiscal_year_id) === yearId && String(p.id) === selectedPeriod);
+            if (!inYear) {
+                setSelectedPeriod('all');
+            }
+        }
+    };
 
     useEffect(() => {
         if (flash.message) {
@@ -48,6 +66,7 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
             route('evaluation-records.index'),
             {
                 search: searchQuery,
+                fiscal_year_id: selectedFiscalYear === 'all' ? undefined : selectedFiscalYear,
                 period_id: selectedPeriod === 'all' ? undefined : selectedPeriod,
                 evaluable_type: selectedType === 'all' ? undefined : selectedType,
                 branch_id: selectedBranch === 'all' ? undefined : selectedBranch,
@@ -70,14 +89,15 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
 
     // Handle other filters immediately
     useEffect(() => {
-        if (selectedPeriod !== (filters.period_id || 'all') ||
+        if (selectedFiscalYear !== (filters.fiscal_year_id || 'all') ||
+            selectedPeriod !== (filters.period_id || 'all') ||
             selectedType !== (filters.evaluable_type || 'all') ||
             selectedBranch !== (filters.branch_id || 'all') ||
             selectedDepartment !== (filters.department_id || 'all') ||
             templateFilter !== (filters.evaluation_name || 'all')) {
             handleFilterChange();
         }
-    }, [selectedPeriod, selectedType, selectedBranch, selectedDepartment, templateFilter]);
+    }, [selectedFiscalYear, selectedPeriod, selectedType, selectedBranch, selectedDepartment, templateFilter]);
 
     const handleDelete = (id: number) => {
         if (confirm('Are you sure you want to delete this evaluation? This will permanently remove all associated scores.')) {
@@ -112,7 +132,7 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
                 </div>
 
                 <Card className="p-6">
-                    <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+                    <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                             <Input
@@ -127,11 +147,22 @@ export default function Index({ auth, evaluationResponses, filters, periods, bra
 
                         <select
                             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            value={selectedFiscalYear}
+                            onChange={(e) => handleFiscalYearChange(e.target.value)}
+                        >
+                            <option value="all">All Years</option>
+                            {fiscalYears?.map((fy: any) => (
+                                <option key={fy.id} value={fy.id}>{fy.name}</option>
+                            ))}
+                        </select>
+
+                        <select
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                             value={selectedPeriod}
                             onChange={(e) => setSelectedPeriod(e.target.value)}
                         >
                             <option value="all">All Periods</option>
-                            {periods.map((p: any) => (
+                            {filteredPeriods.map((p: any) => (
                                 <option key={p.id} value={p.id}>{p.evaluation_period_name}</option>
                             ))}
                         </select>

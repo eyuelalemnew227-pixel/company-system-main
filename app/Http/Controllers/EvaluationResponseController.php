@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\EvaluationResponse;
 use App\Models\EvaluationPeriod;
+use App\Models\FiscalYear;
 use App\Models\Evaluation;
 use App\Models\Branch;
 use App\Models\Department;
@@ -19,6 +20,16 @@ class EvaluationResponseController extends Controller
 {
     public function index(Request $request)
     {
+        $fiscalYearId = $request->fiscal_year_id;
+        $periodId = $request->period_id;
+
+        if ($fiscalYearId === 'all' || $fiscalYearId === '') {
+            $fiscalYearId = null;
+        }
+        if ($periodId === 'all' || $periodId === '') {
+            $periodId = null;
+        }
+
         $evaluationResponses = EvaluationResponse::query()
             ->with(['evaluator', 'evaluationPeriod', 'evaluation', 'creator', 'updater'])
             ->when($request->search, function ($query, $search) {
@@ -63,8 +74,13 @@ class EvaluationResponseController extends Controller
                     $q->where('name', 'like', "%{$name}%");
                 });
             })
-            ->when($request->period_id, function ($query, $id) {
+            ->when($periodId, function ($query, $id) {
                 $query->where('evaluation_period_id', $id);
+            }, function ($query) use ($fiscalYearId) {
+                if ($fiscalYearId) {
+                    $periodIds = EvaluationPeriod::where('fiscal_year_id', $fiscalYearId)->pluck('id');
+                    $query->whereIn('evaluation_period_id', $periodIds);
+                }
             })
             ->when($request->evaluable_type, function ($query, $type) {
                 $query->where('evaluable_type', $type);
@@ -126,8 +142,9 @@ class EvaluationResponseController extends Controller
 
         return Inertia::render('evaluation-records/index', [
             'evaluationResponses' => $evaluationResponses,
-            'filters' => $request->only(['search', 'period_id', 'evaluable_type', 'branch_id', 'department_id', 'evaluation_name']),
-            'periods' => EvaluationPeriod::select('id', 'evaluation_period_name')->get(),
+            'filters' => $request->only(['search', 'fiscal_year_id', 'period_id', 'evaluable_type', 'branch_id', 'department_id', 'evaluation_name']),
+            'fiscalYears' => FiscalYear::select('id', 'name')->orderByDesc('id')->get(),
+            'periods' => EvaluationPeriod::select('id', 'evaluation_period_name', 'fiscal_year_id')->orderByDesc('id')->get(),
             'branches' => Branch::select('id', 'name')->get(),
             'departments' => Department::select('id', 'name')->get(),
             'evaluationCategories' => \App\Models\EvaluationCategory::where('is_active', true)->select('id', 'name')->get(),
