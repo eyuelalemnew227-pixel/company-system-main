@@ -977,6 +977,44 @@ class ExpenseBudgetController extends Controller
             ->first();
     }
 
+    private function findPreviousFiscalMonth(int $fiscalMonthId): ?FiscalMonth
+    {
+        $current = FiscalMonth::query()->find($fiscalMonthId);
+
+        if (! $current) {
+            return null;
+        }
+
+        $previousInYear = FiscalMonth::query()
+            ->where('fiscal_year_id', $current->fiscal_year_id)
+            ->where('efy_month_number', $current->efy_month_number - 1)
+            ->first();
+
+        if ($previousInYear) {
+            return $previousInYear;
+        }
+
+        $currentYear = FiscalYear::query()->find($current->fiscal_year_id);
+
+        if (! $currentYear) {
+            return null;
+        }
+
+        $previousYear = FiscalYear::query()
+            ->where('gregorian_end_date', '<', $currentYear->gregorian_start_date)
+            ->orderByDesc('gregorian_end_date')
+            ->first();
+
+        if (! $previousYear) {
+            return null;
+        }
+
+        return FiscalMonth::query()
+            ->where('fiscal_year_id', $previousYear->id)
+            ->orderByDesc('efy_month_number')
+            ->first();
+    }
+
     /**
      * @return \Illuminate\Support\Collection<int, array{id: int, name: string}>
      */

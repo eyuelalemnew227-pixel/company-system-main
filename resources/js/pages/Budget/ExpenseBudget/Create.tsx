@@ -310,8 +310,13 @@ export default function CreateExpenseBudget({
             setPrevBudgets(result.prev_month_budgets ?? {});
 
             if (rebuildItems) {
+                const prevMonthBudgets = result.prev_month_budgets ?? {};
                 const items = allExpenseItems
-                    .filter((item) => result.prev_month_budgets[item.id] !== undefined && !budgetedIds.has(item.id))
+                    .filter(
+                        (item) =>
+                            prevMonthBudgets[item.id] !== undefined &&
+                            !budgetedIds.has(item.id),
+                    )
                     .map((item) => ({
                         expense_item_id: item.id,
                         planned_budget: '',
