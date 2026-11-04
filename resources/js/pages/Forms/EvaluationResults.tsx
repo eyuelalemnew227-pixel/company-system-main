@@ -2,7 +2,8 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import InputError from '@/components/input-error';
 import { Label } from '@/components/ui/label';
@@ -10,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import TablePagination from '@/components/table-pagination';
 import { usePopup } from '@/hooks/use-popup';
-import { Download, FilterX, GraduationCap } from 'lucide-react';
+import { Download, FilterX, GraduationCap, Eye, Pencil } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 
 type LinkedForm = { id: number; title: string };
@@ -64,17 +65,27 @@ const breadcrumbs: BreadcrumbItem[] = [
 	{ title: 'Evaluation Results', href: '/forms/evaluation-results' },
 ];
 
-function statusClass(status: ResultRow['status']) {
-	if (status === 'pass') return 'bg-green-100 text-green-800 border-green-200';
-	if (status === 'fail') return 'bg-red-100 text-red-800 border-red-200';
-	return 'bg-gray-100 text-gray-700 border-gray-200';
+function statusBadgeClass(status: ResultRow['status']) {
+	if (status === 'pass') {
+		return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+	}
+	if (status === 'fail') {
+		return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+	}
+	return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200';
 }
 
-function actionClass(action: ResultRow['next_action']) {
-	if (action === 'na') return 'bg-green-50 text-green-800 border-green-200';
-	if (action === 'warning') return 'bg-amber-100 text-amber-900 border-amber-200';
-	if (action === 'training') return 'bg-red-50 text-red-800 border-red-200';
-	return 'bg-gray-100 text-gray-700 border-gray-200';
+function actionBadgeClass(action: ResultRow['next_action']) {
+	if (action === 'na') {
+		return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+	}
+	if (action === 'warning') {
+		return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+	}
+	if (action === 'training') {
+		return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+	}
+	return 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200';
 }
 
 export default function EvaluationResults({
@@ -208,274 +219,349 @@ export default function EvaluationResults({
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Evaluation Results" />
-			<div className="mx-auto max-w-[90rem] space-y-6 pb-12">
-				<div>
-					<h2 className="text-2xl font-bold tracking-tight text-amber-900">Evaluation Results</h2>
-					<p className="text-muted-foreground">
-						Employees scored on forms linked to <span className="font-medium text-gray-800">{kpiName}</span>.
-						Pass is 75 or above. A fail from 60 to 74.9 is a warning. Below 60 is training. Next action
-						defaults to NA and can be edited per row.
-					</p>
-				</div>
-
+			<div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-2 sm:p-4">
+				{/* Empty states if KPI or forms not ready */}
 				{pageState === 'missing_kpi' && (
-					<div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/60 p-8 text-center">
-						<GraduationCap className="mx-auto mb-3 h-10 w-10 text-amber-500" />
-						<h3 className="text-lg font-medium text-gray-900">KPI not found</h3>
-						<p className="mx-auto mt-1 max-w-xl text-gray-600">
-							Add a KPI Library entry named "{kpiName}", then link the assessment forms to it.
-						</p>
-						<Button asChild className="mt-4" variant="outline">
-							<Link href="/kpi-libraries">Open KPI Library</Link>
-						</Button>
-					</div>
+					<Card>
+						<CardContent className="p-8 text-center">
+							<GraduationCap className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+							<CardTitle className="text-lg">KPI not found</CardTitle>
+							<p className="mx-auto mt-1 max-w-xl text-sm text-muted-foreground">
+								Add a KPI Library entry named "{kpiName}", then link the assessment forms to it.
+							</p>
+							<Button asChild className="mt-4" variant="outline" size="sm">
+								<Link href="/kpi-libraries">Open KPI Library</Link>
+							</Button>
+						</CardContent>
+					</Card>
 				)}
 
 				{pageState === 'no_forms' && (
-					<div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/60 p-8 text-center">
-						<GraduationCap className="mx-auto mb-3 h-10 w-10 text-amber-500" />
-						<h3 className="text-lg font-medium text-gray-900">No forms linked</h3>
-						<p className="mx-auto mt-1 max-w-xl text-gray-600">
-							"{kpiName}" exists, but it is not linked to any form yet.
-						</p>
-						<Button asChild className="mt-4" variant="outline">
-							<Link href="/kpi-libraries">Link forms in KPI Library</Link>
-						</Button>
-					</div>
+					<Card>
+						<CardContent className="p-8 text-center">
+							<GraduationCap className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
+							<CardTitle className="text-lg">No forms linked</CardTitle>
+							<p className="mx-auto mt-1 max-w-xl text-sm text-muted-foreground">
+								"{kpiName}" exists, but it is not linked to any form yet.
+							</p>
+							<Button asChild className="mt-4" variant="outline" size="sm">
+								<Link href="/kpi-libraries">Link forms in KPI Library</Link>
+							</Button>
+						</CardContent>
+					</Card>
 				)}
 
 				{pageState === 'ready' && (
 					<>
-						<div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
-							{[
-								['Rows', summary.rows],
-								['Employees', summary.employees],
-								['Pass', summary.pass],
-								['Fail', summary.fail],
-								['Warning', summary.warning],
-								['Training', summary.training],
-								['Not scored', summary.not_scored],
-							].map(([label, value]) => (
-								<div key={String(label)} className="rounded-lg border bg-white px-4 py-3">
-									<p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-									<p className="mt-1 text-2xl font-bold text-amber-950">{value}</p>
+						{/* Summary Metric Cards matching other modules */}
+						<div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7 sm:gap-3">
+							<Card>
+								<CardContent className="p-3 sm:p-4">
+									<div className="text-xs font-medium text-muted-foreground uppercase">Rows</div>
+									<div className="text-xl sm:text-2xl font-bold mt-1">{summary.rows}</div>
+								</CardContent>
+							</Card>
+
+							<Card>
+								<CardContent className="p-3 sm:p-4">
+									<div className="text-xs font-medium text-muted-foreground uppercase">Employees</div>
+									<div className="text-xl sm:text-2xl font-bold mt-1">{summary.employees}</div>
+								</CardContent>
+							</Card>
+
+							<Card>
+								<CardContent className="p-3 sm:p-4">
+									<div className="text-xs font-medium text-green-700 dark:text-green-400 uppercase">Pass</div>
+									<div className="text-xl sm:text-2xl font-bold text-green-700 dark:text-green-400 mt-1">{summary.pass}</div>
+								</CardContent>
+							</Card>
+
+							<Card>
+								<CardContent className="p-3 sm:p-4">
+									<div className="text-xs font-medium text-red-700 dark:text-red-400 uppercase">Fail</div>
+									<div className="text-xl sm:text-2xl font-bold text-red-700 dark:text-red-400 mt-1">{summary.fail}</div>
+								</CardContent>
+							</Card>
+
+							<Card>
+								<CardContent className="p-3 sm:p-4">
+									<div className="text-xs font-medium text-yellow-700 dark:text-yellow-400 uppercase">Warning</div>
+									<div className="text-xl sm:text-2xl font-bold text-yellow-700 dark:text-yellow-400 mt-1">{summary.warning}</div>
+								</CardContent>
+							</Card>
+
+							<Card>
+								<CardContent className="p-3 sm:p-4">
+									<div className="text-xs font-medium text-red-700 dark:text-red-400 uppercase">Training</div>
+									<div className="text-xl sm:text-2xl font-bold text-red-700 dark:text-red-400 mt-1">{summary.training}</div>
+								</CardContent>
+							</Card>
+
+							<Card>
+								<CardContent className="p-3 sm:p-4">
+									<div className="text-xs font-medium text-muted-foreground uppercase">Not Scored</div>
+									<div className="text-xl sm:text-2xl font-bold text-muted-foreground mt-1">{summary.not_scored}</div>
+								</CardContent>
+							</Card>
+						</div>
+
+						{/* Main Card */}
+						<Card>
+							<CardHeader className="flex-col space-y-4">
+								<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 w-full">
+									<div>
+										<CardTitle className="text-xl sm:text-2xl">Evaluation Results</CardTitle>
+										<p className="text-sm text-muted-foreground mt-1">
+											Employees scored on forms linked to <span className="font-medium text-foreground">{kpiName}</span>.
+											Pass is 75 or above. Fail from 60 to 74.9 is warning. Below 60 is training.
+										</p>
+									</div>
+
+									<CardAction>
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onClick={exportCsv}
+											disabled={summary.rows === 0}
+											className="w-full sm:w-auto"
+										>
+											<Download className="mr-1.5 h-4 w-4" />
+											Export CSV
+										</Button>
+									</CardAction>
 								</div>
-							))}
-						</div>
 
-						<div className="flex flex-col gap-3 rounded-lg border bg-white p-4 lg:flex-row lg:flex-wrap lg:items-center">
-							<form
-								className="lg:max-w-xs"
-								onSubmit={(e) => {
-									e.preventDefault();
-									applyFilters({ search: searchInput });
-								}}
-							>
-								<Input
-									value={searchInput}
-									onChange={(e) => setSearchInput(e.target.value)}
-									placeholder="Search employee or department"
-								/>
-							</form>
-							<Select value={filters.form_id} onValueChange={(value) => applyFilters({ form_id: value })}>
-								<SelectTrigger className="lg:w-56">
-									<SelectValue placeholder="Form" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">All linked forms</SelectItem>
-									{linkedForms.map((form) => (
-										<SelectItem key={form.id} value={String(form.id)}>
-											{form.title}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<Select value={filters.status} onValueChange={(value) => applyFilters({ status: value })}>
-								<SelectTrigger className="lg:w-40">
-									<SelectValue placeholder="Status" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">All statuses</SelectItem>
-									<SelectItem value="pass">Pass</SelectItem>
-									<SelectItem value="fail">Fail</SelectItem>
-									<SelectItem value="not_scored">Not scored</SelectItem>
-								</SelectContent>
-							</Select>
-							<Select
-								value={filters.next_action}
-								onValueChange={(value) => applyFilters({ next_action: value })}
-							>
-								<SelectTrigger className="lg:w-44">
-									<SelectValue placeholder="Next action" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">All actions</SelectItem>
-									<SelectItem value="na">NA</SelectItem>
-									<SelectItem value="warning">Warning</SelectItem>
-									<SelectItem value="training">Training</SelectItem>
-									<SelectItem value="not_scored">Not scored</SelectItem>
-								</SelectContent>
-							</Select>
-							<Select
-								value={filters.fiscal_year_id}
-								onValueChange={(value) => applyFilters({ fiscal_year_id: value, fiscal_month_id: 'all' })}
-							>
-								<SelectTrigger className="lg:w-44">
-									<SelectValue placeholder="Fiscal year" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">All years</SelectItem>
-									{fiscalYears.map((year) => (
-										<SelectItem key={year.id} value={String(year.id)}>
-											{year.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<Select
-								value={filters.fiscal_month_id}
-								onValueChange={(value) => applyFilters({ fiscal_month_id: value })}
-							>
-								<SelectTrigger className="lg:w-44">
-									<SelectValue placeholder="Fiscal month" />
-								</SelectTrigger>
-								<SelectContent>
-									<SelectItem value="all">All months</SelectItem>
-									{monthsForYear.map((month) => (
-										<SelectItem key={month.id} value={String(month.id)}>
-											{month.name}
-										</SelectItem>
-									))}
-								</SelectContent>
-							</Select>
-							<Button type="button" variant="ghost" onClick={resetFilters} className="text-gray-600">
-								<FilterX className="mr-2 h-4 w-4" /> Reset
-							</Button>
-							<Button
-								type="button"
-								variant="outline"
-								onClick={exportCsv}
-								disabled={summary.rows === 0}
-								className="lg:ml-auto"
-							>
-								<Download className="mr-2 h-4 w-4" /> Export CSV
-							</Button>
-						</div>
+								{/* Filters Toolbar */}
+								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-2 w-full">
+									<form
+										className="w-full"
+										onSubmit={(e) => {
+											e.preventDefault();
+											applyFilters({ search: searchInput });
+										}}
+									>
+										<Input
+											value={searchInput}
+											onChange={(e) => setSearchInput(e.target.value)}
+											placeholder="Search employee / dept..."
+											className="w-full"
+										/>
+									</form>
 
-						<div className="overflow-hidden rounded-lg border bg-white">
-							<Table>
-								<TableHeader>
-									<TableRow>
-										<TableHead>Branch</TableHead>
-										<TableHead>Department</TableHead>
-										<TableHead>Employee Name</TableHead>
-										<TableHead>Form</TableHead>
-										<TableHead>Fiscal month</TableHead>
-										<TableHead className="text-right">Score</TableHead>
-										<TableHead>Status</TableHead>
-										<TableHead>Next action</TableHead>
-										<TableHead>Training type</TableHead>
-										<TableHead />
-									</TableRow>
-								</TableHeader>
-								<TableBody>
-									{rows.data.length === 0 ? (
-										<TableRow>
-											<TableCell colSpan={10} className="py-12 text-center text-gray-500">
-												{summary.rows === 0
-													? 'No employees have an assessment matching these filters.'
-													: 'No rows match these filters.'}
-											</TableCell>
-										</TableRow>
-									) : (
-										rows.data.map((row) => (
-											<TableRow
-												key={`${row.employee_id}-${row.form_id}-${row.fiscal_month_id ?? 'none'}-${row.submission_id}`}
-											>
-												<TableCell>{row.branch_name}</TableCell>
-												<TableCell>{row.department_name}</TableCell>
-												<TableCell className="font-medium text-gray-900">{row.employee_name}</TableCell>
-												<TableCell>{row.form_title}</TableCell>
-												<TableCell>
-													<div className="flex flex-col">
-														<span>{row.fiscal_month_name}</span>
-														{row.fiscal_year_name && (
-															<span className="text-xs text-muted-foreground">
-																{row.fiscal_year_name}
-															</span>
-														)}
-													</div>
-												</TableCell>
-												<TableCell className="text-right font-semibold">
-													{row.score === null ? '—' : `${row.score.toFixed(1)}`}
-												</TableCell>
-												<TableCell>
-													<span
-														className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${statusClass(row.status)}`}
-													>
-														{row.status_label}
-													</span>
-												</TableCell>
-												<TableCell>
-													<span
-														className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${actionClass(row.next_action)}`}
-													>
-														{row.next_action_label}
-													</span>
-												</TableCell>
-												<TableCell>{row.training_type_name || '—'}</TableCell>
-												<TableCell className="text-right">
-													<div className="flex items-center justify-end gap-3">
-														{row.fiscal_year_id && row.fiscal_month_id && (
-															<button
-																type="button"
-																className="text-sm font-medium text-amber-800 hover:underline"
-																onClick={() => openEditDialog(row)}
-															>
-																Edit
-															</button>
-														)}
-														<Link
-															href={`/submissions/${row.submission_id}`}
-															className="text-sm font-medium text-amber-800 hover:underline"
+									<Select value={filters.form_id} onValueChange={(value) => applyFilters({ form_id: value })}>
+										<SelectTrigger className="w-full">
+											<SelectValue placeholder="Form" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">All linked forms</SelectItem>
+											{linkedForms.map((form) => (
+												<SelectItem key={form.id} value={String(form.id)}>
+													{form.title}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+
+									<Select value={filters.status} onValueChange={(value) => applyFilters({ status: value })}>
+										<SelectTrigger className="w-full">
+											<SelectValue placeholder="Status" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">All statuses</SelectItem>
+											<SelectItem value="pass">Pass</SelectItem>
+											<SelectItem value="fail">Fail</SelectItem>
+											<SelectItem value="not_scored">Not scored</SelectItem>
+										</SelectContent>
+									</Select>
+
+									<Select
+										value={filters.next_action}
+										onValueChange={(value) => applyFilters({ next_action: value })}
+									>
+										<SelectTrigger className="w-full">
+											<SelectValue placeholder="Next action" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">All actions</SelectItem>
+											<SelectItem value="na">NA</SelectItem>
+											<SelectItem value="warning">Warning</SelectItem>
+											<SelectItem value="training">Training</SelectItem>
+											<SelectItem value="not_scored">Not scored</SelectItem>
+										</SelectContent>
+									</Select>
+
+									<Select
+										value={filters.fiscal_year_id}
+										onValueChange={(value) => applyFilters({ fiscal_year_id: value, fiscal_month_id: 'all' })}
+									>
+										<SelectTrigger className="w-full">
+											<SelectValue placeholder="Fiscal year" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">All years</SelectItem>
+											{fiscalYears.map((year) => (
+												<SelectItem key={year.id} value={String(year.id)}>
+													{year.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+
+									<Select
+										value={filters.fiscal_month_id}
+										onValueChange={(value) => applyFilters({ fiscal_month_id: value })}
+									>
+										<SelectTrigger className="w-full">
+											<SelectValue placeholder="Fiscal month" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="all">All months</SelectItem>
+											{monthsForYear.map((month) => (
+												<SelectItem key={month.id} value={String(month.id)}>
+													{month.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+
+									<Button
+										type="button"
+										variant="outline"
+										onClick={resetFilters}
+										className="w-full"
+									>
+										<FilterX className="mr-1.5 h-4 w-4" />
+										Reset
+									</Button>
+								</div>
+							</CardHeader>
+							<hr />
+
+							<CardContent className="p-2 sm:p-6">
+								<div className="overflow-x-auto -mx-2 sm:mx-0">
+									<div className="inline-block min-w-full align-middle">
+										<Table>
+											<TableHeader className="bg-slate-500 dark:bg-slate-700">
+												<TableRow>
+													<TableHead className="font-bold text-white whitespace-nowrap">Branch</TableHead>
+													<TableHead className="font-bold text-white whitespace-nowrap">Department</TableHead>
+													<TableHead className="font-bold text-white whitespace-nowrap">Employee Name</TableHead>
+													<TableHead className="font-bold text-white whitespace-nowrap">Form</TableHead>
+													<TableHead className="font-bold text-white whitespace-nowrap">Fiscal Month</TableHead>
+													<TableHead className="font-bold text-white whitespace-nowrap text-right">Score</TableHead>
+													<TableHead className="font-bold text-white whitespace-nowrap">Status</TableHead>
+													<TableHead className="font-bold text-white whitespace-nowrap">Next Action</TableHead>
+													<TableHead className="font-bold text-white whitespace-nowrap">Training Type</TableHead>
+													<TableHead className="font-bold text-white whitespace-nowrap text-right">Actions</TableHead>
+												</TableRow>
+											</TableHeader>
+											<TableBody>
+												{rows.data.length === 0 ? (
+													<TableRow>
+														<TableCell colSpan={10} className="py-12 text-center text-muted-foreground">
+															{summary.rows === 0
+																? 'No employees have an assessment matching these filters.'
+																: 'No rows match these filters.'}
+														</TableCell>
+													</TableRow>
+												) : (
+													rows.data.map((row) => (
+														<TableRow
+															key={`${row.employee_id}-${row.form_id}-${row.fiscal_month_id ?? 'none'}-${row.submission_id}`}
+															className="odd:bg-slate-100 dark:odd:bg-slate-800"
 														>
-															View
-														</Link>
-													</div>
-												</TableCell>
-											</TableRow>
-										))
-									)}
-								</TableBody>
-							</Table>
+															<TableCell>{row.branch_name}</TableCell>
+															<TableCell>{row.department_name}</TableCell>
+															<TableCell className="font-medium">{row.employee_name}</TableCell>
+															<TableCell>{row.form_title}</TableCell>
+															<TableCell>
+																<div className="flex flex-col">
+																	<span>{row.fiscal_month_name}</span>
+																	{row.fiscal_year_name && (
+																		<span className="text-xs text-muted-foreground">
+																			{row.fiscal_year_name}
+																		</span>
+																	)}
+																</div>
+															</TableCell>
+															<TableCell className="text-right font-mono font-semibold">
+																{row.score === null ? '—' : `${row.score.toFixed(1)}`}
+															</TableCell>
+															<TableCell>
+																<span
+																	className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(row.status)}`}
+																>
+																	{row.status_label}
+																</span>
+															</TableCell>
+															<TableCell>
+																<span
+																	className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${actionBadgeClass(row.next_action)}`}
+																>
+																	{row.next_action_label}
+																</span>
+															</TableCell>
+															<TableCell>{row.training_type_name || '—'}</TableCell>
+															<TableCell className="text-right whitespace-nowrap">
+																<div className="flex items-center justify-end gap-1">
+																	{row.fiscal_year_id && row.fiscal_month_id && (
+																		<Button
+																			type="button"
+																			variant="outline"
+																			size="sm"
+																			onClick={() => openEditDialog(row)}
+																		>
+																			<Pencil className="w-3.5 h-3.5 sm:mr-1" />
+																			<span className="hidden sm:inline">Edit</span>
+																		</Button>
+																	)}
+																	<Link href={`/submissions/${row.submission_id}`}>
+																		<Button variant="outline" size="sm">
+																			<Eye className="w-3.5 h-3.5 sm:mr-1" />
+																			<span className="hidden sm:inline">View</span>
+																		</Button>
+																	</Link>
+																</div>
+															</TableCell>
+														</TableRow>
+													))
+												)}
+											</TableBody>
+										</Table>
+									</div>
+								</div>
 
-							{rows.data.length > 0 && (
-								<TablePagination total={rows.total} from={rows.from} to={rows.to} links={rows.links} />
-							)}
-						</div>
+								{rows.data.length > 0 && (
+									<TablePagination total={rows.total} from={rows.from} to={rows.to} links={rows.links} />
+								)}
+							</CardContent>
+						</Card>
 					</>
 				)}
 			</div>
 
+			{/* Edit Next Action Dialog */}
 			<Dialog open={!!editRow} onOpenChange={(open) => !open && closeEditDialog()}>
 				<DialogContent className="sm:max-w-md">
 					<DialogHeader>
 						<DialogTitle>Edit Next Action</DialogTitle>
+						<DialogDescription>
+							Override the next action or assign a specific training type for this employee.
+						</DialogDescription>
 					</DialogHeader>
 					<form onSubmit={submitEdit} className="space-y-4">
-						<div>
-							<p className="text-sm text-muted-foreground">Employee</p>
-							<p className="font-medium">{editRow?.employee_name}</p>
-						</div>
-						<div>
-							<p className="text-sm text-muted-foreground">Form / Period</p>
-							<p className="font-medium">
+						<div className="rounded-md border p-3 bg-muted/40 space-y-1">
+							<div className="text-xs text-muted-foreground uppercase font-medium">Employee</div>
+							<div className="font-semibold text-sm">{editRow?.employee_name}</div>
+							<div className="text-xs text-muted-foreground pt-1">
 								{editRow?.form_title} — {editRow?.fiscal_month_name}
 								{editRow?.fiscal_year_name ? ` / ${editRow.fiscal_year_name}` : ''}
-							</p>
+							</div>
 						</div>
-						<div>
-							<Label htmlFor="next_action">Next action</Label>
+
+						<div className="space-y-1.5">
+							<Label htmlFor="next_action">Next action *</Label>
 							<Select
 								value={data.next_action}
 								onValueChange={(value) => {
@@ -495,7 +581,8 @@ export default function EvaluationResults({
 							</Select>
 							<InputError message={errors.next_action} />
 						</div>
-						<div>
+
+						<div className="space-y-1.5">
 							<Label htmlFor="training_type_id">Training type</Label>
 							<Select
 								value={data.training_type_id || 'none'}
@@ -516,12 +603,13 @@ export default function EvaluationResults({
 							</Select>
 							<InputError message={errors.training_type_id} />
 						</div>
+
 						<DialogFooter>
 							<Button type="button" variant="outline" onClick={closeEditDialog}>
 								Cancel
 							</Button>
-							<Button type="submit" disabled={processing}>
-								Save
+							<Button type="submit" variant="default" disabled={processing}>
+								Save Changes
 							</Button>
 						</DialogFooter>
 					</form>

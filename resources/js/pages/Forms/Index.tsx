@@ -100,15 +100,22 @@ export default function Index({ forms }: { forms: any[] }) {
                                         <div className="bg-amber-100/50 p-2.5 rounded-lg border border-amber-200 text-amber-700 group-hover:scale-105 transition-transform">
                                             <ClipboardList className="w-5 h-5" />
                                         </div>
-                                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center border ${form.status === 'active'
-                                            ? 'bg-green-100 text-green-800 border-green-200'
-                                            : form.status === 'archived'
-                                                ? 'bg-red-100 text-red-800 border-red-200'
-                                                : 'bg-gray-100 text-gray-800 border-gray-200'
-                                            }`}>
-                                            {form.status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></span>}
-                                            {form.status ? form.status.charAt(0).toUpperCase() + form.status.slice(1) : 'Unknown'}
-                                        </span>
+                                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                                            {form.form_type && (
+                                                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200/80">
+                                                    {form.form_type}
+                                                </span>
+                                            )}
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center border ${form.status === 'active'
+                                                ? 'bg-green-100 text-green-800 border-green-200'
+                                                : form.status === 'archived'
+                                                    ? 'bg-red-100 text-red-800 border-red-200'
+                                                    : 'bg-gray-100 text-gray-800 border-gray-200'
+                                                }`}>
+                                                {form.status === 'active' && <span className="w-1.5 h-1.5 rounded-full bg-green-500 mr-1.5 animate-pulse"></span>}
+                                                {form.status ? form.status.charAt(0).toUpperCase() + form.status.slice(1) : 'Unknown'}
+                                            </span>
+                                        </div>
                                     </div>
                                     <CardTitle className="text-xl mt-4 line-clamp-1 group-hover:text-amber-700 transition-colors">
                                         {form.title}

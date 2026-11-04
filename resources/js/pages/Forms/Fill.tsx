@@ -1059,7 +1059,14 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
 
             <div className="max-w-4xl mx-auto space-y-8 pb-16">
                 <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
-                    <h1 className="text-4xl font-bold tracking-tight text-amber-900">{form.title}</h1>
+                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                        <h1 className="text-4xl font-bold tracking-tight text-amber-900">{form.title}</h1>
+                        {form.form_type && (
+                            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+                                {form.form_type}
+                            </span>
+                        )}
+                    </div>
                     {form.description && <p className="text-lg text-gray-600 mt-3 font-medium">{form.description}</p>}
                 </div>
 

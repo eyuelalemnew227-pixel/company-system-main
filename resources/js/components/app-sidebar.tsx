@@ -121,6 +121,7 @@ const baseSections: NavSection[] = [
       { title: 'Pre-Orders Analysis', href: '/pre-orders/dashboard', icon: ShoppingCart, permission: 'view pre-orders' },
       { title: 'Employee Evaluations', href: '/reports/employee-evaluations', icon: BarChart3, permission: 'view evaluation summary|view branch manager evaluation summary|view champions evaluation summary|view regional production maintenance evaluation summary' },
       { title: 'Inventory Count Summary', href: '/reports/inventory-count-summary', icon: Warehouse, permission: 'view inventory count summary' },
+      { title: 'Checklist Summary', href: '/reports/checklist-summary', icon: ClipboardCheck, permission: 'view dashboard|view form submissions|view inspector checklist submissions' },
     ],
   },
   {
@@ -213,6 +214,7 @@ const baseSections: NavSection[] = [
       { title: 'Fill Forms', href: '/available-forms', icon: ClipboardCheck, permission: 'fill forms' },
       { title: 'My Submissions', href: '/my-submissions', icon: FileCheck, permission: 'view my form submissions' },
       { title: 'All Submissions', href: '/submissions', icon: ClipboardList, permission: 'view form submissions|view inspector checklist submissions' },
+      { title: 'Checklist Summary', href: '/reports/checklist-summary', icon: ClipboardCheck, permission: 'view form submissions|view inspector checklist submissions' },
     ],
   },
   {

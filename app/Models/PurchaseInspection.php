@@ -18,7 +18,6 @@ class PurchaseInspection extends Model
         'inspection_date',
         'store_name',
         'status',
-        'notes',
         'submitted_at',
         'approved_by',
         'approved_at',

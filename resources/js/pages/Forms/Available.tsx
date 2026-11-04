@@ -48,16 +48,23 @@ export default function Available({ forms }: { forms: any[] }) {
                             <Link href={`/fill-forms/${form.id}`} key={form.id} className="group block h-full">
                                 <Card className="hover:shadow-md transition-all group-hover:-translate-y-1 group border-amber-900/10 h-full flex flex-col overflow-hidden bg-white">
                                     <CardHeader className="pb-3 flex-none border-b border-gray-100 bg-gradient-to-br from-white to-amber-50/20">
-                                        <div className="flex items-center gap-3">
-                                            <div className="bg-amber-100/50 p-2.5 rounded-lg border border-amber-200 text-amber-700 group-hover:scale-105 transition-transform group-hover:bg-amber-200/50">
-                                                <ClipboardCheck className="w-5 h-5" />
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-amber-100/50 p-2.5 rounded-lg border border-amber-200 text-amber-700 group-hover:scale-105 transition-transform group-hover:bg-amber-200/50">
+                                                    <ClipboardCheck className="w-5 h-5" />
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-amber-600 font-bold uppercase tracking-wider mb-0.5">Start Checklist</span>
+                                                    <CardTitle className="text-xl line-clamp-1 group-hover:text-amber-700 transition-colors">
+                                                        {form.title}
+                                                    </CardTitle>
+                                                </div>
                                             </div>
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] text-amber-600 font-bold uppercase tracking-wider mb-0.5">Start Checklist</span>
-                                                <CardTitle className="text-xl line-clamp-1 group-hover:text-amber-700 transition-colors">
-                                                    {form.title}
-                                                </CardTitle>
-                                            </div>
+                                            {form.form_type && (
+                                                <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200/80 shrink-0">
+                                                    {form.form_type}
+                                                </span>
+                                            )}
                                         </div>
                                     </CardHeader>
                                     <CardContent className="flex-grow pt-4 pb-4">

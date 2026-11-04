@@ -139,7 +139,7 @@ class FillFormController extends Controller
                         foreach ($rosterForMatching as $empIdStr) {
                             $emp = $employees->firstWhere('id', (int) $empIdStr);
                             if ($emp) {
-                                if (in_array((string) $emp->department_id, $deptTargets, true)) {
+                                if (in_array((string) $emp->department_id, array_map('strval', $deptTargets), true)) {
                                     $responsibleEmpIds[] = (string) $empIdStr;
                                 }
                             }

@@ -283,6 +283,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Purchase Inspection Module
     Route::middleware('permission:view purchase inspections')->group(function () {
+        Route::get('purchase-inspections/api-items', [\App\Http\Controllers\PurchaseInspectionController::class, 'apiItems'])->name('purchase-inspections.api-items');
         Route::get('purchase-inspections/{purchase_inspection}/export', [\App\Http\Controllers\PurchaseInspectionController::class, 'export'])->name('purchase-inspections.export');
         Route::post('purchase-inspections/{purchase_inspection}/submit', [\App\Http\Controllers\PurchaseInspectionController::class, 'submit'])->name('purchase-inspections.submit');
         Route::post('purchase-inspections/{purchase_inspection}/approve', [\App\Http\Controllers\PurchaseInspectionController::class, 'approve'])->name('purchase-inspections.approve');
@@ -472,6 +473,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('reports/inventory-count-summary', [\App\Http\Controllers\InventoryCountSummaryController::class, 'summary'])->name('reports.inventory-count-summary');
         Route::get('reports/inventory-count-summary/export', [\App\Http\Controllers\InventoryCountSummaryController::class, 'export'])->name('reports.inventory-count-summary.export');
     });
+
+    // Checklist Summary report
+    Route::get('reports/checklist-summary', [\App\Http\Controllers\ChecklistSummaryReportController::class, 'index'])->name('reports.checklist-summary');
+    Route::get('reports/checklist-summary/export', [\App\Http\Controllers\ChecklistSummaryReportController::class, 'export'])->name('reports.checklist-summary.export');
 
     // Pre-Orders
     Route::middleware('permission:view pre-orders')->group(function () {

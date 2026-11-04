@@ -95,6 +95,7 @@ class FormController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'form_type' => 'nullable|string|max:100',
             'status' => 'nullable|in:draft,active,archived',
             'sections' => 'nullable|array',
             'sections.*.title' => 'required|string|max:255',
@@ -116,6 +117,7 @@ class FormController extends Controller
             $form = Form::create([
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
+                'form_type' => $validated['form_type'] ?? null,
                 'status' => 'draft',
                 'created_by' => auth()->id(),
             ]);
@@ -248,6 +250,7 @@ class FormController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
+            'form_type' => 'nullable|string|max:100',
             'status' => 'nullable|in:draft,active,archived',
             'sections' => 'nullable|array',
             'sections.*.title' => 'required|string|max:255',
@@ -269,6 +272,7 @@ class FormController extends Controller
             $form->update([
                 'title' => $validated['title'],
                 'description' => $validated['description'] ?? null,
+                'form_type' => $validated['form_type'] ?? null,
                 'status' => $validated['status'],
             ]);
 
@@ -364,6 +368,7 @@ class FormController extends Controller
             'form' => [
                 'title' => $form->title,
                 'description' => $form->description,
+                'form_type' => $form->form_type,
                 'status' => $form->status,
                 'version_number' => $version->version_number,
                 'sections' => $version->sections->map(function ($section) {
@@ -421,6 +426,7 @@ class FormController extends Controller
             $form = Form::create([
                 'title' => $formData['title'] . ' (Imported)',
                 'description' => $formData['description'] ?? null,
+                'form_type' => $formData['form_type'] ?? null,
                 'status' => 'draft', // Force draft to prevent accidental deployment
                 'created_by' => auth()->id(),
             ]);

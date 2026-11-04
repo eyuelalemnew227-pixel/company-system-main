@@ -27,10 +27,12 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
     const { data, setData, post, processing, errors, transform } = useForm<{
         title: string;
         description: string;
+        form_type: string;
         sections: any[];
     }>({
         title: '',
         description: '',
+        form_type: '',
         sections: [{ _id: generateId(), title: 'Section 1', questions: [] }]
     });
 
@@ -294,10 +296,17 @@ export default function Create({ inputTypes, branches, departments }: { inputTyp
                             <CardTitle>Form Details</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="title">Form Title <span className="text-red-500">*</span></Label>
-                                <Input id="title" value={data.title} onChange={e => setData('title', e.target.value)} placeholder="e.g. Waiter Daily Checklist" required />
-                                {errors.title && <p className="text-sm text-red-600">{errors.title}</p>}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="title">Form Title <span className="text-red-500">*</span></Label>
+                                    <Input id="title" value={data.title} onChange={e => setData('title', e.target.value)} placeholder="e.g. Waiter Daily Checklist" required />
+                                    {errors.title && <p className="text-sm text-red-600">{errors.title}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="form_type">Form Type <span className="text-xs text-muted-foreground font-normal">(Optional)</span></Label>
+                                    <Input id="form_type" value={data.form_type} onChange={e => setData('form_type', e.target.value)} placeholder="e.g. Checklist, Assessment, Inspection, Audit" />
+                                    {errors.form_type && <p className="text-sm text-red-600">{errors.form_type}</p>}
+                                </div>
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="description">Description</Label>

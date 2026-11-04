@@ -12,11 +12,18 @@ class PurchaseInspectionItem extends Model
 
     protected $fillable = [
         'purchase_inspection_id',
+        'tab_type',
+        'category_name',
+        'item_code',
+        'item_name',
+        'unit_of_measure',
+        'article_id',
         'child_category_id',
         'product_id',
         'main_store_balance',
         'inspected_quantity',
-        'unit_of_measure',
+        'expiry_date',
+        'wac',
         'status',
         'remarks',
     ];
@@ -24,6 +31,8 @@ class PurchaseInspectionItem extends Model
     protected $casts = [
         'main_store_balance' => 'decimal:2',
         'inspected_quantity' => 'decimal:2',
+        'expiry_date' => 'date:Y-m-d',
+        'wac' => 'decimal:4',
     ];
 
     public function purchaseInspection(): BelongsTo

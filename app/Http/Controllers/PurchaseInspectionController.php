@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ChildCategory;
-use App\Models\Product;
 use App\Models\PurchaseInspection;
 use App\Models\PurchaseInspectionItem;
 use App\Models\User;
+use App\Services\PurchaseInspectionApiService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,6 +17,13 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class PurchaseInspectionController extends Controller
 {
+    protected PurchaseInspectionApiService $apiService;
+
+    public function __construct(PurchaseInspectionApiService $apiService)
+    {
+        $this->apiService = $apiService;
+    }
+
     public function index(Request $request): Response
     {
         $search = $request->query('search');
@@ -24,7 +31,7 @@ class PurchaseInspectionController extends Controller
         $dateFrom = $request->query('date_from');
         $dateTo = $request->query('date_to');
         $inspectorId = $request->query('inspector_id');
-        $childCategoryId = $request->query('child_category_id');
+        $category = $request->query('category');
 
         $query = PurchaseInspection::query()
             ->with([
@@ -35,15 +42,17 @@ class PurchaseInspectionController extends Controller
                 'items',
                 'items as passed_items_count' => fn($q) => $q->where('status', 'pass'),
                 'items as failed_items_count' => fn($q) => $q->where('status', 'fail'),
+                'items as none_items_count' => fn($q) => $q->where('status', 'none'),
             ]);
 
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('reference_no', 'like', "%{$search}%")
                     ->orWhere('store_name', 'like', "%{$search}%")
-                    ->orWhere('notes', 'like', "%{$search}%")
                     ->orWhereHas('inspector', fn($iq) => $iq->where('name', 'like', "%{$search}%"))
-                    ->orWhereHas('items.product', fn($pq) => $pq->where('product_name', 'like', "%{$search}%")->orWhere('product_code', 'like', "%{$search}%"));
+                    ->orWhereHas('items', fn($iq) => $iq->where('item_name', 'like', "%{$search}%")
+                        ->orWhere('item_code', 'like', "%{$search}%")
+                        ->orWhere('category_name', 'like', "%{$search}%"));
             });
         }
 
@@ -63,8 +72,8 @@ class PurchaseInspectionController extends Controller
             $query->where('inspector_id', $inspectorId);
         }
 
-        if ($childCategoryId && $childCategoryId !== 'all') {
-            $query->whereHas('items', fn($iq) => $iq->where('child_category_id', $childCategoryId));
+        if ($category && $category !== 'all') {
+            $query->whereHas('items', fn($iq) => $iq->where('category_name', $category));
         }
 
         $inspections = $query->orderByDesc('inspection_date')->orderByDesc('id')->paginate(15)->withQueryString();
@@ -78,6 +87,15 @@ class PurchaseInspectionController extends Controller
             'rejected' => PurchaseInspection::where('status', 'rejected')->count(),
         ];
 
+        // Available categories from DB and external API
+        $dbCategories = PurchaseInspectionItem::whereNotNull('category_name')
+            ->distinct()
+            ->pluck('category_name')
+            ->toArray();
+        $apiCategories = $this->apiService->getCategoryNames();
+        $categories = array_values(array_unique(array_filter(array_merge($apiCategories, $dbCategories))));
+        sort($categories);
+
         return Inertia::render('purchase-inspections/Index', [
             'inspections' => $inspections,
             'metrics' => $metrics,
@@ -87,81 +105,119 @@ class PurchaseInspectionController extends Controller
                 'date_from' => $dateFrom ?? '',
                 'date_to' => $dateTo ?? '',
                 'inspector_id' => $inspectorId ?? 'all',
-                'child_category_id' => $childCategoryId ?? 'all',
+                'category' => $category ?? 'all',
             ],
-            'childCategories' => ChildCategory::where('status', 'Active')->select('id', 'child_name')->orderBy('child_name')->get(),
-            'inspectors' => User::select('id', 'name')->whereHas('roles', fn($q) => $q->whereIn('name', ['Super Admin', 'Admin']))->orWhereNotNull('employee_id')->orderBy('name')->get(),
+            'categories' => $categories,
+            'inspectors' => User::select('id', 'name')
+                ->whereHas('roles', fn($q) => $q->whereIn('name', ['Super Admin', 'Admin']))
+                ->orWhereNotNull('employee_id')
+                ->orderBy('name')
+                ->get(),
         ]);
+    }
+
+    public function apiItems(Request $request): JsonResponse
+    {
+        $refresh = $request->boolean('refresh');
+        $data = $this->apiService->getGroupedCategories($refresh);
+
+        return response()->json($data);
     }
 
     public function create(): Response
     {
-        $childCategories = ChildCategory::where('status', 'Active')
-            ->with(['products' => function ($q) {
-                $q->where('status', 'Active')->select('id', 'child_category_id', 'product_name', 'product_code', 'measurement', 'unit_cost');
-            }])
-            ->select('id', 'child_name')
-            ->orderBy('child_name')
-            ->get();
+        $apiData = $this->apiService->getGroupedCategories();
 
         return Inertia::render('purchase-inspections/Create', [
-            'childCategories' => $childCategories,
+            'apiCategories' => $apiData['grouped'] ?? [],
+            'totalApiItems' => $apiData['total_count'] ?? 0,
             'defaultStore' => 'M/Store',
             'todayDate' => now()->format('Y-m-d'),
             'currentUser' => Auth::user()->only(['id', 'name']),
+            'lastFetched' => $apiData['fetched_at'] ?? now()->toIso8601String(),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'inspection_date' => 'required|date',
-            'store_name' => 'required|string|max:100',
-            'notes' => 'nullable|string',
-            'action' => 'required|in:draft,submit',
-            'items' => 'required|array|min:1',
-            'items.*.child_category_id' => 'required|exists:child_categories,id',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.main_store_balance' => 'required|numeric|min:0',
-            'items.*.inspected_quantity' => 'required|numeric|min:0',
-            'items.*.unit_of_measure' => 'nullable|string|max:50',
-            'items.*.status' => 'required|in:pass,fail',
-            'items.*.remarks' => 'nullable|string',
+        $rawItems = $request->input('items', []);
+        $inspectedItems = array_values(array_filter((array) $rawItems, function ($item) {
+            // If condition is NONE, do not store it (only store PASS and FAIL)
+            $status = $item['status'] ?? null;
+            if ($status !== 'pass' && $status !== 'fail') {
+                return false;
+            }
+
+            $tab = $item['tab_type'] ?? 'custody_accuracy';
+            if ($tab === 'custody_accuracy') {
+                return isset($item['inspected_quantity']) && $item['inspected_quantity'] !== '' && $item['inspected_quantity'] !== null;
+            }
+            if ($tab === 'expiry_control') {
+                return !empty($item['expiry_date']);
+            }
+            if ($tab === 'store_condition') {
+                return true;
+            }
+            return false;
+        }));
+
+        $request->merge([
+            'items' => $inspectedItems,
+            'inspection_date' => now()->toDateString(),
+            'store_name' => 'M/Store',
         ]);
 
-        $isSubmit = $validated['action'] === 'submit';
-        $status = $isSubmit ? 'submitted' : 'draft';
+        $validated = $request->validate([
+            'inspection_date' => 'required|date',
+            'store_name' => 'nullable|string|max:100',
+            'action' => 'nullable|string',
+            'items' => 'required|array|min:1',
+            'items.*.tab_type' => 'required|in:custody_accuracy,expiry_control,store_condition',
+            'items.*.category_name' => 'required|string|max:150',
+            'items.*.item_code' => 'required|string|max:100',
+            'items.*.item_name' => 'required|string|max:255',
+            'items.*.unit_of_measure' => 'nullable|string|max:50',
+            'items.*.article_id' => 'nullable|string|max:50',
+            'items.*.wac' => 'nullable|numeric',
+            'items.*.main_store_balance' => 'nullable|numeric|min:0',
+            'items.*.inspected_quantity' => 'nullable|numeric|min:0',
+            'items.*.expiry_date' => 'nullable|date',
+            'items.*.status' => 'required|in:pass,fail',
+            'items.*.remarks' => 'nullable|string',
+        ], [
+            'items.min' => 'Please complete at least one inspection item with PASS or FAIL condition before saving (items set to NONE are not stored).',
+        ]);
 
-        DB::transaction(function () use ($validated, $status, $isSubmit) {
+        DB::transaction(function () use ($validated) {
             $inspection = PurchaseInspection::create([
                 'inspector_id' => Auth::id(),
                 'inspection_date' => $validated['inspection_date'],
-                'store_name' => $validated['store_name'],
-                'status' => $status,
-                'notes' => $validated['notes'] ?? null,
-                'submitted_at' => $isSubmit ? now() : null,
+                'store_name' => !empty($validated['store_name']) ? $validated['store_name'] : 'M/Store',
+                'status' => 'completed',
+                'submitted_at' => now(),
                 'created_by' => Auth::id(),
                 'updated_by' => Auth::id(),
             ]);
 
             foreach ($validated['items'] as $item) {
                 $inspection->items()->create([
-                    'child_category_id' => $item['child_category_id'],
-                    'product_id' => $item['product_id'],
-                    'main_store_balance' => $item['main_store_balance'],
-                    'inspected_quantity' => $item['inspected_quantity'],
-                    'unit_of_measure' => $item['unit_of_measure'] ?? null,
-                    'status' => $item['status'],
+                    'tab_type' => $item['tab_type'] ?? 'custody_accuracy',
+                    'category_name' => $item['category_name'],
+                    'item_code' => $item['item_code'],
+                    'item_name' => $item['item_name'],
+                    'unit_of_measure' => $item['unit_of_measure'] ?? 'Pcs',
+                    'article_id' => $item['article_id'] ?? null,
+                    'wac' => $item['wac'] ?? null,
+                    'main_store_balance' => isset($item['main_store_balance']) && is_numeric($item['main_store_balance']) ? $item['main_store_balance'] : 0,
+                    'inspected_quantity' => isset($item['inspected_quantity']) && is_numeric($item['inspected_quantity']) ? $item['inspected_quantity'] : null,
+                    'expiry_date' => !empty($item['expiry_date']) ? $item['expiry_date'] : null,
+                    'status' => $item['status'] ?? 'none',
                     'remarks' => $item['remarks'] ?? null,
                 ]);
             }
         });
 
-        $msg = $isSubmit
-            ? 'Purchase Inspection submitted successfully!'
-            : 'Purchase Inspection saved as draft successfully!';
-
-        return redirect()->route('purchase-inspections.index')->with('message', $msg);
+        return redirect()->route('purchase-inspections.index')->with('message', 'Purchase Inspection saved successfully!');
     }
 
     public function show(PurchaseInspection $purchase_inspection): Response
@@ -171,14 +227,18 @@ class PurchaseInspectionController extends Controller
             'approver:id,name',
             'createdBy:id,name',
             'updatedBy:id,name',
-            'items.childCategory:id,child_name',
-            'items.product:id,product_name,product_code,measurement',
+            'items',
         ]);
 
         $totalItems = $purchase_inspection->items->count();
         $passedItems = $purchase_inspection->items->where('status', 'pass')->count();
         $failedItems = $purchase_inspection->items->where('status', 'fail')->count();
-        $totalInspectedQty = $purchase_inspection->items->sum('inspected_quantity');
+        $noneItems = $purchase_inspection->items->where('status', 'none')->count();
+        $totalInspectedQty = $purchase_inspection->items->where('tab_type', 'custody_accuracy')->sum('inspected_quantity');
+
+        $custodyCount = $purchase_inspection->items->where('tab_type', 'custody_accuracy')->count();
+        $expiryCount = $purchase_inspection->items->where('tab_type', 'expiry_control')->count();
+        $conditionCount = $purchase_inspection->items->where('tab_type', 'store_condition')->count();
 
         return Inertia::render('purchase-inspections/Show', [
             'inspection' => $purchase_inspection,
@@ -186,7 +246,11 @@ class PurchaseInspectionController extends Controller
                 'total_items' => $totalItems,
                 'passed_items' => $passedItems,
                 'failed_items' => $failedItems,
+                'none_items' => $noneItems,
                 'total_inspected_qty' => $totalInspectedQty,
+                'custody_count' => $custodyCount,
+                'expiry_count' => $expiryCount,
+                'condition_count' => $conditionCount,
                 'pass_rate' => $totalItems > 0 ? round(($passedItems / $totalItems) * 100, 1) : 0,
             ],
         ]);
@@ -194,61 +258,80 @@ class PurchaseInspectionController extends Controller
 
     public function edit(PurchaseInspection $purchase_inspection): Response
     {
-        // Allow editing if draft or rejected, or user has edit permission
-        if (!in_array($purchase_inspection->status, ['draft', 'rejected']) && !Auth::user()->can('edit purchase inspections')) {
-            abort(403, 'This inspection cannot be edited in its current state.');
+        if (!Auth::user()->can('edit purchase inspections')) {
+            abort(403, 'Unauthorized to edit purchase inspections.');
         }
 
-        $purchase_inspection->load([
-            'items.childCategory:id,child_name',
-            'items.product:id,product_name,product_code,measurement',
-        ]);
-
-        $childCategories = ChildCategory::where('status', 'Active')
-            ->with(['products' => function ($q) {
-                $q->where('status', 'Active')->select('id', 'child_category_id', 'product_name', 'product_code', 'measurement', 'unit_cost');
-            }])
-            ->select('id', 'child_name')
-            ->orderBy('child_name')
-            ->get();
+        $purchase_inspection->load('items');
+        $apiData = $this->apiService->getGroupedCategories();
 
         return Inertia::render('purchase-inspections/Edit', [
             'inspection' => $purchase_inspection,
-            'childCategories' => $childCategories,
+            'apiCategories' => $apiData['grouped'] ?? [],
+            'totalApiItems' => $apiData['total_count'] ?? 0,
+            'lastFetched' => $apiData['fetched_at'] ?? now()->toIso8601String(),
         ]);
     }
 
     public function update(Request $request, PurchaseInspection $purchase_inspection): RedirectResponse
     {
-        if (!in_array($purchase_inspection->status, ['draft', 'rejected']) && !Auth::user()->can('edit purchase inspections')) {
-            abort(403, 'This inspection cannot be edited in its current state.');
+        if (!Auth::user()->can('edit purchase inspections')) {
+            abort(403, 'Unauthorized to edit purchase inspections.');
         }
+
+        $rawItems = $request->input('items', []);
+        $inspectedItems = array_values(array_filter((array) $rawItems, function ($item) {
+            // If condition is NONE, do not store it (only store PASS and FAIL)
+            $status = $item['status'] ?? null;
+            if ($status !== 'pass' && $status !== 'fail') {
+                return false;
+            }
+
+            $tab = $item['tab_type'] ?? 'custody_accuracy';
+            if ($tab === 'custody_accuracy') {
+                return isset($item['inspected_quantity']) && $item['inspected_quantity'] !== '' && $item['inspected_quantity'] !== null;
+            }
+            if ($tab === 'expiry_control') {
+                return !empty($item['expiry_date']);
+            }
+            if ($tab === 'store_condition') {
+                return true;
+            }
+            return false;
+        }));
+
+        $originalDate = \Illuminate\Support\Carbon::parse($purchase_inspection->inspection_date)->toDateString();
+        $request->merge([
+            'items' => $inspectedItems,
+            'inspection_date' => $originalDate,
+            'store_name' => $purchase_inspection->store_name ?: 'M/Store',
+        ]);
 
         $validated = $request->validate([
             'inspection_date' => 'required|date',
-            'store_name' => 'required|string|max:100',
-            'notes' => 'nullable|string',
-            'action' => 'required|in:draft,submit',
+            'store_name' => 'nullable|string|max:100',
+            'action' => 'nullable|string',
             'items' => 'required|array|min:1',
-            'items.*.child_category_id' => 'required|exists:child_categories,id',
-            'items.*.product_id' => 'required|exists:products,id',
-            'items.*.main_store_balance' => 'required|numeric|min:0',
-            'items.*.inspected_quantity' => 'required|numeric|min:0',
+            'items.*.tab_type' => 'required|in:custody_accuracy,expiry_control,store_condition',
+            'items.*.category_name' => 'required|string|max:150',
+            'items.*.item_code' => 'required|string|max:100',
+            'items.*.item_name' => 'required|string|max:255',
             'items.*.unit_of_measure' => 'nullable|string|max:50',
+            'items.*.article_id' => 'nullable|string|max:50',
+            'items.*.wac' => 'nullable|numeric',
+            'items.*.main_store_balance' => 'nullable|numeric|min:0',
+            'items.*.inspected_quantity' => 'nullable|numeric|min:0',
+            'items.*.expiry_date' => 'nullable|date',
             'items.*.status' => 'required|in:pass,fail',
             'items.*.remarks' => 'nullable|string',
+        ], [
+            'items.min' => 'Please complete at least one inspection item with PASS or FAIL condition before saving (items set to NONE are not stored).',
         ]);
 
-        $isSubmit = $validated['action'] === 'submit';
-        $status = $isSubmit ? 'submitted' : 'draft';
-
-        DB::transaction(function () use ($purchase_inspection, $validated, $status, $isSubmit) {
+        DB::transaction(function () use ($purchase_inspection, $validated) {
             $purchase_inspection->update([
                 'inspection_date' => $validated['inspection_date'],
-                'store_name' => $validated['store_name'],
-                'status' => $status,
-                'notes' => $validated['notes'] ?? null,
-                'submitted_at' => $isSubmit ? now() : $purchase_inspection->submitted_at,
+                'store_name' => !empty($validated['store_name']) ? $validated['store_name'] : 'M/Store',
                 'updated_by' => Auth::id(),
             ]);
 
@@ -257,28 +340,29 @@ class PurchaseInspectionController extends Controller
 
             foreach ($validated['items'] as $item) {
                 $purchase_inspection->items()->create([
-                    'child_category_id' => $item['child_category_id'],
-                    'product_id' => $item['product_id'],
-                    'main_store_balance' => $item['main_store_balance'],
-                    'inspected_quantity' => $item['inspected_quantity'],
-                    'unit_of_measure' => $item['unit_of_measure'] ?? null,
-                    'status' => $item['status'],
+                    'tab_type' => $item['tab_type'] ?? 'custody_accuracy',
+                    'category_name' => $item['category_name'],
+                    'item_code' => $item['item_code'],
+                    'item_name' => $item['item_name'],
+                    'unit_of_measure' => $item['unit_of_measure'] ?? 'Pcs',
+                    'article_id' => $item['article_id'] ?? null,
+                    'wac' => $item['wac'] ?? null,
+                    'main_store_balance' => isset($item['main_store_balance']) && is_numeric($item['main_store_balance']) ? $item['main_store_balance'] : 0,
+                    'inspected_quantity' => isset($item['inspected_quantity']) && is_numeric($item['inspected_quantity']) ? $item['inspected_quantity'] : null,
+                    'expiry_date' => !empty($item['expiry_date']) ? $item['expiry_date'] : null,
+                    'status' => $item['status'] ?? 'none',
                     'remarks' => $item['remarks'] ?? null,
                 ]);
             }
         });
 
-        $msg = $isSubmit
-            ? 'Purchase Inspection updated and submitted!'
-            : 'Purchase Inspection draft updated successfully!';
-
-        return redirect()->route('purchase-inspections.show', $purchase_inspection->id)->with('message', $msg);
+        return redirect()->route('purchase-inspections.show', $purchase_inspection->id)->with('message', 'Purchase Inspection updated successfully!');
     }
 
     public function destroy(PurchaseInspection $purchase_inspection): RedirectResponse
     {
-        if (!in_array($purchase_inspection->status, ['draft', 'rejected']) && !Auth::user()->can('delete purchase inspections')) {
-            abort(403, 'Only draft or rejected inspections can be deleted.');
+        if (!Auth::user()->can('delete purchase inspections')) {
+            abort(403, 'Unauthorized to delete purchase inspections.');
         }
 
         $purchase_inspection->delete();
@@ -344,8 +428,7 @@ class PurchaseInspectionController extends Controller
         $purchase_inspection->load([
             'inspector:id,name',
             'approver:id,name',
-            'items.childCategory:id,child_name',
-            'items.product:id,product_name,product_code',
+            'items',
         ]);
 
         $filename = "Purchase_Inspection_{$purchase_inspection->reference_no}.csv";
@@ -359,44 +442,49 @@ class PurchaseInspectionController extends Controller
         return response()->stream(function () use ($purchase_inspection) {
             $out = fopen('php://output', 'w');
             if ($out === false) return;
+            fputs($out, "\xEF\xBB\xBF"); // UTF-8 BOM
 
             // Header metadata
             fputcsv($out, ['Purchase Inspection Report']);
             fputcsv($out, ['Reference No', $purchase_inspection->reference_no]);
             fputcsv($out, ['Inspection Date', $purchase_inspection->inspection_date?->format('Y-m-d')]);
             fputcsv($out, ['Store', $purchase_inspection->store_name]);
-            fputcsv($out, ['Status', strtoupper($purchase_inspection->status)]);
             fputcsv($out, ['Inspector', $purchase_inspection->inspector?->name ?? 'N/A']);
-            fputcsv($out, ['Approver', $purchase_inspection->approver?->name ?? 'N/A']);
-            fputcsv($out, ['Approved At', $purchase_inspection->approved_at?->format('Y-m-d H:i') ?? 'N/A']);
-            if ($purchase_inspection->notes) {
-                fputcsv($out, ['Notes', $purchase_inspection->notes]);
-            }
             fputcsv($out, []); // Blank line
 
             // Item Columns
             fputcsv($out, [
                 'No.',
-                'Child Category',
-                'Product Code',
-                'Product Name',
+                'Inspection Tab / Section',
+                'Category',
+                'Article Code',
+                'Item / Article Name',
+                'UOM',
                 'Main Store Balance',
                 'Inspected Quantity',
-                'Unit of Measure',
+                'Expiry Date',
                 'Condition',
                 'Remarks'
             ]);
 
             $index = 1;
             foreach ($purchase_inspection->items as $item) {
+                $tabLabel = match($item->tab_type) {
+                    'expiry_control' => 'Expiry Control',
+                    'store_condition' => 'Store Condition',
+                    default => 'Custody Accuracy',
+                };
+
                 fputcsv($out, [
                     $index++,
-                    $item->childCategory?->child_name ?? 'N/A',
-                    $item->product?->product_code ?? '',
-                    $item->product?->product_name ?? 'N/A',
-                    $item->main_store_balance,
-                    $item->inspected_quantity,
-                    $item->unit_of_measure ?? '',
+                    $tabLabel,
+                    $item->category_name ?? 'N/A',
+                    $item->item_code ?? '',
+                    $item->item_name ?? 'N/A',
+                    $item->unit_of_measure ?? 'Pcs',
+                    $item->tab_type === 'custody_accuracy' ? $item->main_store_balance : '-',
+                    $item->tab_type === 'custody_accuracy' ? $item->inspected_quantity : '-',
+                    $item->tab_type === 'expiry_control' ? ($item->expiry_date?->format('Y-m-d') ?? '-') : '-',
                     strtoupper($item->status),
                     $item->remarks ?? '',
                 ]);

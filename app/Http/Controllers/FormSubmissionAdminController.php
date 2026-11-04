@@ -65,8 +65,6 @@ class FormSubmissionAdminController extends Controller
             return ($a->question?->inputType?->type_identifier ?? '') === 'employee_attendance_roster';
         });
 
-        $yesAnswers = 0;
-        $totalBoolQuestions = 0;
         $employeeScoresMatrix = [];
         $presentEmployeeIds = [];
 
@@ -80,9 +78,10 @@ class FormSubmissionAdminController extends Controller
         foreach ($presentEmployeeIds as $empId) {
             $emp = $employeesCollection->firstWhere('id', (int) $empId);
             if ($emp) {
-                $employeeScoresMatrix[$empId] = [
+                $employeeScoresMatrix[(string) $empId] = [
                     'id' => $emp->id,
-                    'name' => trim($emp->first_name . ' ' . $emp->last_name) ?: $emp->employee_code,
+                    'name' => trim($emp->first_name . ' ' . $emp->last_name) ?: ($emp->employee_code ?? "Employee #{$emp->id}"),
+                    'employee_code' => $emp->employee_code,
                     'department_id' => $emp->department_id,
                     'branch_id' => $emp->branch_id,
                     'total_points' => 0,
@@ -92,27 +91,46 @@ class FormSubmissionAdminController extends Controller
             }
         }
 
+        // Determine if this submission has any questions with specific employee or department targeting
+        $hasAnyTargeting = $submission->answers->contains(function ($a) {
+            $targets = $a->targeted_employees;
+            if (is_string($targets)) {
+                $targets = json_decode($targets, true);
+            }
+            if (!empty($targets)) {
+                return true;
+            }
+            $deptTargets = $a->question?->department_targets;
+            if (is_string($deptTargets)) {
+                $deptTargets = json_decode($deptTargets, true);
+            }
+            return !empty($deptTargets);
+        });
+
+        $totalBoolQuestions = 0;
+        $yesAnswers = 0;
+
         foreach ($submission->answers as $ans) {
             $qType = $ans->question?->inputType?->type_identifier ?? 'text';
-            if ($qType === 'select_one') {
+            if ($qType === 'select_one' || $qType === 'boolean') {
                 $isScored = false;
                 $isYes = false;
 
                 if ($ans->value_boolean !== null) {
                     $isScored = true;
                     $isYes = (bool) $ans->value_boolean;
-                } elseif ($ans->value_text === '0' || $ans->value_text === '1') {
+                } elseif ($ans->value_text === '0' || $ans->value_text === '1' || $ans->value_text === 'አዎ' || $ans->value_text === 'አይ') {
                     $isScored = true;
-                    $isYes = ($ans->value_text === '1');
+                    $isYes = ($ans->value_text === '1' || $ans->value_text === 'አዎ');
                 } else {
                     $choice = $ans->question?->choices?->first(function ($c) use ($ans) {
                         return (string) $c->id === (string) $ans->value_text
                             || (string) $c->label === (string) $ans->value_text
                             || (string) $c->value === (string) $ans->value_text;
                     });
-                    if ($choice && ($choice->value === '1' || $choice->value === '0')) {
+                    if ($choice && ($choice->value === '1' || $choice->value === '0' || $choice->label === 'አዎ' || $choice->label === 'አይ')) {
                         $isScored = true;
-                        $isYes = ($choice->value === '1');
+                        $isYes = ($choice->value === '1' || $choice->label === 'አዎ');
                     }
                 }
 
@@ -122,16 +140,40 @@ class FormSubmissionAdminController extends Controller
                         $yesAnswers++;
                     }
 
-                    $targetDepts = $ans->question->department_targets ?? [];
+                    // Decode answer targets
+                    $ansTargets = $ans->targeted_employees;
+                    if (is_string($ansTargets)) {
+                        $ansTargets = json_decode($ansTargets, true);
+                    }
+                    $ansTargetEmpIds = is_array($ansTargets) ? array_map('strval', $ansTargets) : [];
 
-                    foreach ($employeeScoresMatrix as $empId => &$empScore) {
-                        if (empty($targetDepts) || in_array((string) $empScore['department_id'], $targetDepts, true)) {
+                    // Decode question department targets
+                    $targetDepts = $ans->question?->department_targets ?? [];
+                    if (is_string($targetDepts)) {
+                        $targetDepts = json_decode($targetDepts, true);
+                    }
+                    $targetDeptIds = is_array($targetDepts) ? array_map('strval', $targetDepts) : [];
+
+                    foreach ($employeeScoresMatrix as $empKey => &$empScore) {
+                        $isTargeted = false;
+                        $empIdStr = (string) $empScore['id'];
+
+                        if (!empty($ansTargetEmpIds)) {
+                            $isTargeted = in_array($empIdStr, $ansTargetEmpIds, true);
+                        } elseif (!empty($targetDeptIds)) {
+                            $isTargeted = in_array((string) $empScore['department_id'], $targetDeptIds, true);
+                        } elseif (!$hasAnyTargeting) {
+                            $isTargeted = true;
+                        }
+
+                        if ($isTargeted) {
                             $empScore['total_points']++;
                             if ($isYes) {
                                 $empScore['earned_points']++;
                             }
                         }
                     }
+                    unset($empScore);
                 }
             }
 
@@ -148,29 +190,36 @@ class FormSubmissionAdminController extends Controller
                 $numVal = is_numeric($ans->value_text) ? (float) $ans->value_text : 0;
 
                 foreach ($targets as $empIdStr) {
-                    $empIdNum = (int) $empIdStr;
-                    if (isset($employeeScoresMatrix[$empIdNum])) {
+                    $empIdKey = (string) $empIdStr;
+                    if (isset($employeeScoresMatrix[$empIdKey])) {
                         if ($numVal > 0) {
-                            $employeeScoresMatrix[$empIdNum]['earned_points'] += $numVal;
+                            $employeeScoresMatrix[$empIdKey]['earned_points'] += $numVal;
                         }
-
-                        // We increment total_points checking max option value ideally, but let's assume
-                        // every evaluation token answered expects a ceiling.
-                        // If value was '0' or '1' strictly, total is always 1 per token.
-                        $employeeScoresMatrix[$empIdNum]['total_points'] += max(1, $numVal);
+                        $employeeScoresMatrix[$empIdKey]['total_points'] += max(1, $numVal);
                     }
                 }
             }
         }
 
-        foreach ($employeeScoresMatrix as $empId => &$empScore) {
+        $scoresList = [];
+        foreach ($employeeScoresMatrix as $empKey => &$empScore) {
             if ($empScore['total_points'] > 0) {
                 $empScore['percentage'] = round(($empScore['earned_points'] / $empScore['total_points']) * 100, 1);
             }
+            $scoresList[] = $empScore;
         }
+        unset($empScore);
 
-        $submission->calculated_score = $totalBoolQuestions > 0 ? round(($yesAnswers / $totalBoolQuestions) * 100, 1) : null;
-        $submission->employee_scores = array_values($employeeScoresMatrix);
+        $submission->employee_scores = $scoresList;
+
+        if (!empty($scoresList)) {
+            $validPercentages = array_filter(array_column($scoresList, 'percentage'), fn ($p) => $p !== null);
+            $submission->calculated_score = !empty($validPercentages)
+                ? round(array_sum($validPercentages) / count($validPercentages), 1)
+                : null;
+        } else {
+            $submission->calculated_score = $totalBoolQuestions > 0 ? round(($yesAnswers / $totalBoolQuestions) * 100, 1) : null;
+        }
 
         return $submission;
     }
@@ -592,6 +641,7 @@ class FormSubmissionAdminController extends Controller
         $fullEmployeesCollection = \App\Models\Employee::get();
         $submissions->each(function ($sub) use ($fullEmployeesCollection) {
             $this->_calculateEmployeeScores($sub, $fullEmployeesCollection);
+            $this->attachLookupSubjectScore($sub, $fullEmployeesCollection);
         });
 
         $branches = \App\Models\Branch::pluck('name', 'id')->toArray();
@@ -703,6 +753,7 @@ class FormSubmissionAdminController extends Controller
 
         $fullEmployeesCollection = \App\Models\Employee::get();
         $this->_calculateEmployeeScores($submission, $fullEmployeesCollection);
+        $this->attachLookupSubjectScore($submission, $fullEmployeesCollection);
 
         $from = request()->query('from', ($isMySubmissions || $isSubmitter) ? 'my-submissions' : null);
 
@@ -1858,12 +1909,110 @@ class FormSubmissionAdminController extends Controller
             return;
         }
 
+        $hasAnyTargeting = $submission->answers->contains(function ($a) {
+            $targets = $a->targeted_employees;
+            if (is_string($targets)) {
+                $targets = json_decode($targets, true);
+            }
+            if (!empty($targets)) {
+                return true;
+            }
+            $deptTargets = $a->question?->department_targets;
+            if (is_string($deptTargets)) {
+                $deptTargets = json_decode($deptTargets, true);
+            }
+            return !empty($deptTargets);
+        });
+
+        $totalPoints = 0;
+        $earnedPoints = 0;
+        $empIdStr = (string) $employee->id;
+        $empDeptIdStr = (string) $employee->department_id;
+
+        foreach ($submission->answers as $ans) {
+            $qType = $ans->question?->inputType?->type_identifier ?? 'text';
+            if ($qType === 'select_one' || $qType === 'boolean') {
+                $isScored = false;
+                $isYes = false;
+
+                if ($ans->value_boolean !== null) {
+                    $isScored = true;
+                    $isYes = (bool) $ans->value_boolean;
+                } elseif ($ans->value_text === '0' || $ans->value_text === '1' || $ans->value_text === 'አዎ' || $ans->value_text === 'አይ') {
+                    $isScored = true;
+                    $isYes = ($ans->value_text === '1' || $ans->value_text === 'አዎ');
+                } else {
+                    $choice = $ans->question?->choices?->first(function ($c) use ($ans) {
+                        return (string) $c->id === (string) $ans->value_text
+                            || (string) $c->label === (string) $ans->value_text
+                            || (string) $c->value === (string) $ans->value_text;
+                    });
+                    if ($choice && ($choice->value === '1' || $choice->value === '0' || $choice->label === 'አዎ' || $choice->label === 'አይ')) {
+                        $isScored = true;
+                        $isYes = ($choice->value === '1' || $choice->label === 'አዎ');
+                    }
+                }
+
+                if ($isScored) {
+                    $ansTargets = $ans->targeted_employees;
+                    if (is_string($ansTargets)) {
+                        $ansTargets = json_decode($ansTargets, true);
+                    }
+                    $ansTargetEmpIds = is_array($ansTargets) ? array_map('strval', $ansTargets) : [];
+
+                    $targetDepts = $ans->question?->department_targets ?? [];
+                    if (is_string($targetDepts)) {
+                        $targetDepts = json_decode($targetDepts, true);
+                    }
+                    $targetDeptIds = is_array($targetDepts) ? array_map('strval', $targetDepts) : [];
+
+                    $isTargeted = false;
+                    if (!empty($ansTargetEmpIds)) {
+                        $isTargeted = in_array($empIdStr, $ansTargetEmpIds, true);
+                    } elseif (!empty($targetDeptIds)) {
+                        $isTargeted = in_array($empDeptIdStr, $targetDeptIds, true);
+                    } elseif (!$hasAnyTargeting) {
+                        $isTargeted = true;
+                    }
+
+                    if ($isTargeted) {
+                        $totalPoints++;
+                        if ($isYes) {
+                            $earnedPoints++;
+                        }
+                    }
+                }
+            }
+
+            if ($qType === 'employee_evaluation_grid') {
+                $targets = $ans->targeted_employees;
+                if (is_string($targets)) {
+                    $targets = json_decode($targets, true);
+                }
+                if (!is_array($targets)) {
+                    $targets = [];
+                }
+                $numVal = is_numeric($ans->value_text) ? (float) $ans->value_text : 0;
+                if (in_array($empIdStr, array_map('strval', $targets), true)) {
+                    if ($numVal > 0) {
+                        $earnedPoints += $numVal;
+                    }
+                    $totalPoints += max(1, $numVal);
+                }
+            }
+        }
+
+        $pct = $totalPoints > 0 ? round(($earnedPoints / $totalPoints) * 100, 1) : null;
+        $submission->calculated_score = $pct;
+
         $submission->employee_scores = [[
             'id' => $employee->id,
             'name' => trim($employee->first_name . ' ' . $employee->last_name) ?: $employee->employee_code,
             'department_id' => $employee->department_id,
             'branch_id' => $employee->branch_id,
-            'percentage' => $submission->calculated_score,
+            'total_points' => $totalPoints,
+            'earned_points' => $earnedPoints,
+            'percentage' => $pct,
         ]];
     }
 
