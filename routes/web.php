@@ -566,12 +566,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Tickets
     Route::get('tickets', [\App\Http\Controllers\TicketController::class, 'index'])
         ->name('tickets.index')
-        ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
+        ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own|ticket.create|ticket.close|ticket.approve|ticket.reject|ticket.assign|ticket.status.update|ticket.done|ticket.escalate|ticket.pending|ticket.rate|ticket.delete|ticket.view.logs');
     Route::get('tickets/store-balance', [\App\Http\Controllers\TicketController::class, 'getStoreBalance'])
         ->name('tickets.store-balance');
     Route::get('tickets/export', [\App\Http\Controllers\TicketController::class, 'export'])
         ->name('tickets.export')
-        ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
+        ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own|ticket.close|ticket.approve|ticket.report.view');
     Route::get('tickets/create', [\App\Http\Controllers\TicketController::class, 'create'])
         ->name('tickets.create')
         ->middleware('permission:ticket.create|ticket.view.own|ticket.view.department|ticket.view.all');
@@ -580,13 +580,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:ticket.create|ticket.view.own|ticket.view.department|ticket.view.all');
     Route::get('tickets/{ticket}', [\App\Http\Controllers\TicketController::class, 'show'])
         ->name('tickets.show')
-        ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
+        ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own|ticket.close|ticket.approve|ticket.reject|ticket.assign|ticket.status.update|ticket.done|ticket.escalate|ticket.pending|ticket.rate|ticket.delete|ticket.view.logs');
     Route::post('tickets/{ticket}/quick-update', [\App\Http\Controllers\TicketController::class, 'quickUpdate'])
         ->name('tickets.quick-update')
-        ->middleware('permission:ticket.status.update|ticket.assign|ticket.view.all|ticket.view.department');
+        ->middleware('permission:ticket.status.update|ticket.assign|ticket.view.all|ticket.view.department|ticket.close|ticket.approve|ticket.reject|ticket.done|ticket.escalate|ticket.pending');
     Route::get('tickets/{ticket}/download-products', [\App\Http\Controllers\TicketController::class, 'downloadProductsPdf'])
         ->name('tickets.download-products')
-        ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own');
+        ->middleware('permission:ticket.view.all|ticket.view.department|ticket.view.own|ticket.close|ticket.approve|ticket.assign|ticket.status.update|ticket.done');
     Route::post('tickets/{ticket}/status', [\App\Http\Controllers\TicketController::class, 'updateStatus'])
         ->name('tickets.status')
         ->middleware('permission:ticket.status.update|ticket.approve|ticket.reject|ticket.done|ticket.pending|ticket.escalate|ticket.close');
@@ -601,13 +601,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:ticket.reject|ticket.status.update|ticket.view.own|ticket.view.department|ticket.view.all');
     Route::post('tickets/{ticket}/rate', [\App\Http\Controllers\TicketController::class, 'rate'])
         ->name('tickets.rate')
-        ->middleware('permission:ticket.rate');
+        ->middleware('permission:ticket.rate|ticket.view.own|ticket.view.department|ticket.view.all');
     Route::post('tickets/{ticket}/chat', [\App\Http\Controllers\TicketController::class, 'sendChatComment'])
         ->name('tickets.chat')
-        ->middleware('permission:ticket.view.own|ticket.view.department|ticket.view.all');
+        ->middleware('permission:ticket.view.own|ticket.view.department|ticket.view.all|ticket.close|ticket.approve|ticket.reject|ticket.assign|ticket.status.update|ticket.done');
     Route::post('tickets/{ticket}/approve-rate', [\App\Http\Controllers\TicketController::class, 'approveAndRate'])
         ->name('tickets.approve-rate')
-        ->middleware('permission:ticket.view.own|ticket.view.department|ticket.view.all');
+        ->middleware('permission:ticket.view.own|ticket.view.department|ticket.view.all|ticket.close|ticket.approve');
     Route::post('tickets/{ticket}/asset', [\App\Http\Controllers\TicketController::class, 'updateAsset'])
         ->name('tickets.update-asset')
         ->middleware('permission:ticket.status.update|ticket.assign|ticket.view.all');

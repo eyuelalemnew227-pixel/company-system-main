@@ -19,9 +19,25 @@ class TicketPolicy
             return true;
         }
 
-        // 3. Department view permission for users in the target department
+        // 3. Department view permission or operational ticket permissions for users in the target department
         $userDeptId = $user->employee?->department_id ?? $user->department_id;
-        if ($user->can('ticket.view.department') && $userDeptId && (int) $userDeptId === (int) $ticket->department_id) {
+        $hasDeptOperationalPermission = $user->can('ticket.view.department')
+            || $user->can('ticket.close')
+            || $user->can('ticket.approve')
+            || $user->can('ticket.reject')
+            || $user->can('ticket.assign')
+            || $user->can('ticket.status.update')
+            || $user->can('ticket.done')
+            || $user->can('ticket.escalate')
+            || $user->can('ticket.pending')
+            || $user->can('ticket.view.logs');
+
+        if ($hasDeptOperationalPermission && $userDeptId && (int) $userDeptId === (int) $ticket->department_id) {
+            return true;
+        }
+
+        // If user has ticket.close or ticket.approve without a department, allow viewing tickets they can act upon
+        if (!$userDeptId && ($user->can('ticket.close') || $user->can('ticket.approve'))) {
             return true;
         }
 

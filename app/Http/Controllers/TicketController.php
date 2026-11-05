@@ -45,13 +45,29 @@ class TicketController extends Controller
         $query = Ticket::query()->with(['department', 'mainCategory', 'subCategory', 'asset', 'requestorBranch', 'assignments.assignee']);
 
         // 1. Authorization Scoping
-        if ($user->can('ticket.view.all') || $user->hasRole('Super Admin') || $user->hasRole('Ticket Super Admin')) {
+        $userDeptId = $user->employee?->department_id ?? $user->department_id;
+        $hasGlobalAccess = $user->can('ticket.view.all')
+            || $user->hasRole('Super Admin')
+            || $user->hasRole('Ticket Super Admin')
+            || (!$userDeptId && ($user->can('ticket.close') || $user->can('ticket.approve')));
+
+        if ($hasGlobalAccess) {
             // Full global access
         } else {
             $managedIds = $user->managedDepartmentIds();
             $userBranchId = $user->employee?->branch_id ?? $user->branch_id;
-            $userDeptId = $user->employee?->department_id ?? $user->department_id;
-            $query->where(function ($q) use ($user, $managedIds, $userBranchId, $userDeptId) {
+            $hasDeptAccess = $user->can('ticket.view.department')
+                || $user->can('ticket.close')
+                || $user->can('ticket.approve')
+                || $user->can('ticket.reject')
+                || $user->can('ticket.assign')
+                || $user->can('ticket.status.update')
+                || $user->can('ticket.done')
+                || $user->can('ticket.escalate')
+                || $user->can('ticket.pending')
+                || $user->can('ticket.view.logs');
+
+            $query->where(function ($q) use ($user, $managedIds, $userBranchId, $userDeptId, $hasDeptAccess) {
                 // Own requested tickets
                 $q->where('user_id', $user->id)
                     // Tickets where user is currently or was assigned
@@ -61,7 +77,7 @@ class TicketController extends Controller
                     // All tickets in departments they manage
                     ->orWhereIn('department_id', $managedIds);
 
-                if ($user->can('ticket.view.department') && $userDeptId) {
+                if ($hasDeptAccess && $userDeptId) {
                     $q->orWhere('department_id', $userDeptId);
                 }
 
@@ -614,17 +630,20 @@ class TicketController extends Controller
         }
 
         $user = $request->user();
-        $isManager = $user->isManagerOfDepartment($ticket->department_id) || $user->hasRole('Ticket Super Admin');
+        $canClose = $user->isManagerOfDepartment($ticket->department_id)
+            || $user->hasRole('Ticket Super Admin')
+            || $user->hasRole('Super Admin')
+            || $user->can('ticket.close');
 
         if ($ticket->status === TicketStatus::PendingApproval) {
             $nextStatus = TicketStatus::Approved;
             $action = 'approved';
             $msg = 'Ticket approved and moved to queue.';
         } elseif ($ticket->status === TicketStatus::Done) {
-            if ($isManager) {
+            if ($canClose) {
                 $nextStatus = TicketStatus::Closed;
                 $action = 'closed';
-                $msg = 'Ticket officially closed by Manager.';
+                $msg = 'Ticket officially closed.';
             } else {
                 $nextStatus = TicketStatus::TicketApproved;
                 $action = 'ticket_approved';
@@ -633,7 +652,7 @@ class TicketController extends Controller
         } else {
             $nextStatus = TicketStatus::Closed;
             $action = 'closed';
-            $msg = 'Approved ticket officially closed by Manager.';
+            $msg = 'Approved ticket officially closed.';
         }
 
         $this->actionService->setStatus(

@@ -111,90 +111,79 @@ class TicketStatusService
      */
     public function getAvailableStatusesForUser(\App\Models\User $user, Ticket $ticket): array
     {
-        $managerUserIds = app(TicketActionService::class)->departmentManagerUserIds($ticket->department_id);
-
-        $isManager = in_array((int) $user->id, $managerUserIds)
-            || $user->hasRole('Ticket Super Admin')
-            || $user->hasRole('Super Admin')
-            || $user->can('ticket.assign')
-            || $user->can('ticket.approve')
-            || $user->can('ticket.close');
-
         $statusVal = is_object($ticket->status) ? $ticket->status->value : (string) $ticket->status;
 
         if (in_array($statusVal, ['closed', 'rejected'], true)) {
             return [];
         }
 
+        $allowedTransitions = $this->getAllowedTransitions($ticket->status);
+
+        // Super Admin has unrestricted managerial access to all valid transitions for the current state
+        if ($user->hasRole('Super Admin')) {
+            return array_values($allowedTransitions);
+        }
+
         $isRequestor = (int) $ticket->user_id === (int) $user->id
             || ($ticket->requestor_branch_id && $user->employee?->branch_id && (int) $ticket->requestor_branch_id === (int) $user->employee->branch_id);
 
-        if ($isRequestor && !$isManager) {
-            if ($statusVal === 'done') {
-                return [TicketStatus::TicketApproved->value, TicketStatus::InProgress->value];
-            }
-            return [];
+        $available = [];
+
+        // ticket.close: can transition to Closed
+        if ($user->can('ticket.close') && in_array(TicketStatus::Closed->value, $allowedTransitions, true)) {
+            $available[] = TicketStatus::Closed->value;
         }
 
-        $isAssignee = $ticket->assignments()->where('is_current', true)->where('assigned_to', $user->id)->exists();
-        $isStaff = $isAssignee
-            || $user->can('ticket.status.update')
-            || $user->can('ticket.done')
-            || $user->can('ticket.escalate')
-            || $user->can('ticket.view.department');
+        // ticket.done: can mark ticket as Done
+        if ($user->can('ticket.done') && in_array(TicketStatus::Done->value, $allowedTransitions, true)) {
+            $available[] = TicketStatus::Done->value;
+        }
 
-        if ($isStaff && !$isManager) {
-            switch ($statusVal) {
-                case 'approved':
-                case 'not_started':
-                    return [TicketStatus::InProgress->value, TicketStatus::Hold->value];
+        // ticket.pending: can place ticket on Hold
+        if ($user->can('ticket.pending') && in_array(TicketStatus::Hold->value, $allowedTransitions, true)) {
+            $available[] = TicketStatus::Hold->value;
+        }
 
-                case 'in_progress':
-                    return [TicketStatus::Hold->value, TicketStatus::Escalated->value, TicketStatus::Done->value];
+        // ticket.escalate: can escalate ticket
+        if ($user->can('ticket.escalate') && in_array(TicketStatus::Escalated->value, $allowedTransitions, true)) {
+            $available[] = TicketStatus::Escalated->value;
+        }
 
-                case 'hold':
-                    return [TicketStatus::InProgress->value, TicketStatus::Escalated->value, TicketStatus::Done->value];
-
-                case 'escalated':
-                    return [TicketStatus::InProgress->value, TicketStatus::Done->value];
-
-                case 'done':
-                    return [];
-
-                default:
-                    return [];
+        // ticket.approve: can approve pending tickets or mark ticket_approved
+        if ($user->can('ticket.approve')) {
+            if (in_array(TicketStatus::Approved->value, $allowedTransitions, true)) {
+                $available[] = TicketStatus::Approved->value;
+            }
+            if (in_array(TicketStatus::TicketApproved->value, $allowedTransitions, true)) {
+                $available[] = TicketStatus::TicketApproved->value;
             }
         }
 
-        if ($isManager) {
-            switch ($statusVal) {
-                case 'pending_approval':
-                    return [TicketStatus::Approved->value, TicketStatus::Rejected->value];
+        // ticket.reject: can reject pending tickets or reject completion
+        if ($user->can('ticket.reject') && in_array(TicketStatus::Rejected->value, $allowedTransitions, true)) {
+            $available[] = TicketStatus::Rejected->value;
+        }
 
-                case 'approved':
-                case 'not_started':
-                    return [TicketStatus::InProgress->value, TicketStatus::Hold->value, TicketStatus::Escalated->value];
-
-                case 'in_progress':
-                    return [TicketStatus::Hold->value, TicketStatus::Escalated->value, TicketStatus::Done->value, TicketStatus::Closed->value, TicketStatus::Rejected->value];
-
-                case 'hold':
-                    return [TicketStatus::InProgress->value, TicketStatus::Escalated->value, TicketStatus::Done->value, TicketStatus::Closed->value, TicketStatus::Rejected->value];
-
-                case 'escalated':
-                    return [TicketStatus::InProgress->value, TicketStatus::Done->value, TicketStatus::Hold->value, TicketStatus::Closed->value, TicketStatus::Rejected->value];
-
-                case 'done':
-                    return [TicketStatus::Closed->value, TicketStatus::InProgress->value, TicketStatus::Rejected->value];
-
-                case 'ticket_approved':
-                    return [TicketStatus::Closed->value];
-
-                default:
-                    return [];
+        // ticket.status.update: can move to in_progress or not_started
+        if ($user->can('ticket.status.update')) {
+            if (in_array(TicketStatus::InProgress->value, $allowedTransitions, true)) {
+                $available[] = TicketStatus::InProgress->value;
+            }
+            if (in_array(TicketStatus::NotStarted->value, $allowedTransitions, true)) {
+                $available[] = TicketStatus::NotStarted->value;
             }
         }
 
-        return [];
+        // Requestor completion actions on done tickets
+        if ($isRequestor && $statusVal === 'done') {
+            if (in_array(TicketStatus::TicketApproved->value, $allowedTransitions, true)) {
+                $available[] = TicketStatus::TicketApproved->value;
+            }
+            if (in_array(TicketStatus::InProgress->value, $allowedTransitions, true)) {
+                $available[] = TicketStatus::InProgress->value;
+            }
+        }
+
+        return array_values(array_unique($available));
     }
 }

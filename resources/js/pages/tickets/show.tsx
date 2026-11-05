@@ -349,15 +349,16 @@ export default function TicketShow() {
   };
 
   const approveCompletion = () => {
+    const canOfficiallyClose = (abilities as any).canClose || abilities.hasManagerPower;
     let nextStatus = 'approved';
     if (ticket.status === 'done') {
-      nextStatus = abilities.hasManagerPower ? 'closed' : 'ticket_approved';
+      nextStatus = canOfficiallyClose ? 'closed' : 'ticket_approved';
     } else if (ticket.status === 'ticket_approved') {
       nextStatus = 'closed';
     }
     router.post(route('tickets.approve-completion', ticket.id), {}, {
       onSuccess: () => {
-        if (!abilities.hasManagerPower) {
+        if (!canOfficiallyClose) {
           setIsRatingModalOpen(true);
           setSuccessModal({ open: false });
         } else {
@@ -829,8 +830,8 @@ export default function TicketShow() {
 
           {/* Secondary Details & History */}
           <div className="space-y-6">
-            {/* Requester Rate & Approve Card when Ticket Status is Done (Permission & Authorization Protected) */}
-            {ticket.status === 'done' && (abilities.canRate || abilities.canApproveReject) && (
+            {/* Requester Rate & Approve Card when Ticket Status is Done */}
+            {ticket.status === 'done' && abilities.isRequestor && (abilities.canRate || abilities.canApproveReject) && (
               <Card className="border-2 border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/40 shadow-lg p-5">
                 <div className="flex items-center gap-2 mb-2">
                   <CheckCircle2 className="h-6 w-6 text-emerald-600" />
@@ -845,6 +846,26 @@ export default function TicketShow() {
                 >
                   <Star className="h-4 w-4 fill-white" />
                   Approve Completion & Rate Technical
+                </Button>
+              </Card>
+            )}
+
+            {/* Official Close Ticket Card when Done or Approved and user has Close permission */}
+            {(ticket.status === 'done' || ticket.status === 'ticket_approved') && !abilities.isRequestor && ((abilities as any).canClose || abilities.hasManagerPower) && (
+              <Card className="border-2 border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40 shadow-lg p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="h-6 w-6 text-indigo-600" />
+                  <h3 className="text-base font-bold text-indigo-950 dark:text-indigo-200">Officially Close Ticket</h3>
+                </div>
+                <p className="text-xs text-indigo-800 dark:text-indigo-300 mb-4 leading-relaxed">
+                  Technical work has been completed. As an authorized closer, you can finalize and officially close this case.
+                </p>
+                <Button
+                  onClick={() => approveCompletion()}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-11 gap-2 text-sm shadow-md"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  Officially Close Ticket
                 </Button>
               </Card>
             )}

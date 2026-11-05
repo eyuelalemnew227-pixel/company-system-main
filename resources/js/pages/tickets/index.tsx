@@ -115,9 +115,7 @@ export default function TicketIndex() {
   const handleOpenUpdateModal = (ticket: Ticket) => {
     setSelectedTicket(ticket);
     const currentAssignee = ticket.assignments?.find((a) => a.is_current)?.assigned_to ?? '';
-    const baseStatuses = ticket.allowed_statuses && ticket.allowed_statuses.length > 0
-      ? ticket.allowed_statuses
-      : options.statuses;
+    const baseStatuses = ticket.allowed_statuses ?? [];
     const remaining = baseStatuses.filter((s: string) => s !== ticket.status);
     setUpdateData({
       status: remaining[0] ?? '',
@@ -564,9 +562,7 @@ export default function TicketIndex() {
                 onChange={(e) => setUpdateData('status', e.target.value)}
               >
                 {(() => {
-                  const baseStatuses = selectedTicket?.allowed_statuses && selectedTicket.allowed_statuses.length > 0
-                    ? selectedTicket.allowed_statuses
-                    : options.statuses;
+                  const baseStatuses = selectedTicket?.allowed_statuses ?? [];
                   const remaining = baseStatuses.filter((s: string) => s !== selectedTicket?.status);
                   if (remaining.length === 0) {
                     return <option value="">No other status transitions available</option>;

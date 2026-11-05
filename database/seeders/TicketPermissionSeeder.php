@@ -39,7 +39,6 @@ class TicketPermissionSeeder extends Seeder
             'Ticket User' => [
                 'ticket.create',
                 'ticket.view.own',
-                'ticket.status.update', // only for approve/reject done handled by policy
                 'ticket.rate',
             ],
             'Ticket Department Manager' => [

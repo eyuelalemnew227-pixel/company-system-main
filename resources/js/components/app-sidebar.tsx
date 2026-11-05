@@ -221,7 +221,7 @@ const baseSections: NavSection[] = [
     label: 'Ticketing',
     icon: Ticket,
     items: [
-      { title: 'Tickets', href: '/tickets', icon: Ticket, permission: 'ticket.view.own|ticket.view.department|ticket.view.all' },
+      { title: 'Tickets', href: '/tickets', icon: Ticket, permission: 'ticket.view.own|ticket.view.department|ticket.view.all|ticket.create|ticket.close|ticket.approve|ticket.assign|ticket.status.update|ticket.done|ticket.escalate|ticket.pending|ticket.reject|ticket.rate|ticket.delete|ticket.view.logs' },
       { title: 'Ticketing Report', href: '/tickets/reports', icon: BarChart3, permission: 'ticket.report.view' },
       { title: 'Broadcast Announcement', href: '/broadcast-announcements', icon: Send, permission: 'view telegram config|send telegram broadcast|ticket.view.department|ticket.view.all' },
       { title: 'Ticket Settings', href: '/ticket-settings', icon: Settings, permission: 'ticket.manage.taxonomy|ticket.view.all' },

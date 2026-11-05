@@ -159,33 +159,46 @@ class Ticket extends Model
         $isAssignee = $currentAssignment && (string) $currentAssignment->assigned_to === (string) $user->id;
 
         $managerUserIds = app(\App\Services\TicketActionService::class)->departmentManagerUserIds($this->department_id);
-        $hasManagerPower = in_array((int) $user->id, $managerUserIds)
-            || $user->hasRole('Ticket Super Admin')
-            || $user->hasRole('Super Admin')
-            || $user->can('ticket.assign')
-            || $user->can('ticket.approve')
-            || $user->can('ticket.close');
+        $isDepartmentManager = in_array((int) $user->id, $managerUserIds);
+        $isSuperAdmin = $user->hasRole('Ticket Super Admin') || $user->hasRole('Super Admin');
+        $hasManagerPower = $isDepartmentManager || $isSuperAdmin;
 
         $isClosedOrRejected = in_array($this->status, [TicketStatus::Rejected, TicketStatus::Closed]);
         $isPendingOrDone = in_array($this->status, [TicketStatus::PendingApproval, TicketStatus::Done]);
 
+        $canAssign = ($hasManagerPower || $user->can('ticket.assign')) && !$isClosedOrRejected;
+        $canClose = ($hasManagerPower || $user->can('ticket.close')) && !$isClosedOrRejected;
+        $canApprove = ($hasManagerPower || $user->can('ticket.approve')) && !$isClosedOrRejected;
+        $canReject = ($hasManagerPower || $user->can('ticket.reject')) && !$isClosedOrRejected;
+
         $canUpdateStatusPermission = $user->can('ticket.status.update')
             || $user->can('ticket.done')
             || $user->can('ticket.escalate')
-            || $user->can('ticket.approve')
-            || $user->can('ticket.close');
+            || $user->can('ticket.pending')
+            || $canApprove
+            || $canReject
+            || $canClose;
+
+        $canUpdateStatus = ($isAssignee || $hasManagerPower || $canUpdateStatusPermission) && !$isClosedOrRejected;
+
+        $isRequestor = (int) $this->user_id === (int) $user->id;
+
+        $canApproveReject = (($canApprove || $canReject || $canClose || $hasManagerPower) && $isPendingOrDone)
+            || ($this->status === TicketStatus::Done && $isRequestor);
 
         return [
-            'canAssign' => ($hasManagerPower || $user->can('ticket.assign')) && !$isClosedOrRejected,
-            'canUpdateStatus' => ($isAssignee || $hasManagerPower || $canUpdateStatusPermission) && !$isClosedOrRejected,
-            'canApproveReject' => (($hasManagerPower || $user->can('ticket.approve') || $user->can('ticket.reject')) && $isPendingOrDone)
-                || ($this->status === TicketStatus::Done && (int) $this->user_id === (int) $user->id),
+            'canAssign' => $canAssign,
+            'canClose' => $canClose,
+            'canApprove' => $canApprove,
+            'canReject' => $canReject,
+            'canUpdateStatus' => $canUpdateStatus,
+            'canApproveReject' => $canApproveReject,
             'canRate' => $this->status === TicketStatus::TicketApproved
-                && ((int) $this->user_id === (int) $user->id || $user->can('ticket.rate'))
+                && ($isRequestor || $user->can('ticket.rate'))
                 && $this->ratings()->doesntExist(),
             'hasRated' => $this->ratings()->exists(),
-            'isRequestor' => (int) $this->user_id === (int) $user->id,
-            'canDelete' => $user->can('ticket.delete') || $user->hasRole('Super Admin') || $user->hasRole('Ticket Super Admin'),
+            'isRequestor' => $isRequestor,
+            'canDelete' => $user->can('ticket.delete') || $isSuperAdmin,
             'canUpdateAsset' => $user->can('updateAsset', $this),
             'canUpdateDeadline' => $user->can('updateDeadline', $this),
             'canUpdatePriority' => $user->can('updatePriority', $this),
