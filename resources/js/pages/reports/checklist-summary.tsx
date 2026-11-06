@@ -9,13 +9,21 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
     Users,
+    Briefcase,
     Building2,
     ClipboardCheck,
     FileCheck2,
     TrendingUp,
     Search,
     Download,
+    Layers,
     FilterX,
     ArrowUpDown,
     CheckCircle2,
@@ -50,6 +58,8 @@ interface SummaryRow {
     employee_code?: string | null;
     branch_id?: number | null;
     branch: string;
+    department_id?: number | null;
+    department?: string | null;
     score_type_1: number | null;
     score_type_2: number | null;
     avg_score: number | null;
@@ -82,12 +92,14 @@ interface ChecklistSummaryProps {
         fiscal_year_id: string;
         fiscal_month_id: string;
         branch_id: string;
+        department_id?: string;
         completion_status: string;
         search: string;
         start_date?: string;
         end_date?: string;
     };
     branches?: Array<{ id: number; name: string }>;
+    departments?: Array<{ id: number; name: string }>;
     fiscalYears?: Array<{ id: number; name: string }>;
     fiscalMonths?: Array<{ id: number; fiscal_year_id: number; name: string }>;
     currentFiscalYearId?: number | null;
@@ -107,12 +119,14 @@ export default function ChecklistSummary({
         fiscal_year_id: 'all',
         fiscal_month_id: 'all',
         branch_id: 'all',
+        department_id: 'all',
         completion_status: 'all',
         search: '',
         start_date: '',
         end_date: '',
     },
     branches = [],
+    departments = [],
     fiscalYears = [],
     fiscalMonths = [],
     currentFiscalYearId = null,
@@ -123,6 +137,7 @@ export default function ChecklistSummary({
     const [selectedYear, setSelectedYear] = useState<string>(filters.fiscal_year_id || 'all');
     const [selectedMonth, setSelectedMonth] = useState<string>(filters.fiscal_month_id || 'all');
     const [selectedBranch, setSelectedBranch] = useState<string>(filters.branch_id || 'all');
+    const [selectedDepartment, setSelectedDepartment] = useState<string>(filters.department_id || 'all');
     const [selectedStatus, setSelectedStatus] = useState<string>(filters.completion_status || 'all');
     const [startDate, setStartDate] = useState<string>(filters.start_date || '');
     const [endDate, setEndDate] = useState<string>(filters.end_date || '');
@@ -159,6 +174,7 @@ export default function ChecklistSummary({
             fiscal_year_id: selectedYear,
             fiscal_month_id: selectedMonth,
             branch_id: selectedBranch,
+            department_id: selectedDepartment,
             completion_status: selectedStatus,
             search: searchTerm,
             start_date: startDate,
@@ -216,6 +232,7 @@ export default function ChecklistSummary({
         setSelectedYear('all');
         setSelectedMonth('all');
         setSelectedBranch('all');
+        setSelectedDepartment('all');
         setSelectedStatus('all');
         setStartDate('');
         setEndDate('');
@@ -224,6 +241,7 @@ export default function ChecklistSummary({
             fiscal_year_id: 'all',
             fiscal_month_id: 'all',
             branch_id: 'all',
+            department_id: 'all',
             completion_status: 'all',
             search: '',
             start_date: '',
@@ -245,6 +263,7 @@ export default function ChecklistSummary({
                 (row) =>
                     row.employee_name.toLowerCase().includes(term) ||
                     row.branch.toLowerCase().includes(term) ||
+                    (row.department && row.department.toLowerCase().includes(term)) ||
                     (row.employee_code && row.employee_code.toLowerCase().includes(term))
             );
         }
@@ -476,12 +495,13 @@ export default function ChecklistSummary({
         if (selectedYear && selectedYear !== 'all') params.set('fiscal_year_id', selectedYear);
         if (selectedMonth && selectedMonth !== 'all') params.set('fiscal_month_id', selectedMonth);
         if (selectedBranch && selectedBranch !== 'all') params.set('branch_id', selectedBranch);
+        if (selectedDepartment && selectedDepartment !== 'all') params.set('department_id', selectedDepartment);
         if (selectedStatus && selectedStatus !== 'all') params.set('completion_status', selectedStatus);
         if (startDate) params.set('start_date', startDate);
         if (endDate) params.set('end_date', endDate);
         if (searchTerm) params.set('search', searchTerm);
         return `/reports/checklist-summary/export?${params.toString()}`;
-    }, [selectedYear, selectedMonth, selectedBranch, selectedStatus, startDate, endDate, searchTerm]);
+    }, [selectedYear, selectedMonth, selectedBranch, selectedDepartment, selectedStatus, startDate, endDate, searchTerm]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -582,11 +602,53 @@ export default function ChecklistSummary({
                             </div>
 
                             <div className="flex items-center gap-2">
-                                <Button asChild variant="outline" size="sm" className="border-amber-300 text-amber-900 hover:bg-amber-50 shadow-xs">
-                                    <a href={exportUrl} download>
-                                        <Download className="w-4 h-4 mr-1.5 text-amber-700" /> Export CSV
-                                    </a>
-                                </Button>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="outline" size="sm" className="border-amber-300 text-amber-900 hover:bg-amber-50 shadow-xs font-semibold flex items-center gap-1.5 cursor-pointer">
+                                            <Download className="w-4 h-4 text-amber-700" />
+                                            <span>Export CSV</span>
+                                            <ChevronDown className="w-3.5 h-3.5 ml-0.5 text-amber-700" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end" className="w-64 p-1.5 bg-white border border-gray-200 shadow-lg rounded-lg">
+                                        <DropdownMenuItem asChild>
+                                            <a href={`${exportUrl}&level=employee`} download className="flex items-center gap-2.5 cursor-pointer py-2 px-2.5 rounded-md hover:bg-amber-50/70 transition-colors">
+                                                <Users className="w-4 h-4 text-blue-600 shrink-0" />
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-xs text-gray-900">Employee Level</span>
+                                                    <span className="text-[10px] text-muted-foreground">Individual employee scores & details</span>
+                                                </div>
+                                            </a>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                            <a href={`${exportUrl}&level=branch`} download className="flex items-center gap-2.5 cursor-pointer py-2 px-2.5 rounded-md hover:bg-amber-50/70 transition-colors">
+                                                <Building2 className="w-4 h-4 text-amber-600 shrink-0" />
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-xs text-gray-900">Branch Level</span>
+                                                    <span className="text-[10px] text-muted-foreground">Aggregated scores by branch</span>
+                                                </div>
+                                            </a>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                            <a href={`${exportUrl}&level=department`} download className="flex items-center gap-2.5 cursor-pointer py-2 px-2.5 rounded-md hover:bg-amber-50/70 transition-colors">
+                                                <Briefcase className="w-4 h-4 text-purple-600 shrink-0" />
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-xs text-gray-900">Department Level</span>
+                                                    <span className="text-[10px] text-muted-foreground">Aggregated scores by department</span>
+                                                </div>
+                                            </a>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem asChild>
+                                            <a href={`${exportUrl}&level=branch_department`} download className="flex items-center gap-2.5 cursor-pointer py-2 px-2.5 rounded-md hover:bg-amber-50/70 transition-colors">
+                                                <Layers className="w-4 h-4 text-emerald-600 shrink-0" />
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-xs text-gray-900">Branch & Department Level</span>
+                                                    <span className="text-[10px] text-muted-foreground">Breakdown by branch & department</span>
+                                                </div>
+                                            </a>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
                         </div>
 
@@ -743,6 +805,29 @@ export default function ChecklistSummary({
                                     </Select>
                                 </div>
 
+                                {/* Department */}
+                                <div className="w-[180px]">
+                                    <Select
+                                        value={selectedDepartment}
+                                        onValueChange={(val) => {
+                                            setSelectedDepartment(val);
+                                            applyFilters({ department_id: val });
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-8 bg-white text-xs border-gray-200 truncate">
+                                            <SelectValue placeholder="Department" />
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-60">
+                                            <SelectItem value="all">All Departments</SelectItem>
+                                            {departments.map((d) => (
+                                                <SelectItem key={d.id} value={String(d.id)}>
+                                                    {d.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
                                 {/* Completion Status */}
                                 <div className="w-[140px]">
                                     <Select
@@ -792,7 +877,7 @@ export default function ChecklistSummary({
                             <Table>
                                 <TableHeader className="bg-slate-700 dark:bg-slate-800 text-white sticky top-0 z-10">
                                     <TableRow className="hover:bg-slate-700 border-none">
-                                        <TableHead className="font-bold text-white w-[30%]">
+                                        <TableHead className="font-bold text-white w-[22%]">
                                             <div className="flex items-center gap-2">
                                                 <span
                                                     onClick={() => handleSort('branch')}
@@ -826,8 +911,19 @@ export default function ChecklistSummary({
                                         </TableHead>
 
                                         <TableHead
+                                            onClick={() => handleSort('department')}
+                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors w-[16%]"
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                <Briefcase className="w-4 h-4 text-amber-400" />
+                                                <span>Department</span>
+                                                <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
+                                            </div>
+                                        </TableHead>
+
+                                        <TableHead
                                             onClick={() => handleSort('employee_name')}
-                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors w-[26%]"
+                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors w-[22%]"
                                         >
                                             <div className="flex items-center gap-1.5">
                                                 <Users className="w-4 h-4 text-amber-400" />
@@ -838,7 +934,7 @@ export default function ChecklistSummary({
 
                                         <TableHead
                                             onClick={() => handleSort('score_type_1')}
-                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors text-center w-[15%]"
+                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors text-center w-[14%]"
                                         >
                                             <div className="flex items-center justify-center gap-1.5">
                                                 <ClipboardCheck className="w-4 h-4 text-blue-300" />
@@ -849,7 +945,7 @@ export default function ChecklistSummary({
 
                                         <TableHead
                                             onClick={() => handleSort('score_type_2')}
-                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors text-center w-[15%]"
+                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors text-center w-[14%]"
                                         >
                                             <div className="flex items-center justify-center gap-1.5">
                                                 <FileCheck2 className="w-4 h-4 text-purple-300" />
@@ -860,7 +956,7 @@ export default function ChecklistSummary({
 
                                         <TableHead
                                             onClick={() => handleSort('avg_score')}
-                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors text-left w-[14%]"
+                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors text-left w-[12%]"
                                         >
                                             <div className="flex items-center gap-1.5">
                                                 <TrendingUp className="w-4 h-4 text-emerald-300" />
@@ -874,7 +970,7 @@ export default function ChecklistSummary({
                                 <TableBody>
                                     {paginatedBranchGroups.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={5} className="text-center py-12">
+                                            <TableCell colSpan={6} className="text-center py-12">
                                                 <div className="flex flex-col items-center justify-center space-y-2 text-gray-400">
                                                     <ClipboardCheck className="w-10 h-10 stroke-1 text-gray-300" />
                                                     <p className="text-base font-medium text-gray-600">
@@ -923,6 +1019,12 @@ export default function ChecklistSummary({
                                                         </TableCell>
 
                                                         <TableCell>
+                                                            <span className="text-xs font-medium text-blue-900/60 dark:text-blue-300/70 italic">
+                                                                —
+                                                            </span>
+                                                        </TableCell>
+
+                                                        <TableCell>
                                                             <span className="text-xs font-medium text-blue-900/80 dark:text-blue-300 italic">
                                                                 Branch Average ({branchGroup.both_completed_count}/{branchGroup.employees.length} completed)
                                                             </span>
@@ -957,6 +1059,12 @@ export default function ChecklistSummary({
                                                                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
                                                                         <span className="truncate">{row.branch}</span>
                                                                     </div>
+                                                                </TableCell>
+
+                                                                <TableCell>
+                                                                    <span className="inline-flex items-center text-xs font-medium text-gray-700 dark:text-gray-300 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-200/70 dark:border-slate-700">
+                                                                        {row.department || '—'}
+                                                                    </span>
                                                                 </TableCell>
 
                                                                 <TableCell>

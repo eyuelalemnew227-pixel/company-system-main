@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Branch;
+use App\Models\Department;
 use App\Models\Employee;
 use App\Models\FiscalMonth;
 use App\Models\FiscalYear;
@@ -313,6 +314,7 @@ class ChecklistScoringService
         $fiscalYearId = $filters['fiscal_year_id'] ?? null;
         $fiscalMonthId = $filters['fiscal_month_id'] ?? null;
         $branchIdFilter = $filters['branch_id'] ?? null;
+        $deptIdFilter = $filters['department_id'] ?? null;
         $completionFilter = $filters['completion_status'] ?? 'all';
         $search = trim($filters['search'] ?? '');
         $startDate = !empty($filters['start_date']) ? $filters['start_date'] : null;
@@ -374,6 +376,7 @@ class ChecklistScoringService
 
         $employees = Employee::get(['id', 'first_name', 'last_name', 'employee_code', 'department_id', 'branch_id'])->keyBy('id');
         $branches = Branch::pluck('name', 'id')->toArray();
+        $departments = Department::pluck('name', 'id')->toArray();
 
         $employeeMap = [];
 
@@ -477,6 +480,8 @@ class ChecklistScoringService
                     $pct = round(($st['passed'] / $st['total']) * 100, 1);
                     $emp = $employees->get($empIdNum) ?? $employees->get((string) $empIdNum);
                     $branchId = $emp?->branch_id ?? $subBranchId;
+                    $deptId = $emp?->department_id;
+                    $deptName = $deptId && isset($departments[$deptId]) ? $departments[$deptId] : '—';
 
                     if (!isset($employeeMap[$empIdNum])) {
                         $employeeMap[$empIdNum] = [
@@ -485,6 +490,8 @@ class ChecklistScoringService
                             'employee_code' => $emp?->employee_code,
                             'branch_id' => $branchId,
                             'branch_name' => $branchId && isset($branches[$branchId]) ? $branches[$branchId] : '—',
+                            'department_id' => $deptId,
+                            'department_name' => $deptName,
                             'type_1_total' => 0,
                             'type_1_passed' => 0,
                             'type_1_count' => 0,
@@ -497,6 +504,11 @@ class ChecklistScoringService
                     if ($branchId && (!$employeeMap[$empIdNum]['branch_id'] || $employeeMap[$empIdNum]['branch_name'] === '—')) {
                         $employeeMap[$empIdNum]['branch_id'] = $branchId;
                         $employeeMap[$empIdNum]['branch_name'] = $branches[$branchId] ?? '—';
+                    }
+
+                    if ($deptId && (!$employeeMap[$empIdNum]['department_id'] || $employeeMap[$empIdNum]['department_name'] === '—')) {
+                        $employeeMap[$empIdNum]['department_id'] = $deptId;
+                        $employeeMap[$empIdNum]['department_name'] = $departments[$deptId] ?? '—';
                     }
 
                     $employeeMap[$empIdNum]['type_1_total'] += $st['total'];
@@ -514,7 +526,10 @@ class ChecklistScoringService
                         continue;
                     }
 
-                    $branchId = $scoreData['branch_id'] ?? $subBranchId;
+                    $emp = $employees->get($empId) ?? $employees->get((string) $empId);
+                    $branchId = $scoreData['branch_id'] ?? $emp?->branch_id ?? $subBranchId;
+                    $deptId = $emp?->department_id;
+                    $deptName = $deptId && isset($departments[$deptId]) ? $departments[$deptId] : '—';
 
                     if (!isset($employeeMap[$empId])) {
                         $employeeMap[$empId] = [
@@ -523,6 +538,8 @@ class ChecklistScoringService
                             'employee_code' => $scoreData['employee_code'] ?? null,
                             'branch_id' => $branchId,
                             'branch_name' => $branchId && isset($branches[$branchId]) ? $branches[$branchId] : '—',
+                            'department_id' => $deptId,
+                            'department_name' => $deptName,
                             'type_1_total' => 0,
                             'type_1_passed' => 0,
                             'type_1_count' => 0,
@@ -535,6 +552,11 @@ class ChecklistScoringService
                     if ($branchId && (!$employeeMap[$empId]['branch_id'] || $employeeMap[$empId]['branch_name'] === '—')) {
                         $employeeMap[$empId]['branch_id'] = $branchId;
                         $employeeMap[$empId]['branch_name'] = $branches[$branchId] ?? '—';
+                    }
+
+                    if ($deptId && (!$employeeMap[$empId]['department_id'] || $employeeMap[$empId]['department_name'] === '—')) {
+                        $employeeMap[$empId]['department_id'] = $deptId;
+                        $employeeMap[$empId]['department_name'] = $departments[$deptId] ?? '—';
                     }
 
                     $employeeMap[$empId]['type_2_total'] += ($scoreData['total_points'] ?? 0);
@@ -594,13 +616,19 @@ class ChecklistScoringService
                 continue;
             }
 
-            // Apply search filter (employee name or branch)
+            // Apply department filter
+            if ($deptIdFilter && $deptIdFilter !== 'all' && (string) ($data['department_id'] ?? '') !== (string) $deptIdFilter) {
+                continue;
+            }
+
+            // Apply search filter (employee name, branch, or department)
             if ($search !== '') {
                 $term = mb_strtolower($search);
                 $matchesName = str_contains(mb_strtolower($data['employee_name']), $term);
                 $matchesBranch = str_contains(mb_strtolower($data['branch_name']), $term);
+                $matchesDept = !empty($data['department_name']) ? str_contains(mb_strtolower($data['department_name']), $term) : false;
                 $matchesCode = $data['employee_code'] ? str_contains(mb_strtolower($data['employee_code']), $term) : false;
-                if (!$matchesName && !$matchesBranch && !$matchesCode) {
+                if (!$matchesName && !$matchesBranch && !$matchesDept && !$matchesCode) {
                     continue;
                 }
             }
@@ -611,6 +639,8 @@ class ChecklistScoringService
                 'employee_code' => $data['employee_code'],
                 'branch_id' => $data['branch_id'],
                 'branch' => $data['branch_name'],
+                'department_id' => $data['department_id'] ?? null,
+                'department' => $data['department_name'] ?? '—',
                 'score_type_1' => $score1,
                 'score_type_2' => $score2,
                 'avg_score' => $avg,
