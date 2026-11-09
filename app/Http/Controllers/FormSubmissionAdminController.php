@@ -91,22 +91,6 @@ class FormSubmissionAdminController extends Controller
             }
         }
 
-        // Determine if this submission has any questions with specific employee or department targeting
-        $hasAnyTargeting = $submission->answers->contains(function ($a) {
-            $targets = $a->targeted_employees;
-            if (is_string($targets)) {
-                $targets = json_decode($targets, true);
-            }
-            if (!empty($targets)) {
-                return true;
-            }
-            $deptTargets = $a->question?->department_targets;
-            if (is_string($deptTargets)) {
-                $deptTargets = json_decode($deptTargets, true);
-            }
-            return !empty($deptTargets);
-        });
-
         $totalBoolQuestions = 0;
         $yesAnswers = 0;
 
@@ -162,7 +146,7 @@ class FormSubmissionAdminController extends Controller
                             $isTargeted = in_array($empIdStr, $ansTargetEmpIds, true);
                         } elseif (!empty($targetDeptIds)) {
                             $isTargeted = in_array((string) $empScore['department_id'], $targetDeptIds, true);
-                        } elseif (!$hasAnyTargeting) {
+                        } else {
                             $isTargeted = true;
                         }
 
@@ -1909,21 +1893,6 @@ class FormSubmissionAdminController extends Controller
             return;
         }
 
-        $hasAnyTargeting = $submission->answers->contains(function ($a) {
-            $targets = $a->targeted_employees;
-            if (is_string($targets)) {
-                $targets = json_decode($targets, true);
-            }
-            if (!empty($targets)) {
-                return true;
-            }
-            $deptTargets = $a->question?->department_targets;
-            if (is_string($deptTargets)) {
-                $deptTargets = json_decode($deptTargets, true);
-            }
-            return !empty($deptTargets);
-        });
-
         $totalPoints = 0;
         $earnedPoints = 0;
         $empIdStr = (string) $employee->id;
@@ -1971,7 +1940,7 @@ class FormSubmissionAdminController extends Controller
                         $isTargeted = in_array($empIdStr, $ansTargetEmpIds, true);
                     } elseif (!empty($targetDeptIds)) {
                         $isTargeted = in_array($empDeptIdStr, $targetDeptIds, true);
-                    } elseif (!$hasAnyTargeting) {
+                    } else {
                         $isTargeted = true;
                     }
 

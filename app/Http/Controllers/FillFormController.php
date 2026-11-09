@@ -91,7 +91,56 @@ class FillFormController extends Controller
             'answers' => 'required|array',
         ]);
 
-        DB::transaction(function () use ($version, $validated) {
+        $version->loadMissing(['sections.questions.inputType', 'sections.questions.choices']);
+
+        $allQuestionsMap = [];
+        foreach ($version->sections as $sec) {
+            foreach ($sec->questions as $q) {
+                if (!empty($q->local_id)) {
+                    $allQuestionsMap[(string) $q->local_id] = $q;
+                }
+                if (!empty($q->id)) {
+                    $allQuestionsMap[(string) $q->id] = $q;
+                }
+            }
+        }
+
+        $validationErrors = [];
+        foreach ($version->sections as $sec) {
+            if (!$this->isSectionVisible($sec, $allQuestionsMap, $validated['answers'])) {
+                continue;
+            }
+
+            foreach ($sec->questions as $q) {
+                if (!$this->isQuestionVisible($q, $allQuestionsMap, $validated['answers'])) {
+                    continue;
+                }
+
+                $tId = $q->inputType->type_identifier ?? '';
+                if ($tId === 'title') {
+                    continue;
+                }
+
+                $isEmployeeLookup = $tId === 'employee_lookup';
+                $isRequired = (bool) $q->is_required || $isEmployeeLookup;
+
+                if ($isRequired) {
+                    $ans = $validated['answers'][$q->id] ?? null;
+                    $isEmpty = $ans === null || $ans === '' || (is_array($ans) && empty($ans));
+                    if ($isEmpty) {
+                        $validationErrors["answers.{$q->id}"] = $isEmployeeLookup
+                            ? "Please select an employee for '{$q->label}' (mandatory)."
+                            : "The '{$q->label}' field is required.";
+                    }
+                }
+            }
+        }
+
+        if (!empty($validationErrors)) {
+            return back()->withErrors($validationErrors)->withInput();
+        }
+
+        DB::transaction(function () use ($version, $validated, $allQuestionsMap) {
             $submission = \App\Models\FormSubmission::create([
                 'form_version_id' => $version->id,
                 'user_id' => auth()->id(),
@@ -102,7 +151,13 @@ class FillFormController extends Controller
 
             $globalRosterArr = [];
             foreach ($version->sections as $sec) {
+                if (!$this->isSectionVisible($sec, $allQuestionsMap, $validated['answers'])) {
+                    continue;
+                }
                 foreach ($sec->questions as $q) {
+                    if (!$this->isQuestionVisible($q, $allQuestionsMap, $validated['answers'])) {
+                        continue;
+                    }
                     $tId = $q->inputType->type_identifier ?? '';
                     if ($tId === 'employee_attendance_roster' && isset($validated['answers'][$q->id])) {
                         $ans = $validated['answers'][$q->id];
@@ -114,8 +169,15 @@ class FillFormController extends Controller
             }
 
             foreach ($version->sections as $section) {
+                if (!$this->isSectionVisible($section, $allQuestionsMap, $validated['answers'])) {
+                    continue;
+                }
+
                 $localRosterArr = [];
                 foreach ($section->questions as $q) {
+                    if (!$this->isQuestionVisible($q, $allQuestionsMap, $validated['answers'])) {
+                        continue;
+                    }
                     $tId = $q->inputType->type_identifier ?? '';
                     if ($tId === 'employee_attendance_roster') {
                         if (isset($validated['answers'][$q->id])) {
@@ -126,6 +188,9 @@ class FillFormController extends Controller
                 }
 
                 foreach ($section->questions as $q) {
+                    if (!$this->isQuestionVisible($q, $allQuestionsMap, $validated['answers'])) {
+                        continue;
+                    }
                     if (!array_key_exists($q->id, $validated['answers'])) {
                         continue;
                     }
@@ -254,4 +319,98 @@ class FillFormController extends Controller
 
         return redirect()->route('forms.available')->with('success', 'Checklist submitted successfully.');
     }
+
+    private function isSectionVisible($sec, array $allQuestionsMap, array $answers): bool
+    {
+        $logic = $sec->visibility_logic;
+        if (empty($logic) || empty($logic['target_local_id'])) {
+            return true;
+        }
+
+        $targetKey = (string) $logic['target_local_id'];
+        $targetQ = $allQuestionsMap[$targetKey] ?? null;
+        if (!$targetQ) {
+            return true;
+        }
+
+        $givenAnswer = $answers[$targetQ->id] ?? null;
+        return $this->evaluateVisibilityLogic($logic, $givenAnswer, $targetQ);
+    }
+
+    private function isQuestionVisible($q, array $allQuestionsMap, array $answers): bool
+    {
+        $logic = $q->visibility_logic;
+        if (empty($logic) || empty($logic['target_local_id'])) {
+            return true;
+        }
+
+        $targetKey = (string) $logic['target_local_id'];
+        $targetQ = $allQuestionsMap[$targetKey] ?? null;
+        if (!$targetQ) {
+            return true;
+        }
+
+        $givenAnswer = $answers[$targetQ->id] ?? null;
+        return $this->evaluateVisibilityLogic($logic, $givenAnswer, $targetQ);
+    }
+
+    private function evaluateVisibilityLogic(?array $logic, $givenAnswer, $targetQ = null): bool
+    {
+        if (empty($logic) || empty($logic['target_local_id'])) {
+            return true;
+        }
+
+        $operator = $logic['operator'] ?? 'equals';
+        $requiredValue = $logic['value'] ?? null;
+
+        // If target question has not been answered yet
+        if ($givenAnswer === null || $givenAnswer === '' || (is_array($givenAnswer) && empty($givenAnswer))) {
+            return $operator === 'not_equals';
+        }
+
+        $normalizeBool = function ($val) {
+            if ($val === true || $val === 1 || $val === '1' || $val === 'true' || strtolower((string) $val) === 'yes') return true;
+            if ($val === false || $val === 0 || $val === '0' || $val === 'false' || strtolower((string) $val) === 'no') return false;
+            return null;
+        };
+
+        $boolAnswer = $normalizeBool($givenAnswer);
+        $boolReq = $normalizeBool($requiredValue);
+
+        $isMatch = false;
+        if ($boolAnswer !== null && $boolReq !== null) {
+            $isMatch = ($boolAnswer === $boolReq);
+        } elseif (is_array($givenAnswer)) {
+            $normalizedReq = strtolower(trim((string) $requiredValue));
+            foreach ($givenAnswer as $v) {
+                if (strtolower(trim((string) $v)) === $normalizedReq) {
+                    $isMatch = true;
+                    break;
+                }
+            }
+        } else {
+            $strGiven = strtolower(trim((string) $givenAnswer));
+            $strReq = strtolower(trim((string) $requiredValue));
+            $isMatch = ($strGiven === $strReq);
+
+            if (!$isMatch && $targetQ && isset($targetQ->choices)) {
+                $matchedChoice = $targetQ->choices->first(function ($c) use ($givenAnswer) {
+                    return (string) $c->id === (string) $givenAnswer
+                        || strtolower(trim((string) $c->value)) === strtolower(trim((string) $givenAnswer))
+                        || strtolower(trim((string) $c->label)) === strtolower(trim((string) $givenAnswer));
+                });
+                if ($matchedChoice) {
+                    $cVal = strtolower(trim((string) $matchedChoice->value));
+                    $cLabel = strtolower(trim((string) $matchedChoice->label));
+                    $cId = (string) $matchedChoice->id;
+                    if ($strReq === $cVal || $strReq === $cLabel || $strReq === $cId) {
+                        $isMatch = true;
+                    }
+                }
+            }
+        }
+
+        return $operator === 'not_equals' ? !$isMatch : $isMatch;
+    }
 }
+

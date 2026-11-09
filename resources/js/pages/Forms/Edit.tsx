@@ -28,14 +28,19 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
     const initialSections = (formVersion?.sections || [{ title: 'Section 1', questions: [] }]).map((sec: any) => ({
         ...sec,
         _id: sec.id?.toString() || generateId(),
-        questions: (sec.questions || []).map((q: any) => ({
-            ...q,
-            _id: q.local_id || q.id?.toString() || generateId(),
-            choices: (q.choices || []).map((c: any) => ({
-                ...c,
-                _id: c.local_id || c.id?.toString() || generateId()
-            }))
-        }))
+        questions: (sec.questions || []).map((q: any) => {
+            const qType = inputTypes.find(t => t.id == q.form_input_type_id);
+            const isEmployeeLookup = qType?.type_identifier === 'employee_lookup';
+            return {
+                ...q,
+                _id: q.local_id || q.id?.toString() || generateId(),
+                is_required: isEmployeeLookup ? true : Boolean(q.is_required),
+                choices: (q.choices || []).map((c: any) => ({
+                    ...c,
+                    _id: c.local_id || c.id?.toString() || generateId()
+                }))
+            };
+        })
     }));
 
     const { data, setData, put, processing, errors, transform } = useForm({
@@ -123,11 +128,15 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
 
     const addQuestion = (sIndex: number) => {
         const newSections = [...data.sections];
+        const defaultTypeId = inputTypes[0]?.id || '';
+        const defaultType = inputTypes.find(t => t.id == defaultTypeId);
+        const isDefaultEmployeeLookup = defaultType?.type_identifier === 'employee_lookup';
+
         newSections[sIndex].questions.push({
             _id: generateId(),
             label: '',
-            form_input_type_id: inputTypes[0]?.id || '',
-            is_required: false,
+            form_input_type_id: defaultTypeId,
+            is_required: isDefaultEmployeeLookup,
             choices: [],
             default_value: '',
             department_targets: []
@@ -152,8 +161,14 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
         if (field === 'form_input_type_id') {
             const isBranch = matchedType?.type_identifier === 'branch_lookup';
             const isDepartment = matchedType?.type_identifier === 'department_lookup';
+            const isEmployeeLookup = matchedType?.type_identifier === 'employee_lookup';
+
             if (!isBranch && !isDepartment) {
                 newSections[sIndex].questions[qIndex].default_value = '';
+            }
+
+            if (isEmployeeLookup) {
+                newSections[sIndex].questions[qIndex].is_required = true;
             }
 
             if (isTitle) {
@@ -250,13 +265,14 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
                 questions: s.questions.map((q: any, qIdx: number) => {
                     const qType = inputTypes.find(t => t.id == q.form_input_type_id);
                     const isTitle = qType?.type_identifier === 'title';
+                    const isEmployeeLookup = qType?.type_identifier === 'employee_lookup';
                     const isEvalGrid = qType?.type_identifier === 'employee_evaluation_grid';
                     const defaultLabel = isTitle ? 'Untitled Title' : (isEvalGrid && q.visibility_logic?.has_sub_questions ? 'Grid Evaluation Matrix' : 'Untitled Question');
                     return {
                         _id: q._id,
                         label: q.label || defaultLabel,
                         form_input_type_id: q.form_input_type_id,
-                        is_required: isTitle ? false : Boolean(q.is_required),
+                        is_required: isTitle ? false : (isEmployeeLookup ? true : Boolean(q.is_required)),
                         order_index: qIdx, // Reassert index based on drag order
                         visibility_logic: q.visibility_logic || null,
                         department_targets: isTitle ? null : (q.department_targets || null),
@@ -475,10 +491,22 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
 
                                                                                                 {!isTitle && (
                                                                                                     <div className="mt-4 flex flex-col space-y-3">
-                                                                                                        <div className="flex items-center space-x-2">
-                                                                                                            <Checkbox id={`req-${sIndex}-${qIndex}`} checked={question.is_required} onCheckedChange={(checked) => updateQuestion(sIndex, qIndex, 'is_required', checked)} />
-                                                                                                            <Label htmlFor={`req-${sIndex}-${qIndex}`} className="text-sm font-normal">Require an answer</Label>
-                                                                                                        </div>
+                                                                                                        {selectedTypeIdentifier === 'employee_lookup' ? (
+                                                                                                            <div className="flex items-center space-x-2">
+                                                                                                                <Checkbox id={`req-${sIndex}-${qIndex}`} checked={true} disabled className="opacity-80 data-[state=checked]:bg-amber-700 data-[state=checked]:border-amber-700 cursor-not-allowed" />
+                                                                                                                <Label htmlFor={`req-${sIndex}-${qIndex}`} className="text-sm font-medium text-amber-950 flex items-center gap-1.5 cursor-not-allowed">
+                                                                                                                    Require an answer
+                                                                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                                                                                                        Mandatory for Employee Lookup
+                                                                                                                    </span>
+                                                                                                                </Label>
+                                                                                                            </div>
+                                                                                                        ) : (
+                                                                                                            <div className="flex items-center space-x-2">
+                                                                                                                <Checkbox id={`req-${sIndex}-${qIndex}`} checked={question.is_required} onCheckedChange={(checked) => updateQuestion(sIndex, qIndex, 'is_required', checked)} />
+                                                                                                                <Label htmlFor={`req-${sIndex}-${qIndex}`} className="text-sm font-normal">Require an answer</Label>
+                                                                                                            </div>
+                                                                                                        )}
 
                                                                                                         {selectedTypeIdentifier === 'employee_evaluation_grid' && (
                                                                                                             <div className="flex flex-col space-y-3 bg-amber-50 p-3 rounded border border-amber-200">

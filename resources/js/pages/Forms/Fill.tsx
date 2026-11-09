@@ -10,8 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import SignatureCanvas from 'react-signature-canvas';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { MultiSelect } from '@/components/ui/multi-select';
-import { Star, MapPin, ChevronRight, RotateCcw, FileSignature, CheckCircle2, History } from 'lucide-react';
+import { Star, MapPin, ChevronRight, RotateCcw, FileSignature, CheckCircle2, History, AlertCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import React, { useMemo, useEffect, useState, useRef } from 'react';
 const GeoLocationPicker = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
     const [loading, setLoading] = React.useState(false);
@@ -314,57 +314,9 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         answers: initialAnswers as Record<number, any>
     });
 
-    // Debounced auto-save draft to localStorage whenever answers change (avoids blocking main thread on every input/click)
-    useEffect(() => {
-        if (!draftKey || typeof window === 'undefined') return;
+    const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-        const timer = setTimeout(() => {
-            try {
-                const serializable: Record<number, any> = {};
-                let hasAnyAnswer = false;
-
-                for (const [qId, val] of Object.entries(data.answers)) {
-                    if (val instanceof File) continue;
-                    if (val !== undefined && val !== null && val !== '') {
-                        hasAnyAnswer = true;
-                    }
-                    serializable[Number(qId)] = val;
-                }
-
-                if (hasAnyAnswer) {
-                    localStorage.setItem(draftKey, JSON.stringify(serializable));
-                }
-            } catch (e) {
-                console.error('Failed to auto-save form draft in localStorage:', e);
-            }
-        }, 400);
-
-        return () => clearTimeout(timer);
-    }, [data.answers, draftKey]);
-
-    const clearDraftAndReset = () => {
-        if (draftKey && typeof window !== 'undefined') {
-            try {
-                localStorage.removeItem(draftKey);
-            } catch (e) {
-                // ignore
-            }
-        }
-        setData('answers', getPureDefaults());
-        setHasRestoredDraft(false);
-    };
-
-    const handleAnswerChange = (questionId: number, value: any) => {
-        setData(current => ({
-            ...current,
-            answers: {
-                ...current.answers,
-                [questionId]: value
-            }
-        }));
-    };
-
-    const evaluateVisibilityLogic = (logic: any, givenAnswer: any) => {
+    const evaluateVisibilityLogic = (logic: any, givenAnswer: any, targetQ?: any) => {
         if (!logic || !logic.target_local_id) return true;
 
         const operator = logic.operator || 'equals';
@@ -406,6 +358,23 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                 const strGiven = String(givenAnswer ?? '').trim().toLowerCase();
                 const strReq = String(requiredValue ?? '').trim().toLowerCase();
                 isMatch = (strGiven === strReq);
+
+                // Check choices if targetQ has choices (matching by choice ID vs value/label)
+                if (!isMatch && targetQ && Array.isArray(targetQ.choices)) {
+                    const matchedChoice = targetQ.choices.find((c: any) =>
+                        String(c.id) === String(givenAnswer) ||
+                        String(c.value ?? '').trim().toLowerCase() === strGiven ||
+                        String(c.label ?? '').trim().toLowerCase() === strGiven
+                    );
+                    if (matchedChoice) {
+                        const cVal = String(matchedChoice.value ?? '').trim().toLowerCase();
+                        const cLabel = String(matchedChoice.label ?? '').trim().toLowerCase();
+                        const cId = String(matchedChoice.id);
+                        if (strReq === cVal || strReq === cLabel || strReq === cId) {
+                            isMatch = true;
+                        }
+                    }
+                }
             }
         }
 
@@ -414,22 +383,152 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
 
     const isQuestionVisible = (question: any) => {
         if (!question.visibility_logic || !question.visibility_logic.target_local_id) return true;
-        const targetQ = allQuestionsMap[question.visibility_logic.target_local_id];
+        const targetQ = allQuestionsMap[String(question.visibility_logic.target_local_id)];
         if (!targetQ) return true; // Fail open if target is deleted
         const givenAnswer = data.answers[targetQ.id];
-        return evaluateVisibilityLogic(question.visibility_logic, givenAnswer);
+        return evaluateVisibilityLogic(question.visibility_logic, givenAnswer, targetQ);
     };
 
     const isSectionVisible = (section: any) => {
         if (!section.visibility_logic || !section.visibility_logic.target_local_id) return true;
-        const targetQ = allQuestionsMap[section.visibility_logic.target_local_id];
+        const targetQ = allQuestionsMap[String(section.visibility_logic.target_local_id)];
         if (!targetQ) return true; // Fail open if target is deleted
         const givenAnswer = data.answers[targetQ.id];
-        return evaluateVisibilityLogic(section.visibility_logic, givenAnswer);
+        return evaluateVisibilityLogic(section.visibility_logic, givenAnswer, targetQ);
+    };
+
+    // Filter out errors for any question that is in a skipped section or is itself skipped
+    const activeErrors = React.useMemo(() => {
+        const raw = { ...errors, ...validationErrors };
+        const filtered: Record<string, string> = {};
+
+        const visibleQuestionIds = new Set<string>();
+        (formVersion?.sections || []).forEach((sec: any) => {
+            if (!isSectionVisible(sec)) return; // SKIPPED SECTION
+            (sec.questions || []).forEach((q: any) => {
+                if (!isQuestionVisible(q)) return; // SKIPPED QUESTION
+                visibleQuestionIds.add(String(q.id));
+            });
+        });
+
+        for (const [key, msg] of Object.entries(raw)) {
+            if (key.startsWith('answers.')) {
+                const qId = key.replace('answers.', '');
+                if (visibleQuestionIds.has(qId)) {
+                    filtered[key] = msg;
+                }
+            } else {
+                filtered[key] = msg;
+            }
+        }
+
+        return filtered;
+    }, [errors, validationErrors, formVersion, data.answers, allQuestionsMap]);
+
+    const allErrors = activeErrors;
+
+    // Debounced auto-save draft to localStorage whenever answers change (avoids blocking main thread on every input/click)
+    useEffect(() => {
+        if (!draftKey || typeof window === 'undefined') return;
+
+        const timer = setTimeout(() => {
+            try {
+                const serializable: Record<number, any> = {};
+                let hasAnyAnswer = false;
+
+                for (const [qId, val] of Object.entries(data.answers)) {
+                    if (val instanceof File) continue;
+                    if (val !== undefined && val !== null && val !== '') {
+                        hasAnyAnswer = true;
+                    }
+                    serializable[Number(qId)] = val;
+                }
+
+                if (hasAnyAnswer) {
+                    localStorage.setItem(draftKey, JSON.stringify(serializable));
+                }
+            } catch (e) {
+                console.error('Failed to auto-save form draft in localStorage:', e);
+            }
+        }, 400);
+
+        return () => clearTimeout(timer);
+    }, [data.answers, draftKey]);
+
+    const clearDraftAndReset = () => {
+        if (draftKey && typeof window !== 'undefined') {
+            try {
+                localStorage.removeItem(draftKey);
+            } catch (e) {
+                // ignore
+            }
+        }
+        setData('answers', getPureDefaults());
+        setHasRestoredDraft(false);
+    };
+
+    const handleAnswerChange = (questionId: number, value: any) => {
+        setValidationErrors(prev => {
+            if (!prev[`answers.${questionId}`]) return prev;
+            const next = { ...prev };
+            delete next[`answers.${questionId}`];
+            return next;
+        });
+        setData(current => ({
+            ...current,
+            answers: {
+                ...current.answers,
+                [questionId]: value
+            }
+        }));
     };
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Client-side required check (especially for custom widgets like employee_lookup and searchable selects)
+        const localErrors: Record<string, string> = {};
+        let firstInvalidQuestionId: number | null = null;
+
+        (formVersion?.sections || []).filter(isSectionVisible).forEach((sec: any) => {
+            (sec.questions || []).filter(isQuestionVisible).forEach((q: any) => {
+                const inputTypeResolver = q.input_type || q.inputType;
+                const isTitle = (inputTypeResolver?.type_identifier || '') === 'title';
+                if (isTitle) return;
+
+                const isEmployeeLookup = inputTypeResolver?.type_identifier === 'employee_lookup';
+                const isRequired = Boolean(q.is_required) || isEmployeeLookup;
+
+                if (!isRequired) return;
+
+                const ans = data.answers[q.id];
+                const isEmpty = ans === undefined || ans === null || ans === '' || (Array.isArray(ans) && ans.length === 0);
+
+                if (isEmpty) {
+                    localErrors[`answers.${q.id}`] = isEmployeeLookup
+                        ? `Please select an employee for "${q.label || 'Employee'}" (mandatory).`
+                        : `This field is required.`;
+                    if (!firstInvalidQuestionId) {
+                        firstInvalidQuestionId = q.id;
+                    }
+                }
+            });
+        });
+
+        if (Object.keys(localErrors).length > 0) {
+            setValidationErrors(localErrors);
+            if (firstInvalidQuestionId) {
+                const el = document.getElementById(`question-card-${firstInvalidQuestionId}`);
+                if (el) {
+                    const yOffset = -120;
+                    const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+                    window.scrollTo({ top: y, behavior: 'smooth' });
+                }
+            }
+            return;
+        }
+
+        setValidationErrors({});
 
         transform((currentData) => {
             const visibleAnswers: Record<number, any> = {};
@@ -463,7 +562,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         }
     };
 
-    const renderInput = (section: any, question: any) => {
+    const renderInput = (section: any, question: any, hasError: boolean = false) => {
         const inputTypeResolver = question.input_type || question.inputType;
         const typeId = inputTypeResolver?.type_identifier || 'text'; // Fallback to text to prevent crash
         const answer = data.answers[question.id] !== undefined ? data.answers[question.id] : '';
@@ -490,12 +589,12 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                         onChange={(e) => handleAnswerChange(question.id, e.target.value)}
                         required={question.is_required}
                         placeholder="Your answer..."
-                        className="bg-white"
+                        className={cn("bg-white transition-all", hasError && "!border-red-500 !ring-2 !ring-red-400 bg-red-50/40 text-red-950 font-medium placeholder:text-red-300")}
                     />
                 );
             case 'boolean':
                 return (
-                    <div className="flex space-x-6">
+                    <div className={cn("flex space-x-6 p-2 rounded-lg transition-all", hasError && "border-2 border-red-500 bg-red-50/50 ring-2 ring-red-400/30")}>
                         <label className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors">
                             <input
                                 type="radio"
@@ -541,13 +640,16 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     }
                 }
                 return (
-                    <SearchableSelect
-                        options={branchOptions}
-                        value={answer}
-                        onValueChange={(val) => handleAnswerChange(question.id, val)}
-                        placeholder="Search branches..."
-                        disabled={!!question.default_value}
-                    />
+                    <div className="space-y-1 max-w-xl">
+                        <SearchableSelect
+                            options={branchOptions}
+                            value={answer}
+                            onValueChange={(val) => handleAnswerChange(question.id, val)}
+                            placeholder="Search branches..."
+                            disabled={!!question.default_value}
+                            className={hasError ? '!border-red-500 !ring-2 !ring-red-400 bg-red-50/40 text-red-950 font-medium shadow-sm' : ''}
+                        />
+                    </div>
                 );
             case 'department_lookup':
                 const localBranchForDept = getAnswerForTypeInSection('branch_lookup');
@@ -558,14 +660,17 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     );
                 }
                 return (
-                    <SearchableSelect
-                        options={localFilteredDepartments}
-                        value={answer}
-                        onValueChange={(val) => handleAnswerChange(question.id, val)}
-                        placeholder="Search departments..."
-                        emptyText="No departments found"
-                        disabled={!!question.default_value}
-                    />
+                    <div className="space-y-1 max-w-xl">
+                        <SearchableSelect
+                            options={localFilteredDepartments}
+                            value={answer}
+                            onValueChange={(val) => handleAnswerChange(question.id, val)}
+                            placeholder="Search departments..."
+                            emptyText="No departments found"
+                            disabled={!!question.default_value}
+                            className={hasError ? '!border-red-500 !ring-2 !ring-red-400 bg-red-50/40 text-red-950 font-medium shadow-sm' : ''}
+                        />
+                    </div>
                 );
             case 'employee_lookup':
                 const localBranchForEmp = getAnswerForTypeInSection('branch_lookup');
@@ -581,13 +686,16 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     return true;
                 });
                 return (
-                    <SearchableSelect
-                        options={localFilteredEmployees}
-                        value={answer}
-                        onValueChange={(val) => handleAnswerChange(question.id, val)}
-                        placeholder="Search employees..."
-                        emptyText="No employees found for the selected criteria"
-                    />
+                    <div className="space-y-1 max-w-xl">
+                        <SearchableSelect
+                            options={localFilteredEmployees}
+                            value={answer}
+                            onValueChange={(val) => handleAnswerChange(question.id, val)}
+                            placeholder="Select employee (mandatory)..."
+                            emptyText="No employees found for the selected criteria"
+                            className={hasError ? '!border-red-500 !ring-2 !ring-red-400 bg-red-50/40 text-red-950 font-semibold shadow-sm' : ''}
+                        />
+                    </div>
                 );
             case 'employee_attendance_roster':
                 const rosterArr = Array.isArray(answer) ? answer : [];
@@ -736,7 +844,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
 
                 if (choices.length <= 4 && choices.length > 0) {
                     return (
-                        <div className="flex flex-col space-y-3">
+                        <div className={cn("flex flex-col space-y-3 p-2 rounded-lg transition-all", hasError && "border-2 border-red-500 bg-red-50/50 ring-2 ring-red-400/30")}>
                             {choices.map((choice: any) => {
                                 const checked = isChoiceChecked(choice);
                                 return (
@@ -773,7 +881,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                             }}
                             required={question.is_required}
                         >
-                            <SelectTrigger className="w-[300px] bg-white">
+                            <SelectTrigger className={cn("w-[300px] bg-white transition-all", hasError && "!border-red-500 !ring-2 !ring-red-400 bg-red-50/40 text-red-950 font-medium")}>
                                 <SelectValue placeholder="Select an option" />
                             </SelectTrigger>
                             <SelectContent>
@@ -964,7 +1072,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                 const multiChoices = question.choices || [];
                 const currentAnsArray = Array.isArray(answer) ? answer : [];
                 return (
-                    <div className="flex flex-col space-y-3">
+                    <div className={cn("flex flex-col space-y-3 p-2 rounded-lg transition-all", hasError && "border-2 border-red-500 bg-red-50/50 ring-2 ring-red-400/30")}>
                         {multiChoices.length > 0 ? multiChoices.map((choice: any) => (
                             <label key={choice.id} className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors w-fit">
                                 <Checkbox
@@ -983,13 +1091,13 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     </div>
                 );
             case 'number':
-                return <Input type="number" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} disabled={!!question.default_value} className="max-w-xl bg-white" />;
+                return <Input type="number" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} disabled={!!question.default_value} className={cn("max-w-xl bg-white transition-all", hasError && "!border-red-500 !ring-2 !ring-red-400 bg-red-50/40 text-red-950 font-medium")} />;
             case 'date':
-                return <Input type="date" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} disabled={!!question.default_value} className="max-w-xl bg-white" />;
+                return <Input type="date" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} disabled={!!question.default_value} className={cn("max-w-xl bg-white transition-all", hasError && "!border-red-500 !ring-2 !ring-red-400 bg-red-50/40 text-red-950 font-medium")} />;
             case 'rating_stars':
                 const currentStar = parseInt(answer) || 0;
                 return (
-                    <div className="flex space-x-1">
+                    <div className={cn("flex space-x-1 p-2 rounded-lg transition-all", hasError && "border-2 border-red-500 bg-red-50/50 ring-2 ring-red-400/30")}>
                         {[1, 2, 3, 4, 5].map((starIdx) => (
                             <Star
                                 key={starIdx}
@@ -1021,13 +1129,17 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     </div>
                 );
             case 'time':
-                return <Input type="time" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} className="w-fit bg-white" />;
+                return <Input type="time" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} className={cn("w-fit bg-white transition-all", hasError && "!border-red-500 !ring-2 !ring-red-400 bg-red-50/40 text-red-950 font-medium")} />;
             case 'signature':
-                return <SignaturePad value={answer} onChange={(val) => handleAnswerChange(question.id, val)} />;
+                return (
+                    <div className={cn("rounded-lg transition-all", hasError && "border-2 border-red-500 p-2 bg-red-50/50 ring-2 ring-red-400/30")}>
+                        <SignaturePad value={answer} onChange={(val) => handleAnswerChange(question.id, val)} />
+                    </div>
+                );
             case 'multiple_choice':
                 const currentArr = Array.isArray(answer) ? answer : [];
                 return (
-                    <div className="flex flex-col space-y-3">
+                    <div className={cn("flex flex-col space-y-3 p-2 rounded-lg transition-all", hasError && "border-2 border-red-500 bg-red-50/50 ring-2 ring-red-400/30")}>
                         {question.choices?.map((choice: any) => (
                             <label key={choice.id} className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors w-fit">
                                 <input
@@ -1049,7 +1161,16 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     </div>
                 );
             default:
-                return <Input type="text" value={answer} onChange={(e) => handleAnswerChange(question.id, e.target.value)} required={question.is_required} className="max-w-xl bg-white" placeholder="Type your answer..." />;
+                return (
+                    <Input
+                        type="text"
+                        value={answer}
+                        onChange={(e) => handleAnswerChange(question.id, e.target.value)}
+                        required={question.is_required}
+                        className={cn("max-w-xl bg-white transition-all", hasError && "!border-red-500 !ring-2 !ring-red-400 bg-red-50/40 text-red-950 font-medium placeholder:text-red-300")}
+                        placeholder="Type your answer..."
+                    />
+                );
         }
     };
 
@@ -1136,18 +1257,37 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                                                 );
                                             }
 
+                                            const hasFieldError = Boolean((allErrors as any)[`answers.${question.id}`]);
                                             return (
-                                                <div key={question.id} className="space-y-4 pb-8 border-b border-gray-100 last:border-0 last:pb-0">
-                                                    <Label className="text-lg font-semibold text-gray-900">
-                                                        {qCounter}. {question.label}
-                                                        {Boolean(question.is_required) && <span className="text-red-500 ml-1" title="Required field">*</span>}
-                                                    </Label>
+                                                <div
+                                                    id={`question-card-${question.id}`}
+                                                    key={question.id}
+                                                    className={cn(
+                                                        "space-y-4 pb-8 border-b border-gray-100 last:border-0 last:pb-0 transition-all duration-300 rounded-xl",
+                                                        hasFieldError && "p-6 bg-red-50/80 border-2 border-red-500 shadow-md ring-4 ring-red-200/60 dark:ring-red-950/40"
+                                                    )}
+                                                >
+                                                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                                                        <Label className={cn("text-lg font-semibold flex items-center flex-wrap gap-2", hasFieldError ? "text-red-900 font-bold" : "text-gray-900")}>
+                                                            <span>{qCounter}. {question.label}</span>
+                                                            {(Boolean(question.is_required) || (inputTypeResolver?.type_identifier === 'employee_lookup')) && (
+                                                                <span className="text-red-600 font-bold text-xl leading-none" title="Mandatory field">*</span>
+                                                            )}
+                                                        </Label>
+                                                        {hasFieldError && (
+                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-600 text-white shadow-xs uppercase tracking-wide animate-pulse">
+                                                                <AlertCircle className="w-3.5 h-3.5" />
+                                                                Required - Missing Answer
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     <div className="pl-4 pt-2">
-                                                        {renderInput(section, question)}
-                                                        {(errors as any)[`answers.${question.id}`] && (
-                                                            <p className="text-red-500 text-sm mt-2 flex items-center">
-                                                                <span className="font-bold mr-1">Error:</span> {(errors as any)[`answers.${question.id}`]}
-                                                            </p>
+                                                        {renderInput(section, question, hasFieldError)}
+                                                        {hasFieldError && (
+                                                            <div className="flex items-center gap-2.5 p-3.5 mt-3 text-sm text-red-800 bg-red-100 border border-red-300 rounded-lg font-semibold shadow-xs animate-in slide-in-from-top-1">
+                                                                <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                                                                <span>{(allErrors as any)[`answers.${question.id}`]}</span>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </div>
@@ -1159,10 +1299,45 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                         ))
                     )}
 
-                    {Object.keys(errors).length > 0 && (
-                        <div className="bg-red-50 text-red-700 p-6 rounded-lg border-l-4 border-red-500 shadow-sm flex flex-col justify-center">
-                            <p className="font-bold text-lg mb-1">Submission Failed</p>
-                            <p>Please double-check all required fields marked with an asterisk (*).</p>
+                    {Object.keys(allErrors).length > 0 && (
+                        <div className="bg-red-50 text-red-900 p-6 rounded-xl border-2 border-red-500 shadow-md flex flex-col gap-3 animate-in fade-in">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 rounded-xl bg-red-600 text-white shrink-0 shadow-xs">
+                                    <AlertCircle className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <p className="font-bold text-lg text-red-950">Submission Incomplete</p>
+                                    <p className="text-sm text-red-800 font-medium">
+                                        Please fill out all missing required fields highlighted in red above. An employee must be selected for Employee Lookup.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="pt-3 border-t border-red-200 flex flex-wrap items-center gap-2">
+                                <span className="text-xs font-bold text-red-900 uppercase tracking-wider">Click to jump to missing field:</span>
+                                {Object.keys(allErrors).map(errKey => {
+                                    if (!errKey.startsWith('answers.')) return null;
+                                    const qId = errKey.replace('answers.', '');
+                                    const targetQ = allQuestionsMap[qId];
+                                    const label = targetQ?.label || `Question #${qId}`;
+                                    return (
+                                        <button
+                                            key={errKey}
+                                            type="button"
+                                            onClick={() => {
+                                                const el = document.getElementById(`question-card-${qId}`);
+                                                if (el) {
+                                                    const yOffset = -120;
+                                                    const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+                                                    window.scrollTo({ top: y, behavior: 'smooth' });
+                                                }
+                                            }}
+                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white transition-all shadow-xs cursor-pointer active:scale-95"
+                                        >
+                                            <span>{label}</span> &rarr;
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     )}
 

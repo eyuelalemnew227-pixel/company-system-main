@@ -50,15 +50,6 @@ class ChecklistScoringService
             }
         }
 
-        // Determine if this submission has any questions with specific employee or department targeting
-        $hasAnyTargeting = false;
-        foreach ($submission->answers as $a) {
-            if (!empty($a->targeted_employees) || !empty($a->question?->department_targets)) {
-                $hasAnyTargeting = true;
-                break;
-            }
-        }
-
         $totalBoolQuestions = 0;
         $yesAnswers = 0;
 
@@ -114,7 +105,7 @@ class ChecklistScoringService
                             $isTargeted = in_array($empIdStr, $ansTargetEmpIds, true);
                         } elseif (!empty($targetDeptIds)) {
                             $isTargeted = in_array((string) $empScore['department_id'], $targetDeptIds, true);
-                        } elseif (!$hasAnyTargeting) {
+                        } else {
                             $isTargeted = true;
                         }
 
@@ -205,14 +196,6 @@ class ChecklistScoringService
             return;
         }
 
-        $hasAnyTargeting = false;
-        foreach ($submission->answers as $a) {
-            if (!empty($a->targeted_employees) || !empty($a->question?->department_targets)) {
-                $hasAnyTargeting = true;
-                break;
-            }
-        }
-
         $totalPoints = 0;
         $earnedPoints = 0;
         $empIdStr = (string) $employee->id;
@@ -260,7 +243,7 @@ class ChecklistScoringService
                         $isTargeted = in_array($empIdStr, $ansTargetEmpIds, true);
                     } elseif (!empty($targetDeptIds)) {
                         $isTargeted = in_array($empDeptIdStr, $targetDeptIds, true);
-                    } elseif (!$hasAnyTargeting) {
+                    } else {
                         $isTargeted = true;
                     }
 
@@ -311,6 +294,8 @@ class ChecklistScoringService
      */
     public function getEmployeeChecklistSummary(array $filters = []): array
     {
+        @ini_set('memory_limit', '512M');
+
         $fiscalYearId = $filters['fiscal_year_id'] ?? null;
         $fiscalMonthId = $filters['fiscal_month_id'] ?? null;
         $branchIdFilter = $filters['branch_id'] ?? null;
@@ -368,23 +353,22 @@ class ChecklistScoringService
             }
         }
 
-        $submissions = $query->with([
-            'formVersion.form:id,title,form_type',
-            'answers.question.inputType:id,type_identifier',
-            'answers.question.choices:id,form_question_id,value,label',
-        ])->latest()->get();
-
         $employees = Employee::get(['id', 'first_name', 'last_name', 'employee_code', 'department_id', 'branch_id'])->keyBy('id');
         $branches = Branch::pluck('name', 'id')->toArray();
         $departments = Department::pluck('name', 'id')->toArray();
 
         $employeeMap = [];
 
-        foreach ($submissions as $sub) {
-            $formType = (string) ($sub->formVersion?->form?->form_type ?? '');
-            if ($formType !== '1' && $formType !== '2') {
-                continue;
-            }
+        $query->with([
+            'formVersion.form:id,title,form_type',
+            'answers.question.inputType:id,type_identifier',
+            'answers.question.choices:id,form_question_id,value,label',
+        ])->chunkById(50, function ($submissions) use (&$employeeMap, $employees, $branches, $departments) {
+            foreach ($submissions as $sub) {
+                $formType = (string) ($sub->formVersion?->form?->form_type ?? '');
+                if ($formType !== '1' && $formType !== '2') {
+                    continue;
+                }
 
             // Extract branch lookup from submission if employee has no branch
             $branchLookup = $sub->answers->first(function ($a) {
@@ -565,6 +549,7 @@ class ChecklistScoringService
                 }
             }
         }
+        });
 
         $rows = [];
         $totalScore1Sum = 0;

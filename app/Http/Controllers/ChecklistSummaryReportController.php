@@ -22,6 +22,8 @@ class ChecklistSummaryReportController extends Controller
 
     public function index(Request $request)
     {
+        @ini_set('memory_limit', '512M');
+
         $fiscalYears = Cache::remember('dashboard_fiscal_years', 3600, function () {
             return FiscalYear::select('id', 'name', 'gregorian_start_date', 'gregorian_end_date')
                 ->orderBy('gregorian_start_date', 'desc')
@@ -52,12 +54,12 @@ class ChecklistSummaryReportController extends Controller
         $now = now();
         $currentMonth = $fiscalMonths->first(function ($m) use ($now) {
             return $m->gregorian_start_date && $m->gregorian_end_date
-                && $now->between(Carbon::parse($m->gregorian_start_date), Carbon::parse($m->gregorian_end_date));
+                && $now->between(Carbon::parse($m->gregorian_start_date)->startOfDay(), Carbon::parse($m->gregorian_end_date)->endOfDay());
         });
 
         $currentYear = $fiscalYears->first(function ($y) use ($now) {
             return $y->gregorian_start_date && $y->gregorian_end_date
-                && $now->between(Carbon::parse($y->gregorian_start_date), Carbon::parse($y->gregorian_end_date));
+                && $now->between(Carbon::parse($y->gregorian_start_date)->startOfDay(), Carbon::parse($y->gregorian_end_date)->endOfDay());
         });
 
         // Filters with smart defaults: default to current month if not explicitly specified and no custom date range
@@ -98,6 +100,8 @@ class ChecklistSummaryReportController extends Controller
 
     public function export(Request $request)
     {
+        @ini_set('memory_limit', '512M');
+
         $filters = [
             'fiscal_year_id' => $request->input('fiscal_year_id', 'all'),
             'fiscal_month_id' => $request->input('fiscal_month_id', 'all'),

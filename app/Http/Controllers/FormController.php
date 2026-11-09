@@ -128,6 +128,8 @@ class FormController extends Controller
                 'status' => 'draft',
             ]);
 
+            $employeeLookupTypeId = FormInputType::where('type_identifier', 'employee_lookup')->value('id');
+
             if (!empty($validated['sections'])) {
                 foreach ($validated['sections'] as $sIndex => $sectionData) {
                     $section = FormSection::create([
@@ -139,11 +141,14 @@ class FormController extends Controller
 
                     if (!empty($sectionData['questions'])) {
                         foreach ($sectionData['questions'] as $qIndex => $questionData) {
+                            $isEmployeeLookup = $employeeLookupTypeId && (string) $questionData['form_input_type_id'] === (string) $employeeLookupTypeId;
+                            $isRequired = $isEmployeeLookup ? true : ($questionData['is_required'] ?? false);
+
                             $question = FormQuestion::create([
                                 'form_section_id' => $section->id,
                                 'form_input_type_id' => $questionData['form_input_type_id'],
                                 'label' => $questionData['label'],
-                                'is_required' => $questionData['is_required'] ?? false,
+                                'is_required' => $isRequired,
                                 'order_index' => $qIndex,
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),
                                 'visibility_logic' => !empty($questionData['visibility_logic']) ? $questionData['visibility_logic'] : null,
@@ -285,6 +290,8 @@ class FormController extends Controller
                 'status' => 'draft',
             ]);
 
+            $employeeLookupTypeId = FormInputType::where('type_identifier', 'employee_lookup')->value('id');
+
             if (!empty($validated['sections'])) {
                 foreach ($validated['sections'] as $sIndex => $sectionData) {
                     $section = FormSection::create([
@@ -296,11 +303,14 @@ class FormController extends Controller
 
                     if (!empty($sectionData['questions'])) {
                         foreach ($sectionData['questions'] as $qIndex => $questionData) {
+                            $isEmployeeLookup = $employeeLookupTypeId && (string) $questionData['form_input_type_id'] === (string) $employeeLookupTypeId;
+                            $isRequired = $isEmployeeLookup ? true : ($questionData['is_required'] ?? false);
+
                             $question = FormQuestion::create([
                                 'form_section_id' => $section->id,
                                 'form_input_type_id' => $questionData['form_input_type_id'],
                                 'label' => $questionData['label'],
-                                'is_required' => $questionData['is_required'] ?? false,
+                                'is_required' => $isRequired,
                                 'order_index' => $qIndex,
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),
                                 'visibility_logic' => !empty($questionData['visibility_logic']) ? $questionData['visibility_logic'] : null,
