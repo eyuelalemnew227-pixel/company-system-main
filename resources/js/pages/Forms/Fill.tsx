@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import SignatureCanvas from 'react-signature-canvas';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { Star, MapPin, ChevronRight, RotateCcw, FileSignature, CheckCircle2, History, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import React, { useMemo, useEffect, useState, useRef } from 'react';
