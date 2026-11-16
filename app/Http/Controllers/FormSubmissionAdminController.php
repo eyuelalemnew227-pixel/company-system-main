@@ -93,9 +93,16 @@ class FormSubmissionAdminController extends Controller
 
         $totalBoolQuestions = 0;
         $yesAnswers = 0;
+        $sectionScores = [];
+        $empSectionScores = [];
+        $sectionsById = $submission->formVersion?->sections?->keyBy('id') ?? collect();
 
         foreach ($submission->answers as $ans) {
             $qType = $ans->question?->inputType?->type_identifier ?? 'text';
+            $sec = $ans->question?->section ?? $sectionsById->get($ans->question?->form_section_id);
+            $secId = $sec ? (int) $sec->id : 0;
+            $secWeight = ($sec && $sec->weight !== null && $sec->weight > 0) ? (float) $sec->weight : null;
+
             if ($qType === 'select_one' || $qType === 'boolean') {
                 $isScored = false;
                 $isYes = false;
@@ -119,9 +126,21 @@ class FormSubmissionAdminController extends Controller
                 }
 
                 if ($isScored) {
-                    $totalBoolQuestions++;
+                    $qWeight = ($ans->question && $ans->question->weight !== null && $ans->question->weight > 0)
+                        ? (float) $ans->question->weight
+                        : 1.0;
+
+                    $totalBoolQuestions += $qWeight;
                     if ($isYes) {
-                        $yesAnswers++;
+                        $yesAnswers += $qWeight;
+                    }
+
+                    if (!isset($sectionScores[$secId])) {
+                        $sectionScores[$secId] = ['weight' => $secWeight, 'earned' => 0, 'total' => 0];
+                    }
+                    $sectionScores[$secId]['total'] += $qWeight;
+                    if ($isYes) {
+                        $sectionScores[$secId]['earned'] += $qWeight;
                     }
 
                     // Decode answer targets
@@ -151,9 +170,17 @@ class FormSubmissionAdminController extends Controller
                         }
 
                         if ($isTargeted) {
-                            $empScore['total_points']++;
+                            $empScore['total_points'] += $qWeight;
                             if ($isYes) {
-                                $empScore['earned_points']++;
+                                $empScore['earned_points'] += $qWeight;
+                            }
+
+                            if (!isset($empSectionScores[$empKey][$secId])) {
+                                $empSectionScores[$empKey][$secId] = ['weight' => $secWeight, 'earned' => 0, 'total' => 0];
+                            }
+                            $empSectionScores[$empKey][$secId]['total'] += $qWeight;
+                            if ($isYes) {
+                                $empSectionScores[$empKey][$secId]['earned'] += $qWeight;
                             }
                         }
                     }
@@ -180,6 +207,32 @@ class FormSubmissionAdminController extends Controller
                             $employeeScoresMatrix[$empIdKey]['earned_points'] += $numVal;
                         }
                         $employeeScoresMatrix[$empIdKey]['total_points'] += max(1, $numVal);
+
+                        if (!isset($empSectionScores[$empIdKey][$secId])) {
+                            $empSectionScores[$empIdKey][$secId] = ['weight' => $secWeight, 'earned' => 0, 'total' => 0];
+                        }
+                        if ($numVal > 0) {
+                            $empSectionScores[$empIdKey][$secId]['earned'] += $numVal;
+                        }
+                        $empSectionScores[$empIdKey][$secId]['total'] += max(1, $numVal);
+                    }
+                }
+            }
+        }
+
+        $hasCustomSectionWeights = false;
+        foreach ($sectionScores as $sData) {
+            if ($sData['weight'] !== null && $sData['weight'] > 0) {
+                $hasCustomSectionWeights = true;
+                break;
+            }
+        }
+        if (!$hasCustomSectionWeights) {
+            foreach ($empSectionScores as $eSecs) {
+                foreach ($eSecs as $sData) {
+                    if ($sData['weight'] !== null && $sData['weight'] > 0) {
+                        $hasCustomSectionWeights = true;
+                        break 2;
                     }
                 }
             }
@@ -187,8 +240,26 @@ class FormSubmissionAdminController extends Controller
 
         $scoresList = [];
         foreach ($employeeScoresMatrix as $empKey => &$empScore) {
-            if ($empScore['total_points'] > 0) {
-                $empScore['percentage'] = round(($empScore['earned_points'] / $empScore['total_points']) * 100, 1);
+            if ($hasCustomSectionWeights && !empty($empSectionScores[$empKey])) {
+                $empWeightedSum = 0;
+                $empWeightTotal = 0;
+                foreach ($empSectionScores[$empKey] as $sData) {
+                    if ($sData['total'] > 0) {
+                        $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                        $pct = ($sData['earned'] / $sData['total']) * 100;
+                        $empWeightedSum += $pct * $w;
+                        $empWeightTotal += $w;
+                    }
+                }
+                if ($empWeightTotal > 0) {
+                    $empScore['percentage'] = round($empWeightedSum / $empWeightTotal, 1);
+                } elseif ($empScore['total_points'] > 0) {
+                    $empScore['percentage'] = round(($empScore['earned_points'] / $empScore['total_points']) * 100, 1);
+                }
+            } else {
+                if ($empScore['total_points'] > 0) {
+                    $empScore['percentage'] = round(($empScore['earned_points'] / $empScore['total_points']) * 100, 1);
+                }
             }
             $scoresList[] = $empScore;
         }
@@ -202,7 +273,21 @@ class FormSubmissionAdminController extends Controller
                 ? round(array_sum($validPercentages) / count($validPercentages), 1)
                 : null;
         } else {
-            $submission->calculated_score = $totalBoolQuestions > 0 ? round(($yesAnswers / $totalBoolQuestions) * 100, 1) : null;
+            if ($hasCustomSectionWeights && !empty($sectionScores)) {
+                $subWeightedSum = 0;
+                $subWeightTotal = 0;
+                foreach ($sectionScores as $sData) {
+                    if ($sData['total'] > 0) {
+                        $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                        $pct = ($sData['earned'] / $sData['total']) * 100;
+                        $subWeightedSum += $pct * $w;
+                        $subWeightTotal += $w;
+                    }
+                }
+                $submission->calculated_score = $subWeightTotal > 0 ? round($subWeightedSum / $subWeightTotal, 1) : null;
+            } else {
+                $submission->calculated_score = $totalBoolQuestions > 0 ? round(($yesAnswers / $totalBoolQuestions) * 100, 1) : null;
+            }
         }
 
         return $submission;
@@ -262,6 +347,7 @@ class FormSubmissionAdminController extends Controller
 
         $statusFilter = $request->input('status', 'all');
         $submittedByFilter = $request->input('submitted_by', 'all');
+        $submissionTypeFilter = $request->input('submission_type', 'all');
         $branchFilter = $request->input('branch_id', 'all');
         $employeeFilter = $request->input('employee_id', 'all');
         // Default to current fiscal period only on first visit (no filter query params).
@@ -273,9 +359,9 @@ class FormSubmissionAdminController extends Controller
             : ($currentFiscalMonth?->id ? (string) $currentFiscalMonth->id : 'all');
 
         $query = FormSubmission::query()
-            ->select(['id', 'form_version_id', 'user_id', 'status', 'created_at'])
+            ->select(['id', 'form_version_id', 'user_id', 'status', 'is_qa_manager', 'qa_manager_id', 'created_at'])
             ->whereHas('formVersion', fn ($q) => $q->where('form_id', $form->id))
-            ->with(['user:id,name'])
+            ->with(['user:id,name', 'qaManager:id,name'])
             ->orderByDesc('id');
 
         if ($statusFilter !== 'all') {
@@ -284,6 +370,12 @@ class FormSubmissionAdminController extends Controller
 
         if ($submittedByFilter !== 'all' && ctype_digit($submittedByFilter)) {
             $query->where('user_id', (int) $submittedByFilter);
+        }
+
+        if ($submissionTypeFilter === 'qa_manager') {
+            $query->where('is_qa_manager', true);
+        } elseif ($submissionTypeFilter === 'standard') {
+            $query->where('is_qa_manager', false);
         }
 
         if ($fiscalMonthFilter !== 'all' && ctype_digit($fiscalMonthFilter)) {
@@ -400,6 +492,9 @@ class FormSubmissionAdminController extends Controller
                 'id' => $sub->id,
                 'status' => $sub->status ?? 'pending',
                 'submitted_by' => $sub->user?->name ?? 'Unknown User',
+                'is_qa_manager' => (bool) $sub->is_qa_manager,
+                'qa_manager_id' => $sub->qa_manager_id,
+                'qa_manager_name' => $sub->qaManager?->name,
                 'created_at' => $sub->created_at?->toDateTimeString(),
                 'branch_name' => $branchId ? ($branchNames[$branchId] ?? (string) $branchId) : null,
                 'employee_name' => $employeeId ? ($employeeNames[$employeeId] ?? (string) $employeeId) : null,
@@ -462,6 +557,7 @@ class FormSubmissionAdminController extends Controller
             'filters' => [
                 'status' => $statusFilter,
                 'submitted_by' => $submittedByFilter,
+                'submission_type' => $submissionTypeFilter,
                 'branch_id' => $branchFilter,
                 'employee_id' => $employeeFilter,
                 'fiscal_year_id' => (string) $fiscalYearFilter,
@@ -617,7 +713,9 @@ class FormSubmissionAdminController extends Controller
         $submissions = FormSubmission::where('user_id', $user->id)
             ->with([
                 'formVersion.form',
+                'formVersion.sections',
                 'answers.question.inputType',
+                'answers.question.section',
             ])
             ->orderByDesc('id')
             ->get();
@@ -701,10 +799,12 @@ class FormSubmissionAdminController extends Controller
     {
         $submission = FormSubmission::with([
             'user',
+            'qaManager',
             'formVersion.form',
             'formVersion.sections.questions.inputType',
             'formVersion.sections.questions.choices',
             'answers.question.inputType',
+            'answers.question.section',
             'answers.question.choices'
         ])->findOrFail($submissionId);
 
@@ -1072,7 +1172,7 @@ class FormSubmissionAdminController extends Controller
             fputs($file, "\xEF\xBB\xBF");
 
             // Build CSV Header
-            $headerRow = ['Record ID', 'Status', 'Submitted By', 'Submission Date'];
+            $headerRow = ['Record ID', 'Status', 'Submission Type', 'Submitted By', 'Submission Date'];
             foreach ($headersMap as $qData) {
                 $headerRow[] = rtrim($qData['label'], '?'); // Clean trailing question marks
             }
@@ -1085,6 +1185,7 @@ class FormSubmissionAdminController extends Controller
                 $row = [
                     '#' . $sub->id,
                     strtoupper($sub->status ?? 'PENDING'),
+                    $sub->is_qa_manager ? 'QA Manager' : 'Standard Inspector',
                     $empName,
                     $sub->created_at->format('Y-m-d H:i:s')
                 ];
@@ -1330,6 +1431,7 @@ class FormSubmissionAdminController extends Controller
             $row = [
                 '#' . $sub->id,
                 strtoupper($sub->status ?: 'PENDING'),
+                $sub->is_qa_manager ? 'QA Manager' : 'Standard Inspector',
                 $branchName ?? 'Unassigned',
                 $branchCode ?? '',
                 $submitterName,
@@ -1399,6 +1501,7 @@ class FormSubmissionAdminController extends Controller
         $baseHeaders = [
             'Record ID',
             'Status',
+            'Submission Type',
             'Branch',
             'Branch Code',
             'Submitted By',
@@ -1897,9 +2000,15 @@ class FormSubmissionAdminController extends Controller
         $earnedPoints = 0;
         $empIdStr = (string) $employee->id;
         $empDeptIdStr = (string) $employee->department_id;
+        $empSectionScores = [];
+        $sectionsById = $submission->formVersion?->sections?->keyBy('id') ?? collect();
 
         foreach ($submission->answers as $ans) {
             $qType = $ans->question?->inputType?->type_identifier ?? 'text';
+            $sec = $ans->question?->section ?? $sectionsById->get($ans->question?->form_section_id);
+            $secId = $sec ? (int) $sec->id : 0;
+            $secWeight = ($sec && $sec->weight !== null && $sec->weight > 0) ? (float) $sec->weight : null;
+
             if ($qType === 'select_one' || $qType === 'boolean') {
                 $isScored = false;
                 $isYes = false;
@@ -1945,9 +2054,21 @@ class FormSubmissionAdminController extends Controller
                     }
 
                     if ($isTargeted) {
-                        $totalPoints++;
+                        $qWeight = ($ans->question && $ans->question->weight !== null && $ans->question->weight > 0)
+                            ? (float) $ans->question->weight
+                            : 1.0;
+
+                        $totalPoints += $qWeight;
                         if ($isYes) {
-                            $earnedPoints++;
+                            $earnedPoints += $qWeight;
+                        }
+
+                        if (!isset($empSectionScores[$secId])) {
+                            $empSectionScores[$secId] = ['weight' => $secWeight, 'earned' => 0, 'total' => 0];
+                        }
+                        $empSectionScores[$secId]['total'] += $qWeight;
+                        if ($isYes) {
+                            $empSectionScores[$secId]['earned'] += $qWeight;
                         }
                     }
                 }
@@ -1967,11 +2088,41 @@ class FormSubmissionAdminController extends Controller
                         $earnedPoints += $numVal;
                     }
                     $totalPoints += max(1, $numVal);
+
+                    if (!isset($empSectionScores[$secId])) {
+                        $empSectionScores[$secId] = ['weight' => $secWeight, 'earned' => 0, 'total' => 0];
+                    }
+                    if ($numVal > 0) {
+                        $empSectionScores[$secId]['earned'] += $numVal;
+                    }
+                    $empSectionScores[$secId]['total'] += max(1, $numVal);
                 }
             }
         }
 
-        $pct = $totalPoints > 0 ? round(($earnedPoints / $totalPoints) * 100, 1) : null;
+        $hasCustomSectionWeights = false;
+        foreach ($empSectionScores as $sData) {
+            if ($sData['weight'] !== null && $sData['weight'] > 0) {
+                $hasCustomSectionWeights = true;
+                break;
+            }
+        }
+
+        if ($hasCustomSectionWeights && !empty($empSectionScores)) {
+            $empWeightedSum = 0;
+            $empWeightTotal = 0;
+            foreach ($empSectionScores as $sData) {
+                if ($sData['total'] > 0) {
+                    $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                    $pct = ($sData['earned'] / $sData['total']) * 100;
+                    $empWeightedSum += $pct * $w;
+                    $empWeightTotal += $w;
+                }
+            }
+            $pct = $empWeightTotal > 0 ? round($empWeightedSum / $empWeightTotal, 1) : null;
+        } else {
+            $pct = $totalPoints > 0 ? round(($earnedPoints / $totalPoints) * 100, 1) : null;
+        }
         $submission->calculated_score = $pct;
 
         $submission->employee_scores = [[

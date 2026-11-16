@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { MultiSelect } from '@/components/ui/multi-select';
-import { Trash2, Plus, GripVertical, Settings, Waypoints, Star, SlidersHorizontal, Heading } from 'lucide-react';
+import { Trash2, Plus, GripVertical, Settings, Waypoints, Star, SlidersHorizontal, Heading, CheckSquare, Scale, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import React from 'react';
@@ -28,12 +28,17 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
     const initialSections = (formVersion?.sections || [{ title: 'Section 1', questions: [] }]).map((sec: any) => ({
         ...sec,
         _id: sec.id?.toString() || generateId(),
+        exact_required_answers: sec.exact_required_answers ?? sec.min_required_answers ?? '',
+        min_required_answers: sec.min_required_answers ?? '',
+        max_allowed_answers: sec.max_allowed_answers ?? '',
+        weight: sec.weight ?? '',
         questions: (sec.questions || []).map((q: any) => {
             const qType = inputTypes.find(t => t.id == q.form_input_type_id);
             const isEmployeeLookup = qType?.type_identifier === 'employee_lookup';
             return {
                 ...q,
                 _id: q.local_id || q.id?.toString() || generateId(),
+                weight: q.weight ?? '',
                 is_required: isEmployeeLookup ? true : Boolean(q.is_required),
                 choices: (q.choices || []).map((c: any) => ({
                     ...c,
@@ -110,7 +115,7 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
     };
 
     const addSection = () => {
-        setData('sections', [...data.sections, { _id: generateId(), title: `Section ${data.sections.length + 1}`, questions: [] }]);
+        setData('sections', [...data.sections, { _id: generateId(), title: `Section ${data.sections.length + 1}`, weight: '', exact_required_answers: '', questions: [] }]);
     };
 
     const removeSection = (sIndex: number) => {
@@ -126,15 +131,91 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
         setData('sections', newSections);
     };
 
+    const getSectionQuestionDefaultWeight = (section: any) => {
+        const secWeight = parseFloat(section.weight);
+        if (!secWeight || secWeight <= 0) return null;
+
+        const answerable = (section.questions || []).filter((q: any) => {
+            const type = inputTypes.find(t => t.id == q.form_input_type_id);
+            return type?.type_identifier !== 'title';
+        });
+
+        if (answerable.length === 0) return null;
+
+        const allMandatory = answerable.every((q: any) => Boolean(q.is_required));
+
+        if (allMandatory) {
+            const defaultWeight = Math.round((secWeight / answerable.length) * 100) / 100;
+            return {
+                defaultWeight,
+                mode: 'all_mandatory' as const,
+                divisor: answerable.length,
+                secWeight,
+                message: `All ${answerable.length} questions are mandatory (${secWeight} ÷ ${answerable.length} = ${defaultWeight} each)`
+            };
+        } else {
+            const exactReq = section.exact_required_answers !== undefined && section.exact_required_answers !== '' && section.exact_required_answers !== null
+                ? parseInt(section.exact_required_answers)
+                : 0;
+
+            if (exactReq > 0) {
+                const defaultWeight = Math.round((secWeight / exactReq) * 100) / 100;
+                return {
+                    defaultWeight,
+                    mode: 'exact_required' as const,
+                    divisor: exactReq,
+                    secWeight,
+                    message: `Non-mandatory questions present (${secWeight} ÷ ${exactReq} required = ${defaultWeight} each)`
+                };
+            } else {
+                return {
+                    defaultWeight: null,
+                    mode: 'missing_exact' as const,
+                    divisor: 0,
+                    secWeight,
+                    message: "Non-mandatory questions exist in this section. Please set 'Questions That Must Be Answered (Exact)' above to calculate question weights."
+                };
+            }
+        }
+    };
+
+    const distributeSectionWeight = (sIndex: number) => {
+        const section = data.sections[sIndex];
+        const calc = getSectionQuestionDefaultWeight(section);
+
+        if (!calc) {
+            alert('Please specify a positive Section Scoring Weight first.');
+            return;
+        }
+
+        if (calc.mode === 'missing_exact') {
+            alert(calc.message);
+            return;
+        }
+
+        const newSections = [...data.sections];
+        newSections[sIndex].questions = newSections[sIndex].questions.map((q: any) => {
+            const type = inputTypes.find(t => t.id == q.form_input_type_id);
+            if (type?.type_identifier === 'title') return q;
+            return { ...q, weight: calc.defaultWeight };
+        });
+
+        setData('sections', newSections);
+    };
+
     const addQuestion = (sIndex: number) => {
         const newSections = [...data.sections];
         const defaultTypeId = inputTypes[0]?.id || '';
         const defaultType = inputTypes.find(t => t.id == defaultTypeId);
         const isDefaultEmployeeLookup = defaultType?.type_identifier === 'employee_lookup';
 
+        const calc = getSectionQuestionDefaultWeight(newSections[sIndex]);
+        const initialWeight = (calc && calc.defaultWeight) ? calc.defaultWeight : '';
+
         newSections[sIndex].questions.push({
             _id: generateId(),
             label: '',
+            weight: initialWeight,
             form_input_type_id: defaultTypeId,
             is_required: isDefaultEmployeeLookup,
             choices: [],
@@ -262,6 +343,10 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
                 title: s.title,
                 order_index: sIdx, // Reassert index based on drag order
                 visibility_logic: s.visibility_logic || null,
+                exact_required_answers: s.exact_required_answers !== undefined && s.exact_required_answers !== '' && s.exact_required_answers !== null ? Math.max(0, parseInt(s.exact_required_answers) || 0) : null,
+                min_required_answers: s.exact_required_answers !== undefined && s.exact_required_answers !== '' && s.exact_required_answers !== null ? Math.max(0, parseInt(s.exact_required_answers) || 0) : null,
+                max_allowed_answers: s.exact_required_answers !== undefined && s.exact_required_answers !== '' && s.exact_required_answers !== null ? Math.max(0, parseInt(s.exact_required_answers) || 0) : null,
+                weight: s.weight !== undefined && s.weight !== '' && s.weight !== null ? Math.max(0, parseFloat(s.weight) || 0) : null,
                 questions: s.questions.map((q: any, qIdx: number) => {
                     const qType = inputTypes.find(t => t.id == q.form_input_type_id);
                     const isTitle = qType?.type_identifier === 'title';
@@ -271,6 +356,7 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
                     return {
                         _id: q._id,
                         label: q.label || defaultLabel,
+                        weight: q.weight !== undefined && q.weight !== '' && q.weight !== null ? Math.max(0, parseFloat(q.weight) || 0) : null,
                         form_input_type_id: q.form_input_type_id,
                         is_required: isTitle ? false : (isEmployeeLookup ? true : Boolean(q.is_required)),
                         order_index: qIdx, // Reassert index based on drag order
@@ -376,8 +462,104 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
                                                         </div>
                                                     </CardHeader>
                                                     <CardContent className="pt-6 space-y-6">
-                                                        <div className="bg-muted/10 p-4 rounded border border-muted mb-4">
-                                                            <div className="flex items-center justify-between mb-3">
+                                                        <div className="bg-muted/10 p-4 rounded border border-muted mb-4 space-y-4">
+                                                            {/* Questions That Must Be Answered (Exact) */}
+                                                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-3 border-b border-muted">
+                                                                <div className="space-y-0.5">
+                                                                    <Label className="text-sm font-semibold text-amber-900 flex items-center">
+                                                                        <CheckSquare className="w-4 h-4 mr-2 text-amber-700" /> Questions That Must Be Answered (Exact)
+                                                                    </Label>
+                                                                    <p className="text-xs text-muted-foreground">
+                                                                        Specify the exact number of questions that must be answered in this section (leave empty for no restriction).
+                                                                    </p>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                                    <Label className="text-xs font-medium text-gray-600">Exact:</Label>
+                                                                    <Input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        value={section.exact_required_answers ?? ''}
+                                                                        onChange={e => updateSection(sIndex, 'exact_required_answers', e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0))}
+                                                                        placeholder="e.g. 3"
+                                                                        className="w-24 h-8 text-sm bg-white"
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Section Weight & Scoring */}
+                                                            <div className="flex flex-col gap-3 pb-3 border-b border-muted">
+                                                                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                                                    <div className="space-y-0.5">
+                                                                        <Label className="text-sm font-semibold text-amber-900 flex items-center">
+                                                                            <Scale className="w-4 h-4 mr-2 text-amber-700" /> Section Scoring Weight
+                                                                        </Label>
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            Assign a total weight to this section (e.g. 30). This will be distributed across the questions.
+                                                                        </p>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2 shrink-0">
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <Label className="text-xs font-medium text-gray-600">Weight:</Label>
+                                                                            <Input
+                                                                                type="number"
+                                                                                min="0"
+                                                                                step="any"
+                                                                                value={section.weight ?? ''}
+                                                                                onChange={e => updateSection(sIndex, 'weight', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0))}
+                                                                                placeholder="No weight"
+                                                                                className="w-28 h-8 text-sm bg-white"
+                                                                            />
+                                                                        </div>
+                                                                        {section.weight && parseFloat(section.weight) > 0 && (
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                onClick={() => distributeSectionWeight(sIndex)}
+                                                                                className="h-8 text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300"
+                                                                                title="Calculate and assign default weight to all questions in this section"
+                                                                            >
+                                                                                <Scale className="w-3.5 h-3.5 mr-1 text-amber-700" />
+                                                                                Distribute Weight
+                                                                            </Button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Live Distribution Status & Explanation */}
+                                                                {section.weight && parseFloat(section.weight) > 0 && (() => {
+                                                                    const calc = getSectionQuestionDefaultWeight(section);
+                                                                    if (!calc) return null;
+
+                                                                    if (calc.mode === 'missing_exact') {
+                                                                        return (
+                                                                            <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-amber-100/70 border border-amber-300 text-amber-900 text-xs">
+                                                                                <AlertCircle className="w-4 h-4 shrink-0 text-amber-700" />
+                                                                                <span>{calc.message}</span>
+                                                                            </div>
+                                                                        );
+                                                                    }
+
+                                                                    return (
+                                                                        <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs">
+                                                                            <div className="flex items-center gap-1.5">
+                                                                                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                                                                                <span><strong>Default Distribution:</strong> {calc.message}</span>
+                                                                            </div>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => distributeSectionWeight(sIndex)}
+                                                                                className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 underline ml-2 shrink-0"
+                                                                            >
+                                                                                Apply to all ({calc.defaultWeight})
+                                                                            </button>
+                                                                        </div>
+                                                                    );
+                                                                })()}
+                                                            </div>
+
+                                                            {/* Section Visibility Logic */}
+                                                            <div className="flex items-center justify-between">
                                                                 <Label className="text-sm font-semibold text-amber-900 flex items-center">
                                                                     <Waypoints className="w-4 h-4 mr-2" /> Section Visibility Logic
                                                                 </Label>
@@ -491,22 +673,40 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
 
                                                                                                 {!isTitle && (
                                                                                                     <div className="mt-4 flex flex-col space-y-3">
-                                                                                                        {selectedTypeIdentifier === 'employee_lookup' ? (
-                                                                                                            <div className="flex items-center space-x-2">
-                                                                                                                <Checkbox id={`req-${sIndex}-${qIndex}`} checked={true} disabled className="opacity-80 data-[state=checked]:bg-amber-700 data-[state=checked]:border-amber-700 cursor-not-allowed" />
-                                                                                                                <Label htmlFor={`req-${sIndex}-${qIndex}`} className="text-sm font-medium text-amber-950 flex items-center gap-1.5 cursor-not-allowed">
-                                                                                                                    Require an answer
-                                                                                                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
-                                                                                                                        Mandatory for Employee Lookup
-                                                                                                                    </span>
+                                                                                                        <div className="flex flex-wrap items-center justify-between gap-4">
+                                                                                                            {selectedTypeIdentifier === 'employee_lookup' ? (
+                                                                                                                <div className="flex items-center space-x-2">
+                                                                                                                    <Checkbox id={`req-${sIndex}-${qIndex}`} checked={true} disabled className="opacity-80 data-[state=checked]:bg-amber-700 data-[state=checked]:border-amber-700 cursor-not-allowed" />
+                                                                                                                    <Label htmlFor={`req-${sIndex}-${qIndex}`} className="text-sm font-medium text-amber-950 flex items-center gap-1.5 cursor-not-allowed">
+                                                                                                                        Require an answer
+                                                                                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                                                                                                            Mandatory for Employee Lookup
+                                                                                                                        </span>
+                                                                                                                    </Label>
+                                                                                                                </div>
+                                                                                                            ) : (
+                                                                                                                <div className="flex items-center space-x-2">
+                                                                                                                    <Checkbox id={`req-${sIndex}-${qIndex}`} checked={question.is_required} onCheckedChange={(checked) => updateQuestion(sIndex, qIndex, 'is_required', checked)} />
+                                                                                                                    <Label htmlFor={`req-${sIndex}-${qIndex}`} className="text-sm font-normal">Require an answer</Label>
+                                                                                                                </div>
+                                                                                                            )}
+
+                                                                                                            <div className="flex items-center gap-1.5">
+                                                                                                                <Label htmlFor={`weight-${sIndex}-${qIndex}`} className="text-xs font-semibold text-gray-700 flex items-center">
+                                                                                                                    <Scale className="w-3.5 h-3.5 mr-1 text-amber-700" /> Question Weight:
                                                                                                                 </Label>
+                                                                                                                <Input
+                                                                                                                    id={`weight-${sIndex}-${qIndex}`}
+                                                                                                                    type="number"
+                                                                                                                    min="0"
+                                                                                                                    step="any"
+                                                                                                                    value={question.weight ?? ''}
+                                                                                                                    onChange={e => updateQuestion(sIndex, qIndex, 'weight', e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0))}
+                                                                                                                    placeholder="e.g. 10"
+                                                                                                                    className="w-24 h-8 text-sm bg-white"
+                                                                                                                />
                                                                                                             </div>
-                                                                                                        ) : (
-                                                                                                            <div className="flex items-center space-x-2">
-                                                                                                                <Checkbox id={`req-${sIndex}-${qIndex}`} checked={question.is_required} onCheckedChange={(checked) => updateQuestion(sIndex, qIndex, 'is_required', checked)} />
-                                                                                                                <Label htmlFor={`req-${sIndex}-${qIndex}`} className="text-sm font-normal">Require an answer</Label>
-                                                                                                            </div>
-                                                                                                        )}
+                                                                                                        </div>
 
                                                                                                         {selectedTypeIdentifier === 'employee_evaluation_grid' && (
                                                                                                             <div className="flex flex-col space-y-3 bg-amber-50 p-3 rounded border border-amber-200">
@@ -596,7 +796,7 @@ export default function Edit({ form, formVersion, inputTypes, branches, departme
                                                                                                             ))}
                                                                                                             <Button
                                                                                                                 type="button"
-                                                                                                                 variant="outline"
+                                                                                                                variant="outline"
                                                                                                                 size="sm"
                                                                                                                 onClick={() => addSubQuestion(sIndex, qIndex)}
                                                                                                                 className="h-7 text-xs font-medium text-blue-600 border-blue-200 hover:bg-blue-50 mt-2"

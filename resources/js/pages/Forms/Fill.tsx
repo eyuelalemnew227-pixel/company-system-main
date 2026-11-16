@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import SignatureCanvas from 'react-signature-canvas';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MultiSelect } from '@/components/ui/multi-select';
-import { Star, MapPin, ChevronRight, RotateCcw, FileSignature, CheckCircle2, History, AlertCircle } from 'lucide-react';
+import { Star, MapPin, ChevronRight, RotateCcw, FileSignature, CheckCircle2, History, AlertCircle, CheckSquare, Square, Scale } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import React, { useMemo, useEffect, useState, useRef } from 'react';
 const GeoLocationPicker = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
@@ -63,16 +63,28 @@ const GeoLocationPicker = ({ value, onChange }: { value: string, onChange: (val:
                         <p className="text-sm font-semibold text-green-900">Location Captured</p>
                         <p className="text-xs text-green-700 font-mono mt-0.5">{value}</p>
                     </div>
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={getLocation}
-                        disabled={loading}
-                        className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity h-7 text-xs text-green-800 hover:bg-green-200/50"
-                    >
-                        Retake
-                    </Button>
+                    <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={getLocation}
+                            disabled={loading}
+                            className="h-7 text-xs text-green-800 hover:bg-green-200/50"
+                        >
+                            Retake
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onChange('')}
+                            disabled={loading}
+                            className="h-7 text-xs text-red-600 hover:bg-red-50"
+                        >
+                            Clear
+                        </Button>
+                    </div>
                 </div>
             )}
             {error && <p className="text-sm text-red-500 font-medium">{error}</p>}
@@ -205,9 +217,9 @@ const SignaturePad = ({ value, onChange }: { value: string, onChange: (val: stri
 
 export default function Fill({ form, formVersion, submission, parsedAnswers, branches, departments, employees }: { form: any, formVersion: any, submission?: any, parsedAnswers?: any, branches?: any[], departments?: any[], employees?: any[] }) {
     const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Form', href: '/forms' },
-        { title: 'Fill Forms', href: '/forms/available' },
-        { title: form.title, href: `/forms/${form.id}/fill` },
+        { title: 'Form', href: '/available-forms' },
+        { title: 'Fill Forms', href: '/available-forms' },
+        { title: form.title, href: `/fill-forms/${form.id}` },
     ];
 
     const allQuestionsMap = React.useMemo(() => {
@@ -311,8 +323,10 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         }
     }, [draftKey]);
 
-    const { data, setData, post, put, processing, errors, transform } = useForm({
-        answers: initialAnswers as Record<number, any>
+    const { data, setData, post, put, processing, errors, transform } = useForm<{
+        answers: Record<string | number, any>;
+    }>({
+        answers: initialAnswers as Record<string | number, any>
     });
 
     const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -418,6 +432,12 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                 if (visibleQuestionIds.has(qId)) {
                     filtered[key] = msg;
                 }
+            } else if (key.startsWith('section_')) {
+                const secId = key.replace('section_', '');
+                const sec = (formVersion?.sections || []).find((s: any) => String(s.id) === secId);
+                if (!sec || isSectionVisible(sec)) {
+                    filtered[key] = msg;
+                }
             } else {
                 filtered[key] = msg;
             }
@@ -468,7 +488,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         setHasRestoredDraft(false);
     };
 
-    const handleAnswerChange = (questionId: number, value: any) => {
+    const handleAnswerChange = (questionId: number | string, value: any) => {
         setValidationErrors(prev => {
             if (!prev[`answers.${questionId}`]) return prev;
             const next = { ...prev };
@@ -484,42 +504,118 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         }));
     };
 
+    const getAnswerForType = (tId: string, section?: any) => {
+        let matchQ = section?.questions?.find((q: any) =>
+            (q.input_type?.type_identifier === tId || q.inputType?.type_identifier === tId)
+        );
+        if (!matchQ) {
+            // Fallback across all sections in the form
+            formVersion?.sections?.forEach((s: any) => {
+                if (!matchQ) {
+                    matchQ = s.questions?.find((q: any) =>
+                        (q.input_type?.type_identifier === tId || q.inputType?.type_identifier === tId)
+                    );
+                }
+            });
+        }
+        if (!matchQ) {
+            if (tId === 'branch_lookup') {
+                const userBranch = pageProps?.auth?.user?.employee?.branch_id || pageProps?.auth?.user?.branch_id;
+                if (userBranch) return String(userBranch);
+            }
+            return null;
+        }
+        const ans = data.answers[matchQ.id];
+        if (ans !== undefined && ans !== null && ans !== '') {
+            return ans;
+        }
+        if (matchQ.default_value) {
+            return matchQ.default_value;
+        }
+        if (tId === 'branch_lookup') {
+            const userBranch = pageProps?.auth?.user?.employee?.branch_id || pageProps?.auth?.user?.branch_id;
+            if (userBranch) return String(userBranch);
+        }
+        return null;
+    };
+
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
 
         // Client-side required check (especially for custom widgets like employee_lookup and searchable selects)
         const localErrors: Record<string, string> = {};
-        let firstInvalidQuestionId: number | null = null;
+        let firstInvalidElementId: string | null = null;
 
         (formVersion?.sections || []).filter(isSectionVisible).forEach((sec: any) => {
-            (sec.questions || []).filter(isQuestionVisible).forEach((q: any) => {
+            let answeredCount = 0;
+            const visibleQuestions = (sec.questions || []).filter(isQuestionVisible);
+
+            visibleQuestions.forEach((q: any) => {
                 const inputTypeResolver = q.input_type || q.inputType;
                 const isTitle = (inputTypeResolver?.type_identifier || '') === 'title';
                 if (isTitle) return;
 
                 const isEmployeeLookup = inputTypeResolver?.type_identifier === 'employee_lookup';
+                const isAttendanceRoster = inputTypeResolver?.type_identifier === 'employee_attendance_roster';
                 const isRequired = Boolean(q.is_required) || isEmployeeLookup;
-
-                if (!isRequired) return;
 
                 const ans = data.answers[q.id];
                 const isEmpty = ans === undefined || ans === null || ans === '' || (Array.isArray(ans) && ans.length === 0);
 
-                if (isEmpty) {
+                if (!isEmpty) {
+                    answeredCount++;
+                }
+
+                if (isRequired && isEmpty) {
+                    if (isAttendanceRoster) {
+                        const localBranch = getAnswerForType('branch_lookup', sec);
+                        const branchEmps = localBranch ? (employeesByBranch[String(localBranch)] || []) : [];
+                        if (branchEmps.length === 0) {
+                            return; // Do not block submission if no employees exist for this branch
+                        }
+                    }
                     localErrors[`answers.${q.id}`] = isEmployeeLookup
                         ? `Please select an employee for "${q.label || 'Employee'}" (mandatory).`
                         : `This field is required.`;
-                    if (!firstInvalidQuestionId) {
-                        firstInvalidQuestionId = q.id;
+                    if (!firstInvalidElementId) {
+                        firstInvalidElementId = `question-card-${q.id}`;
                     }
                 }
             });
+
+            // Enforce exact required answered questions in this section
+            const exactReq = Number(sec.exact_required_answers);
+            if (exactReq && exactReq > 0) {
+                if (answeredCount !== exactReq) {
+                    localErrors[`section_${sec.id}`] = `Section "${sec.title}" requires exactly ${exactReq} question${exactReq > 1 ? 's' : ''} to be answered (currently answered: ${answeredCount}).`;
+                    if (!firstInvalidElementId) {
+                        firstInvalidElementId = `section-card-${sec.id}`;
+                    }
+                }
+            } else {
+                // Fallback for legacy min/max if exact is not set
+                const minReq = Number(sec.min_required_answers);
+                if (minReq && minReq > 0 && answeredCount < minReq) {
+                    localErrors[`section_${sec.id}`] = `Section "${sec.title}" requires at least ${minReq} question${minReq > 1 ? 's' : ''} to be answered (currently answered: ${answeredCount}).`;
+                    if (!firstInvalidElementId) {
+                        firstInvalidElementId = `section-card-${sec.id}`;
+                    }
+                }
+
+                const maxAllowed = Number(sec.max_allowed_answers);
+                if (maxAllowed && maxAllowed > 0 && answeredCount > maxAllowed) {
+                    localErrors[`section_${sec.id}`] = `Section "${sec.title}" allows at most ${maxAllowed} question${maxAllowed > 1 ? 's' : ''} to be answered (currently answered: ${answeredCount}).`;
+                    if (!firstInvalidElementId) {
+                        firstInvalidElementId = `section-card-${sec.id}`;
+                    }
+                }
+            }
         });
 
         if (Object.keys(localErrors).length > 0) {
             setValidationErrors(localErrors);
-            if (firstInvalidQuestionId) {
-                const el = document.getElementById(`question-card-${firstInvalidQuestionId}`);
+            if (firstInvalidElementId) {
+                const el = document.getElementById(firstInvalidElementId);
                 if (el) {
                     const yOffset = -120;
                     const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
@@ -568,17 +664,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         const typeId = inputTypeResolver?.type_identifier || 'text'; // Fallback to text to prevent crash
         const answer = data.answers[question.id] !== undefined ? data.answers[question.id] : '';
 
-        const getAnswerForTypeInSection = (tId: string) => {
-            const matchQ = section?.questions?.find((q: any) =>
-                (q.input_type?.type_identifier === tId || q.inputType?.type_identifier === tId)
-            );
-            if (!matchQ) return null;
-            const ans = data.answers[matchQ.id];
-            if (ans !== undefined && ans !== null && ans !== '') {
-                return ans;
-            }
-            return matchQ.default_value || null;
-        };
+        const getAnswerForTypeInSection = (tId: string) => getAnswerForType(tId, section);
 
         switch (typeId) {
             case 'title':
@@ -594,32 +680,38 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     />
                 );
             case 'boolean':
+                const isYes = answer === true || answer === 'true' || answer === '1' || answer === 1;
+                const isNo = answer === false || answer === 'false' || answer === '0' || answer === 0;
                 return (
                     <div className={cn("flex space-x-6 p-2 rounded-lg transition-all", hasError && "border-2 border-red-500 bg-red-50/50 ring-2 ring-red-400/30")}>
-                        <label className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors">
+                        <div
+                            onClick={() => handleAnswerChange(question.id, isYes ? '' : true)}
+                            className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors select-none"
+                        >
                             <input
                                 type="radio"
                                 name={`q-${question.id}`}
                                 value="yes"
-                                checked={answer === true}
-                                onChange={() => handleAnswerChange(question.id, true)}
-                                required={question.is_required}
-                                className="w-5 h-5 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500"
+                                checked={isYes}
+                                readOnly
+                                className="w-5 h-5 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500 pointer-events-none cursor-pointer"
                             />
                             <span className="text-base font-medium leading-none">Yes</span>
-                        </label>
-                        <label className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors">
+                        </div>
+                        <div
+                            onClick={() => handleAnswerChange(question.id, isNo ? '' : false)}
+                            className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors select-none"
+                        >
                             <input
                                 type="radio"
                                 name={`q-${question.id}`}
                                 value="no"
-                                checked={answer === false}
-                                onChange={() => handleAnswerChange(question.id, false)}
-                                required={question.is_required}
-                                className="w-5 h-5 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500"
+                                checked={isNo}
+                                readOnly
+                                className="w-5 h-5 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500 pointer-events-none cursor-pointer"
                             />
                             <span className="text-base font-medium leading-none">No</span>
-                        </label>
+                        </div>
                     </div>
                 );
             case 'geolocation':
@@ -849,18 +941,21 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                             {choices.map((choice: any) => {
                                 const checked = isChoiceChecked(choice);
                                 return (
-                                    <label key={choice.id} className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors w-fit">
+                                    <div
+                                        key={choice.id}
+                                        onClick={() => handleAnswerChange(question.id, checked ? '' : getSelectedValueToStore(choice))}
+                                        className="flex items-center space-x-2 cursor-pointer p-2 rounded hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-colors w-fit select-none"
+                                    >
                                         <input
                                             type="radio"
                                             name={`q-${question.id}`}
                                             value={choice.id ?? choice.value}
                                             checked={checked}
-                                            onChange={() => handleAnswerChange(question.id, getSelectedValueToStore(choice))}
-                                            required={question.is_required}
-                                            className="w-5 h-5 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500"
+                                            readOnly
+                                            className="w-5 h-5 text-amber-600 bg-gray-100 border-gray-300 focus:ring-amber-500 pointer-events-none cursor-pointer"
                                         />
                                         <span className="text-base font-medium leading-none">{choice.label}</span>
-                                    </label>
+                                    </div>
                                 );
                             })}
                         </div>
@@ -870,27 +965,46 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     const selectValue = selectedChoice ? String(selectedChoice.id) : (answer ? String(answer) : '');
 
                     return (
-                        <Select
-                            value={selectValue}
-                            onValueChange={(val: string) => {
-                                const found = choices.find((c: any) => String(c.id) === val);
-                                if (found) {
-                                    handleAnswerChange(question.id, getSelectedValueToStore(found));
-                                } else {
-                                    handleAnswerChange(question.id, val);
-                                }
-                            }}
-                            required={question.is_required}
-                        >
-                            <SelectTrigger className={cn("w-[300px] bg-white transition-all", hasError && "!border-red-500 !ring-2 !ring-red-400 bg-red-50/40 text-red-950 font-medium")}>
-                                <SelectValue placeholder="Select an option" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {choices.map((choice: any) => (
-                                    <SelectItem key={choice.id} value={String(choice.id)}>{choice.label}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <div className="flex items-center gap-2">
+                            <Select
+                                value={selectValue}
+                                onValueChange={(val: string) => {
+                                    if (val === '__clear__') {
+                                        handleAnswerChange(question.id, '');
+                                        return;
+                                    }
+                                    const found = choices.find((c: any) => String(c.id) === val);
+                                    if (found) {
+                                        handleAnswerChange(question.id, getSelectedValueToStore(found));
+                                    } else {
+                                        handleAnswerChange(question.id, val);
+                                    }
+                                }}
+                                required={question.is_required}
+                            >
+                                <SelectTrigger className={cn("w-[300px] bg-white transition-all", hasError && "!border-red-500 !ring-2 !ring-red-400 bg-red-50/40 text-red-950 font-medium")}>
+                                    <SelectValue placeholder="Select an option" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="__clear__" className="text-muted-foreground italic">-- Clear selection --</SelectItem>
+                                    {choices.map((choice: any) => (
+                                        <SelectItem key={choice.id} value={String(choice.id)}>{choice.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {selectValue && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleAnswerChange(question.id, '')}
+                                    className="h-8 px-2 text-xs text-muted-foreground hover:text-red-600"
+                                    title="Clear selection"
+                                >
+                                    Clear
+                                </Button>
+                            )}
+                        </div>
                     );
                 } else {
                     return <p className="text-sm text-red-500 italic">No options defined for this question.</p>;
@@ -951,18 +1065,30 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     displayedEmps = targetedEmps.filter(e => e && manualSelectedIds.includes(String(e.id)));
                 }
 
-                const gridAnsState = data.answers[question.id] || {};
+                const rawGridState = data.answers[question.id];
+                const gridAnsState = typeof rawGridState === 'object' && rawGridState !== null && !Array.isArray(rawGridState) ? rawGridState : {};
                 const hasRemarkField = question.visibility_logic?.has_remark_field ?? true;
 
-                const handleGridChange = (empId: string, choiceId: string, val: string) => {
-                    const currentEmpState = gridAnsState[empId] || {};
-                    handleAnswerChange(question.id, {
-                        ...gridAnsState,
-                        [empId]: {
-                            ...currentEmpState,
-                            [choiceId]: val
+                const handleGridChange = (empId: string, choiceId: string, val: string, isToggle = false) => {
+                    const currentEmpState = { ...(gridAnsState[empId] || {}) };
+                    if (isToggle && currentEmpState[choiceId] === val) {
+                        delete currentEmpState[choiceId];
+                    } else {
+                        if (val === '' && !isToggle) {
+                            delete currentEmpState[choiceId];
+                        } else {
+                            currentEmpState[choiceId] = val;
                         }
-                    });
+                    }
+
+                    const nextGridState = { ...gridAnsState };
+                    if (Object.keys(currentEmpState).length === 0) {
+                        delete nextGridState[empId];
+                    } else {
+                        nextGridState[empId] = currentEmpState;
+                    }
+
+                    handleAnswerChange(question.id, Object.keys(nextGridState).length > 0 ? nextGridState : '');
                 };
 
                 return (
@@ -1009,38 +1135,62 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                                                         subQuestions.map((sq: any) => (
                                                             <td key={sq.id || sq.label} className="px-4 py-3 text-center border-l align-middle min-w-[120px]">
                                                                 <div className="flex items-center justify-center space-x-3">
-                                                                    {evalChoices.map((c: any) => (
-                                                                        <label key={c.id} className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded border border-transparent hover:border-gray-200 transition-colors">
-                                                                            <input
-                                                                                type="radio"
-                                                                                name={`grid-${question.id}-${empIdStr}-${sq.id || sq.label}`}
-                                                                                value={c.value}
-                                                                                checked={empData[sq.id || sq.label] === c.value}
-                                                                                onChange={() => handleGridChange(empIdStr, sq.id || sq.label, c.value)}
-                                                                                className="h-4 w-4 focus:ring-primary border-gray-300 cursor-pointer text-[#1c2c4c]"
-                                                                            />
-                                                                            <span className="text-xs font-semibold text-gray-700">{c.label}</span>
-                                                                        </label>
-                                                                    ))}
+                                                                    {evalChoices.map((c: any) => {
+                                                                        const isChecked = empData[sq.id || sq.label] === c.value;
+                                                                        return (
+                                                                            <div
+                                                                                key={c.id}
+                                                                                onClick={() => handleGridChange(empIdStr, sq.id || sq.label, c.value, true)}
+                                                                                className={cn(
+                                                                                    "flex items-center space-x-1.5 cursor-pointer px-2 py-1 rounded border transition-colors select-none",
+                                                                                    isChecked
+                                                                                        ? "border-[#1c2c4c]/40 bg-[#1c2c4c]/5 font-semibold text-[#1c2c4c]"
+                                                                                        : "border-transparent hover:border-gray-200 hover:bg-gray-50 text-gray-700"
+                                                                                )}
+                                                                            >
+                                                                                <input
+                                                                                    type="radio"
+                                                                                    name={`grid-${question.id}-${empIdStr}-${sq.id || sq.label}`}
+                                                                                    value={c.value}
+                                                                                    checked={isChecked}
+                                                                                    readOnly
+                                                                                    className="h-4 w-4 pointer-events-none text-[#1c2c4c] border-gray-300"
+                                                                                />
+                                                                                <span className="text-xs font-semibold">{c.label}</span>
+                                                                            </div>
+                                                                        );
+                                                                    })}
                                                                 </div>
                                                             </td>
                                                         ))
                                                     ) : (
                                                         <td className="px-4 py-3 text-center border-l align-middle min-w-[120px]">
                                                             <div className="flex items-center justify-center space-x-4">
-                                                                {evalChoices.map((c: any) => (
-                                                                    <label key={c.id} className="flex items-center space-x-1.5 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded border border-transparent hover:border-gray-200 transition-colors">
-                                                                        <input
-                                                                            type="radio"
-                                                                            name={`grid-${question.id}-${empIdStr}-single`}
-                                                                            value={c.value}
-                                                                            checked={empData['single'] === c.value}
-                                                                            onChange={() => handleGridChange(empIdStr, 'single', c.value)}
-                                                                            className="h-4.5 w-4.5 focus:ring-primary border-gray-300 cursor-pointer text-[#1c2c4c]"
-                                                                        />
-                                                                        <span className="text-sm font-semibold text-gray-700">{c.label}</span>
-                                                                    </label>
-                                                                ))}
+                                                                {evalChoices.map((c: any) => {
+                                                                    const isChecked = empData['single'] === c.value;
+                                                                    return (
+                                                                        <div
+                                                                            key={c.id}
+                                                                            onClick={() => handleGridChange(empIdStr, 'single', c.value, true)}
+                                                                            className={cn(
+                                                                                "flex items-center space-x-1.5 cursor-pointer px-2 py-1 rounded border transition-colors select-none",
+                                                                                isChecked
+                                                                                    ? "border-[#1c2c4c]/40 bg-[#1c2c4c]/5 font-semibold text-[#1c2c4c]"
+                                                                                    : "border-transparent hover:border-gray-200 hover:bg-gray-50 text-gray-700"
+                                                                            )}
+                                                                        >
+                                                                            <input
+                                                                                type="radio"
+                                                                                name={`grid-${question.id}-${empIdStr}-single`}
+                                                                                value={c.value}
+                                                                                checked={isChecked}
+                                                                                readOnly
+                                                                                className="h-4.5 w-4.5 pointer-events-none text-[#1c2c4c] border-gray-300"
+                                                                            />
+                                                                            <span className="text-sm font-semibold">{c.label}</span>
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </td>
                                                     )}
@@ -1050,7 +1200,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                                                             <Input
                                                                 type="text"
                                                                 value={empData.remark || ''}
-                                                                onChange={(e) => handleGridChange(empIdStr, 'remark', e.target.value)}
+                                                                onChange={(e) => handleGridChange(empIdStr, 'remark', e.target.value, false)}
                                                                 placeholder="Note..."
                                                                 className="w-full h-8 text-xs bg-white"
                                                             />
@@ -1098,18 +1248,32 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
             case 'rating_stars':
                 const currentStar = parseInt(answer) || 0;
                 return (
-                    <div className={cn("flex space-x-1 p-2 rounded-lg transition-all", hasError && "border-2 border-red-500 bg-red-50/50 ring-2 ring-red-400/30")}>
-                        {[1, 2, 3, 4, 5].map((starIdx) => (
-                            <Star
-                                key={starIdx}
-                                className={`h-8 w-8 transition-colors ${!!question.default_value ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${currentStar >= starIdx ? 'text-amber-500 fill-amber-500' : 'text-gray-200 hover:text-amber-200'}`}
-                                onClick={() => !question.default_value && handleAnswerChange(question.id, starIdx.toString())}
-                            />
-                        ))}
+                    <div className={cn("flex items-center space-x-3 p-2 rounded-lg transition-all", hasError && "border-2 border-red-500 bg-red-50/50 ring-2 ring-red-400/30")}>
+                        <div className="flex space-x-1">
+                            {[1, 2, 3, 4, 5].map((starIdx) => (
+                                <Star
+                                    key={starIdx}
+                                    className={`h-8 w-8 transition-colors ${!!question.default_value ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} ${currentStar >= starIdx ? 'text-amber-500 fill-amber-500' : 'text-gray-200 hover:text-amber-200'}`}
+                                    onClick={() => !question.default_value && handleAnswerChange(question.id, currentStar === starIdx ? '' : starIdx.toString())}
+                                />
+                            ))}
+                        </div>
+                        {currentStar > 0 && !question.default_value && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleAnswerChange(question.id, '')}
+                                className="h-7 px-2 text-xs text-muted-foreground hover:text-red-600 hover:bg-red-50"
+                            >
+                                Clear
+                            </Button>
+                        )}
                     </div>
                 );
             case 'rating_slider':
-                const sliderVal = parseInt(answer) || 5;
+                const sliderVal = answer !== undefined && answer !== null && answer !== '' ? parseInt(answer) : null;
+                const displayVal = sliderVal ?? 5;
                 return (
                     <div className="flex flex-col space-y-2 max-w-xl bg-white p-3 border rounded-md">
                         <input
@@ -1118,14 +1282,25 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                             max="10"
                             step="1"
                             disabled={!!question.default_value}
-                            value={sliderVal}
+                            value={displayVal}
                             onChange={(e) => handleAnswerChange(question.id, e.target.value)}
                             className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600 disabled:opacity-50"
                         />
-                        <div className="flex justify-between text-xs text-gray-500 font-medium px-1">
+                        <div className="flex justify-between items-center text-xs text-gray-500 font-medium px-1">
                             <span>1</span>
-                            <span className="text-indigo-600 font-bold text-sm">Value: {sliderVal}</span>
+                            <span className="text-indigo-600 font-bold text-sm">
+                                {sliderVal !== null ? `Value: ${sliderVal}` : 'Not set (default: 5)'}
+                            </span>
                             <span>10</span>
+                            {sliderVal !== null && !question.default_value && (
+                                <button
+                                    type="button"
+                                    onClick={() => handleAnswerChange(question.id, '')}
+                                    className="ml-2 text-xs text-red-500 hover:underline"
+                                >
+                                    Clear
+                                </button>
+                            )}
                         </div>
                     </div>
                 );
@@ -1225,79 +1400,185 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                             <p className="text-lg text-gray-500 font-medium">No sections are currently available based on your answers.</p>
                         </div>
                     ) : (
-                        formVersion.sections.filter(isSectionVisible).map((section: any, idx: number) => (
-                            <Card key={section.id} className="shadow-md border-amber-900/10 overflow-hidden">
-                                <div className="bg-amber-900/5 px-6 py-4 border-b border-amber-900/10">
-                                    <h3 className="text-xl font-bold text-amber-900">{idx + 1}. {section.title}</h3>
-                                </div>
-                                <CardContent className="p-8 space-y-10 bg-white">
-                                    {(() => {
-                                        const visibleQuestions = (section.questions || []).filter(isQuestionVisible);
-                                        if (visibleQuestions.length === 0) {
-                                            return <p className="text-muted-foreground italic">No questions in this section.</p>;
-                                        }
+                        formVersion.sections.filter(isSectionVisible).map((section: any, idx: number) => {
+                            const visibleQuestions = (section.questions || []).filter(isQuestionVisible);
+                            const answeredCount = visibleQuestions.filter((q: any) => {
+                                const t = (q.input_type || q.inputType)?.type_identifier;
+                                if (t === 'title') return false;
+                                const ans = data.answers[q.id];
+                                return ans !== undefined && ans !== null && ans !== '' && !(Array.isArray(ans) && ans.length === 0);
+                            }).length;
 
-                                        let qCounter = 0;
-                                        return visibleQuestions.map((question: any) => {
-                                            const inputTypeResolver = question.input_type || question.inputType;
-                                            const isTitle = (inputTypeResolver?.type_identifier || '') === 'title';
-                                            if (!isTitle) {
-                                                qCounter++;
+                            const exactReq = Number(section.exact_required_answers);
+                            const hasExact = Boolean(exactReq && exactReq > 0);
+
+                            const minReq = Number(section.min_required_answers);
+                            const maxAllowed = Number(section.max_allowed_answers);
+                            const hasMin = Boolean(minReq && minReq > 0);
+                            const hasMax = Boolean(maxAllowed && maxAllowed > 0);
+
+                            let badgeState: 'valid' | 'under' | 'exceeded' = 'valid';
+                            let badgeLabel = '';
+
+                            if (hasExact) {
+                                if (answeredCount > exactReq) {
+                                    badgeState = 'exceeded';
+                                    badgeLabel = `Must Answer: Exactly ${exactReq} (Exceeded: ${answeredCount}/${exactReq})`;
+                                } else if (answeredCount < exactReq) {
+                                    badgeState = 'under';
+                                    badgeLabel = `Must Answer: Exactly ${exactReq} (${answeredCount}/${exactReq} answered)`;
+                                } else {
+                                    badgeState = 'valid';
+                                    badgeLabel = `Must Answer: Exactly ${exactReq} (${answeredCount}/${exactReq} answered)`;
+                                }
+                            } else if (hasMin && hasMax) {
+                                if (answeredCount > maxAllowed) {
+                                    badgeState = 'exceeded';
+                                    badgeLabel = `Required: ${minReq}–${maxAllowed} (Exceeded: ${answeredCount}/${maxAllowed})`;
+                                } else if (answeredCount < minReq) {
+                                    badgeState = 'under';
+                                    badgeLabel = `Required: ${minReq}–${maxAllowed} (${answeredCount}/${minReq} answered)`;
+                                } else {
+                                    badgeState = 'valid';
+                                    badgeLabel = `Required: ${minReq}–${maxAllowed} (${answeredCount} answered)`;
+                                }
+                            } else if (hasMin) {
+                                if (answeredCount < minReq) {
+                                    badgeState = 'under';
+                                    badgeLabel = `Minimum Required: ${minReq} (${answeredCount}/${minReq} answered)`;
+                                } else {
+                                    badgeState = 'valid';
+                                    badgeLabel = `Minimum Required: ${minReq} (${answeredCount}/${minReq} answered)`;
+                                }
+                            } else if (hasMax) {
+                                if (answeredCount > maxAllowed) {
+                                    badgeState = 'exceeded';
+                                    badgeLabel = `Maximum Allowed: ${maxAllowed} (Exceeded: ${answeredCount}/${maxAllowed})`;
+                                } else {
+                                    badgeState = 'valid';
+                                    badgeLabel = `Maximum Allowed: ${maxAllowed} (${answeredCount}/${maxAllowed} answered)`;
+                                }
+                            }
+
+                            const sectionError = (allErrors as any)[`section_${section.id}`];
+
+                            return (
+                                <Card
+                                    key={section.id}
+                                    id={`section-card-${section.id}`}
+                                    className={cn(
+                                        "shadow-md border-amber-900/10 overflow-hidden transition-all duration-200",
+                                        sectionError && "border-2 border-red-500 shadow-lg ring-2 ring-red-200"
+                                    )}
+                                >
+                                    <div className="bg-amber-900/5 px-6 py-4 border-b border-amber-900/10 flex items-center justify-between flex-wrap gap-3">
+                                        <h3 className="text-xl font-bold text-amber-900">{idx + 1}. {section.title}</h3>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            {section.weight && Number(section.weight) > 0 && (
+                                                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200 flex items-center gap-1">
+                                                    <Scale className="w-3.5 h-3.5 text-blue-600" />
+                                                    Weight: {Number(section.weight)}
+                                                </span>
+                                            )}
+                                            {(hasExact || hasMin || hasMax) && (
+                                                <span className={cn(
+                                                    "px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 transition-colors",
+                                                    badgeState === 'valid' && "bg-emerald-50 text-emerald-800 border-emerald-300",
+                                                    badgeState === 'under' && "bg-amber-50 text-amber-900 border-amber-300",
+                                                    badgeState === 'exceeded' && "bg-red-50 text-red-900 border-red-300 animate-pulse"
+                                                )}>
+                                                    {badgeState === 'valid' ? (
+                                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                                    ) : (
+                                                        <AlertCircle className={cn("w-3.5 h-3.5", badgeState === 'exceeded' ? "text-red-600" : "text-amber-600")} />
+                                                    )}
+                                                    <span>{badgeLabel}</span>
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {sectionError && (
+                                        <div className="bg-red-50 text-red-900 px-6 py-3 border-b border-red-200 flex items-center gap-2 text-sm font-semibold animate-in slide-in-from-top-1">
+                                            <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                                            <span>{sectionError}</span>
+                                        </div>
+                                    )}
+                                    <CardContent className="p-8 space-y-10 bg-white">
+                                        {(() => {
+                                            if (visibleQuestions.length === 0) {
+                                                return <p className="text-muted-foreground italic">No questions in this section.</p>;
                                             }
 
-                                            if (isTitle) {
+                                            let qCounter = 0;
+                                            return visibleQuestions.map((question: any) => {
+                                                const inputTypeResolver = question.input_type || question.inputType;
+                                                const isTitle = (inputTypeResolver?.type_identifier || '') === 'title';
+                                                if (!isTitle) {
+                                                    qCounter++;
+                                                }
+
+                                                if (isTitle) {
+                                                    return (
+                                                        <div key={question.id} className="pt-4 pb-2 border-b-2 border-amber-800/20">
+                                                            <div className="flex items-center space-x-2.5">
+                                                                <span className="w-1.5 h-6 bg-amber-700 rounded-full inline-block shrink-0"></span>
+                                                                <h4 className="text-lg font-bold text-amber-950 tracking-tight">
+                                                                    {question.label}
+                                                                </h4>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+
+                                                const hasFieldError = Boolean((allErrors as any)[`answers.${question.id}`]);
                                                 return (
-                                                    <div key={question.id} className="pt-4 pb-2 border-b-2 border-amber-800/20">
-                                                        <div className="flex items-center space-x-2.5">
-                                                            <span className="w-1.5 h-6 bg-amber-700 rounded-full inline-block shrink-0"></span>
-                                                            <h4 className="text-lg font-bold text-amber-950 tracking-tight">
-                                                                {question.label}
-                                                            </h4>
+                                                    <div
+                                                        id={`question-card-${question.id}`}
+                                                        key={question.id}
+                                                        className={cn(
+                                                            "space-y-4 pb-8 border-b border-gray-100 last:border-0 last:pb-0 transition-all duration-300 rounded-xl",
+                                                            hasFieldError && "p-6 bg-red-50/80 border-2 border-red-500 shadow-md ring-4 ring-red-200/60 dark:ring-red-950/40"
+                                                        )}
+                                                    >
+                                                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                                                            <Label className={cn("text-lg font-semibold flex items-center flex-wrap gap-2", hasFieldError ? "text-red-900 font-bold" : "text-gray-900")}>
+                                                                <span>{qCounter}. {question.label}</span>
+                                                                {(Boolean(question.is_required) || (inputTypeResolver?.type_identifier === 'employee_lookup')) && (
+                                                                    <span className="text-red-600 font-bold text-xl leading-none" title="Mandatory field">*</span>
+                                                                )}
+                                                            </Label>
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                {question.weight && Number(question.weight) > 0 && (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-300">
+                                                                        <Scale className="w-3 h-3 text-slate-500" />
+                                                                        Weight: {Number(question.weight)}
+                                                                    </span>
+                                                                )}
+                                                                {hasFieldError && (
+                                                                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-600 text-white shadow-xs uppercase tracking-wide animate-pulse">
+                                                                        <AlertCircle className="w-3.5 h-3.5" />
+                                                                        Required - Missing Answer
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <div className="pl-4 pt-2">
+                                                            {renderInput(section, question, hasFieldError)}
+                                                            {hasFieldError && (
+                                                                <div className="flex items-center gap-2.5 p-3.5 mt-3 text-sm text-red-800 bg-red-100 border border-red-300 rounded-lg font-semibold shadow-xs animate-in slide-in-from-top-1">
+                                                                    <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                                                                    <span>{(allErrors as any)[`answers.${question.id}`]}</span>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 );
-                                            }
-
-                                            const hasFieldError = Boolean((allErrors as any)[`answers.${question.id}`]);
-                                            return (
-                                                <div
-                                                    id={`question-card-${question.id}`}
-                                                    key={question.id}
-                                                    className={cn(
-                                                        "space-y-4 pb-8 border-b border-gray-100 last:border-0 last:pb-0 transition-all duration-300 rounded-xl",
-                                                        hasFieldError && "p-6 bg-red-50/80 border-2 border-red-500 shadow-md ring-4 ring-red-200/60 dark:ring-red-950/40"
-                                                    )}
-                                                >
-                                                    <div className="flex items-start justify-between gap-4 flex-wrap">
-                                                        <Label className={cn("text-lg font-semibold flex items-center flex-wrap gap-2", hasFieldError ? "text-red-900 font-bold" : "text-gray-900")}>
-                                                            <span>{qCounter}. {question.label}</span>
-                                                            {(Boolean(question.is_required) || (inputTypeResolver?.type_identifier === 'employee_lookup')) && (
-                                                                <span className="text-red-600 font-bold text-xl leading-none" title="Mandatory field">*</span>
-                                                            )}
-                                                        </Label>
-                                                        {hasFieldError && (
-                                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-600 text-white shadow-xs uppercase tracking-wide animate-pulse">
-                                                                <AlertCircle className="w-3.5 h-3.5" />
-                                                                Required - Missing Answer
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="pl-4 pt-2">
-                                                        {renderInput(section, question, hasFieldError)}
-                                                        {hasFieldError && (
-                                                            <div className="flex items-center gap-2.5 p-3.5 mt-3 text-sm text-red-800 bg-red-100 border border-red-300 rounded-lg font-semibold shadow-xs animate-in slide-in-from-top-1">
-                                                                <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
-                                                                <span>{(allErrors as any)[`answers.${question.id}`]}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        });
-                                    })()}
-                                </CardContent>
-                            </Card>
-                        ))
+                                            });
+                                        })()}
+                                    </CardContent>
+                                </Card>
+                            );
+                        })
                     )}
 
                     {Object.keys(allErrors).length > 0 && (

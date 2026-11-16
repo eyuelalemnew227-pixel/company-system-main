@@ -111,6 +111,8 @@ class FillFormController extends Controller
                 continue;
             }
 
+            $answeredCountInSection = 0;
+
             foreach ($sec->questions as $q) {
                 if (!$this->isQuestionVisible($q, $allQuestionsMap, $validated['answers'])) {
                     continue;
@@ -124,13 +126,42 @@ class FillFormController extends Controller
                 $isEmployeeLookup = $tId === 'employee_lookup';
                 $isRequired = (bool) $q->is_required || $isEmployeeLookup;
 
+                $ans = $validated['answers'][$q->id] ?? null;
+                $isEmpty = $ans === null || $ans === '' || (is_array($ans) && empty($ans));
+
+                if (!$isEmpty) {
+                    $answeredCountInSection++;
+                }
+
                 if ($isRequired) {
-                    $ans = $validated['answers'][$q->id] ?? null;
-                    $isEmpty = $ans === null || $ans === '' || (is_array($ans) && empty($ans));
                     if ($isEmpty) {
                         $validationErrors["answers.{$q->id}"] = $isEmployeeLookup
                             ? "Please select an employee for '{$q->label}' (mandatory)."
                             : "The '{$q->label}' field is required.";
+                    }
+                }
+            }
+
+            $exactReq = !empty($sec->exact_required_answers) && (int) $sec->exact_required_answers > 0
+                ? (int) $sec->exact_required_answers
+                : null;
+
+            if ($exactReq !== null) {
+                if ($answeredCountInSection !== $exactReq) {
+                    $validationErrors["section_{$sec->id}"] = "Section '{$sec->title}' requires exactly {$exactReq} question" . ($exactReq > 1 ? 's' : '') . " to be answered (currently answered: {$answeredCountInSection}).";
+                }
+            } else {
+                if (!empty($sec->min_required_answers) && (int) $sec->min_required_answers > 0) {
+                    $minReq = (int) $sec->min_required_answers;
+                    if ($answeredCountInSection < $minReq) {
+                        $validationErrors["section_{$sec->id}"] = "Section '{$sec->title}' requires at least {$minReq} question" . ($minReq > 1 ? 's' : '') . " to be answered (currently answered: {$answeredCountInSection}).";
+                    }
+                }
+
+                if (!empty($sec->max_allowed_answers) && (int) $sec->max_allowed_answers > 0) {
+                    $maxAllowed = (int) $sec->max_allowed_answers;
+                    if ($answeredCountInSection > $maxAllowed) {
+                        $validationErrors["section_{$sec->id}"] = "Section '{$sec->title}' allows at most {$maxAllowed} question" . ($maxAllowed > 1 ? 's' : '') . " to be answered (currently answered: {$answeredCountInSection}).";
                     }
                 }
             }
@@ -141,9 +172,14 @@ class FillFormController extends Controller
         }
 
         DB::transaction(function () use ($version, $validated, $allQuestionsMap) {
+            $user = auth()->user();
+            $isQaManager = $user ? $user->can('submit form as qa manager') : false;
+
             $submission = \App\Models\FormSubmission::create([
                 'form_version_id' => $version->id,
-                'user_id' => auth()->id(),
+                'user_id' => $user?->id,
+                'is_qa_manager' => $isQaManager,
+                'qa_manager_id' => $isQaManager ? $user->id : null,
                 'status' => 'pending',
             ]);
 

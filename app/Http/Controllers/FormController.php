@@ -100,8 +100,13 @@ class FormController extends Controller
             'sections' => 'nullable|array',
             'sections.*.title' => 'required|string|max:255',
             'sections.*.visibility_logic' => 'nullable|array',
+            'sections.*.min_required_answers' => 'nullable|integer|min:0',
+            'sections.*.max_allowed_answers' => 'nullable|integer|min:0',
+            'sections.*.exact_required_answers' => 'nullable|integer|min:0',
+            'sections.*.weight' => 'nullable|numeric|min:0',
             'sections.*.questions' => 'nullable|array',
             'sections.*.questions.*.label' => 'required|string',
+            'sections.*.questions.*.weight' => 'nullable|numeric|min:0',
             'sections.*.questions.*.form_input_type_id' => 'required|exists:form_input_types,id',
             'sections.*.questions.*.is_required' => 'boolean',
             'sections.*.questions.*.choices' => 'nullable|array',
@@ -137,6 +142,10 @@ class FormController extends Controller
                         'title' => $sectionData['title'],
                         'order_index' => $sIndex,
                         'visibility_logic' => $sectionData['visibility_logic'] ?? null,
+                        'min_required_answers' => isset($sectionData['min_required_answers']) && $sectionData['min_required_answers'] !== '' && $sectionData['min_required_answers'] !== null ? (int) $sectionData['min_required_answers'] : null,
+                        'max_allowed_answers' => isset($sectionData['max_allowed_answers']) && $sectionData['max_allowed_answers'] !== '' && $sectionData['max_allowed_answers'] !== null ? (int) $sectionData['max_allowed_answers'] : null,
+                        'exact_required_answers' => isset($sectionData['exact_required_answers']) && $sectionData['exact_required_answers'] !== '' && $sectionData['exact_required_answers'] !== null ? (int) $sectionData['exact_required_answers'] : null,
+                        'weight' => isset($sectionData['weight']) && $sectionData['weight'] !== '' && $sectionData['weight'] !== null ? (float) $sectionData['weight'] : null,
                     ]);
 
                     if (!empty($sectionData['questions'])) {
@@ -148,6 +157,7 @@ class FormController extends Controller
                                 'form_section_id' => $section->id,
                                 'form_input_type_id' => $questionData['form_input_type_id'],
                                 'label' => $questionData['label'],
+                                'weight' => isset($questionData['weight']) && $questionData['weight'] !== '' && $questionData['weight'] !== null ? (float) $questionData['weight'] : null,
                                 'is_required' => $isRequired,
                                 'order_index' => $qIndex,
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),
@@ -260,8 +270,13 @@ class FormController extends Controller
             'sections' => 'nullable|array',
             'sections.*.title' => 'required|string|max:255',
             'sections.*.visibility_logic' => 'nullable|array',
+            'sections.*.min_required_answers' => 'nullable|integer|min:0',
+            'sections.*.max_allowed_answers' => 'nullable|integer|min:0',
+            'sections.*.exact_required_answers' => 'nullable|integer|min:0',
+            'sections.*.weight' => 'nullable|numeric|min:0',
             'sections.*.questions' => 'nullable|array',
             'sections.*.questions.*.label' => 'required|string',
+            'sections.*.questions.*.weight' => 'nullable|numeric|min:0',
             'sections.*.questions.*.form_input_type_id' => 'required|exists:form_input_types,id',
             'sections.*.questions.*.is_required' => 'boolean',
             'sections.*.questions.*.choices' => 'nullable|array',
@@ -299,6 +314,10 @@ class FormController extends Controller
                         'title' => $sectionData['title'],
                         'order_index' => $sIndex,
                         'visibility_logic' => $sectionData['visibility_logic'] ?? null,
+                        'min_required_answers' => isset($sectionData['min_required_answers']) && $sectionData['min_required_answers'] !== '' && $sectionData['min_required_answers'] !== null ? (int) $sectionData['min_required_answers'] : null,
+                        'max_allowed_answers' => isset($sectionData['max_allowed_answers']) && $sectionData['max_allowed_answers'] !== '' && $sectionData['max_allowed_answers'] !== null ? (int) $sectionData['max_allowed_answers'] : null,
+                        'exact_required_answers' => isset($sectionData['exact_required_answers']) && $sectionData['exact_required_answers'] !== '' && $sectionData['exact_required_answers'] !== null ? (int) $sectionData['exact_required_answers'] : null,
+                        'weight' => isset($sectionData['weight']) && $sectionData['weight'] !== '' && $sectionData['weight'] !== null ? (float) $sectionData['weight'] : null,
                     ]);
 
                     if (!empty($sectionData['questions'])) {
@@ -310,6 +329,7 @@ class FormController extends Controller
                                 'form_section_id' => $section->id,
                                 'form_input_type_id' => $questionData['form_input_type_id'],
                                 'label' => $questionData['label'],
+                                'weight' => isset($questionData['weight']) && $questionData['weight'] !== '' && $questionData['weight'] !== null ? (float) $questionData['weight'] : null,
                                 'is_required' => $isRequired,
                                 'order_index' => $qIndex,
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),
@@ -386,10 +406,15 @@ class FormController extends Controller
                         'title' => $section->title,
                         'order_index' => $section->order_index,
                         'visibility_logic' => $section->visibility_logic,
+                        'min_required_answers' => $section->min_required_answers,
+                        'max_allowed_answers' => $section->max_allowed_answers,
+                        'exact_required_answers' => $section->exact_required_answers,
+                        'weight' => $section->weight,
                         'questions' => $section->questions->map(function ($question) {
                             return [
                                 '_id' => $question->local_id,
                                 'label' => $question->label,
+                                'weight' => $question->weight,
                                 'form_input_type_id' => $question->form_input_type_id,
                                 'type_identifier' => $question->inputType->type_identifier ?? null,
                                 'is_required' => $question->is_required,
@@ -456,6 +481,10 @@ class FormController extends Controller
                         'title' => $sectionData['title'],
                         'order_index' => $sectionData['order_index'] ?? $sIndex,
                         'visibility_logic' => !empty($sectionData['visibility_logic']) ? $sectionData['visibility_logic'] : null,
+                        'min_required_answers' => isset($sectionData['min_required_answers']) && $sectionData['min_required_answers'] !== '' && $sectionData['min_required_answers'] !== null ? (int) $sectionData['min_required_answers'] : null,
+                        'max_allowed_answers' => isset($sectionData['max_allowed_answers']) && $sectionData['max_allowed_answers'] !== '' && $sectionData['max_allowed_answers'] !== null ? (int) $sectionData['max_allowed_answers'] : null,
+                        'exact_required_answers' => isset($sectionData['exact_required_answers']) && $sectionData['exact_required_answers'] !== '' && $sectionData['exact_required_answers'] !== null ? (int) $sectionData['exact_required_answers'] : null,
+                        'weight' => isset($sectionData['weight']) && $sectionData['weight'] !== '' && $sectionData['weight'] !== null ? (float) $sectionData['weight'] : null,
                     ]);
 
                     if (!empty($sectionData['questions'])) {
@@ -464,6 +493,7 @@ class FormController extends Controller
                                 'form_section_id' => $section->id,
                                 'form_input_type_id' => $this->resolveInputTypeId($questionData),
                                 'label' => $questionData['label'],
+                                'weight' => isset($questionData['weight']) && $questionData['weight'] !== '' && $questionData['weight'] !== null ? (float) $questionData['weight'] : null,
                                 'is_required' => $questionData['is_required'] ?? false,
                                 'order_index' => $questionData['order_index'] ?? $qIndex,
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),
@@ -528,6 +558,11 @@ class FormController extends Controller
                         'form_version_id' => $version->id,
                         'title' => $sectionData['title'],
                         'order_index' => $sectionData['order_index'] ?? $sIndex,
+                        'visibility_logic' => !empty($sectionData['visibility_logic']) ? $sectionData['visibility_logic'] : null,
+                        'min_required_answers' => isset($sectionData['min_required_answers']) && $sectionData['min_required_answers'] !== '' && $sectionData['min_required_answers'] !== null ? (int) $sectionData['min_required_answers'] : null,
+                        'max_allowed_answers' => isset($sectionData['max_allowed_answers']) && $sectionData['max_allowed_answers'] !== '' && $sectionData['max_allowed_answers'] !== null ? (int) $sectionData['max_allowed_answers'] : null,
+                        'exact_required_answers' => isset($sectionData['exact_required_answers']) && $sectionData['exact_required_answers'] !== '' && $sectionData['exact_required_answers'] !== null ? (int) $sectionData['exact_required_answers'] : null,
+                        'weight' => isset($sectionData['weight']) && $sectionData['weight'] !== '' && $sectionData['weight'] !== null ? (float) $sectionData['weight'] : null,
                     ]);
 
                     if (!empty($sectionData['questions'])) {
@@ -536,6 +571,7 @@ class FormController extends Controller
                                 'form_section_id' => $section->id,
                                 'form_input_type_id' => $this->resolveInputTypeId($questionData),
                                 'label' => $questionData['label'],
+                                'weight' => isset($questionData['weight']) && $questionData['weight'] !== '' && $questionData['weight'] !== null ? (float) $questionData['weight'] : null,
                                 'is_required' => $questionData['is_required'] ?? false,
                                 'order_index' => $questionData['order_index'] ?? $qIndex,
                                 'local_id' => $questionData['_id'] ?? \Illuminate\Support\Str::random(7),

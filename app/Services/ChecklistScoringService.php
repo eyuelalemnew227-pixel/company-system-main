@@ -52,9 +52,16 @@ class ChecklistScoringService
 
         $totalBoolQuestions = 0;
         $yesAnswers = 0;
+        $sectionScores = [];
+        $empSectionScores = [];
+        $sectionsById = $submission->formVersion?->sections?->keyBy('id') ?? collect();
 
         foreach ($submission->answers as $ans) {
             $qType = $ans->question?->inputType?->type_identifier ?? 'text';
+            $sec = $ans->question?->section ?? $sectionsById->get($ans->question?->form_section_id);
+            $secId = $sec ? (int) $sec->id : 0;
+            $secWeight = ($sec && $sec->weight !== null && $sec->weight > 0) ? (float) $sec->weight : null;
+
             if ($qType === 'select_one' || $qType === 'boolean') {
                 $isScored = false;
                 $isYes = false;
@@ -78,9 +85,21 @@ class ChecklistScoringService
                 }
 
                 if ($isScored) {
-                    $totalBoolQuestions++;
+                    $qWeight = ($ans->question && $ans->question->weight !== null && $ans->question->weight > 0)
+                        ? (float) $ans->question->weight
+                        : 1.0;
+
+                    $totalBoolQuestions += $qWeight;
                     if ($isYes) {
-                        $yesAnswers++;
+                        $yesAnswers += $qWeight;
+                    }
+
+                    if (!isset($sectionScores[$secId])) {
+                        $sectionScores[$secId] = ['weight' => $secWeight, 'earned' => 0, 'total' => 0];
+                    }
+                    $sectionScores[$secId]['total'] += $qWeight;
+                    if ($isYes) {
+                        $sectionScores[$secId]['earned'] += $qWeight;
                     }
 
                     // Decode answer targets
@@ -110,9 +129,17 @@ class ChecklistScoringService
                         }
 
                         if ($isTargeted) {
-                            $empScore['total_points']++;
+                            $empScore['total_points'] += $qWeight;
                             if ($isYes) {
-                                $empScore['earned_points']++;
+                                $empScore['earned_points'] += $qWeight;
+                            }
+
+                            if (!isset($empSectionScores[$empKey][$secId])) {
+                                $empSectionScores[$empKey][$secId] = ['weight' => $secWeight, 'earned' => 0, 'total' => 0];
+                            }
+                            $empSectionScores[$empKey][$secId]['total'] += $qWeight;
+                            if ($isYes) {
+                                $empSectionScores[$empKey][$secId]['earned'] += $qWeight;
                             }
                         }
                     }
@@ -139,6 +166,32 @@ class ChecklistScoringService
                             $employeeScoresMatrix[$empIdKey]['earned_points'] += $numVal;
                         }
                         $employeeScoresMatrix[$empIdKey]['total_points'] += max(1, $numVal);
+
+                        if (!isset($empSectionScores[$empIdKey][$secId])) {
+                            $empSectionScores[$empIdKey][$secId] = ['weight' => $secWeight, 'earned' => 0, 'total' => 0];
+                        }
+                        if ($numVal > 0) {
+                            $empSectionScores[$empIdKey][$secId]['earned'] += $numVal;
+                        }
+                        $empSectionScores[$empIdKey][$secId]['total'] += max(1, $numVal);
+                    }
+                }
+            }
+        }
+
+        $hasCustomSectionWeights = false;
+        foreach ($sectionScores as $sData) {
+            if ($sData['weight'] !== null && $sData['weight'] > 0) {
+                $hasCustomSectionWeights = true;
+                break;
+            }
+        }
+        if (!$hasCustomSectionWeights) {
+            foreach ($empSectionScores as $eSecs) {
+                foreach ($eSecs as $sData) {
+                    if ($sData['weight'] !== null && $sData['weight'] > 0) {
+                        $hasCustomSectionWeights = true;
+                        break 2;
                     }
                 }
             }
@@ -146,8 +199,28 @@ class ChecklistScoringService
 
         $scoresList = [];
         foreach ($employeeScoresMatrix as $empKey => &$empScore) {
-            if ($empScore['total_points'] > 0) {
-                $empScore['percentage'] = round(($empScore['earned_points'] / $empScore['total_points']) * 100, 1);
+            if ($hasCustomSectionWeights && !empty($empSectionScores[$empKey])) {
+                $empWeightedSum = 0;
+                $empWeightTotal = 0;
+                foreach ($empSectionScores[$empKey] as $sData) {
+                    if ($sData['total'] > 0) {
+                        $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                        $pct = ($sData['earned'] / $sData['total']) * 100;
+                        $empWeightedSum += $pct * $w;
+                        $empWeightTotal += $w;
+                    }
+                }
+                if ($empWeightTotal > 0) {
+                    $empScore['percentage'] = round($empWeightedSum / $empWeightTotal, 1);
+                    $empScore['total_points'] = round($empWeightTotal, 2);
+                    $empScore['earned_points'] = round(($empScore['percentage'] / 100) * $empWeightTotal, 2);
+                } elseif ($empScore['total_points'] > 0) {
+                    $empScore['percentage'] = round(($empScore['earned_points'] / $empScore['total_points']) * 100, 1);
+                }
+            } else {
+                if ($empScore['total_points'] > 0) {
+                    $empScore['percentage'] = round(($empScore['earned_points'] / $empScore['total_points']) * 100, 1);
+                }
             }
             $scoresList[] = $empScore;
         }
@@ -161,7 +234,21 @@ class ChecklistScoringService
                 ? round(array_sum($validPercentages) / count($validPercentages), 1)
                 : null;
         } else {
-            $submission->calculated_score = $totalBoolQuestions > 0 ? round(($yesAnswers / $totalBoolQuestions) * 100, 1) : null;
+            if ($hasCustomSectionWeights && !empty($sectionScores)) {
+                $subWeightedSum = 0;
+                $subWeightTotal = 0;
+                foreach ($sectionScores as $sData) {
+                    if ($sData['total'] > 0) {
+                        $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                        $pct = ($sData['earned'] / $sData['total']) * 100;
+                        $subWeightedSum += $pct * $w;
+                        $subWeightTotal += $w;
+                    }
+                }
+                $submission->calculated_score = $subWeightTotal > 0 ? round($subWeightedSum / $subWeightTotal, 1) : null;
+            } else {
+                $submission->calculated_score = $totalBoolQuestions > 0 ? round(($yesAnswers / $totalBoolQuestions) * 100, 1) : null;
+            }
         }
 
         return $submission;
@@ -200,9 +287,15 @@ class ChecklistScoringService
         $earnedPoints = 0;
         $empIdStr = (string) $employee->id;
         $empDeptIdStr = (string) $employee->department_id;
+        $empSectionScores = [];
+        $sectionsById = $submission->formVersion?->sections?->keyBy('id') ?? collect();
 
         foreach ($submission->answers as $ans) {
             $qType = $ans->question?->inputType?->type_identifier ?? 'text';
+            $sec = $ans->question?->section ?? $sectionsById->get($ans->question?->form_section_id);
+            $secId = $sec ? (int) $sec->id : 0;
+            $secWeight = ($sec && $sec->weight !== null && $sec->weight > 0) ? (float) $sec->weight : null;
+
             if ($qType === 'select_one' || $qType === 'boolean') {
                 $isScored = false;
                 $isYes = false;
@@ -248,9 +341,21 @@ class ChecklistScoringService
                     }
 
                     if ($isTargeted) {
-                        $totalPoints++;
+                        $qWeight = ($ans->question && $ans->question->weight !== null && $ans->question->weight > 0)
+                            ? (float) $ans->question->weight
+                            : 1.0;
+
+                        $totalPoints += $qWeight;
                         if ($isYes) {
-                            $earnedPoints++;
+                            $earnedPoints += $qWeight;
+                        }
+
+                        if (!isset($empSectionScores[$secId])) {
+                            $empSectionScores[$secId] = ['weight' => $secWeight, 'earned' => 0, 'total' => 0];
+                        }
+                        $empSectionScores[$secId]['total'] += $qWeight;
+                        if ($isYes) {
+                            $empSectionScores[$secId]['earned'] += $qWeight;
                         }
                     }
                 }
@@ -270,11 +375,45 @@ class ChecklistScoringService
                         $earnedPoints += $numVal;
                     }
                     $totalPoints += max(1, $numVal);
+
+                    if (!isset($empSectionScores[$secId])) {
+                        $empSectionScores[$secId] = ['weight' => $secWeight, 'earned' => 0, 'total' => 0];
+                    }
+                    if ($numVal > 0) {
+                        $empSectionScores[$secId]['earned'] += $numVal;
+                    }
+                    $empSectionScores[$secId]['total'] += max(1, $numVal);
                 }
             }
         }
 
-        $pct = $totalPoints > 0 ? round(($earnedPoints / $totalPoints) * 100, 1) : null;
+        $hasCustomSectionWeights = false;
+        foreach ($empSectionScores as $sData) {
+            if ($sData['weight'] !== null && $sData['weight'] > 0) {
+                $hasCustomSectionWeights = true;
+                break;
+            }
+        }
+
+        if ($hasCustomSectionWeights && !empty($empSectionScores)) {
+            $empWeightedSum = 0;
+            $empWeightTotal = 0;
+            foreach ($empSectionScores as $sData) {
+                if ($sData['total'] > 0) {
+                    $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                    $pct = ($sData['earned'] / $sData['total']) * 100;
+                    $empWeightedSum += $pct * $w;
+                    $empWeightTotal += $w;
+                }
+            }
+            $pct = $empWeightTotal > 0 ? round($empWeightedSum / $empWeightTotal, 1) : null;
+            if ($empWeightTotal > 0 && $pct !== null) {
+                $totalPoints = round($empWeightTotal, 2);
+                $earnedPoints = round(($pct / 100) * $empWeightTotal, 2);
+            }
+        } else {
+            $pct = $totalPoints > 0 ? round(($earnedPoints / $totalPoints) * 100, 1) : null;
+        }
         $submission->calculated_score = $pct;
 
         $submission->employee_scores = [[
@@ -362,6 +501,7 @@ class ChecklistScoringService
         $query->with([
             'formVersion.form:id,title,form_type',
             'answers.question.inputType:id,type_identifier',
+            'answers.question.section:id,form_version_id,weight',
             'answers.question.choices:id,form_question_id,value,label',
         ])->chunkById(50, function ($submissions) use (&$employeeMap, $employees, $branches, $departments) {
             foreach ($submissions as $sub) {
@@ -442,17 +582,29 @@ class ChecklistScoringService
                         continue;
                     }
 
+                    $sec = $ans->question?->section;
+                    $secId = $sec ? (int) $sec->id : 0;
+                    $secWeight = ($sec && $sec->weight !== null && $sec->weight > 0) ? (float) $sec->weight : null;
+
                     foreach ($targets as $empIdStr) {
                         $empIdNum = (int) $empIdStr;
                         if (!$empIdNum) {
                             continue;
                         }
                         if (!isset($empStats[$empIdNum])) {
-                            $empStats[$empIdNum] = ['total' => 0, 'passed' => 0];
+                            $empStats[$empIdNum] = ['total' => 0, 'passed' => 0, 'sections' => []];
                         }
                         $empStats[$empIdNum]['total']++;
                         if ($isYes) {
                             $empStats[$empIdNum]['passed']++;
+                        }
+
+                        if (!isset($empStats[$empIdNum]['sections'][$secId])) {
+                            $empStats[$empIdNum]['sections'][$secId] = ['weight' => $secWeight, 'total' => 0, 'passed' => 0];
+                        }
+                        $empStats[$empIdNum]['sections'][$secId]['total']++;
+                        if ($isYes) {
+                            $empStats[$empIdNum]['sections'][$secId]['passed']++;
                         }
                     }
                 }
@@ -461,7 +613,35 @@ class ChecklistScoringService
                     if ($st['total'] === 0) {
                         continue;
                     }
-                    $pct = round(($st['passed'] / $st['total']) * 100, 1);
+
+                    $hasCustomSectionWeights = false;
+                    foreach ($st['sections'] ?? [] as $sData) {
+                        if ($sData['weight'] !== null && $sData['weight'] > 0) {
+                            $hasCustomSectionWeights = true;
+                            break;
+                        }
+                    }
+
+                    if ($hasCustomSectionWeights) {
+                        $empWeightedSum = 0;
+                        $empWeightTotal = 0;
+                        foreach ($st['sections'] as $sData) {
+                            if ($sData['total'] > 0) {
+                                $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                                $pct = ($sData['passed'] / $sData['total']) * 100;
+                                $empWeightedSum += $pct * $w;
+                                $empWeightTotal += $w;
+                            }
+                        }
+                        $pct = $empWeightTotal > 0 ? round($empWeightedSum / $empWeightTotal, 1) : round(($st['passed'] / $st['total']) * 100, 1);
+                        $passedPoints = round(($pct / 100) * $empWeightTotal, 2);
+                        $totalPoints = round($empWeightTotal, 2);
+                    } else {
+                        $pct = round(($st['passed'] / $st['total']) * 100, 1);
+                        $passedPoints = $st['passed'];
+                        $totalPoints = $st['total'];
+                    }
+
                     $emp = $employees->get($empIdNum) ?? $employees->get((string) $empIdNum);
                     $branchId = $emp?->branch_id ?? $subBranchId;
                     $deptId = $emp?->department_id;
@@ -495,8 +675,8 @@ class ChecklistScoringService
                         $employeeMap[$empIdNum]['department_name'] = $departments[$deptId] ?? '—';
                     }
 
-                    $employeeMap[$empIdNum]['type_1_total'] += $st['total'];
-                    $employeeMap[$empIdNum]['type_1_passed'] += $st['passed'];
+                    $employeeMap[$empIdNum]['type_1_total'] += $totalPoints;
+                    $employeeMap[$empIdNum]['type_1_passed'] += $passedPoints;
                     $employeeMap[$empIdNum]['type_1_count']++;
                 }
             } elseif ($formType === '2') {
@@ -568,25 +748,17 @@ class ChecklistScoringService
             $avg = null;
             if ($score1 !== null && $score2 !== null) {
                 $avg = round(($score1 + $score2) / 2, 1);
-                $bothCompletedCount++;
             } elseif ($score1 !== null) {
                 $avg = $score1;
             } elseif ($score2 !== null) {
                 $avg = $score2;
             }
 
-            if ($score1 !== null) {
-                $totalScore1Sum += $score1;
-                $totalScore1Count++;
-            }
-
-            if ($score2 !== null) {
-                $totalScore2Sum += $score2;
-                $totalScore2Count++;
-            }
-
             // Apply completion status filter
-            if ($completionFilter === 'both' && (!$hasType1 || !$hasType2)) {
+            if (($completionFilter === 'complete' || $completionFilter === 'both') && (!$hasType1 || !$hasType2)) {
+                continue;
+            }
+            if ($completionFilter === 'partial' && ($hasType1 && $hasType2)) {
                 continue;
             }
             if ($completionFilter === 'type_1_only' && (!$hasType1 || $hasType2)) {
@@ -616,6 +788,20 @@ class ChecklistScoringService
                 if (!$matchesName && !$matchesBranch && !$matchesDept && !$matchesCode) {
                     continue;
                 }
+            }
+
+            if ($score1 !== null && $score2 !== null) {
+                $bothCompletedCount++;
+            }
+
+            if ($score1 !== null) {
+                $totalScore1Sum += $score1;
+                $totalScore1Count++;
+            }
+
+            if ($score2 !== null) {
+                $totalScore2Sum += $score2;
+                $totalScore2Count++;
             }
 
             $rows[] = [

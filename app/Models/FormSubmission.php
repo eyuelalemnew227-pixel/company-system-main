@@ -9,7 +9,17 @@ class FormSubmission extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['form_version_id', 'user_id', 'status'];
+    protected $fillable = [
+        'form_version_id',
+        'user_id',
+        'status',
+        'is_qa_manager',
+        'qa_manager_id',
+    ];
+
+    protected $casts = [
+        'is_qa_manager' => 'boolean',
+    ];
 
     protected static function booted()
     {
@@ -38,6 +48,11 @@ class FormSubmission extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function qaManager()
+    {
+        return $this->belongsTo(User::class, 'qa_manager_id');
     }
 
     public function answers()

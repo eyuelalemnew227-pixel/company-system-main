@@ -89,7 +89,24 @@ export function SearchableSelect({
                     )}
                 >
                     <span className="truncate">{displayLabel}</span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <div className="flex items-center ml-2 shrink-0">
+                        {stringValue && !disabled && (
+                            <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    onValueChange('');
+                                }}
+                                className="p-0.5 hover:bg-gray-200 dark:hover:bg-zinc-800 rounded-full text-muted-foreground hover:text-foreground mr-1"
+                                title="Clear selection"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                            </span>
+                        )}
+                        <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                    </div>
                 </Button>
             </PopoverTrigger>
             <PopoverContent
@@ -146,7 +163,7 @@ export function SearchableSelect({
                                         key={opt.id}
                                         onMouseDown={(e) => {
                                             e.preventDefault();
-                                            handleSelect(optIdStr);
+                                            handleSelect(isSelected ? '' : optIdStr);
                                         }}
                                         className={cn(
                                             'flex items-center justify-between px-2.5 py-2 rounded-sm text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground select-none transition-colors',

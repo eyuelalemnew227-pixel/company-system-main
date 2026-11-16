@@ -458,6 +458,11 @@ export default function MySubmissions({
                                                         <span className="px-1.5 py-0.5 text-[10px] rounded font-medium bg-amber-100 text-amber-800 border border-amber-200">
                                                             v{versionNum}.0
                                                         </span>
+                                                        {sub.is_qa_manager && (
+                                                            <span className="px-1.5 py-0.5 text-[10px] rounded font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                                                                QA Manager
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     {formObj?.description && (
                                                         <span className="text-xs text-muted-foreground line-clamp-1 mt-0.5">

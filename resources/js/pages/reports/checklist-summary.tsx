@@ -138,15 +138,23 @@ export default function ChecklistSummary({
     const [selectedMonth, setSelectedMonth] = useState<string>(filters.fiscal_month_id || 'all');
     const [selectedBranch, setSelectedBranch] = useState<string>(filters.branch_id || 'all');
     const [selectedDepartment, setSelectedDepartment] = useState<string>(filters.department_id || 'all');
-    const [selectedStatus, setSelectedStatus] = useState<string>(filters.completion_status || 'all');
+    const [selectedStatus, setSelectedStatus] = useState<string>(
+        filters.completion_status === 'both' ? 'complete' : (filters.completion_status || 'all')
+    );
     const [startDate, setStartDate] = useState<string>(filters.start_date || '');
     const [endDate, setEndDate] = useState<string>(filters.end_date || '');
 
-    // Keep date states in sync if props change
+    // Keep date and status states in sync if props change
     useEffect(() => {
         setStartDate(filters.start_date || '');
         setEndDate(filters.end_date || '');
     }, [filters.start_date, filters.end_date]);
+
+    useEffect(() => {
+        setSelectedStatus(
+            filters.completion_status === 'both' ? 'complete' : (filters.completion_status || 'all')
+        );
+    }, [filters.completion_status]);
 
     // Sorting state
     const [sortColumn, setSortColumn] = useState<keyof SummaryRow>('branch');
@@ -256,6 +264,19 @@ export default function ChecklistSummary({
     const sortedAndFilteredRows = useMemo(() => {
         let list = [...summaryRows];
 
+        // Status filter refinement
+        if (selectedStatus && selectedStatus !== 'all') {
+            if (selectedStatus === 'complete' || selectedStatus === 'both') {
+                list = list.filter((row) => row.score_type_1 !== null && row.score_type_2 !== null);
+            } else if (selectedStatus === 'partial') {
+                list = list.filter((row) => !(row.score_type_1 !== null && row.score_type_2 !== null));
+            } else if (selectedStatus === 'type_1_only') {
+                list = list.filter((row) => row.score_type_1 !== null && row.score_type_2 === null);
+            } else if (selectedStatus === 'type_2_only') {
+                list = list.filter((row) => row.score_type_1 === null && row.score_type_2 !== null);
+            }
+        }
+
         // Search filter (client-side backup for smooth feel)
         if (searchTerm.trim() !== '') {
             const term = searchTerm.toLowerCase();
@@ -290,7 +311,7 @@ export default function ChecklistSummary({
         });
 
         return list;
-    }, [summaryRows, searchTerm, sortColumn, sortDirection]);
+    }, [summaryRows, searchTerm, selectedStatus, sortColumn, sortDirection]);
 
     // Group employees by branch and compute branch averages
     const branchGroups = useMemo(() => {
@@ -684,7 +705,7 @@ export default function ChecklistSummary({
                                             onClick={(e) => {
                                                 try {
                                                     e.currentTarget.showPicker();
-                                                } catch {}
+                                                } catch { }
                                             }}
                                             className="h-8 w-[138px] cursor-pointer bg-white text-xs border-gray-200 focus:border-amber-400 px-2"
                                             title="Start Date (From)"
@@ -701,7 +722,7 @@ export default function ChecklistSummary({
                                             onClick={(e) => {
                                                 try {
                                                     e.currentTarget.showPicker();
-                                                } catch {}
+                                                } catch { }
                                             }}
                                             className="h-8 w-[138px] cursor-pointer bg-white text-xs border-gray-200 focus:border-amber-400 px-2"
                                             title="End Date (To)"
@@ -842,7 +863,8 @@ export default function ChecklistSummary({
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Status</SelectItem>
-                                            <SelectItem value="both">Both Done</SelectItem>
+                                            <SelectItem value="complete">Complete</SelectItem>
+                                            <SelectItem value="partial">Partial</SelectItem>
                                             <SelectItem value="type_1_only">Type 1 Only</SelectItem>
                                             <SelectItem value="type_2_only">Type 2 Only</SelectItem>
                                         </SelectContent>

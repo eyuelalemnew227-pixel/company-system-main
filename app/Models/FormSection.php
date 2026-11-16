@@ -9,10 +9,14 @@ class FormSection extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['form_version_id', 'title', 'order_index', 'visibility_logic'];
+    protected $fillable = ['form_version_id', 'title', 'order_index', 'visibility_logic', 'min_required_answers', 'max_allowed_answers', 'exact_required_answers', 'weight'];
 
     protected $casts = [
         'visibility_logic' => 'array',
+        'min_required_answers' => 'integer',
+        'max_allowed_answers' => 'integer',
+        'exact_required_answers' => 'integer',
+        'weight' => 'float',
     ];
 
     public function formVersion()

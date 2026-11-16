@@ -353,6 +353,7 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'update forms']);
         Permission::firstOrCreate(['name' => 'delete forms']);
         Permission::firstOrCreate(['name' => 'fill forms']);
+        Permission::firstOrCreate(['name' => 'submit form as qa manager']);
         Permission::firstOrCreate(['name' => 'view my form submissions']);
         Permission::firstOrCreate(['name' => 'view form submissions']);
         Permission::firstOrCreate(['name' => 'view inspector checklist submissions']);

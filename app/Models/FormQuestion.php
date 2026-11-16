@@ -9,9 +9,10 @@ class FormQuestion extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['form_section_id', 'form_input_type_id', 'label', 'is_required', 'order_index', 'local_id', 'visibility_logic', 'default_value', 'department_targets'];
+    protected $fillable = ['form_section_id', 'form_input_type_id', 'label', 'weight', 'is_required', 'order_index', 'local_id', 'visibility_logic', 'default_value', 'department_targets'];
 
     protected $casts = [
+        'weight' => 'float',
         'visibility_logic' => 'array',
         'department_targets' => 'array',
     ];

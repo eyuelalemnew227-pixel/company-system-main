@@ -4,7 +4,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import TablePagination from '@/components/table-pagination';
-import { Eye, Pencil, Trash2, ArrowLeft, Download, FilterX, BarChart3, MoreHorizontal } from 'lucide-react';
+import { Eye, Pencil, Trash2, ArrowLeft, Download, FilterX, BarChart3, MoreHorizontal, ShieldCheck } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 
@@ -14,6 +14,9 @@ type SubmissionRow = {
 	id: number;
 	status: string;
 	submitted_by: string;
+	is_qa_manager?: boolean;
+	qa_manager_id?: number | null;
+	qa_manager_name?: string | null;
 	created_at: string | null;
 	branch_name: string | null;
 	employee_name: string | null;
@@ -24,6 +27,7 @@ type SubmissionRow = {
 type Filters = {
 	status: string;
 	submitted_by: string;
+	submission_type?: string;
 	branch_id: string;
 	employee_id: string;
 	fiscal_year_id: string;
@@ -77,6 +81,7 @@ export default function FormSubmissions({
 		const params: Record<string, string> = {
 			status: next.status ?? filters.status,
 			submitted_by: next.submitted_by ?? filters.submitted_by,
+			submission_type: next.submission_type ?? filters.submission_type ?? 'all',
 			branch_id: next.branch_id ?? filters.branch_id,
 			employee_id: next.employee_id ?? filters.employee_id,
 			fiscal_year_id: next.fiscal_year_id ?? filters.fiscal_year_id,
@@ -96,6 +101,7 @@ export default function FormSubmissions({
 			{
 				status: 'all',
 				submitted_by: 'all',
+				submission_type: 'all',
 				branch_id: 'all',
 				employee_id: 'all',
 				fiscal_year_id: 'all',
@@ -202,6 +208,20 @@ export default function FormSubmissions({
 						/>
 
 						<SearchableSelect
+							value={filters.submission_type || 'all'}
+							onValueChange={(value) => applyFilters({ submission_type: value })}
+							placeholder="Submission Type"
+							searchPlaceholder="Search type..."
+							allowAll={true}
+							allLabel="All Submission Types"
+							className="w-[180px] bg-gray-50/50"
+							options={[
+								{ id: 'qa_manager', name: 'QA Manager Only' },
+								{ id: 'standard', name: 'Standard Inspector' },
+							]}
+						/>
+
+						<SearchableSelect
 							value={filters.fiscal_year_id}
 							onValueChange={(value) => applyFilters({ fiscal_year_id: value, fiscal_month_id: 'all' })}
 							placeholder="Fiscal Year"
@@ -278,7 +298,14 @@ export default function FormSubmissions({
 											</span>
 										</TableCell>
 										<TableCell>
-											<span className="font-semibold text-gray-700">{sub.submitted_by}</span>
+											<div className="flex flex-col items-start gap-1">
+												<span className="font-semibold text-gray-700">{sub.submitted_by}</span>
+												{sub.is_qa_manager && (
+													<span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-800 border border-purple-200">
+														<ShieldCheck className="h-3 w-3" /> QA Manager
+													</span>
+												)}
+											</div>
 										</TableCell>
 										<TableCell>
 											{sub.created_at ? (

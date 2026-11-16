@@ -157,11 +157,13 @@ class ChecklistSummaryReportController extends Controller
                 'Score Type 1 (%)',
                 'Score Type 2 (%)',
                 'Average Score (%)',
+                'Status',
                 'Type 1 Evaluations Count',
                 'Type 2 Evaluations Count',
             ]);
 
             foreach ($rows as $row) {
+                $status = ($row['score_type_1'] !== null && $row['score_type_2'] !== null) ? 'Complete' : 'Partial';
                 fputcsv($file, [
                     $row['branch'],
                     $row['department'] ?? '—',
@@ -170,6 +172,7 @@ class ChecklistSummaryReportController extends Controller
                     $row['score_type_1'] !== null ? $row['score_type_1'] . '%' : '—',
                     $row['score_type_2'] !== null ? $row['score_type_2'] . '%' : '—',
                     $row['avg_score'] !== null ? $row['avg_score'] . '%' : '—',
+                    $status,
                     $row['type_1_count'],
                     $row['type_2_count'],
                 ]);
