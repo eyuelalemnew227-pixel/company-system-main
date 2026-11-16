@@ -20,6 +20,7 @@ type SubmissionRow = {
 	created_at: string | null;
 	branch_name: string | null;
 	employee_name: string | null;
+	is_employee_relocated?: boolean;
 	fiscal_year_id: number | null;
 	fiscal_month_id: number | null;
 };
@@ -280,7 +281,16 @@ export default function FormSubmissions({
 											<TableCell className="font-medium text-amber-900">{sub.branch_name || '—'}</TableCell>
 										)}
 										{hasEmployee && (
-											<TableCell className="font-semibold text-blue-900">{sub.employee_name || '—'}</TableCell>
+											<TableCell>
+												<div className="flex flex-col items-start gap-1">
+													<span className="font-semibold text-blue-900">{sub.employee_name || '—'}</span>
+													{sub.is_employee_relocated && (
+														<span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200">
+															Relocated
+														</span>
+													)}
+												</div>
+											</TableCell>
 										)}
 										<TableCell>
 											<span

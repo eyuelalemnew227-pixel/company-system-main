@@ -89,7 +89,10 @@ class FillFormController extends Controller
 
         $validated = $request->validate([
             'answers' => 'required|array',
+            'relocated_questions' => 'nullable|array',
         ]);
+
+        $relocatedQuestions = $request->input('relocated_questions', []);
 
         $version->loadMissing(['sections.questions.inputType', 'sections.questions.choices']);
 
@@ -171,7 +174,7 @@ class FillFormController extends Controller
             return back()->withErrors($validationErrors)->withInput();
         }
 
-        DB::transaction(function () use ($version, $validated, $allQuestionsMap) {
+        DB::transaction(function () use ($version, $validated, $allQuestionsMap, $relocatedQuestions) {
             $user = auth()->user();
             $isQaManager = $user ? $user->can('submit form as qa manager') : false;
 
@@ -323,6 +326,7 @@ class FillFormController extends Controller
                             'form_question_id' => $q->id,
                             'value_text' => $valText,
                             'value_boolean' => $boolVal,
+                            'is_relocated' => !empty($relocatedQuestions[$q->id]),
                             'targeted_employees' => empty($responsibleEmpIds) ? null : $responsibleEmpIds, // Generic targets
                         ]);
                     } else {
@@ -346,6 +350,7 @@ class FillFormController extends Controller
                             'form_question_id' => $q->id,
                             'value_text' => $valText,
                             'value_boolean' => $boolVal,
+                            'is_relocated' => !empty($relocatedQuestions[$q->id]),
                             'targeted_employees' => empty($responsibleEmpIds) ? null : $responsibleEmpIds, // Generic targets
                         ]);
                     }

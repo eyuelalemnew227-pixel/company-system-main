@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import SignatureCanvas from 'react-signature-canvas';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MultiSelect } from '@/components/ui/multi-select';
+import { Switch } from '@/components/ui/switch';
 import { Star, MapPin, ChevronRight, RotateCcw, FileSignature, CheckCircle2, History, AlertCircle, CheckSquare, Square, Scale } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import React, { useMemo, useEffect, useState, useRef } from 'react';
@@ -215,7 +216,7 @@ const SignaturePad = ({ value, onChange }: { value: string, onChange: (val: stri
     );
 };
 
-export default function Fill({ form, formVersion, submission, parsedAnswers, branches, departments, employees }: { form: any, formVersion: any, submission?: any, parsedAnswers?: any, branches?: any[], departments?: any[], employees?: any[] }) {
+export default function Fill({ form, formVersion, submission, parsedAnswers, initialRelocated = {}, branches, departments, employees }: { form: any, formVersion: any, submission?: any, parsedAnswers?: any, initialRelocated?: Record<string | number, boolean>, branches?: any[], departments?: any[], employees?: any[] }) {
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Form', href: '/available-forms' },
         { title: 'Fill Forms', href: '/available-forms' },
@@ -269,6 +270,7 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
     const pageProps = usePage()?.props as any;
     const userId = pageProps?.auth?.user?.id || 'guest';
     const draftKey = !submission ? `form_draft_u${userId}_f${form.id}_v${formVersion?.id || 'default'}` : null;
+    const draftRelocatedKey = !submission ? `form_draft_relocated_u${userId}_f${form.id}_v${formVersion?.id || 'default'}` : null;
     const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
 
     const getPureDefaults = React.useCallback(() => {
@@ -306,6 +308,24 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         return defaults;
     }, [draftKey, getPureDefaults]);
 
+    const initialRelocatedQuestions = React.useMemo(() => {
+        const defaults: Record<string | number, boolean> = { ...(initialRelocated || {}) };
+        if (draftRelocatedKey && typeof window !== 'undefined') {
+            try {
+                const saved = localStorage.getItem(draftRelocatedKey);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && typeof parsed === 'object') {
+                        return { ...defaults, ...parsed };
+                    }
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+        return defaults;
+    }, [draftRelocatedKey, initialRelocated]);
+
     useEffect(() => {
         if (draftKey && typeof window !== 'undefined') {
             try {
@@ -325,8 +345,10 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
 
     const { data, setData, post, put, processing, errors, transform } = useForm<{
         answers: Record<string | number, any>;
+        relocated_questions?: Record<string | number, boolean>;
     }>({
-        answers: initialAnswers as Record<string | number, any>
+        answers: initialAnswers as Record<string | number, any>,
+        relocated_questions: initialRelocatedQuestions,
     });
 
     const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -476,6 +498,17 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
         return () => clearTimeout(timer);
     }, [data.answers, draftKey]);
 
+    useEffect(() => {
+        if (!draftRelocatedKey || typeof window === 'undefined') return;
+        try {
+            if (data.relocated_questions && Object.keys(data.relocated_questions).length > 0) {
+                localStorage.setItem(draftRelocatedKey, JSON.stringify(data.relocated_questions));
+            }
+        } catch (e) {
+            // ignore
+        }
+    }, [data.relocated_questions, draftRelocatedKey]);
+
     const clearDraftAndReset = () => {
         if (draftKey && typeof window !== 'undefined') {
             try {
@@ -484,7 +517,17 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                 // ignore
             }
         }
-        setData('answers', getPureDefaults());
+        if (draftRelocatedKey && typeof window !== 'undefined') {
+            try {
+                localStorage.removeItem(draftRelocatedKey);
+            } catch (e) {
+                // ignore
+            }
+        }
+        setData({
+            answers: getPureDefaults(),
+            relocated_questions: {},
+        });
         setHasRestoredDraft(false);
     };
 
@@ -629,16 +672,21 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
 
         transform((currentData) => {
             const visibleAnswers: Record<number, any> = {};
+            const visibleRelocated: Record<number, boolean> = {};
             (formVersion?.sections || []).filter(isSectionVisible).forEach((sec: any) => {
                 (sec.questions || []).filter(isQuestionVisible).forEach((q: any) => {
                     if (currentData.answers[q.id] !== undefined) {
                         visibleAnswers[q.id] = currentData.answers[q.id];
                     }
+                    if (currentData.relocated_questions?.[q.id] !== undefined) {
+                        visibleRelocated[q.id] = currentData.relocated_questions[q.id];
+                    }
                 });
             });
             return {
                 ...currentData,
-                answers: visibleAnswers
+                answers: visibleAnswers,
+                relocated_questions: visibleRelocated,
             };
         });
 
@@ -650,6 +698,13 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     if (draftKey && typeof window !== 'undefined') {
                         try {
                             localStorage.removeItem(draftKey);
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+                    if (draftRelocatedKey && typeof window !== 'undefined') {
+                        try {
+                            localStorage.removeItem(draftRelocatedKey);
                         } catch (e) {
                             // ignore
                         }
@@ -768,7 +823,11 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
             case 'employee_lookup':
                 const localBranchForEmp = getAnswerForTypeInSection('branch_lookup');
                 const localDeptForEmp = getAnswerForTypeInSection('department_lookup');
-                const pool = localBranchForEmp ? (employeesByBranch[String(localBranchForEmp)] || []) : (employees || []);
+                const isRelocated = Boolean(data.relocated_questions?.[question.id]);
+                // When relocated, bypass branch filter; department filter is preserved
+                const pool = (isRelocated || !localBranchForEmp)
+                    ? (employees || [])
+                    : (employeesByBranch[String(localBranchForEmp)] || []);
                 const localFilteredEmployees = pool.filter(e => {
                     const isActive = !e.status || e.status === 'active';
                     const isCurrentlySelected = Array.isArray(answer)
@@ -779,13 +838,43 @@ export default function Fill({ form, formVersion, submission, parsedAnswers, bra
                     return true;
                 });
                 return (
-                    <div className="space-y-1 max-w-xl">
+                    <div className="space-y-2 max-w-xl">
+                        <div className="flex items-center justify-between rounded-lg border border-amber-200/80 bg-amber-50/50 px-3 py-1.5 shadow-2xs">
+                            <Label
+                                htmlFor={`relocated-switch-${question.id}`}
+                                className="text-xs font-semibold text-amber-950 cursor-pointer flex items-center gap-1.5"
+                            >
+                                <span>Relocated Employee</span>
+                                {isRelocated && (
+                                    <span className="text-[10px] font-bold bg-amber-200/90 text-amber-900 px-1.5 py-0.5 rounded border border-amber-300">
+                                        Branch filter bypassed
+                                    </span>
+                                )}
+                            </Label>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs text-amber-800 font-medium">
+                                    {isRelocated ? 'Yes' : 'No'}
+                                </span>
+                                <Switch
+                                    id={`relocated-switch-${question.id}`}
+                                    checked={isRelocated}
+                                    onCheckedChange={(checked) => {
+                                        setData('relocated_questions', {
+                                            ...(data.relocated_questions || {}),
+                                            [question.id]: checked,
+                                        });
+                                    }}
+                                    className="data-[state=checked]:bg-amber-600"
+                                />
+                            </div>
+                        </div>
+
                         <SearchableSelect
                             options={localFilteredEmployees}
                             value={answer}
                             onValueChange={(val) => handleAnswerChange(question.id, val)}
-                            placeholder="Select employee (mandatory)..."
-                            emptyText="No employees found for the selected criteria"
+                            placeholder={isRelocated ? "Select relocated employee (mandatory)..." : "Select employee (mandatory)..."}
+                            emptyText={isRelocated ? "No active employees found in selected department" : "No employees found for the selected branch/department"}
                             className={hasError ? '!border-red-500 !ring-2 !ring-red-400 bg-red-50/40 text-red-950 font-semibold shadow-sm' : ''}
                         />
                     </div>

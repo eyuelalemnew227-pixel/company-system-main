@@ -424,7 +424,7 @@ class FormSubmissionAdminController extends Controller
                 ->whereIn('form_submission_id', $pageIds)
                 ->whereHas('question.inputType', fn ($q) => $q->whereIn('type_identifier', $types))
                 ->with(['question.inputType:id,type_identifier'])
-                ->get(['id', 'form_submission_id', 'form_question_id', 'value_text'])
+                ->get(['id', 'form_submission_id', 'form_question_id', 'value_text', 'is_relocated'])
                 ->groupBy('form_submission_id');
         }
 
@@ -487,6 +487,7 @@ class FormSubmissionAdminController extends Controller
 
             $branchId = $branchAnswer && is_numeric($branchAnswer->value_text) ? (int) $branchAnswer->value_text : null;
             $employeeId = $employeeAnswer && is_numeric($employeeAnswer->value_text) ? (int) $employeeAnswer->value_text : null;
+            $isEmployeeRelocated = (bool) ($employeeAnswer?->is_relocated ?? false);
 
             return [
                 'id' => $sub->id,
@@ -498,6 +499,7 @@ class FormSubmissionAdminController extends Controller
                 'created_at' => $sub->created_at?->toDateTimeString(),
                 'branch_name' => $branchId ? ($branchNames[$branchId] ?? (string) $branchId) : null,
                 'employee_name' => $employeeId ? ($employeeNames[$employeeId] ?? (string) $employeeId) : null,
+                'is_employee_relocated' => $isEmployeeRelocated,
                 'fiscal_year_id' => $matchedYear?->id,
                 'fiscal_month_id' => $matchedMonth?->id,
             ];
@@ -914,11 +916,19 @@ class FormSubmissionAdminController extends Controller
             ];
         });
 
+        $initialRelocated = [];
+        foreach ($submission->answers as $ans) {
+            if ($ans->is_relocated) {
+                $initialRelocated[$ans->form_question_id] = true;
+            }
+        }
+
         return Inertia::render('Forms/Fill', [
             'form' => $submission->formVersion->form,
             'formVersion' => $submission->formVersion,
             'submission' => $submission,
             'parsedAnswers' => $parsedAnswers,
+            'initialRelocated' => $initialRelocated,
             'branches' => $branches,
             'departments' => $departments,
             'employees' => $employees
@@ -938,15 +948,19 @@ class FormSubmissionAdminController extends Controller
 
         $validated = $request->validate([
             'answers' => 'required|array',
+            'relocated_questions' => 'nullable|array',
         ]);
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($submission, $validated) {
+        $relocatedQuestions = $request->input('relocated_questions', []);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($submission, $validated, $relocatedQuestions) {
             $submission->answers()->delete();
 
             foreach ($validated['answers'] as $questionId => $answerValue) {
                 // To fetch the question type safely for matrix targeting we can query it directly here (or eager load it above)
                 $questionForTypeCheck = \App\Models\FormQuestion::with('inputType')->find($questionId);
                 $tId = $questionForTypeCheck->inputType->type_identifier ?? '';
+                $isRelocated = !empty($relocatedQuestions[$questionId]);
 
                 if ($tId === 'title') {
                     continue;
@@ -968,6 +982,7 @@ class FormSubmissionAdminController extends Controller
                                 'sub_question_identifier' => $subQLabel === 'single' ? null : $subQLabel,
                                 'value_text' => (string) $val,
                                 'value_boolean' => null,
+                                'is_relocated' => $isRelocated,
                                 'targeted_employees' => $empId,
                             ]);
                         }
@@ -1023,6 +1038,7 @@ class FormSubmissionAdminController extends Controller
                             'form_question_id' => $questionId,
                             'value_text' => $valText,
                             'value_boolean' => $boolVal,
+                            'is_relocated' => $isRelocated,
                         ]);
                     } else {
                         $boolVal = null;
@@ -1045,6 +1061,7 @@ class FormSubmissionAdminController extends Controller
                             'form_question_id' => $questionId,
                             'value_text' => $valText,
                             'value_boolean' => $boolVal,
+                            'is_relocated' => $isRelocated,
                         ]);
                     }
                 } else {
@@ -1053,6 +1070,7 @@ class FormSubmissionAdminController extends Controller
                         'form_question_id' => $questionId,
                         'value_text' => is_bool($answerValue) ? ($answerValue ? 'yes' : 'no') : (is_array($answerValue) ? json_encode($answerValue) : (string) $answerValue),
                         'value_boolean' => null,
+                        'is_relocated' => $isRelocated,
                     ]);
                 }
             }

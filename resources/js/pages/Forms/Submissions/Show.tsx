@@ -304,7 +304,17 @@ export default function Show({
         } else if (qType === 'department_lookup') {
             val = departments?.find(d => String(d.id) === String(val))?.name || val;
         } else if (qType === 'employee_lookup') {
-            val = employees?.find(e => String(e.id) === String(val))?.name || val;
+            const empName = employees?.find(e => String(e.id) === String(val))?.name || val;
+            return (
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-gray-900 font-medium">{empName || '-'}</span>
+                    {matchingAns.is_relocated && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800 border border-blue-200">
+                            Relocated Employee
+                        </span>
+                    )}
+                </div>
+            );
         }
 
         const isBase64Image = typeof val === 'string' && val.startsWith('data:image/png;base64,');

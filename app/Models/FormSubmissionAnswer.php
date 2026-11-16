@@ -15,10 +15,12 @@ class FormSubmissionAnswer extends Model
         'sub_question_identifier',
         'value_text',
         'value_boolean',
+        'is_relocated',
         'targeted_employees',
     ];
 
     protected $casts = [
+        'is_relocated' => 'boolean',
         'targeted_employees' => 'array',
     ];
 
