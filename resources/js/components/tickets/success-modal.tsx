@@ -1,8 +1,9 @@
-import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import React, { useEffect, useRef } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { CheckCircle2, UserCheck } from 'lucide-react';
 import { StatusBadge } from './status-badge';
+
+const SUCCESS_AUTO_CLOSE_MS = 1000;
 
 interface SuccessModalProps {
   open: boolean;
@@ -21,6 +22,19 @@ export function SuccessModal({
   status,
   assigneeName,
 }: SuccessModalProps) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!open) return;
+
+    const timer = window.setTimeout(() => {
+      onCloseRef.current();
+    }, SUCCESS_AUTO_CLOSE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [open]);
+
   return (
     <Dialog open={open} onOpenChange={(val) => !val && onClose()}>
       <DialogContent className="sm:max-w-md p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-2xl">
@@ -47,16 +61,6 @@ export function SuccessModal({
             )}
           </div>
         )}
-
-        <DialogFooter className="sm:justify-center pt-2">
-          <Button
-            type="button"
-            className="w-full sm:w-auto px-10 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm rounded-xl shadow-md transition-all"
-            onClick={onClose}
-          >
-            Done
-          </Button>
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

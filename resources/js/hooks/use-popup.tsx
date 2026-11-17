@@ -9,6 +9,8 @@ export function usePopup() {
         type: 'success'
     });
 
+    const closePopup = useCallback(() => setIsOpen(false), []);
+
     const triggerPopup = useCallback((title: string, description: string, type: PopupNotificationType = 'success') => {
         setPopupData({ title, description, type });
         setIsOpen(true);
@@ -17,12 +19,12 @@ export function usePopup() {
     const PopupComponent = useCallback(() => (
         <PopupNotification
             isOpen={isOpen}
-            onClose={() => setIsOpen(false)}
+            onClose={closePopup}
             title={popupData.title}
             description={popupData.description}
             type={popupData.type}
         />
-    ), [isOpen, popupData]);
+    ), [isOpen, popupData, closePopup]);
 
     return { triggerPopup, PopupComponent };
 }
