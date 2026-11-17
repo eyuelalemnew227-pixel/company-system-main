@@ -148,10 +148,10 @@ export default function AssignQuestionsIndex({
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Assign TD KPI Questions" />
-			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-				<Card>
-					<CardHeader>
-						<div className="mb-4 flex items-start justify-between">
+			<div className="flex h-full flex-1 flex-col overflow-x-auto rounded-xl p-4">
+				<Card className="gap-2 py-3">
+					<CardHeader className="gap-1">
+						<div className="flex items-start justify-between">
 							<CardTitle>Assign Questions</CardTitle>
 						</div>
 						<div className="flex flex-wrap items-end gap-3">

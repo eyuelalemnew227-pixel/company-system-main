@@ -21,6 +21,7 @@ class TdKpiAssignment extends Model
 
     protected $fillable = [
         'evaluation_result_override_id',
+        'training_request_id',
         'employee_id',
         'fiscal_year_id',
         'fiscal_month_id',
@@ -28,7 +29,10 @@ class TdKpiAssignment extends Model
         'department_id',
         'training_type_id',
         'assigned_training_content_id',
-        'proposed_training_date',
+        'proposed_training_start_at',
+        'proposed_training_end_at',
+        'actual_training_start_at',
+        'actual_training_end_at',
         'is_training_held',
         'attendance',
         'assessment_id',
@@ -39,7 +43,10 @@ class TdKpiAssignment extends Model
     ];
 
     protected $casts = [
-        'proposed_training_date' => 'date',
+        'proposed_training_start_at' => 'datetime',
+        'proposed_training_end_at' => 'datetime',
+        'actual_training_start_at' => 'datetime',
+        'actual_training_end_at' => 'datetime',
         'is_training_held' => 'boolean',
         'attendance' => 'boolean',
         'post_assessment_score' => 'decimal:2',
@@ -56,6 +63,11 @@ class TdKpiAssignment extends Model
     public function evaluationResultOverride(): BelongsTo
     {
         return $this->belongsTo(EvaluationResultOverride::class, 'evaluation_result_override_id');
+    }
+
+    public function trainingRequest(): BelongsTo
+    {
+        return $this->belongsTo(TrainingRequest::class, 'training_request_id');
     }
 
     public function employee(): BelongsTo

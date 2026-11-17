@@ -214,7 +214,7 @@ const baseSections: NavSection[] = [
       { title: 'Fill Forms', href: '/available-forms', icon: ClipboardCheck, permission: 'fill forms' },
       { title: 'My Submissions', href: '/my-submissions', icon: FileCheck, permission: 'view my form submissions' },
       { title: 'All Submissions', href: '/submissions', icon: ClipboardList, permission: 'view form submissions|view inspector checklist submissions' },
-      { title: 'Checklist Summary', href: '/reports/checklist-summary', icon: ClipboardCheck, permission: 'view form submissions|view inspector checklist submissions' },
+
     ],
   },
   {
@@ -320,6 +320,12 @@ const baseSections: NavSection[] = [
             permission: 'training.td_kpi.assignments.view',
           },
           {
+            title: 'Date Change Requests',
+            href: '/training/td-kpi/proposed-date-requests',
+            icon: FileText,
+            permission: 'training.td_kpi.proposed_date_requests.review',
+          },
+          {
             title: 'Training Types',
             href: '/training/td-kpi/training-types',
             icon: GraduationCap,
@@ -336,6 +342,24 @@ const baseSections: NavSection[] = [
             href: '/training/td-kpi/assessments',
             icon: ClipboardCheck,
             permission: 'training.td_kpi.assessments.view',
+          },
+        ],
+      },
+      {
+        label: 'Training Request',
+        icon: ClipboardList,
+        items: [
+          {
+            title: 'New Request',
+            href: '/training/requests/create',
+            icon: Plus,
+            permission: 'training.requests.create',
+          },
+          {
+            title: 'My Requests',
+            href: '/training/requests',
+            icon: ListChecks,
+            permission: 'training.requests.view',
           },
         ],
       },

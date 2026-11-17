@@ -58,9 +58,9 @@ export default function AssessmentsIndex({ assessments }: PageProps) {
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="TD KPI Assessments" />
-			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-				<Card>
-					<CardHeader className="flex items-center justify-between">
+			<div className="flex h-full flex-1 flex-col overflow-x-auto rounded-xl p-4">
+				<Card className="gap-2 py-3">
+					<CardHeader className="flex items-center justify-between gap-1">
 						<CardTitle>Assessments</CardTitle>
 						<div className="ml-4 flex gap-2">
 							<Input

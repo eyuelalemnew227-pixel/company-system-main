@@ -45,7 +45,8 @@ type AssignmentMeta = {
 	department: string | null;
 	training_type: string | null;
 	assigned_training_content: string | null;
-	proposed_training_date: string | null;
+	proposed_training_start_at: string | null;
+	proposed_training_end_at: string | null;
 	is_training_held: boolean;
 	attendance: boolean;
 	assessment_name: string | null;
@@ -220,7 +221,7 @@ export default function TakeAssessment({ assignment, questions }: PageProps) {
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title={assignment.assessment_name || 'Take Assessment'} />
-			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
+			<div className="flex h-full flex-1 flex-col gap-3 overflow-x-auto rounded-xl p-4">
 				<div className="flex flex-wrap items-center justify-between gap-3">
 					<div>
 						<h1 className="text-xl font-semibold">{assignment.assessment_name || 'Assessment'}</h1>
@@ -233,8 +234,8 @@ export default function TakeAssessment({ assignment, questions }: PageProps) {
 					</Button>
 				</div>
 
-				<Card>
-					<CardHeader>
+				<Card className="gap-2 py-3">
+					<CardHeader className="gap-1">
 						<CardTitle>Assignment details</CardTitle>
 					</CardHeader>
 					<hr />
@@ -254,7 +255,8 @@ export default function TakeAssessment({ assignment, questions }: PageProps) {
 						<MetaItem label="Department" value={assignment.department} />
 						<MetaItem label="Training Type" value={assignment.training_type} />
 						<MetaItem label="Assigned Training Content" value={assignment.assigned_training_content} />
-						<MetaItem label="Proposed Training Date" value={assignment.proposed_training_date} />
+						<MetaItem label="Training Start" value={assignment.proposed_training_start_at} />
+						<MetaItem label="Training End" value={assignment.proposed_training_end_at} />
 						<MetaItem label="Is Training Held" value={yesNo(assignment.is_training_held)} />
 						<MetaItem label="Attendance" value={yesNo(assignment.attendance)} />
 						<MetaItem label="Assessment" value={assignment.assessment_name} />
@@ -278,8 +280,8 @@ export default function TakeAssessment({ assignment, questions }: PageProps) {
 					</CardContent>
 				</Card>
 
-				<Card>
-					<CardHeader>
+				<Card className="gap-2 py-3">
+					<CardHeader className="gap-1">
 						<CardTitle>Questions</CardTitle>
 					</CardHeader>
 					<hr />

@@ -48,9 +48,9 @@ export default function RecurringModuleCreate({
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Create Recurring Training Module" />
-			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-				<Card>
-					<CardHeader className="flex items-center justify-between">
+			<div className="flex h-full flex-1 flex-col overflow-x-auto rounded-xl p-4">
+				<Card className="gap-2 py-3">
+					<CardHeader className="flex items-center justify-between gap-1">
 						<CardTitle>Create Recurring Training Module</CardTitle>
 						<CardAction>
 							<Link href="/training/td-kpi/recurring-modules">
@@ -59,7 +59,7 @@ export default function RecurringModuleCreate({
 						</CardAction>
 					</CardHeader>
 					<hr />
-					<CardContent className="pt-6">
+					<CardContent>
 						<form onSubmit={submit} className="mx-auto max-w-xl space-y-4">
 							<div>
 								<Label htmlFor="training_name">Training Name</Label>

@@ -309,6 +309,7 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'training.td_kpi.assignments.view']);
         Permission::firstOrCreate(['name' => 'training.td_kpi.assignments.create']);
         Permission::firstOrCreate(['name' => 'training.td_kpi.assignments.delete']);
+        Permission::firstOrCreate(['name' => 'training.td_kpi.proposed_date_requests.review']);
         Permission::firstOrCreate(['name' => 'training.td_kpi.training_types.view']);
         Permission::firstOrCreate(['name' => 'training.td_kpi.training_types.create']);
         Permission::firstOrCreate(['name' => 'training.td_kpi.training_types.update']);
@@ -321,6 +322,8 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'training.td_kpi.assessments.create']);
         Permission::firstOrCreate(['name' => 'training.td_kpi.assessments.update']);
         Permission::firstOrCreate(['name' => 'training.td_kpi.assessments.delete']);
+        Permission::firstOrCreate(['name' => 'training.requests.view']);
+        Permission::firstOrCreate(['name' => 'training.requests.create']);
 
         // Internal Memorandum & Documents (11 total Memos & Documents permissions)
         Permission::firstOrCreate(['name' => 'memo.view']);

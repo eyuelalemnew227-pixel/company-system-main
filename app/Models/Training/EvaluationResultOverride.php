@@ -26,7 +26,14 @@ class EvaluationResultOverride extends Model
         'fiscal_month_id',
         'next_action',
         'training_type_id',
+        'requested_training_date',
+        'requested_module_id',
+        'request_extra_info',
         'updated_by',
+    ];
+
+    protected $casts = [
+        'requested_training_date' => 'date',
     ];
 
     public function employee(): BelongsTo
@@ -52,6 +59,11 @@ class EvaluationResultOverride extends Model
     public function trainingType(): BelongsTo
     {
         return $this->belongsTo(TrainingType::class, 'training_type_id');
+    }
+
+    public function requestedModule(): BelongsTo
+    {
+        return $this->belongsTo(RecurringTrainingModule::class, 'requested_module_id');
     }
 
     public function updater(): BelongsTo

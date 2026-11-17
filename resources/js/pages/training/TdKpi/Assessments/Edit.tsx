@@ -78,9 +78,9 @@ export default function AssessmentEdit({
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Edit Assessment" />
-			<div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-				<Card>
-					<CardHeader className="flex items-center justify-between">
+			<div className="flex h-full flex-1 flex-col overflow-x-auto rounded-xl p-4">
+				<Card className="gap-2 py-3">
+					<CardHeader className="flex items-center justify-between gap-1">
 						<CardTitle>Edit Assessment</CardTitle>
 						<CardAction>
 							<Link href="/training/td-kpi/assessments">
@@ -89,7 +89,7 @@ export default function AssessmentEdit({
 						</CardAction>
 					</CardHeader>
 					<hr />
-					<CardContent className="pt-6">
+					<CardContent>
 						<form onSubmit={submit} className="mx-auto max-w-xl space-y-4">
 							<div>
 								<Label htmlFor="assessment_name">Assessment Name</Label>

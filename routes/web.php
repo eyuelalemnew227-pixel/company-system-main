@@ -750,7 +750,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Training Management System
-    Route::prefix('training')->name('training.')->middleware(['permission:training.online.view|training.agendas.view|training.agendas.create|training.master_schedule.view|training.master_schedule.create|training.evaluations.manage|training.settings.manage|training.td_kpi.questions.view|training.td_kpi.questions.create|training.td_kpi.questions.update|training.td_kpi.questions.delete|training.td_kpi.assignments.view|training.td_kpi.assignments.create|training.td_kpi.assignments.delete|training.td_kpi.training_types.view|training.td_kpi.training_types.create|training.td_kpi.training_types.update|training.td_kpi.training_types.delete|training.recurring_modules.view|training.recurring_modules.create|training.recurring_modules.update|training.recurring_modules.delete|training.td_kpi.assessments.view|training.td_kpi.assessments.create|training.td_kpi.assessments.update|training.td_kpi.assessments.delete'])->group(function () {
+    Route::prefix('training')->name('training.')->middleware(['permission:training.online.view|training.agendas.view|training.agendas.create|training.master_schedule.view|training.master_schedule.create|training.evaluations.manage|training.settings.manage|training.td_kpi.questions.view|training.td_kpi.questions.create|training.td_kpi.questions.update|training.td_kpi.questions.delete|training.td_kpi.assignments.view|training.td_kpi.assignments.create|training.td_kpi.assignments.delete|training.td_kpi.training_types.view|training.td_kpi.training_types.create|training.td_kpi.training_types.update|training.td_kpi.training_types.delete|training.recurring_modules.view|training.recurring_modules.create|training.recurring_modules.update|training.recurring_modules.delete|training.td_kpi.assessments.view|training.td_kpi.assessments.create|training.td_kpi.assessments.update|training.td_kpi.assessments.delete|training.requests.view|training.requests.create|training.td_kpi.proposed_date_requests.review'])->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Training\TrainingDashboardController::class, 'index'])->name('dashboard');
 
         // Courses & Lessons
@@ -842,6 +842,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         // Reports
         Route::get('/reports', [\App\Http\Controllers\Training\ReportController::class, 'index'])->middleware('permission:training.reports.view|training.reports.export|training.online.reports.view')->name('reports.index');
 
+        Route::get('requests', [\App\Http\Controllers\Training\TrainingRequestController::class, 'index'])
+            ->middleware('permission:training.requests.view')
+            ->name('requests.index');
+        Route::get('requests/create', [\App\Http\Controllers\Training\TrainingRequestController::class, 'create'])
+            ->middleware('permission:training.requests.create')
+            ->name('requests.create');
+        Route::post('requests', [\App\Http\Controllers\Training\TrainingRequestController::class, 'store'])
+            ->middleware('permission:training.requests.create')
+            ->name('requests.store');
+        Route::put('requests/{trainingRequest}/verdict', [\App\Http\Controllers\Training\TrainingRequestController::class, 'verdict'])
+            ->middleware('permission:training.requests.view')
+            ->name('requests.verdict');
+
         // TD KPI Questions
         Route::prefix('td-kpi')->name('td-kpi.')->group(function () {
             Route::get('questions', [\App\Http\Controllers\Training\TdKpiQuestionController::class, 'index'])
@@ -869,6 +882,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::put('assignments/upsert', [\App\Http\Controllers\Training\TdKpiAssignmentController::class, 'upsert'])
                 ->middleware('permission:training.td_kpi.assignments.create|training.td_kpi.assignments.view')
                 ->name('assignments.upsert');
+            Route::post('assignments/proposed-date-requests', [\App\Http\Controllers\Training\ProposedDatetimeChangeRequestController::class, 'store'])
+                ->middleware('permission:training.td_kpi.assignments.create|training.td_kpi.assignments.view')
+                ->name('proposed-date-requests.store');
+
+            Route::get('proposed-date-requests', [\App\Http\Controllers\Training\ProposedDatetimeChangeRequestController::class, 'index'])
+                ->middleware('permission:training.td_kpi.proposed_date_requests.review')
+                ->name('proposed-date-requests.index');
+            Route::post('proposed-date-requests/{proposedDatetimeChangeRequest}/accept', [\App\Http\Controllers\Training\ProposedDatetimeChangeRequestController::class, 'accept'])
+                ->middleware('permission:training.td_kpi.proposed_date_requests.review')
+                ->name('proposed-date-requests.accept');
+            Route::post('proposed-date-requests/{proposedDatetimeChangeRequest}/reject', [\App\Http\Controllers\Training\ProposedDatetimeChangeRequestController::class, 'reject'])
+                ->middleware('permission:training.td_kpi.proposed_date_requests.review')
+                ->name('proposed-date-requests.reject');
             Route::get('assignments/{assignment}/take', [\App\Http\Controllers\Training\TdKpiAssignmentController::class, 'take'])
                 ->middleware('permission:training.td_kpi.assignments.view')
                 ->name('assignments.take');

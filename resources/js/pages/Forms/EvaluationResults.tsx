@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import InputError from '@/components/input-error';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import TablePagination from '@/components/table-pagination';
@@ -37,6 +38,9 @@ type ResultRow = {
 	next_action_label: string;
 	training_type_id: number | null;
 	training_type_name: string | null;
+	requested_training_date: string | null;
+	requested_module_id: number | null;
+	request_extra_info: string | null;
 };
 
 type Summary = {
@@ -95,6 +99,7 @@ export default function EvaluationResults({
 	rows,
 	summary,
 	trainingTypes = [],
+	trainingModules = [],
 	fiscalYears = [],
 	fiscalMonths = [],
 	filters,
@@ -111,6 +116,7 @@ export default function EvaluationResults({
 	};
 	summary: Summary;
 	trainingTypes: TrainingTypeOption[];
+	trainingModules: TrainingTypeOption[];
 	fiscalYears: FiscalOption[];
 	fiscalMonths: FiscalOption[];
 	filters: Filters;
@@ -127,6 +133,9 @@ export default function EvaluationResults({
 		fiscal_month_id: '',
 		next_action: 'na',
 		training_type_id: '',
+		requested_training_date: '',
+		requested_module_id: '',
+		request_extra_info: '',
 	});
 
 	useEffect(() => {
@@ -199,6 +208,9 @@ export default function EvaluationResults({
 			fiscal_month_id: String(row.fiscal_month_id),
 			next_action: row.next_action,
 			training_type_id: row.training_type_id ? String(row.training_type_id) : '',
+			requested_training_date: row.requested_training_date ?? '',
+			requested_module_id: row.requested_module_id ? String(row.requested_module_id) : '',
+			request_extra_info: row.request_extra_info ?? '',
 		});
 	}
 
@@ -311,10 +323,7 @@ export default function EvaluationResults({
 								<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 w-full">
 									<div>
 										<CardTitle className="text-xl sm:text-2xl">Evaluation Results</CardTitle>
-										<p className="text-sm text-muted-foreground mt-1">
-											Employees scored on forms linked to <span className="font-medium text-foreground">{kpiName}</span>.
-											Pass is 75 or above. Fail from 60 to 74.9 is warning. Below 60 is training.
-										</p>
+
 									</div>
 
 									<CardAction>
@@ -437,6 +446,10 @@ export default function EvaluationResults({
 								</div>
 							</CardHeader>
 							<hr />
+							<p className="text-sm text-muted-foreground mt-1 ml-6">
+								Employees scored on forms linked to <span className="font-medium text-foreground">{kpiName}</span>.
+								Pass is 75 or above. Fail from 60 to 74.9 is warning. Below 60 is training.
+							</p>
 
 							<CardContent className="p-2 sm:p-6">
 								<div className="overflow-x-auto -mx-2 sm:mx-0">
@@ -565,8 +578,18 @@ export default function EvaluationResults({
 							<Select
 								value={data.next_action}
 								onValueChange={(value) => {
+									if (value !== 'training') {
+										setData({
+											...data,
+											next_action: value,
+											training_type_id: '',
+											requested_training_date: '',
+											requested_module_id: '',
+											request_extra_info: '',
+										});
+										return;
+									}
 									setData('next_action', value);
-									if (value !== 'training') setData('training_type_id', '');
 								}}
 							>
 								<SelectTrigger id="next_action">
@@ -603,6 +626,53 @@ export default function EvaluationResults({
 							</Select>
 							<InputError message={errors.training_type_id} />
 						</div>
+
+						{data.next_action === 'training' && (
+							<>
+								<div className="space-y-1.5">
+									<Label htmlFor="requested_training_date">Proposed date *</Label>
+									<Input
+										id="requested_training_date"
+										type="date"
+										value={data.requested_training_date}
+										onChange={(e) => setData('requested_training_date', e.target.value)}
+									/>
+									<InputError message={errors.requested_training_date} />
+								</div>
+								<div className="space-y-1.5">
+									<Label htmlFor="requested_module_id">Training module *</Label>
+									<Select
+										value={data.requested_module_id || 'none'}
+										onValueChange={(value) =>
+											setData('requested_module_id', value === 'none' ? '' : value)
+										}
+									>
+										<SelectTrigger id="requested_module_id">
+											<SelectValue placeholder="Select training module" />
+										</SelectTrigger>
+										<SelectContent>
+											<SelectItem value="none">None</SelectItem>
+											{trainingModules.map((module) => (
+												<SelectItem key={module.id} value={String(module.id)}>
+													{module.name}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+									<InputError message={errors.requested_module_id} />
+								</div>
+								<div className="space-y-1.5">
+									<Label htmlFor="request_extra_info">Extra info</Label>
+									<Textarea
+										id="request_extra_info"
+										value={data.request_extra_info}
+										onChange={(e) => setData('request_extra_info', e.target.value)}
+										rows={3}
+									/>
+									<InputError message={errors.request_extra_info} />
+								</div>
+							</>
+						)}
 
 						<DialogFooter>
 							<Button type="button" variant="outline" onClick={closeEditDialog}>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Form;
 use App\Models\FormSubmission;
 use App\Models\Training\EvaluationResultOverride;
+use App\Models\Training\RecurringTrainingModule;
 use App\Models\Training\TrainingType;
 use App\Models\User;
 use App\Services\Forms\InspectorChecklistChampionAccess;
@@ -1671,6 +1672,10 @@ class FormSubmissionAdminController extends Controller
             ->where('status', 'active')
             ->orderBy('name')
             ->get(['id', 'name']);
+        $trainingModules = RecurringTrainingModule::query()
+            ->orderBy('training_name')
+            ->get(['id', 'training_name'])
+            ->map(fn ($module) => ['id' => $module->id, 'name' => $module->training_name]);
 
         $rows = collect();
 
@@ -1718,7 +1723,7 @@ class FormSubmissionAdminController extends Controller
             $branches = \App\Models\Branch::pluck('name', 'id');
 
             $overrides = EvaluationResultOverride::query()
-                ->with('trainingType:id,name')
+                ->with(['trainingType:id,name', 'requestedModule:id,training_name'])
                 ->whereIn('form_id', $formIds)
                 ->get()
                 ->keyBy(fn (EvaluationResultOverride $override) => $override->employee_id . '|' . $override->form_id . '|' . $override->fiscal_month_id);
@@ -1768,6 +1773,9 @@ class FormSubmissionAdminController extends Controller
                     $nextActionLabel = $this->nextActionLabel($nextAction);
                     $trainingTypeId = null;
                     $trainingTypeName = null;
+                    $requestedTrainingDate = null;
+                    $requestedModuleId = null;
+                    $requestExtraInfo = null;
 
                     if ($matchedMonth) {
                         $override = $overrides->get($employeeId . '|' . $formId . '|' . $matchedMonth->id);
@@ -1776,6 +1784,9 @@ class FormSubmissionAdminController extends Controller
                             $nextActionLabel = $this->nextActionLabel($nextAction);
                             $trainingTypeId = $override->training_type_id;
                             $trainingTypeName = $override->trainingType?->name;
+                            $requestedTrainingDate = $override->requested_training_date?->format('Y-m-d');
+                            $requestedModuleId = $override->requested_module_id;
+                            $requestExtraInfo = $override->request_extra_info;
                         }
                     }
 
@@ -1798,6 +1809,9 @@ class FormSubmissionAdminController extends Controller
                         'next_action_label' => $nextActionLabel,
                         'training_type_id' => $trainingTypeId,
                         'training_type_name' => $trainingTypeName,
+                        'requested_training_date' => $requestedTrainingDate,
+                        'requested_module_id' => $requestedModuleId,
+                        'request_extra_info' => $requestExtraInfo,
                     ];
                 }
             }
@@ -1863,6 +1877,7 @@ class FormSubmissionAdminController extends Controller
             'rows' => $paginator,
             'summary' => $summary,
             'trainingTypes' => $trainingTypes,
+            'trainingModules' => $trainingModules,
             'fiscalYears' => $fiscalYears->map(fn ($year) => ['id' => $year->id, 'name' => $year->name])->values(),
             'fiscalMonths' => $fiscalMonths->map(fn ($month) => [
                 'id' => $month->id,
@@ -1925,6 +1940,17 @@ class FormSubmissionAdminController extends Controller
         if ($request->input('training_type_id') === '' || $request->input('training_type_id') === 'none') {
             $request->merge(['training_type_id' => null]);
         }
+        if ($request->input('requested_module_id') === '' || $request->input('requested_module_id') === 'none') {
+            $request->merge(['requested_module_id' => null]);
+        }
+        if ($request->input('requested_training_date') === '') {
+            $request->merge(['requested_training_date' => null]);
+        }
+        if ($request->input('request_extra_info') === '') {
+            $request->merge(['request_extra_info' => null]);
+        }
+
+        $isTraining = $request->input('next_action') === 'training';
 
         $validated = $request->validate([
             'employee_id' => ['required', 'exists:employees,id'],
@@ -1939,14 +1965,28 @@ class FormSubmissionAdminController extends Controller
             ],
             'next_action' => ['required', Rule::in(['na', 'warning', 'training', 'not_scored'])],
             'training_type_id' => [
-                Rule::requiredIf($request->input('next_action') === 'training'),
+                Rule::requiredIf($isTraining),
                 'nullable',
                 'exists:training_types,id',
             ],
+            'requested_training_date' => [
+                Rule::requiredIf($isTraining),
+                'nullable',
+                'date',
+            ],
+            'requested_module_id' => [
+                Rule::requiredIf($isTraining),
+                'nullable',
+                'exists:recurring_training_modules,id',
+            ],
+            'request_extra_info' => ['nullable', 'string'],
         ]);
 
         if ($validated['next_action'] !== 'training') {
             $validated['training_type_id'] = null;
+            $validated['requested_training_date'] = null;
+            $validated['requested_module_id'] = null;
+            $validated['request_extra_info'] = null;
         }
 
         $user = auth()->user();
@@ -1969,6 +2009,9 @@ class FormSubmissionAdminController extends Controller
                 'fiscal_year_id' => $validated['fiscal_year_id'],
                 'next_action' => $validated['next_action'],
                 'training_type_id' => $validated['training_type_id'] ?? null,
+                'requested_training_date' => $validated['requested_training_date'] ?? null,
+                'requested_module_id' => $validated['requested_module_id'] ?? null,
+                'request_extra_info' => $validated['request_extra_info'] ?? null,
                 'updated_by' => auth()->id(),
             ]
         );

@@ -1,5 +1,15 @@
+export type TdKpiAssignmentNote = {
+	from: string;
+	proposed_date: string | null;
+	module: string | null;
+	extra_info: string | null;
+};
+
 export type TdKpiAssignmentRow = {
-	override_id: number;
+	source: 'evaluation_result' | 'training_request';
+	override_id: number | null;
+	training_request_id: number | null;
+	row_key: string;
 	assignment_id: number | null;
 	employee_id: number | null;
 	employee_name: string;
@@ -8,7 +18,15 @@ export type TdKpiAssignmentRow = {
 	department: string | null;
 	training_type: string | null;
 	assigned_training_content: string | null;
-	proposed_training_date: string | null;
+	proposed_training_start_at: string | null;
+	proposed_training_start_at_input: string | null;
+	proposed_training_end_at: string | null;
+	proposed_training_end_at_input: string | null;
+	actual_training_start_at: string | null;
+	actual_training_start_at_input: string | null;
+	actual_training_end_at: string | null;
+	actual_training_end_at_input: string | null;
+	actual_date_differs: boolean;
 	is_training_held: boolean;
 	attendance: boolean;
 	assessment_name: string | null;
@@ -19,6 +37,10 @@ export type TdKpiAssignmentRow = {
 	assigned_training_content_id: number | null;
 	assessment_id: number | null;
 	content_locked: boolean;
+	attendance_locked: boolean;
+	proposed_date_change_pending: boolean;
+	proposed_date_change_open: boolean;
+	note: TdKpiAssignmentNote;
 };
 
 export type TdKpiOption = { id: number; name: string };
@@ -46,7 +68,8 @@ export type TdKpiTakeAssignment = {
 	department: string | null;
 	training_type: string | null;
 	assigned_training_content: string | null;
-	proposed_training_date: string | null;
+	proposed_training_start_at: string | null;
+	proposed_training_end_at: string | null;
 	is_training_held: boolean;
 	attendance: boolean;
 	assessment_name: string | null;
