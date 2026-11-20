@@ -140,8 +140,17 @@ class PurchaseInspectionController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $rawItems = $request->input('items', []);
-        $inspectedItems = array_values(array_filter((array) $rawItems, function ($item) {
+        $rawItems = (array) $request->input('items', []);
+        $inspectedItems = array_values(array_filter(array_map(function ($item) {
+            $tab = $item['tab_type'] ?? 'custody_accuracy';
+            if ($tab === 'expiry_control' && !empty($item['expiry_date']) && empty($item['status'])) {
+                $exp = \Illuminate\Support\Carbon::parse($item['expiry_date'])->startOfDay();
+                $today = now()->startOfDay();
+                $diffDays = $today->diffInDays($exp, false);
+                $item['status'] = $diffDays <= 90 ? 'fail' : 'pass';
+            }
+            return $item;
+        }, $rawItems), function ($item) {
             // If condition is NONE, do not store it (only store PASS and FAIL)
             $status = $item['status'] ?? null;
             if ($status !== 'pass' && $status !== 'fail') {
@@ -279,8 +288,17 @@ class PurchaseInspectionController extends Controller
             abort(403, 'Unauthorized to edit purchase inspections.');
         }
 
-        $rawItems = $request->input('items', []);
-        $inspectedItems = array_values(array_filter((array) $rawItems, function ($item) {
+        $rawItems = (array) $request->input('items', []);
+        $inspectedItems = array_values(array_filter(array_map(function ($item) {
+            $tab = $item['tab_type'] ?? 'custody_accuracy';
+            if ($tab === 'expiry_control' && !empty($item['expiry_date']) && empty($item['status'])) {
+                $exp = \Illuminate\Support\Carbon::parse($item['expiry_date'])->startOfDay();
+                $today = now()->startOfDay();
+                $diffDays = $today->diffInDays($exp, false);
+                $item['status'] = $diffDays <= 90 ? 'fail' : 'pass';
+            }
+            return $item;
+        }, $rawItems), function ($item) {
             // If condition is NONE, do not store it (only store PASS and FAIL)
             $status = $item['status'] ?? null;
             if ($status !== 'pass' && $status !== 'fail') {

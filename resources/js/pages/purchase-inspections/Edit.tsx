@@ -287,12 +287,16 @@ export default function EditPurchaseInspection({
         const next = data.items.map((item) => {
             if (item.client_id === clientId) {
                 const updated = { ...item, [field]: value };
-                if (field === 'expiry_date' && value) {
-                    const exp = new Date(value);
-                    const today = new Date();
-                    today.setHours(0, 0, 0, 0);
-                    if (exp < today) {
-                        updated.status = 'fail';
+                if (field === 'expiry_date') {
+                    if (value) {
+                        const exp = new Date(value);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const diffDays = Math.ceil((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                        // Auto-assign Condition: <= 90 days (3 months) is FAIL, > 90 days is PASS
+                        updated.status = diffDays <= 90 ? 'fail' : 'pass';
+                    } else {
+                        updated.status = 'none';
                     }
                 }
                 return updated;
@@ -894,7 +898,7 @@ export default function EditPurchaseInspection({
                                                 </Badge>
                                             </h3>
                                             <p className="text-xs text-muted-foreground mt-0.5">
-                                                Record expiry date for each product. Expired or near-expiry items are automatically tagged.
+                                                Record expiry date for each product. Items with ≤90 days (3 months) remaining automatically fail, while items with &gt;90 days pass.
                                             </p>
                                         </div>
                                     </div>
@@ -910,9 +914,9 @@ export default function EditPurchaseInspection({
                                                     <TableHead className="font-bold text-white whitespace-nowrap w-44 text-left">
                                                         Expiry Date *
                                                     </TableHead>
-                                                    <TableHead className="font-bold text-white whitespace-nowrap w-36 text-center">Shelf Life Status</TableHead>
+                                                    <TableHead className="font-bold text-white whitespace-nowrap w-40 text-center">Shelf Life Status</TableHead>
                                                     <TableHead className="font-bold text-white whitespace-nowrap w-36 text-center">
-                                                        Condition
+                                                        Condition (Auto)
                                                     </TableHead>
                                                     <TableHead className="font-bold text-white whitespace-nowrap min-w-[160px]">Remarks / Batch #</TableHead>
                                                     <TableHead className="font-bold text-white whitespace-nowrap w-12 text-center"></TableHead>
@@ -942,10 +946,10 @@ export default function EditPurchaseInspection({
                                                                         Expired ({Math.abs(diffDays)}d ago)
                                                                     </Badge>
                                                                 );
-                                                            } else if (diffDays <= 30) {
+                                                            } else if (diffDays <= 90) {
                                                                 shelfLifeBadge = (
-                                                                    <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[11px]">
-                                                                        Expires in {diffDays}d
+                                                                    <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-[11px] font-semibold">
+                                                                        Expires in {diffDays}d (≤90d)
                                                                     </Badge>
                                                                 );
                                                             } else {

@@ -548,10 +548,10 @@ export default function ShowPurchaseInspection({
                                                                     Expired ({Math.abs(diffDays)}d)
                                                                 </Badge>
                                                             );
-                                                        } else if (diffDays <= 30) {
+                                                        } else if (diffDays <= 90) {
                                                             shelfLifeBadge = (
-                                                                <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-xs">
-                                                                    Near Expiry ({diffDays}d)
+                                                                <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-xs font-semibold">
+                                                                    Expires in {diffDays}d (≤90d)
                                                                 </Badge>
                                                             );
                                                         } else {
