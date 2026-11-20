@@ -120,12 +120,15 @@ class MemoController extends Controller
     /**
      * Show form to create a new memorandum.
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $user = Auth::user();
         $departments = Department::orderBy('name')->get(['id', 'name']);
         $branches = Branch::orderBy('name')->get(['id', 'name']);
-        $templates = MemoTemplate::where('user_id', $user->id)->latest()->get();
+        // Shared/managed templates should be available when loading from Evaluation Results.
+        $templates = $user->can('memo.templates.manage')
+            ? MemoTemplate::latest()->get()
+            : MemoTemplate::where('user_id', $user->id)->latest()->get();
         $prefix = MemoSetting::getValue('MEMO_PREFIX', 'KCM');
 
         // User Branch
@@ -134,6 +137,25 @@ class MemoController extends Controller
 
         // Generate draft ID
         $suggestedMemoId = $prefix . '-' . strtoupper(Str::random(6)) . '-' . date('Ymd');
+
+        $prefill = $request->session()->pull('memo_prefill');
+
+        // Ensure the evaluation-linked template is available in the dropdown even if owned by someone else.
+        if (is_array($prefill) && ! empty($prefill['selected_template_id'])) {
+            $prefillTemplateId = $prefill['selected_template_id'];
+            $hasPrefillTemplate = $templates->contains(
+                fn (MemoTemplate $template) => $template->template_id === $prefillTemplateId
+            );
+
+            if (! $hasPrefillTemplate) {
+                $extraTemplate = MemoTemplate::query()
+                    ->where('template_id', $prefillTemplateId)
+                    ->first();
+                if ($extraTemplate) {
+                    $templates = $templates->prepend($extraTemplate)->values();
+                }
+            }
+        }
 
         return Inertia::render('memos/create', [
             'departments' => $departments,
@@ -147,6 +169,7 @@ class MemoController extends Controller
                 'sender_name' => $senderNameWithBranch,
                 'sender_position' => $user->employee?->position?->name ?? 'Staff',
             ],
+            'prefill' => $prefill,
         ]);
     }
 

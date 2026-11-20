@@ -37,7 +37,7 @@ import {
     CheckCircle2,
     Edit3,
 } from 'lucide-react';
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -59,6 +59,17 @@ interface TemplateItem {
     content?: string;
 }
 
+interface MemoPrefill {
+    title?: string;
+    content?: string;
+    recipient_name?: string;
+    departments?: string[];
+    selected_branch_id?: string | null;
+    selected_department_id?: string | null;
+    is_head_office?: boolean;
+    selected_template_id?: string | null;
+}
+
 interface Props {
     departments: SelectableEntity[];
     branches: SelectableEntity[];
@@ -71,6 +82,7 @@ interface Props {
         sender_name: string;
         sender_position: string;
     };
+    prefill?: MemoPrefill | null;
 }
 
 interface MemoCreateForm {
@@ -95,29 +107,47 @@ export default function MemoCreate({
     templates,
     suggestedMemoId,
     userDefaultSignature,
+    prefill = null,
 }: Props) {
     const hasSavedSignature = Boolean(userDefaultSignature && userDefaultSignature.signature_data);
 
     const { data, setData, post, processing, errors } = useForm({
         memo_id: suggestedMemoId,
-        title: '',
+        title: prefill?.title || '',
         memo_date: new Date().toISOString().split('T')[0],
         sender_name: userDefaultSignature.sender_name || '',
         sender_position: '',
-        target_department: '',
-        recipient_name: '',
-        content: '',
+        target_department: prefill?.selected_branch_id || '',
+        recipient_name: prefill?.recipient_name || '',
+        content: prefill?.content || '',
         priority: 'normal',
-        departments: [] as string[],
+        departments: (prefill?.departments || []) as string[],
         signature_type: userDefaultSignature.signature_type || 'typed',
         signature_data: userDefaultSignature.signature_data || '',
         send_telegram: true as boolean,
     });
 
-    const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string>(prefill?.selected_template_id || '');
     const [previewOpen, setPreviewOpen] = useState<boolean>(false);
     const [changeSignature, setChangeSignature] = useState<boolean>(!hasSavedSignature);
-    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+    const textareaRef = useRef<HTMLDivElement | null>(null);
+
+    const syncEditorContent = (html: string) => {
+        if (textareaRef.current) {
+            textareaRef.current.innerHTML = html || '';
+        }
+    };
+
+    const toEditorHtml = (raw: string) => {
+        const value = raw || '';
+        if (!value) return '';
+        if (/<[a-z][\s\S]*>/i.test(value)) return value;
+        return value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '<br>');
+    };
 
     // Target Options
     const branchOptions = useMemo(() => {
@@ -136,16 +166,41 @@ export default function MemoCreate({
         }));
     }, [departments]);
 
-    const [selectedBranchId, setSelectedBranchId] = useState<string>('');
-    const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>('');
-    const [isHeadOffice, setIsHeadOffice] = useState<boolean>(false);
+    const [selectedBranchId, setSelectedBranchId] = useState<string>(prefill?.selected_branch_id || '');
+    const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>(prefill?.selected_department_id || '');
+    const [isHeadOffice, setIsHeadOffice] = useState<boolean>(Boolean(prefill?.is_head_office));
+    const [prefillNoticeShown, setPrefillNoticeShown] = useState(false);
+
+    useEffect(() => {
+        if (!prefill || prefillNoticeShown) return;
+        setPrefillNoticeShown(true);
+        if (prefill.content) {
+            const html = toEditorHtml(prefill.content);
+            setData('content', html);
+            requestAnimationFrame(() => syncEditorContent(html));
+        }
+        toast.info('Memorandum prefilled from Evaluation Results. Review and publish.');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefill, prefillNoticeShown]);
+
+    // Seed the contentEditable editor once on mount when form content is already set.
+    useEffect(() => {
+        if (data.content) {
+            requestAnimationFrame(() => syncEditorContent(toEditorHtml(data.content)));
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const handleApplyTemplate = (templateId: string) => {
         setSelectedTemplateId(templateId);
         const tpl = templates.find((t) => t.template_id === templateId || String(t.id) === templateId);
         if (tpl) {
             if (tpl.title) setData('title', tpl.title);
-            if (tpl.content) setData('content', tpl.content);
+            if (tpl.content != null && tpl.content !== '') {
+                const html = toEditorHtml(tpl.content);
+                setData('content', html);
+                syncEditorContent(html);
+            }
             toast.success(`Template "${tpl.template_name}" loaded.`);
         }
     };
@@ -190,34 +245,6 @@ export default function MemoCreate({
         }));
     };
 
-    const insertFormatting = (prefix: string, suffix: string = '') => {
-        const textarea = textareaRef.current;
-        if (!textarea) return;
-
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const selectedText = data.content.substring(start, end);
-        const replacement = prefix + selectedText + suffix;
-
-        const newContent =
-            data.content.substring(0, start) + replacement + data.content.substring(end);
-
-        setData('content', newContent);
-
-        setTimeout(() => {
-            textarea.focus();
-            if (selectedText.length > 0) {
-                textarea.setSelectionRange(
-                    start + prefix.length,
-                    start + prefix.length + selectedText.length
-                );
-            } else {
-                const cursorPosition = start + prefix.length;
-                textarea.setSelectionRange(cursorPosition, cursorPosition);
-            }
-        }, 0);
-    };
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (isHeadOffice && !data.recipient_name) {
@@ -247,7 +274,10 @@ export default function MemoCreate({
                     <div className="flex items-center gap-2">
                         {templates.length > 0 && (
                             <div className="w-56">
-                                <Select value={selectedTemplateId} onValueChange={handleApplyTemplate}>
+                                <Select
+                                    value={selectedTemplateId || undefined}
+                                    onValueChange={handleApplyTemplate}
+                                >
                                     <SelectTrigger className="h-9 text-xs bg-white dark:bg-slate-950">
                                         <SelectValue placeholder="Load Template..." />
                                     </SelectTrigger>
@@ -452,8 +482,9 @@ export default function MemoCreate({
                                 </div>
 
                                 <div
-                                    ref={textareaRef as any}
+                                    ref={textareaRef}
                                     contentEditable
+                                    suppressContentEditableWarning
                                     onInput={(e) => setData('content', e.currentTarget.innerHTML)}
                                     onBlur={(e) => setData('content', e.currentTarget.innerHTML)}
                                     className="min-h-[140px] p-3 text-sm rounded-md border border-input bg-background text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring leading-relaxed overflow-y-auto"

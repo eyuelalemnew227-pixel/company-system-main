@@ -324,7 +324,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('memos/{memo}/sign-cc', [MemoController::class, 'signCc'])->name('memos.sign-cc');
     Route::post('memos/{memo}/send-telegram', [MemoController::class, 'sendTelegram'])->name('memos.send-telegram');
     Route::resource('memos', MemoController::class);
-    Route::resource('memo-templates', MemoTemplateController::class)->only(['index', 'store', 'destroy']);
+    Route::resource('memo-templates', MemoTemplateController::class)->only(['index', 'store', 'update', 'destroy']);
     Route::get('memo-settings', [MemoSettingController::class, 'index'])->name('memo-settings.index');
     Route::post('memo-settings', [MemoSettingController::class, 'update'])->name('memo-settings.update');
     Route::post('user/signature', [MemoController::class, 'updateUserSignature'])->name('user.signature.update');

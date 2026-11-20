@@ -34,7 +34,7 @@ type ResultRow = {
 	score: number | null;
 	status: 'pass' | 'fail' | 'not_scored';
 	status_label: string;
-	next_action: 'na' | 'warning' | 'training' | 'not_scored';
+	next_action: 'na' | 'warning' | 'reward' | 'training' | 'not_scored';
 	next_action_label: string;
 	training_type_id: number | null;
 	training_type_name: string | null;
@@ -49,6 +49,7 @@ type Summary = {
 	pass: number;
 	fail: number;
 	warning: number;
+	reward: number;
 	training: number;
 	not_scored: number;
 };
@@ -85,6 +86,9 @@ function actionBadgeClass(action: ResultRow['next_action']) {
 	}
 	if (action === 'warning') {
 		return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+	}
+	if (action === 'reward') {
+		return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200';
 	}
 	if (action === 'training') {
 		return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
@@ -131,11 +135,13 @@ export default function EvaluationResults({
 		form_id: '',
 		fiscal_year_id: '',
 		fiscal_month_id: '',
-		next_action: 'na',
+		next_action: 'na' as ResultRow['next_action'],
 		training_type_id: '',
 		requested_training_date: '',
 		requested_module_id: '',
 		request_extra_info: '',
+		score: '' as string,
+		status_label: '',
 	});
 
 	useEffect(() => {
@@ -211,6 +217,8 @@ export default function EvaluationResults({
 			requested_training_date: row.requested_training_date ?? '',
 			requested_module_id: row.requested_module_id ? String(row.requested_module_id) : '',
 			request_extra_info: row.request_extra_info ?? '',
+			score: row.score === null || row.score === undefined ? '' : String(row.score),
+			status_label: row.status_label ?? '',
 		});
 	}
 
@@ -222,9 +230,12 @@ export default function EvaluationResults({
 
 	function submitEdit(e: React.FormEvent) {
 		e.preventDefault();
+		const opensMemo = data.next_action === 'warning' || data.next_action === 'reward';
 		put('/forms/evaluation-results/override', {
-			preserveScroll: true,
-			onSuccess: () => closeEditDialog(),
+			preserveScroll: !opensMemo,
+			onSuccess: () => {
+				if (!opensMemo) closeEditDialog();
+			},
 		});
 	}
 
@@ -299,6 +310,13 @@ export default function EvaluationResults({
 								<CardContent className="p-3 sm:p-4">
 									<div className="text-xs font-medium text-yellow-700 dark:text-yellow-400 uppercase">Warning</div>
 									<div className="text-xl sm:text-2xl font-bold text-yellow-700 dark:text-yellow-400 mt-1">{summary.warning}</div>
+								</CardContent>
+							</Card>
+
+							<Card>
+								<CardContent className="p-3 sm:p-4">
+									<div className="text-xs font-medium text-emerald-700 dark:text-emerald-400 uppercase">Reward</div>
+									<div className="text-xl sm:text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">{summary.reward}</div>
 								</CardContent>
 							</Card>
 
@@ -395,6 +413,7 @@ export default function EvaluationResults({
 											<SelectItem value="all">All actions</SelectItem>
 											<SelectItem value="na">NA</SelectItem>
 											<SelectItem value="warning">Warning</SelectItem>
+											<SelectItem value="reward">Reward</SelectItem>
 											<SelectItem value="training">Training</SelectItem>
 											<SelectItem value="not_scored">Not scored</SelectItem>
 										</SelectContent>
@@ -561,6 +580,7 @@ export default function EvaluationResults({
 						<DialogTitle>Edit Next Action</DialogTitle>
 						<DialogDescription>
 							Override the next action or assign a specific training type for this employee.
+							Warning and Reward open a prefilled memorandum to HR after save.
 						</DialogDescription>
 					</DialogHeader>
 					<form onSubmit={submitEdit} className="space-y-4">
@@ -578,10 +598,11 @@ export default function EvaluationResults({
 							<Select
 								value={data.next_action}
 								onValueChange={(value) => {
-									if (value !== 'training') {
+									const nextAction = value as ResultRow['next_action'];
+									if (nextAction !== 'training') {
 										setData({
 											...data,
-											next_action: value,
+											next_action: nextAction,
 											training_type_id: '',
 											requested_training_date: '',
 											requested_module_id: '',
@@ -589,7 +610,7 @@ export default function EvaluationResults({
 										});
 										return;
 									}
-									setData('next_action', value);
+									setData('next_action', nextAction);
 								}}
 							>
 								<SelectTrigger id="next_action">
@@ -598,6 +619,7 @@ export default function EvaluationResults({
 								<SelectContent>
 									<SelectItem value="na">NA</SelectItem>
 									<SelectItem value="warning">Warning</SelectItem>
+									<SelectItem value="reward">Reward</SelectItem>
 									<SelectItem value="training">Training</SelectItem>
 									<SelectItem value="not_scored">Not scored</SelectItem>
 								</SelectContent>

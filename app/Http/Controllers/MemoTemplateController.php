@@ -47,6 +47,28 @@ class MemoTemplateController extends Controller
         return back()->with('success', 'Memo template saved successfully.');
     }
 
+    public function update(Request $request, MemoTemplate $memoTemplate)
+    {
+        $user = Auth::user();
+        if ($memoTemplate->user_id !== $user->id && ! $user->can('memo.templates.manage')) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $request->validate([
+            'template_name' => 'required|string|max:200',
+            'title' => 'nullable|string|max:255',
+            'content' => 'required|string',
+        ]);
+
+        $memoTemplate->update([
+            'template_name' => $request->input('template_name'),
+            'title' => $request->input('title'),
+            'content' => $request->input('content'),
+        ]);
+
+        return back()->with('success', 'Memo template updated successfully.');
+    }
+
     public function destroy(MemoTemplate $memoTemplate)
     {
         $user = Auth::user();

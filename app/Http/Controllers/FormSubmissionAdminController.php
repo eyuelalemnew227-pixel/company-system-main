@@ -2,8 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Branch;
+use App\Models\Department;
+use App\Models\Employee;
+use App\Models\FiscalMonth;
 use App\Models\Form;
 use App\Models\FormSubmission;
+use App\Models\MemoTemplate;
 use App\Models\Training\EvaluationResultOverride;
 use App\Models\Training\RecurringTrainingModule;
 use App\Models\Training\TrainingType;
@@ -1846,6 +1851,7 @@ class FormSubmissionAdminController extends Controller
             'pass' => $rows->where('status', 'pass')->count(),
             'fail' => $rows->where('status', 'fail')->count(),
             'warning' => $rows->where('next_action', 'warning')->count(),
+            'reward' => $rows->where('next_action', 'reward')->count(),
             'training' => $rows->where('next_action', 'training')->count(),
             'not_scored' => $rows->where('status', 'not_scored')->count(),
         ];
@@ -1949,6 +1955,12 @@ class FormSubmissionAdminController extends Controller
         if ($request->input('request_extra_info') === '') {
             $request->merge(['request_extra_info' => null]);
         }
+        if ($request->input('score') === '') {
+            $request->merge(['score' => null]);
+        }
+        if ($request->input('status_label') === '') {
+            $request->merge(['status_label' => null]);
+        }
 
         $isTraining = $request->input('next_action') === 'training';
 
@@ -1963,7 +1975,7 @@ class FormSubmissionAdminController extends Controller
                     fn ($q) => $q->where('fiscal_year_id', $request->input('fiscal_year_id'))
                 ),
             ],
-            'next_action' => ['required', Rule::in(['na', 'warning', 'training', 'not_scored'])],
+            'next_action' => ['required', Rule::in(['na', 'warning', 'reward', 'training', 'not_scored'])],
             'training_type_id' => [
                 Rule::requiredIf($isTraining),
                 'nullable',
@@ -1980,6 +1992,8 @@ class FormSubmissionAdminController extends Controller
                 'exists:recurring_training_modules,id',
             ],
             'request_extra_info' => ['nullable', 'string'],
+            'score' => ['nullable', 'numeric'],
+            'status_label' => ['nullable', 'string', 'max:100'],
         ]);
 
         if ($validated['next_action'] !== 'training') {
@@ -2015,6 +2029,22 @@ class FormSubmissionAdminController extends Controller
                 'updated_by' => auth()->id(),
             ]
         );
+
+        if (in_array($validated['next_action'], ['warning', 'reward'], true)) {
+            $prefill = $this->buildEvaluationMemoPrefill(
+                (int) $validated['employee_id'],
+                (int) $validated['form_id'],
+                (int) $validated['fiscal_year_id'],
+                (int) $validated['fiscal_month_id'],
+                $validated['next_action'],
+                $validated['score'] ?? null,
+                $validated['status_label'] ?? null,
+            );
+
+            return Redirect::route('memos.create')
+                ->with('memo_prefill', $prefill)
+                ->with('message', 'Evaluation result updated. Review and publish the memorandum.');
+        }
 
         return Redirect::back()->with('message', 'Evaluation result updated successfully!');
     }
@@ -2224,9 +2254,107 @@ class FormSubmissionAdminController extends Controller
         return match ($nextAction) {
             'na' => 'NA',
             'warning' => 'Warning',
+            'reward' => 'Reward',
             'training' => 'Training',
             'not_scored' => 'Not scored',
             default => ucfirst(str_replace('_', ' ', $nextAction)),
         };
+    }
+
+    private const WARNING_MEMO_TEMPLATE_NAME = 'የማስጠንቀቂያ ደብዳቤ';
+
+    private const REWARD_MEMO_TEMPLATE_NAME = 'የምስጋና ደብዳቤ';
+
+    /**
+     * @return array{
+     *     title: string,
+     *     content: string,
+     *     recipient_name: string,
+     *     departments: list<string>,
+     *     selected_branch_id: string|null,
+     *     selected_department_id: string|null,
+     *     is_head_office: bool,
+     *     selected_template_id: string|null
+     * }
+     */
+    private function buildEvaluationMemoPrefill(
+        int $employeeId,
+        int $formId,
+        int $fiscalYearId,
+        int $fiscalMonthId,
+        string $nextAction,
+        mixed $score,
+        ?string $statusLabel,
+    ): array {
+        $employee = Employee::query()->find($employeeId);
+        $employeeName = trim(($employee?->first_name ?? '') . ' ' . ($employee?->last_name ?? ''));
+        if ($employeeName === '') {
+            $employeeName = $employee?->employee_code ?: 'Employee #' . $employeeId;
+        }
+
+        $formTitle = Form::query()->whereKey($formId)->value('title') ?: 'Evaluation form';
+        $fiscalMonthName = FiscalMonth::query()->whereKey($fiscalMonthId)->value('name') ?: 'Unknown month';
+
+        $fallbackTitle = $nextAction === 'reward'
+            ? "Employee Reward Recommendation – {$employeeName} – {$formTitle} ({$fiscalMonthName})"
+            : "Performance Warning – {$employeeName} – {$formTitle} ({$fiscalMonthName})";
+
+        $templateName = $nextAction === 'reward'
+            ? self::REWARD_MEMO_TEMPLATE_NAME
+            : self::WARNING_MEMO_TEMPLATE_NAME;
+
+        $template = MemoTemplate::query()
+            ->where('template_name', $templateName)
+            ->latest()
+            ->first();
+
+        $title = $fallbackTitle;
+        $content = '';
+        $selectedTemplateId = null;
+
+        if ($template) {
+            $selectedTemplateId = $template->template_id;
+            $title = filled($template->title)
+                ? trim($template->title) . " – {$employeeName} ({$fiscalMonthName})"
+                : $fallbackTitle;
+
+            $content = trim((string) $template->content);
+        }
+
+        $hrDepartment = Department::query()
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->first(function (Department $department) {
+                $normalized = strtolower(trim($department->name));
+                $compact = preg_replace('/[\s\-_]+/', '', $normalized) ?? $normalized;
+
+                return $normalized === 'hr'
+                    || str_contains($normalized, 'human resource')
+                    || str_contains($compact, 'hrdepartment')
+                    || (bool) preg_match('/\bhr\b/', $normalized);
+            });
+
+        $hrName = $hrDepartment?->name ?: 'HR';
+
+        $headOffice = Branch::query()
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->first(function (Branch $branch) {
+                $normalized = strtolower($branch->name);
+                $compact = preg_replace('/[\s\-_]+/', '', $normalized) ?? $normalized;
+
+                return str_contains($normalized, 'head office') || str_contains($compact, 'headoffice');
+            });
+
+        return [
+            'title' => $title,
+            'content' => $content,
+            'recipient_name' => $hrName,
+            'departments' => [$hrName],
+            'selected_branch_id' => $headOffice ? 'branch_' . $headOffice->id : null,
+            'selected_department_id' => $hrDepartment ? 'dept_' . $hrDepartment->id : null,
+            'is_head_office' => (bool) $headOffice,
+            'selected_template_id' => $selectedTemplateId,
+        ];
     }
 }
