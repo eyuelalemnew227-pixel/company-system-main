@@ -509,6 +509,7 @@ class ChecklistScoringService
                 if ($formType !== '1' && $formType !== '2') {
                     continue;
                 }
+                $isQa = (bool) ($sub->is_qa_manager ?? false);
 
             // Extract branch lookup from submission if employee has no branch
             $branchLookup = $sub->answers->first(function ($a) {
@@ -659,9 +660,21 @@ class ChecklistScoringService
                             'type_1_total' => 0,
                             'type_1_passed' => 0,
                             'type_1_count' => 0,
+                            'type_1_inspector_total' => 0,
+                            'type_1_inspector_passed' => 0,
+                            'type_1_inspector_count' => 0,
+                            'type_1_qa_total' => 0,
+                            'type_1_qa_passed' => 0,
+                            'type_1_qa_count' => 0,
                             'type_2_total' => 0,
                             'type_2_passed' => 0,
                             'type_2_count' => 0,
+                            'type_2_inspector_total' => 0,
+                            'type_2_inspector_passed' => 0,
+                            'type_2_inspector_count' => 0,
+                            'type_2_qa_total' => 0,
+                            'type_2_qa_passed' => 0,
+                            'type_2_qa_count' => 0,
                         ];
                     }
 
@@ -678,6 +691,16 @@ class ChecklistScoringService
                     $employeeMap[$empIdNum]['type_1_total'] += $totalPoints;
                     $employeeMap[$empIdNum]['type_1_passed'] += $passedPoints;
                     $employeeMap[$empIdNum]['type_1_count']++;
+
+                    if ($isQa) {
+                        $employeeMap[$empIdNum]['type_1_qa_total'] += $totalPoints;
+                        $employeeMap[$empIdNum]['type_1_qa_passed'] += $passedPoints;
+                        $employeeMap[$empIdNum]['type_1_qa_count']++;
+                    } else {
+                        $employeeMap[$empIdNum]['type_1_inspector_total'] += $totalPoints;
+                        $employeeMap[$empIdNum]['type_1_inspector_passed'] += $passedPoints;
+                        $employeeMap[$empIdNum]['type_1_inspector_count']++;
+                    }
                 }
             } elseif ($formType === '2') {
                 // Form 2 calculation: standard form scoring using subject lookup or roster
@@ -707,9 +730,21 @@ class ChecklistScoringService
                             'type_1_total' => 0,
                             'type_1_passed' => 0,
                             'type_1_count' => 0,
+                            'type_1_inspector_total' => 0,
+                            'type_1_inspector_passed' => 0,
+                            'type_1_inspector_count' => 0,
+                            'type_1_qa_total' => 0,
+                            'type_1_qa_passed' => 0,
+                            'type_1_qa_count' => 0,
                             'type_2_total' => 0,
                             'type_2_passed' => 0,
                             'type_2_count' => 0,
+                            'type_2_inspector_total' => 0,
+                            'type_2_inspector_passed' => 0,
+                            'type_2_inspector_count' => 0,
+                            'type_2_qa_total' => 0,
+                            'type_2_qa_passed' => 0,
+                            'type_2_qa_count' => 0,
                         ];
                     }
 
@@ -723,9 +758,22 @@ class ChecklistScoringService
                         $employeeMap[$empId]['department_name'] = $departments[$deptId] ?? '—';
                     }
 
-                    $employeeMap[$empId]['type_2_total'] += ($scoreData['total_points'] ?? 0);
-                    $employeeMap[$empId]['type_2_passed'] += ($scoreData['earned_points'] ?? 0);
+                    $totPoints = ($scoreData['total_points'] ?? 0);
+                    $earnPoints = ($scoreData['earned_points'] ?? 0);
+
+                    $employeeMap[$empId]['type_2_total'] += $totPoints;
+                    $employeeMap[$empId]['type_2_passed'] += $earnPoints;
                     $employeeMap[$empId]['type_2_count']++;
+
+                    if ($isQa) {
+                        $employeeMap[$empId]['type_2_qa_total'] += $totPoints;
+                        $employeeMap[$empId]['type_2_qa_passed'] += $earnPoints;
+                        $employeeMap[$empId]['type_2_qa_count']++;
+                    } else {
+                        $employeeMap[$empId]['type_2_inspector_total'] += $totPoints;
+                        $employeeMap[$empId]['type_2_inspector_passed'] += $earnPoints;
+                        $employeeMap[$empId]['type_2_inspector_count']++;
+                    }
                 }
             }
         }
@@ -736,6 +784,18 @@ class ChecklistScoringService
         $totalScore1Count = 0;
         $totalScore2Sum = 0;
         $totalScore2Count = 0;
+        $totalScore1InspectorSum = 0;
+        $totalScore1InspectorCount = 0;
+        $totalScore1QaSum = 0;
+        $totalScore1QaCount = 0;
+        $totalScore2InspectorSum = 0;
+        $totalScore2InspectorCount = 0;
+        $totalScore2QaSum = 0;
+        $totalScore2QaCount = 0;
+        $totalAvgInspectorSum = 0;
+        $totalAvgInspectorCount = 0;
+        $totalAvgQaSum = 0;
+        $totalAvgQaCount = 0;
         $bothCompletedCount = 0;
 
         foreach ($employeeMap as $empId => $data) {
@@ -745,6 +805,39 @@ class ChecklistScoringService
             $score1 = $hasType1 ? round(($data['type_1_passed'] / $data['type_1_total']) * 100, 1) : null;
             $score2 = $hasType2 ? round(($data['type_2_passed'] / $data['type_2_total']) * 100, 1) : null;
 
+            $hasType1Inspector = ($data['type_1_inspector_total'] > 0);
+            $score1Inspector = $hasType1Inspector ? round(($data['type_1_inspector_passed'] / $data['type_1_inspector_total']) * 100, 1) : null;
+
+            $hasType1Qa = ($data['type_1_qa_total'] > 0);
+            $score1Qa = $hasType1Qa ? round(($data['type_1_qa_passed'] / $data['type_1_qa_total']) * 100, 1) : null;
+
+            $hasType2Inspector = ($data['type_2_inspector_total'] > 0);
+            $score2Inspector = $hasType2Inspector ? round(($data['type_2_inspector_passed'] / $data['type_2_inspector_total']) * 100, 1) : null;
+
+            $hasType2Qa = ($data['type_2_qa_total'] > 0);
+            $score2Qa = $hasType2Qa ? round(($data['type_2_qa_passed'] / $data['type_2_qa_total']) * 100, 1) : null;
+
+            // Inspector average across form types
+            $avgInspector = null;
+            if ($score1Inspector !== null && $score2Inspector !== null) {
+                $avgInspector = round(($score1Inspector + $score2Inspector) / 2, 1);
+            } elseif ($score1Inspector !== null) {
+                $avgInspector = $score1Inspector;
+            } elseif ($score2Inspector !== null) {
+                $avgInspector = $score2Inspector;
+            }
+
+            // QA average across form types
+            $avgQa = null;
+            if ($score1Qa !== null && $score2Qa !== null) {
+                $avgQa = round(($score1Qa + $score2Qa) / 2, 1);
+            } elseif ($score1Qa !== null) {
+                $avgQa = $score1Qa;
+            } elseif ($score2Qa !== null) {
+                $avgQa = $score2Qa;
+            }
+
+            // Overall average across form types
             $avg = null;
             if ($score1 !== null && $score2 !== null) {
                 $avg = round(($score1 + $score2) / 2, 1);
@@ -804,6 +897,36 @@ class ChecklistScoringService
                 $totalScore2Count++;
             }
 
+            if ($score1Inspector !== null) {
+                $totalScore1InspectorSum += $score1Inspector;
+                $totalScore1InspectorCount++;
+            }
+
+            if ($score1Qa !== null) {
+                $totalScore1QaSum += $score1Qa;
+                $totalScore1QaCount++;
+            }
+
+            if ($score2Inspector !== null) {
+                $totalScore2InspectorSum += $score2Inspector;
+                $totalScore2InspectorCount++;
+            }
+
+            if ($score2Qa !== null) {
+                $totalScore2QaSum += $score2Qa;
+                $totalScore2QaCount++;
+            }
+
+            if ($avgInspector !== null) {
+                $totalAvgInspectorSum += $avgInspector;
+                $totalAvgInspectorCount++;
+            }
+
+            if ($avgQa !== null) {
+                $totalAvgQaSum += $avgQa;
+                $totalAvgQaCount++;
+            }
+
             $rows[] = [
                 'employee_id' => $empId,
                 'employee_name' => $data['employee_name'],
@@ -815,8 +938,18 @@ class ChecklistScoringService
                 'score_type_1' => $score1,
                 'score_type_2' => $score2,
                 'avg_score' => $avg,
+                'score_type_1_inspector' => $score1Inspector,
+                'score_type_1_qa' => $score1Qa,
+                'score_type_2_inspector' => $score2Inspector,
+                'score_type_2_qa' => $score2Qa,
+                'avg_inspector' => $avgInspector,
+                'avg_qa' => $avgQa,
                 'type_1_count' => $data['type_1_count'],
                 'type_2_count' => $data['type_2_count'],
+                'type_1_inspector_count' => $data['type_1_inspector_count'],
+                'type_1_qa_count' => $data['type_1_qa_count'],
+                'type_2_inspector_count' => $data['type_2_inspector_count'],
+                'type_2_qa_count' => $data['type_2_qa_count'],
             ];
         }
 
@@ -837,6 +970,17 @@ class ChecklistScoringService
             'overall_avg' => ($totalScore1Count + $totalScore2Count) > 0
                 ? round(($totalScore1Sum + $totalScore2Sum) / ($totalScore1Count + $totalScore2Count), 1)
                 : null,
+            'avg_type_1_inspector' => $totalScore1InspectorCount > 0 ? round($totalScore1InspectorSum / $totalScore1InspectorCount, 1) : null,
+            'avg_type_1_qa' => $totalScore1QaCount > 0 ? round($totalScore1QaSum / $totalScore1QaCount, 1) : null,
+            'avg_type_2_inspector' => $totalScore2InspectorCount > 0 ? round($totalScore2InspectorSum / $totalScore2InspectorCount, 1) : null,
+            'avg_type_2_qa' => $totalScore2QaCount > 0 ? round($totalScore2QaSum / $totalScore2QaCount, 1) : null,
+            'avg_inspector' => $totalAvgInspectorCount > 0 ? round($totalAvgInspectorSum / $totalAvgInspectorCount, 1) : null,
+            'avg_qa' => $totalAvgQaCount > 0 ? round($totalAvgQaSum / $totalAvgQaCount, 1) : null,
+        ];
+
+        return [
+            'rows' => $rows,
+            'metrics' => $metrics,
         ];
 
         return [

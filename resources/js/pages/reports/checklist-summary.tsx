@@ -63,8 +63,18 @@ interface SummaryRow {
     score_type_1: number | null;
     score_type_2: number | null;
     avg_score: number | null;
+    score_type_1_inspector: number | null;
+    score_type_1_qa: number | null;
+    score_type_2_inspector: number | null;
+    score_type_2_qa: number | null;
+    avg_inspector: number | null;
+    avg_qa: number | null;
     type_1_count: number;
     type_2_count: number;
+    type_1_inspector_count?: number;
+    type_1_qa_count?: number;
+    type_2_inspector_count?: number;
+    type_2_qa_count?: number;
 }
 
 interface BranchGroup {
@@ -74,6 +84,12 @@ interface BranchGroup {
     avg_type_1: number | null;
     avg_type_2: number | null;
     overall_avg: number | null;
+    avg_type_1_inspector: number | null;
+    avg_type_1_qa: number | null;
+    avg_type_2_inspector: number | null;
+    avg_type_2_qa: number | null;
+    overall_avg_inspector: number | null;
+    overall_avg_qa: number | null;
     both_completed_count: number;
 }
 
@@ -83,6 +99,12 @@ interface SummaryMetrics {
     avg_type_1: number | null;
     avg_type_2: number | null;
     overall_avg: number | null;
+    avg_type_1_inspector?: number | null;
+    avg_type_1_qa?: number | null;
+    avg_type_2_inspector?: number | null;
+    avg_type_2_qa?: number | null;
+    avg_inspector?: number | null;
+    avg_qa?: number | null;
 }
 
 interface ChecklistSummaryProps {
@@ -344,11 +366,51 @@ export default function ChecklistSummary({
                 .map((e) => e.avg_score)
                 .filter((s): s is number => s !== null);
 
+            const t1Insp = group.employees
+                .map((e) => e.score_type_1_inspector)
+                .filter((s): s is number => s !== null);
+            const t1Qa = group.employees
+                .map((e) => e.score_type_1_qa)
+                .filter((s): s is number => s !== null);
+            const t2Insp = group.employees
+                .map((e) => e.score_type_2_inspector)
+                .filter((s): s is number => s !== null);
+            const t2Qa = group.employees
+                .map((e) => e.score_type_2_qa)
+                .filter((s): s is number => s !== null);
+            const avgsInsp = group.employees
+                .map((e) => e.avg_inspector)
+                .filter((s): s is number => s !== null);
+            const avgsQa = group.employees
+                .map((e) => e.avg_qa)
+                .filter((s): s is number => s !== null);
+
             const avg_type_1 = t1.length > 0
                 ? Math.round((t1.reduce((a, b) => a + b, 0) / t1.length) * 10) / 10
                 : null;
             const avg_type_2 = t2.length > 0
                 ? Math.round((t2.reduce((a, b) => a + b, 0) / t2.length) * 10) / 10
+                : null;
+
+            const avg_type_1_inspector = t1Insp.length > 0
+                ? Math.round((t1Insp.reduce((a, b) => a + b, 0) / t1Insp.length) * 10) / 10
+                : null;
+            const avg_type_1_qa = t1Qa.length > 0
+                ? Math.round((t1Qa.reduce((a, b) => a + b, 0) / t1Qa.length) * 10) / 10
+                : null;
+
+            const avg_type_2_inspector = t2Insp.length > 0
+                ? Math.round((t2Insp.reduce((a, b) => a + b, 0) / t2Insp.length) * 10) / 10
+                : null;
+            const avg_type_2_qa = t2Qa.length > 0
+                ? Math.round((t2Qa.reduce((a, b) => a + b, 0) / t2Qa.length) * 10) / 10
+                : null;
+
+            const overall_avg_inspector = avgsInsp.length > 0
+                ? Math.round((avgsInsp.reduce((a, b) => a + b, 0) / avgsInsp.length) * 10) / 10
+                : null;
+            const overall_avg_qa = avgsQa.length > 0
+                ? Math.round((avgsQa.reduce((a, b) => a + b, 0) / avgsQa.length) * 10) / 10
                 : null;
 
             let overall_avg: number | null = null;
@@ -367,6 +429,12 @@ export default function ChecklistSummary({
                 avg_type_1,
                 avg_type_2,
                 overall_avg,
+                avg_type_1_inspector,
+                avg_type_1_qa,
+                avg_type_2_inspector,
+                avg_type_2_qa,
+                overall_avg_inspector,
+                overall_avg_qa,
                 both_completed_count,
             };
         });
@@ -383,9 +451,39 @@ export default function ChecklistSummary({
                 const valB = b.avg_type_1 ?? -1;
                 return sortDirection === 'asc' ? valA - valB : valB - valA;
             }
+            if (sortColumn === 'score_type_1_inspector') {
+                const valA = a.avg_type_1_inspector ?? -1;
+                const valB = b.avg_type_1_inspector ?? -1;
+                return sortDirection === 'asc' ? valA - valB : valB - valA;
+            }
+            if (sortColumn === 'score_type_1_qa') {
+                const valA = a.avg_type_1_qa ?? -1;
+                const valB = b.avg_type_1_qa ?? -1;
+                return sortDirection === 'asc' ? valA - valB : valB - valA;
+            }
             if (sortColumn === 'score_type_2') {
                 const valA = a.avg_type_2 ?? -1;
                 const valB = b.avg_type_2 ?? -1;
+                return sortDirection === 'asc' ? valA - valB : valB - valA;
+            }
+            if (sortColumn === 'score_type_2_inspector') {
+                const valA = a.avg_type_2_inspector ?? -1;
+                const valB = b.avg_type_2_inspector ?? -1;
+                return sortDirection === 'asc' ? valA - valB : valB - valA;
+            }
+            if (sortColumn === 'score_type_2_qa') {
+                const valA = a.avg_type_2_qa ?? -1;
+                const valB = b.avg_type_2_qa ?? -1;
+                return sortDirection === 'asc' ? valA - valB : valB - valA;
+            }
+            if (sortColumn === 'avg_inspector') {
+                const valA = a.overall_avg_inspector ?? -1;
+                const valB = b.overall_avg_inspector ?? -1;
+                return sortDirection === 'asc' ? valA - valB : valB - valA;
+            }
+            if (sortColumn === 'avg_qa') {
+                const valA = a.overall_avg_qa ?? -1;
+                const valB = b.overall_avg_qa ?? -1;
                 return sortDirection === 'asc' ? valA - valB : valB - valA;
             }
             if (sortColumn === 'avg_score') {
@@ -449,8 +547,8 @@ export default function ChecklistSummary({
     const getScoreBadge = (score: number | null, count?: number) => {
         if (score === null) {
             return (
-                <span className="inline-flex items-center text-xs font-medium text-gray-400 bg-gray-50 border border-dashed border-gray-200 px-2.5 py-1 rounded-md">
-                    Not Evaluated
+                <span className="inline-flex items-center text-xs font-medium text-gray-400 bg-gray-50/70 border border-dashed border-gray-200 px-2 py-0.5 rounded-md">
+                    —
                 </span>
             );
         }
@@ -463,20 +561,20 @@ export default function ChecklistSummary({
         }
 
         return (
-            <div className="inline-flex items-center gap-1.5">
-                <span className={`px-2.5 py-1 rounded-md text-xs font-bold border ${colorClasses}`}>
+            <div className="inline-flex items-center justify-center gap-1">
+                <span className={`px-2 py-0.5 rounded-md text-xs font-bold border ${colorClasses}`}>
                     {score}%
                 </span>
                 {count !== undefined && count > 1 && (
                     <span className="text-[10px] text-gray-400" title={`${count} evaluations recorded`}>
-                        ({count}x)
+                        ({count})
                     </span>
                 )}
             </div>
         );
     };
 
-    const getAvgScoreBadge = (avg: number | null, hasBoth: boolean) => {
+    const getAvgScoreBadge = (avg: number | null, hasBoth: boolean = false, showStatusBadge: boolean = true) => {
         if (avg === null) {
             return (
                 <span className="inline-flex items-center text-xs text-gray-400 italic">
@@ -493,18 +591,20 @@ export default function ChecklistSummary({
         }
 
         return (
-            <div className="flex items-center gap-2">
-                <span className={`px-3 py-1 rounded-md text-sm tracking-tight border shadow-xs ${bgClass}`}>
+            <div className="inline-flex items-center justify-center gap-1.5">
+                <span className={`px-2.5 py-0.5 rounded-md text-xs tracking-tight border shadow-2xs font-bold ${bgClass}`}>
                     {avg}%
                 </span>
-                {hasBoth ? (
-                    <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] px-1.5 py-0 h-5">
-                        Complete
-                    </Badge>
-                ) : (
-                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] px-1.5 py-0 h-5">
-                        Partial
-                    </Badge>
+                {showStatusBadge && (
+                    hasBoth ? (
+                        <span className="text-[10px] text-emerald-700 font-bold px-1 bg-emerald-50 rounded border border-emerald-200 hidden xl:inline" title="Both forms evaluated">
+                            ✓
+                        </span>
+                    ) : (
+                        <span className="text-[10px] text-amber-700 font-semibold px-1 bg-amber-50 rounded border border-amber-200 hidden xl:inline" title="Partial evaluation">
+                            !
+                        </span>
+                    )
                 )}
             </div>
         );
@@ -563,9 +663,10 @@ export default function ChecklistSummary({
                             <div className="text-2xl font-bold text-gray-900">
                                 {summaryMetrics.avg_type_1 !== null ? `${summaryMetrics.avg_type_1}%` : '—'}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Score out of 100 for Checklist Round 1
-                            </p>
+                            <div className="text-xs text-muted-foreground mt-1.5 flex items-center justify-between gap-1 border-t border-gray-100 pt-1.5">
+                                <span>Inspector: <strong className="text-gray-900 font-semibold">{summaryMetrics.avg_type_1_inspector !== null && summaryMetrics.avg_type_1_inspector !== undefined ? `${summaryMetrics.avg_type_1_inspector}%` : '—'}</strong></span>
+                                <span>QA: <strong className="text-gray-900 font-semibold">{summaryMetrics.avg_type_1_qa !== null && summaryMetrics.avg_type_1_qa !== undefined ? `${summaryMetrics.avg_type_1_qa}%` : '—'}</strong></span>
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -582,9 +683,10 @@ export default function ChecklistSummary({
                             <div className="text-2xl font-bold text-gray-900">
                                 {summaryMetrics.avg_type_2 !== null ? `${summaryMetrics.avg_type_2}%` : '—'}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Score out of 100 for Checklist Round 2
-                            </p>
+                            <div className="text-xs text-muted-foreground mt-1.5 flex items-center justify-between gap-1 border-t border-gray-100 pt-1.5">
+                                <span>Inspector: <strong className="text-gray-900 font-semibold">{summaryMetrics.avg_type_2_inspector !== null && summaryMetrics.avg_type_2_inspector !== undefined ? `${summaryMetrics.avg_type_2_inspector}%` : '—'}</strong></span>
+                                <span>QA: <strong className="text-gray-900 font-semibold">{summaryMetrics.avg_type_2_qa !== null && summaryMetrics.avg_type_2_qa !== undefined ? `${summaryMetrics.avg_type_2_qa}%` : '—'}</strong></span>
+                            </div>
                         </CardContent>
                     </Card>
 
@@ -601,9 +703,10 @@ export default function ChecklistSummary({
                             <div className="text-2xl font-bold text-gray-900">
                                 {summaryMetrics.overall_avg !== null ? `${summaryMetrics.overall_avg}%` : '—'}
                             </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                                Aggregate average of both form types
-                            </p>
+                            <div className="text-xs text-muted-foreground mt-1.5 flex items-center justify-between gap-1 border-t border-gray-100 pt-1.5">
+                                <span>Inspector Avg: <strong className="text-gray-900 font-semibold">{summaryMetrics.avg_inspector !== null && summaryMetrics.avg_inspector !== undefined ? `${summaryMetrics.avg_inspector}%` : '—'}</strong></span>
+                                <span>QA Avg: <strong className="text-gray-900 font-semibold">{summaryMetrics.avg_qa !== null && summaryMetrics.avg_qa !== undefined ? `${summaryMetrics.avg_qa}%` : '—'}</strong></span>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
@@ -898,8 +1001,9 @@ export default function ChecklistSummary({
                         <div className="overflow-x-auto">
                             <Table>
                                 <TableHeader className="bg-slate-700 dark:bg-slate-800 text-white sticky top-0 z-10">
-                                    <TableRow className="hover:bg-slate-700 border-none">
-                                        <TableHead className="font-bold text-white w-[22%]">
+                                    {/* Top Row: Categories */}
+                                    <TableRow className="hover:bg-slate-700 border-b border-slate-600/70">
+                                        <TableHead rowSpan={2} className="font-bold text-white align-middle border-r border-slate-600/60 min-w-[200px]">
                                             <div className="flex items-center gap-2">
                                                 <span
                                                     onClick={() => handleSort('branch')}
@@ -933,8 +1037,9 @@ export default function ChecklistSummary({
                                         </TableHead>
 
                                         <TableHead
+                                            rowSpan={2}
                                             onClick={() => handleSort('department')}
-                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors w-[16%]"
+                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors align-middle border-r border-slate-600/60 min-w-[140px]"
                                         >
                                             <div className="flex items-center gap-1.5">
                                                 <Briefcase className="w-4 h-4 text-amber-400" />
@@ -944,8 +1049,9 @@ export default function ChecklistSummary({
                                         </TableHead>
 
                                         <TableHead
+                                            rowSpan={2}
                                             onClick={() => handleSort('employee_name')}
-                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors w-[22%]"
+                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors align-middle border-r border-slate-600/60 min-w-[180px]"
                                         >
                                             <div className="flex items-center gap-1.5">
                                                 <Users className="w-4 h-4 text-amber-400" />
@@ -954,36 +1060,96 @@ export default function ChecklistSummary({
                                             </div>
                                         </TableHead>
 
+                                        {/* Form Type 1 Group Header */}
                                         <TableHead
-                                            onClick={() => handleSort('score_type_1')}
-                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors text-center w-[14%]"
+                                            colSpan={2}
+                                            className="font-bold text-white text-center border-r border-slate-600/60 bg-slate-800/60 py-2.5"
                                         >
-                                            <div className="flex items-center justify-center gap-1.5">
+                                            <div className="flex items-center justify-center gap-1.5 text-blue-200">
                                                 <ClipboardCheck className="w-4 h-4 text-blue-300" />
-                                                <span>Form Type 1 (Score / 100)</span>
-                                                <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
+                                                <span>Form Type 1</span>
                                             </div>
                                         </TableHead>
 
+                                        {/* Form Type 2 Group Header */}
                                         <TableHead
-                                            onClick={() => handleSort('score_type_2')}
-                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors text-center w-[14%]"
+                                            colSpan={2}
+                                            className="font-bold text-white text-center border-r border-slate-600/60 bg-slate-800/60 py-2.5"
                                         >
-                                            <div className="flex items-center justify-center gap-1.5">
+                                            <div className="flex items-center justify-center gap-1.5 text-purple-200">
                                                 <FileCheck2 className="w-4 h-4 text-purple-300" />
-                                                <span>Form Type 2 (Score / 100)</span>
-                                                <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
+                                                <span>Form Type 2</span>
                                             </div>
                                         </TableHead>
 
+                                        {/* Average Score Group Header */}
                                         <TableHead
-                                            onClick={() => handleSort('avg_score')}
-                                            className="cursor-pointer select-none font-bold text-white hover:text-amber-300 transition-colors text-left w-[12%]"
+                                            colSpan={2}
+                                            className="font-bold text-white text-center bg-slate-800/60 py-2.5"
                                         >
-                                            <div className="flex items-center gap-1.5">
+                                            <div className="flex items-center justify-center gap-1.5 text-emerald-200">
                                                 <TrendingUp className="w-4 h-4 text-emerald-300" />
                                                 <span>Average Score</span>
-                                                <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />
+                                            </div>
+                                        </TableHead>
+                                    </TableRow>
+
+                                    {/* Second Row: Subheaders */}
+                                    <TableRow className="hover:bg-slate-700/80 border-none bg-slate-750">
+                                        <TableHead
+                                            onClick={() => handleSort('score_type_1_inspector')}
+                                            className="cursor-pointer select-none font-semibold text-white/95 hover:text-amber-300 transition-colors text-center text-xs border-r border-slate-600/40 py-2 min-w-[110px]"
+                                        >
+                                            <div className="flex items-center justify-center gap-1">
+                                                <span>Inspector</span>
+                                                <ArrowUpDown className="w-3 h-3 text-slate-300" />
+                                            </div>
+                                        </TableHead>
+                                        <TableHead
+                                            onClick={() => handleSort('score_type_1_qa')}
+                                            className="cursor-pointer select-none font-semibold text-white/95 hover:text-amber-300 transition-colors text-center text-xs border-r border-slate-600/60 py-2 min-w-[125px]"
+                                        >
+                                            <div className="flex items-center justify-center gap-1">
+                                                <span>QA Inspection</span>
+                                                <ArrowUpDown className="w-3 h-3 text-slate-300" />
+                                            </div>
+                                        </TableHead>
+
+                                        <TableHead
+                                            onClick={() => handleSort('score_type_2_inspector')}
+                                            className="cursor-pointer select-none font-semibold text-white/95 hover:text-amber-300 transition-colors text-center text-xs border-r border-slate-600/40 py-2 min-w-[110px]"
+                                        >
+                                            <div className="flex items-center justify-center gap-1">
+                                                <span>Inspector</span>
+                                                <ArrowUpDown className="w-3 h-3 text-slate-300" />
+                                            </div>
+                                        </TableHead>
+                                        <TableHead
+                                            onClick={() => handleSort('score_type_2_qa')}
+                                            className="cursor-pointer select-none font-semibold text-white/95 hover:text-amber-300 transition-colors text-center text-xs border-r border-slate-600/60 py-2 min-w-[125px]"
+                                        >
+                                            <div className="flex items-center justify-center gap-1">
+                                                <span>QA Inspection</span>
+                                                <ArrowUpDown className="w-3 h-3 text-slate-300" />
+                                            </div>
+                                        </TableHead>
+
+                                        <TableHead
+                                            onClick={() => handleSort('avg_inspector')}
+                                            className="cursor-pointer select-none font-semibold text-white/95 hover:text-amber-300 transition-colors text-center text-xs border-r border-slate-600/40 py-2 min-w-[110px]"
+                                        >
+                                            <div className="flex items-center justify-center gap-1">
+                                                <span>Inspector Avg</span>
+                                                <ArrowUpDown className="w-3 h-3 text-slate-300" />
+                                            </div>
+                                        </TableHead>
+                                        <TableHead
+                                            onClick={() => handleSort('avg_qa')}
+                                            className="cursor-pointer select-none font-semibold text-white/95 hover:text-amber-300 transition-colors text-center text-xs py-2 min-w-[125px]"
+                                        >
+                                            <div className="flex items-center justify-center gap-1">
+                                                <span>QA Avg</span>
+                                                <ArrowUpDown className="w-3 h-3 text-slate-300" />
                                             </div>
                                         </TableHead>
                                     </TableRow>
@@ -992,7 +1158,7 @@ export default function ChecklistSummary({
                                 <TableBody>
                                     {paginatedBranchGroups.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="text-center py-12">
+                                            <TableCell colSpan={9} className="text-center py-12">
                                                 <div className="flex flex-col items-center justify-center space-y-2 text-gray-400">
                                                     <ClipboardCheck className="w-10 h-10 stroke-1 text-gray-300" />
                                                     <p className="text-base font-medium text-gray-600">
@@ -1053,18 +1219,27 @@ export default function ChecklistSummary({
                                                         </TableCell>
 
                                                         <TableCell className="text-center font-bold">
-                                                            {getScoreBadge(branchGroup.avg_type_1)}
+                                                            {getScoreBadge(branchGroup.avg_type_1_inspector)}
                                                         </TableCell>
 
                                                         <TableCell className="text-center font-bold">
-                                                            {getScoreBadge(branchGroup.avg_type_2)}
+                                                            {getScoreBadge(branchGroup.avg_type_1_qa)}
                                                         </TableCell>
 
-                                                        <TableCell>
-                                                            {getAvgScoreBadge(
-                                                                branchGroup.overall_avg,
-                                                                branchGroup.both_completed_count === branchGroup.employees.length && branchGroup.employees.length > 0
-                                                            )}
+                                                        <TableCell className="text-center font-bold">
+                                                            {getScoreBadge(branchGroup.avg_type_2_inspector)}
+                                                        </TableCell>
+
+                                                        <TableCell className="text-center font-bold">
+                                                            {getScoreBadge(branchGroup.avg_type_2_qa)}
+                                                        </TableCell>
+
+                                                        <TableCell className="text-center font-bold">
+                                                            {getAvgScoreBadge(branchGroup.overall_avg_inspector, false, false)}
+                                                        </TableCell>
+
+                                                        <TableCell className="text-center font-bold">
+                                                            {getAvgScoreBadge(branchGroup.overall_avg_qa, false, false)}
                                                         </TableCell>
                                                     </TableRow>
 
@@ -1090,21 +1265,48 @@ export default function ChecklistSummary({
                                                                 </TableCell>
 
                                                                 <TableCell>
-                                                                    <span className="font-semibold text-gray-900 dark:text-gray-100">
-                                                                        {row.employee_name}
-                                                                    </span>
+                                                                    <div className="flex flex-col">
+                                                                        <span className="font-semibold text-gray-900 dark:text-gray-100">
+                                                                            {row.employee_name}
+                                                                        </span>
+                                                                        {row.employee_code && (
+                                                                            <span className="text-[10px] text-muted-foreground">
+                                                                                {row.employee_code}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </TableCell>
 
                                                                 <TableCell className="text-center">
-                                                                    {getScoreBadge(row.score_type_1, row.type_1_count)}
+                                                                    {getScoreBadge(row.score_type_1_inspector, row.type_1_inspector_count)}
                                                                 </TableCell>
 
                                                                 <TableCell className="text-center">
-                                                                    {getScoreBadge(row.score_type_2, row.type_2_count)}
+                                                                    {getScoreBadge(row.score_type_1_qa, row.type_1_qa_count)}
                                                                 </TableCell>
 
-                                                                <TableCell>
-                                                                    {getAvgScoreBadge(row.avg_score, hasBoth)}
+                                                                <TableCell className="text-center">
+                                                                    {getScoreBadge(row.score_type_2_inspector, row.type_2_inspector_count)}
+                                                                </TableCell>
+
+                                                                <TableCell className="text-center">
+                                                                    {getScoreBadge(row.score_type_2_qa, row.type_2_qa_count)}
+                                                                </TableCell>
+
+                                                                <TableCell className="text-center">
+                                                                    {getAvgScoreBadge(
+                                                                        row.avg_inspector,
+                                                                        row.score_type_1_inspector !== null && row.score_type_2_inspector !== null,
+                                                                        true
+                                                                    )}
+                                                                </TableCell>
+
+                                                                <TableCell className="text-center">
+                                                                    {getAvgScoreBadge(
+                                                                        row.avg_qa,
+                                                                        row.score_type_1_qa !== null && row.score_type_2_qa !== null,
+                                                                        true
+                                                                    )}
                                                                 </TableCell>
                                                             </TableRow>
                                                         );

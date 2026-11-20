@@ -78,7 +78,7 @@ class ChecklistSummaryReportController extends Controller
             'end_date' => $request->input('end_date', ''),
         ];
 
-        $ver = Cache::get('checklist_summary_ver', 2);
+        $ver = Cache::get('checklist_summary_ver', 3);
         $cacheKey = "checklist_summary_v{$ver}_" . md5(json_encode($filters));
 
         $summaryData = Cache::remember($cacheKey, 300, function () use ($filters) {
@@ -115,7 +115,7 @@ class ChecklistSummaryReportController extends Controller
 
         $level = $request->input('level', $request->input('export_type', 'employee'));
 
-        $ver = Cache::get('checklist_summary_ver', 2);
+        $ver = Cache::get('checklist_summary_ver', 3);
         $cacheKey = "checklist_summary_v{$ver}_" . md5(json_encode($filters));
 
         $summaryData = Cache::remember($cacheKey, 300, function () use ($filters) {
@@ -154,12 +154,18 @@ class ChecklistSummaryReportController extends Controller
                 'Department',
                 'Employee Name',
                 'Employee Code',
-                'Score Type 1 (%)',
-                'Score Type 2 (%)',
-                'Average Score (%)',
+                'Form Type 1 - Inspector (%)',
+                'Form Type 1 - QA Inspection (%)',
+                'Form Type 2 - Inspector (%)',
+                'Form Type 2 - QA Inspection (%)',
+                'Inspector Avg (%)',
+                'QA Inspection Avg (%)',
+                'Combined Avg (%)',
                 'Status',
-                'Type 1 Evaluations Count',
-                'Type 2 Evaluations Count',
+                'Type 1 (Inspector) Count',
+                'Type 1 (QA) Count',
+                'Type 2 (Inspector) Count',
+                'Type 2 (QA) Count',
             ]);
 
             foreach ($rows as $row) {
@@ -169,12 +175,18 @@ class ChecklistSummaryReportController extends Controller
                     $row['department'] ?? '—',
                     $row['employee_name'],
                     $row['employee_code'] ?? '—',
-                    $row['score_type_1'] !== null ? $row['score_type_1'] . '%' : '—',
-                    $row['score_type_2'] !== null ? $row['score_type_2'] . '%' : '—',
+                    $row['score_type_1_inspector'] !== null ? $row['score_type_1_inspector'] . '%' : '—',
+                    $row['score_type_1_qa'] !== null ? $row['score_type_1_qa'] . '%' : '—',
+                    $row['score_type_2_inspector'] !== null ? $row['score_type_2_inspector'] . '%' : '—',
+                    $row['score_type_2_qa'] !== null ? $row['score_type_2_qa'] . '%' : '—',
+                    $row['avg_inspector'] !== null ? $row['avg_inspector'] . '%' : '—',
+                    $row['avg_qa'] !== null ? $row['avg_qa'] . '%' : '—',
                     $row['avg_score'] !== null ? $row['avg_score'] . '%' : '—',
                     $status,
-                    $row['type_1_count'],
-                    $row['type_2_count'],
+                    $row['type_1_inspector_count'] ?? 0,
+                    $row['type_1_qa_count'] ?? 0,
+                    $row['type_2_inspector_count'] ?? 0,
+                    $row['type_2_qa_count'] ?? 0,
                 ]);
             }
 
@@ -205,9 +217,13 @@ class ChecklistSummaryReportController extends Controller
                 'Total Employees',
                 'Both Completed Count',
                 'Completion Rate (%)',
-                'Score Type 1 Average (%)',
-                'Score Type 2 Average (%)',
-                'Overall Average Score (%)',
+                'Form 1 - Inspector (%)',
+                'Form 1 - QA (%)',
+                'Form 2 - Inspector (%)',
+                'Form 2 - QA (%)',
+                'Inspector Overall Avg (%)',
+                'QA Overall Avg (%)',
+                'Combined Avg (%)',
             ]);
 
             foreach ($summary as $item) {
@@ -216,8 +232,12 @@ class ChecklistSummaryReportController extends Controller
                     $item['total_employees'],
                     $item['both_completed'],
                     $item['completion_rate'],
-                    $item['avg_type_1'],
-                    $item['avg_type_2'],
+                    $item['avg_type_1_inspector'],
+                    $item['avg_type_1_qa'],
+                    $item['avg_type_2_inspector'],
+                    $item['avg_type_2_qa'],
+                    $item['overall_avg_inspector'],
+                    $item['overall_avg_qa'],
                     $item['overall_avg'],
                 ]);
             }
@@ -249,9 +269,13 @@ class ChecklistSummaryReportController extends Controller
                 'Total Employees',
                 'Both Completed Count',
                 'Completion Rate (%)',
-                'Score Type 1 Average (%)',
-                'Score Type 2 Average (%)',
-                'Overall Average Score (%)',
+                'Form 1 - Inspector (%)',
+                'Form 1 - QA (%)',
+                'Form 2 - Inspector (%)',
+                'Form 2 - QA (%)',
+                'Inspector Overall Avg (%)',
+                'QA Overall Avg (%)',
+                'Combined Avg (%)',
             ]);
 
             foreach ($summary as $item) {
@@ -260,8 +284,12 @@ class ChecklistSummaryReportController extends Controller
                     $item['total_employees'],
                     $item['both_completed'],
                     $item['completion_rate'],
-                    $item['avg_type_1'],
-                    $item['avg_type_2'],
+                    $item['avg_type_1_inspector'],
+                    $item['avg_type_1_qa'],
+                    $item['avg_type_2_inspector'],
+                    $item['avg_type_2_qa'],
+                    $item['overall_avg_inspector'],
+                    $item['overall_avg_qa'],
                     $item['overall_avg'],
                 ]);
             }
@@ -303,9 +331,13 @@ class ChecklistSummaryReportController extends Controller
                 'Total Employees',
                 'Both Completed Count',
                 'Completion Rate (%)',
-                'Score Type 1 Average (%)',
-                'Score Type 2 Average (%)',
-                'Overall Average Score (%)',
+                'Form 1 - Inspector (%)',
+                'Form 1 - QA (%)',
+                'Form 2 - Inspector (%)',
+                'Form 2 - QA (%)',
+                'Inspector Overall Avg (%)',
+                'QA Overall Avg (%)',
+                'Combined Avg (%)',
             ]);
 
             foreach ($summary as $item) {
@@ -315,8 +347,12 @@ class ChecklistSummaryReportController extends Controller
                     $item['total_employees'],
                     $item['both_completed'],
                     $item['completion_rate'],
-                    $item['avg_type_1'],
-                    $item['avg_type_2'],
+                    $item['avg_type_1_inspector'],
+                    $item['avg_type_1_qa'],
+                    $item['avg_type_2_inspector'],
+                    $item['avg_type_2_qa'],
+                    $item['overall_avg_inspector'],
+                    $item['overall_avg_qa'],
                     $item['overall_avg'],
                 ]);
             }
@@ -332,6 +368,13 @@ class ChecklistSummaryReportController extends Controller
         $t1Sum = 0; $t1Count = 0;
         $t2Sum = 0; $t2Count = 0;
         $avgSum = 0; $avgCount = 0;
+
+        $t1InspSum = 0; $t1InspCount = 0;
+        $t1QaSum = 0; $t1QaCount = 0;
+        $t2InspSum = 0; $t2InspCount = 0;
+        $t2QaSum = 0; $t2QaCount = 0;
+        $avgInspSum = 0; $avgInspCount = 0;
+        $avgQaSum = 0; $avgQaCount = 0;
 
         foreach ($emps as $e) {
             if ($e['score_type_1'] !== null && $e['score_type_2'] !== null) {
@@ -349,6 +392,31 @@ class ChecklistSummaryReportController extends Controller
                 $avgSum += $e['avg_score'];
                 $avgCount++;
             }
+
+            if (($e['score_type_1_inspector'] ?? null) !== null) {
+                $t1InspSum += $e['score_type_1_inspector'];
+                $t1InspCount++;
+            }
+            if (($e['score_type_1_qa'] ?? null) !== null) {
+                $t1QaSum += $e['score_type_1_qa'];
+                $t1QaCount++;
+            }
+            if (($e['score_type_2_inspector'] ?? null) !== null) {
+                $t2InspSum += $e['score_type_2_inspector'];
+                $t2InspCount++;
+            }
+            if (($e['score_type_2_qa'] ?? null) !== null) {
+                $t2QaSum += $e['score_type_2_qa'];
+                $t2QaCount++;
+            }
+            if (($e['avg_inspector'] ?? null) !== null) {
+                $avgInspSum += $e['avg_inspector'];
+                $avgInspCount++;
+            }
+            if (($e['avg_qa'] ?? null) !== null) {
+                $avgQaSum += $e['avg_qa'];
+                $avgQaCount++;
+            }
         }
 
         $avg1 = $t1Count > 0 ? round($t1Sum / $t1Count, 1) : null;
@@ -360,6 +428,13 @@ class ChecklistSummaryReportController extends Controller
             $overall = round($avgSum / $avgCount, 1);
         }
 
+        $avg1Insp = $t1InspCount > 0 ? round($t1InspSum / $t1InspCount, 1) : null;
+        $avg1Qa = $t1QaCount > 0 ? round($t1QaSum / $t1QaCount, 1) : null;
+        $avg2Insp = $t2InspCount > 0 ? round($t2InspSum / $t2InspCount, 1) : null;
+        $avg2Qa = $t2QaCount > 0 ? round($t2QaSum / $t2QaCount, 1) : null;
+        $overallInsp = $avgInspCount > 0 ? round($avgInspSum / $avgInspCount, 1) : null;
+        $overallQa = $avgQaCount > 0 ? round($avgQaSum / $avgQaCount, 1) : null;
+
         return [
             'name' => $name,
             'total_employees' => $total,
@@ -368,6 +443,12 @@ class ChecklistSummaryReportController extends Controller
             'avg_type_1' => $avg1 !== null ? $avg1 . '%' : '—',
             'avg_type_2' => $avg2 !== null ? $avg2 . '%' : '—',
             'overall_avg' => $overall !== null ? $overall . '%' : '—',
+            'avg_type_1_inspector' => $avg1Insp !== null ? $avg1Insp . '%' : '—',
+            'avg_type_1_qa' => $avg1Qa !== null ? $avg1Qa . '%' : '—',
+            'avg_type_2_inspector' => $avg2Insp !== null ? $avg2Insp . '%' : '—',
+            'avg_type_2_qa' => $avg2Qa !== null ? $avg2Qa . '%' : '—',
+            'overall_avg_inspector' => $overallInsp !== null ? $overallInsp . '%' : '—',
+            'overall_avg_qa' => $overallQa !== null ? $overallQa . '%' : '—',
         ];
     }
 
