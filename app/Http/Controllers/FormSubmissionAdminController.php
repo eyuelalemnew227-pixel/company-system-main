@@ -20,6 +20,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Redirect;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -82,7 +83,7 @@ class FormSubmissionAdminController extends Controller
         }
 
         foreach ($presentEmployeeIds as $empId) {
-            $emp = $employeesCollection->firstWhere('id', (int) $empId);
+            $emp = $this->employeeFromCollection($employeesCollection, (int) $empId);
             if ($emp) {
                 $employeeScoresMatrix[(string) $empId] = [
                     'id' => $emp->id,
@@ -961,6 +962,12 @@ class FormSubmissionAdminController extends Controller
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($submission, $validated, $relocatedQuestions) {
             $submission->answers()->delete();
+            if (Schema::hasColumn('form_submissions', 'evaluation_score_snapshot')) {
+                $submission->forceFill([
+                    'evaluation_score_snapshot' => null,
+                    'evaluation_score_snapshot_at' => null,
+                ])->saveQuietly();
+            }
 
             foreach ($validated['answers'] as $questionId => $answerValue) {
                 // To fetch the question type safely for matrix targeting we can query it directly here (or eager load it above)
@@ -1081,6 +1088,8 @@ class FormSubmissionAdminController extends Controller
                 }
             }
         });
+
+        $this->refreshEvaluationScoreSnapshot($submission);
 
         return redirect()->route('forms.submissions.show', $submission->id)->with('success', 'Submission updated successfully.');
     }
@@ -1711,19 +1720,42 @@ class FormSubmissionAdminController extends Controller
                 }
             }
 
+            $hasScoreSnapshotColumn = Schema::hasColumn('form_submissions', 'evaluation_score_snapshot');
+            $submissionColumns = ['id', 'form_version_id', 'created_at'];
+            if ($hasScoreSnapshotColumn) {
+                $submissionColumns[] = 'evaluation_score_snapshot';
+                $submissionColumns[] = 'evaluation_score_snapshot_at';
+            }
+
             $submissions = $submissionsQuery
                 ->with([
                     'formVersion:id,form_id',
                     'formVersion.form:id,title',
+                ])
+                ->orderByDesc('id')
+                ->get($submissionColumns);
+
+            $needsLiveScoring = $submissions->filter(
+                fn (FormSubmission $submission) => ! $hasScoreSnapshotColumn || $submission->evaluation_score_snapshot === null
+            );
+
+            if ($needsLiveScoring->isNotEmpty()) {
+                $needsLiveScoring->load([
+                    'formVersion.sections',
                     'answers.question.inputType',
                     'answers.question.choices',
                     'answers.question.section',
-                ])
-                ->orderByDesc('id')
-                ->get();
+                ]);
+            }
 
-            $employees = \App\Models\Employee::query()
-                ->get(['id', 'first_name', 'last_name', 'employee_code', 'department_id', 'branch_id']);
+            $employeeIds = $this->collectReferencedEmployeeIds($needsLiveScoring);
+            $employees = $employeeIds === []
+                ? collect()
+                : \App\Models\Employee::query()
+                    ->whereIn('id', $employeeIds)
+                    ->get(['id', 'first_name', 'last_name', 'employee_code', 'department_id', 'branch_id'])
+                    ->keyBy('id');
+
             $departments = \App\Models\Department::pluck('name', 'id');
             $branches = \App\Models\Branch::pluck('name', 'id');
 
@@ -1733,31 +1765,47 @@ class FormSubmissionAdminController extends Controller
                 ->get()
                 ->keyBy(fn (EvaluationResultOverride $override) => $override->employee_id . '|' . $override->form_id . '|' . $override->fiscal_month_id);
 
+            $fiscalYearBounds = $fiscalYears->map(fn ($year) => [
+                'id' => $year->id,
+                'name' => $year->name,
+                'start' => Carbon::parse($year->gregorian_start_date)->startOfDay()->timestamp,
+                'end' => Carbon::parse($year->gregorian_end_date)->endOfDay()->timestamp,
+            ])->values();
+            $fiscalMonthBounds = $fiscalMonths->map(fn ($month) => [
+                'id' => $month->id,
+                'name' => $month->name,
+                'start' => Carbon::parse($month->gregorian_start_date)->startOfDay()->timestamp,
+                'end' => Carbon::parse($month->gregorian_end_date)->endOfDay()->timestamp,
+            ])->values();
+
             $seen = [];
             $built = [];
             foreach ($submissions as $submission) {
-                $this->_calculateEmployeeScores($submission, $employees);
-                $this->attachLookupSubjectScore($submission, $employees);
+                $employeeScores = $submission->evaluation_score_snapshot;
+                if ($employeeScores === null) {
+                    $this->_calculateEmployeeScores($submission, $employees);
+                    $this->attachLookupSubjectScore($submission, $employees);
+                    $employeeScores = array_values($submission->employee_scores ?? []);
+                    if ($hasScoreSnapshotColumn) {
+                        $this->persistEvaluationScoreSnapshot($submission, $employeeScores);
+                    }
+                } elseif (! is_array($employeeScores)) {
+                    $employeeScores = [];
+                }
 
-                $submittedAt = Carbon::parse($submission->created_at);
-                $matchedYear = $fiscalYears->first(
-                    fn ($year) => $submittedAt->between(
-                        Carbon::parse($year->gregorian_start_date),
-                        Carbon::parse($year->gregorian_end_date)
-                    )
+                $submittedAt = Carbon::parse($submission->created_at)->timestamp;
+                $matchedYear = $fiscalYearBounds->first(
+                    fn (array $year) => $submittedAt >= $year['start'] && $submittedAt <= $year['end']
                 );
-                $matchedMonth = $fiscalMonths->first(
-                    fn ($month) => $submittedAt->between(
-                        Carbon::parse($month->gregorian_start_date),
-                        Carbon::parse($month->gregorian_end_date)
-                    )
+                $matchedMonth = $fiscalMonthBounds->first(
+                    fn (array $month) => $submittedAt >= $month['start'] && $submittedAt <= $month['end']
                 );
 
                 $formId = $submission->formVersion?->form_id;
                 $formTitle = $submission->formVersion?->form?->title ?? 'Unknown form';
-                $monthKey = $matchedMonth?->id ?? 'none';
+                $monthKey = $matchedMonth['id'] ?? 'none';
 
-                foreach ($submission->employee_scores ?? [] as $score) {
+                foreach ($employeeScores as $score) {
                     $employeeId = $score['id'] ?? null;
                     if (! $employeeId || ! $formId) {
                         continue;
@@ -1769,7 +1817,7 @@ class FormSubmissionAdminController extends Controller
                     }
                     $seen[$dedupeKey] = true;
 
-                    $percentage = $score['percentage'];
+                    $percentage = $score['percentage'] ?? null;
                     $outcome = $this->postAssessmentOutcome($percentage === null ? null : (float) $percentage);
                     $departmentId = $score['department_id'] ?? null;
                     $branchId = $score['branch_id'] ?? null;
@@ -1783,7 +1831,7 @@ class FormSubmissionAdminController extends Controller
                     $requestExtraInfo = null;
 
                     if ($matchedMonth) {
-                        $override = $overrides->get($employeeId . '|' . $formId . '|' . $matchedMonth->id);
+                        $override = $overrides->get($employeeId . '|' . $formId . '|' . $matchedMonth['id']);
                         if ($override) {
                             $nextAction = $override->next_action;
                             $nextActionLabel = $this->nextActionLabel($nextAction);
@@ -1803,10 +1851,10 @@ class FormSubmissionAdminController extends Controller
                         'form_id' => $formId,
                         'form_title' => $formTitle,
                         'submission_id' => $submission->id,
-                        'fiscal_year_id' => $matchedYear?->id,
-                        'fiscal_year_name' => $matchedYear?->name,
-                        'fiscal_month_id' => $matchedMonth?->id,
-                        'fiscal_month_name' => $matchedMonth?->name ?? 'Outside fiscal calendar',
+                        'fiscal_year_id' => $matchedYear['id'] ?? null,
+                        'fiscal_year_name' => $matchedYear['name'] ?? null,
+                        'fiscal_month_id' => $matchedMonth['id'] ?? null,
+                        'fiscal_month_name' => $matchedMonth['name'] ?? 'Outside fiscal calendar',
                         'score' => $percentage === null ? null : (float) $percentage,
                         'status' => $outcome['status'],
                         'status_label' => $outcome['status_label'],
@@ -2082,7 +2130,7 @@ class FormSubmissionAdminController extends Controller
             return;
         }
 
-        $employee = $employeesCollection->firstWhere('id', (int) $lookup->value_text);
+        $employee = $this->employeeFromCollection($employeesCollection, (int) $lookup->value_text);
         if (!$employee) {
             return;
         }
@@ -2259,6 +2307,128 @@ class FormSubmissionAdminController extends Controller
             'not_scored' => 'Not scored',
             default => ucfirst(str_replace('_', ' ', $nextAction)),
         };
+    }
+
+    /**
+     * Resolve an employee from a collection that may be keyed by id or sequential.
+     */
+    private function employeeFromCollection($employeesCollection, int $employeeId): ?\App\Models\Employee
+    {
+        $employee = $employeesCollection->get($employeeId);
+        if ($employee && (int) ($employee->id ?? 0) === $employeeId) {
+            return $employee;
+        }
+
+        return $employeesCollection->firstWhere('id', $employeeId);
+    }
+
+    /**
+     * Collect employee IDs referenced by roster/lookup answers for live scoring.
+     *
+     * @param  \Illuminate\Support\Collection<int, FormSubmission>  $submissions
+     * @return list<int>
+     */
+    private function collectReferencedEmployeeIds($submissions): array
+    {
+        $ids = [];
+
+        foreach ($submissions as $submission) {
+            foreach ($submission->answers ?? [] as $answer) {
+                $type = $answer->question?->inputType?->type_identifier ?? '';
+                if ($type === 'employee_attendance_roster' && $answer->value_text) {
+                    $decoded = json_decode($answer->value_text, true);
+                    if (is_array($decoded)) {
+                        foreach ($decoded as $empId) {
+                            if (is_numeric($empId)) {
+                                $ids[] = (int) $empId;
+                            }
+                        }
+                    }
+                }
+
+                if ($type === 'employee_lookup' && is_numeric($answer->value_text)) {
+                    $ids[] = (int) $answer->value_text;
+                }
+
+                $targets = $answer->targeted_employees;
+                if (is_string($targets)) {
+                    $targets = json_decode($targets, true);
+                }
+                if (is_array($targets)) {
+                    foreach ($targets as $empId) {
+                        if (is_numeric($empId)) {
+                            $ids[] = (int) $empId;
+                        }
+                    }
+                }
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * Persist a score snapshot produced by the same live scoring helpers.
+     *
+     * Uses a direct update so in-memory scoring attributes (employee_scores /
+     * calculated_score) are never written as real columns.
+     *
+     * @param  list<array<string, mixed>>  $employeeScores
+     */
+    private function persistEvaluationScoreSnapshot(FormSubmission $submission, array $employeeScores): void
+    {
+        if (! Schema::hasColumn('form_submissions', 'evaluation_score_snapshot')) {
+            return;
+        }
+
+        $payload = array_values($employeeScores);
+        $now = now();
+
+        \Illuminate\Support\Facades\DB::table('form_submissions')
+            ->where('id', $submission->id)
+            ->update([
+                'evaluation_score_snapshot' => json_encode($payload),
+                'evaluation_score_snapshot_at' => $now->toDateTimeString(),
+                'updated_at' => $now->toDateTimeString(),
+            ]);
+
+        $submission->setAttribute('evaluation_score_snapshot', $payload);
+        $submission->setAttribute('evaluation_score_snapshot_at', $now);
+        $submission->syncOriginalAttribute('evaluation_score_snapshot');
+        $submission->syncOriginalAttribute('evaluation_score_snapshot_at');
+    }
+
+    /**
+     * Recompute and store evaluation score snapshot using current scoring helpers.
+     */
+    public function refreshEvaluationScoreSnapshot(FormSubmission|int $submission): array
+    {
+        if (! $submission instanceof FormSubmission) {
+            $submission = FormSubmission::query()->findOrFail($submission);
+        }
+
+        $submission->load([
+            'formVersion.sections',
+            'answers.question.inputType',
+            'answers.question.choices',
+            'answers.question.section',
+        ]);
+
+        $employeeIds = $this->collectReferencedEmployeeIds(collect([$submission]));
+        $employees = $employeeIds === []
+            ? collect()
+            : \App\Models\Employee::query()
+                ->whereIn('id', $employeeIds)
+                ->get(['id', 'first_name', 'last_name', 'employee_code', 'department_id', 'branch_id'])
+                ->keyBy('id');
+
+        $this->_calculateEmployeeScores($submission, $employees);
+        $this->attachLookupSubjectScore($submission, $employees);
+
+        $employeeScores = array_values($submission->employee_scores ?? []);
+        $this->persistEvaluationScoreSnapshot($submission, $employeeScores);
+
+        return $employeeScores;
     }
 
     private const WARNING_MEMO_TEMPLATE_NAME = 'የማስጠንቀቂያ ደብዳቤ';

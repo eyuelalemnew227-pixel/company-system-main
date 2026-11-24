@@ -174,7 +174,7 @@ class FillFormController extends Controller
             return back()->withErrors($validationErrors)->withInput();
         }
 
-        DB::transaction(function () use ($version, $validated, $allQuestionsMap, $relocatedQuestions) {
+        $submission = DB::transaction(function () use ($version, $validated, $allQuestionsMap, $relocatedQuestions) {
             $user = auth()->user();
             $isQaManager = $user ? $user->can('submit form as qa manager') : false;
 
@@ -356,7 +356,12 @@ class FillFormController extends Controller
                     }
                 }
             }
+
+            return $submission;
         });
+
+        app(\App\Http\Controllers\FormSubmissionAdminController::class)
+            ->refreshEvaluationScoreSnapshot($submission);
 
         return redirect()->route('forms.available')->with('success', 'Checklist submitted successfully.');
     }

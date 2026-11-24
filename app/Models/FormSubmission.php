@@ -15,10 +15,14 @@ class FormSubmission extends Model
         'status',
         'is_qa_manager',
         'qa_manager_id',
+        'evaluation_score_snapshot',
+        'evaluation_score_snapshot_at',
     ];
 
     protected $casts = [
         'is_qa_manager' => 'boolean',
+        'evaluation_score_snapshot' => 'array',
+        'evaluation_score_snapshot_at' => 'datetime',
     ];
 
     protected static function booted()

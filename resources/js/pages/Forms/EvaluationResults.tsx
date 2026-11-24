@@ -2,7 +2,7 @@ import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import InputError from '@/components/input-error';
@@ -242,7 +242,7 @@ export default function EvaluationResults({
 	return (
 		<AppLayout breadcrumbs={breadcrumbs}>
 			<Head title="Evaluation Results" />
-			<div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-2 sm:p-4">
+			<div className="flex h-full flex-1 flex-col gap-2 rounded-xl px-2 pb-2 pt-0 sm:px-4 sm:pb-4">
 				{/* Empty states if KPI or forms not ready */}
 				{pageState === 'missing_kpi' && (
 					<Card>
@@ -276,91 +276,70 @@ export default function EvaluationResults({
 
 				{pageState === 'ready' && (
 					<>
-						{/* Summary Metric Cards matching other modules */}
-						<div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7 sm:gap-3">
-							<Card>
-								<CardContent className="p-3 sm:p-4">
-									<div className="text-xs font-medium text-muted-foreground uppercase">Rows</div>
-									<div className="text-xl sm:text-2xl font-bold mt-1">{summary.rows}</div>
+						{/* Summary Metric Cards — 8 across on large screens, tighter vertical padding */}
+						<div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+							<Card className="gap-0 py-0">
+								<CardContent className="px-2.5 py-1 sm:px-3">
+									<div className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase leading-tight">Rows</div>
+									<div className="text-lg sm:text-xl font-bold mt-0.5">{summary.rows}</div>
 								</CardContent>
 							</Card>
 
-							<Card>
-								<CardContent className="p-3 sm:p-4">
-									<div className="text-xs font-medium text-muted-foreground uppercase">Employees</div>
-									<div className="text-xl sm:text-2xl font-bold mt-1">{summary.employees}</div>
+							<Card className="gap-0 py-0">
+								<CardContent className="px-2.5 py-1 sm:px-3">
+									<div className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase leading-tight">Employees</div>
+									<div className="text-lg sm:text-xl font-bold mt-0.5">{summary.employees}</div>
 								</CardContent>
 							</Card>
 
-							<Card>
-								<CardContent className="p-3 sm:p-4">
-									<div className="text-xs font-medium text-green-700 dark:text-green-400 uppercase">Pass</div>
-									<div className="text-xl sm:text-2xl font-bold text-green-700 dark:text-green-400 mt-1">{summary.pass}</div>
+							<Card className="gap-0 py-0">
+								<CardContent className="px-2.5 py-1 sm:px-3">
+									<div className="text-[10px] sm:text-xs font-medium text-green-700 dark:text-green-400 uppercase leading-tight">Pass</div>
+									<div className="text-lg sm:text-xl font-bold text-green-700 dark:text-green-400 mt-0.5">{summary.pass}</div>
 								</CardContent>
 							</Card>
 
-							<Card>
-								<CardContent className="p-3 sm:p-4">
-									<div className="text-xs font-medium text-red-700 dark:text-red-400 uppercase">Fail</div>
-									<div className="text-xl sm:text-2xl font-bold text-red-700 dark:text-red-400 mt-1">{summary.fail}</div>
+							<Card className="gap-0 py-0">
+								<CardContent className="px-2.5 py-1 sm:px-3">
+									<div className="text-[10px] sm:text-xs font-medium text-red-700 dark:text-red-400 uppercase leading-tight">Fail</div>
+									<div className="text-lg sm:text-xl font-bold text-red-700 dark:text-red-400 mt-0.5">{summary.fail}</div>
 								</CardContent>
 							</Card>
 
-							<Card>
-								<CardContent className="p-3 sm:p-4">
-									<div className="text-xs font-medium text-yellow-700 dark:text-yellow-400 uppercase">Warning</div>
-									<div className="text-xl sm:text-2xl font-bold text-yellow-700 dark:text-yellow-400 mt-1">{summary.warning}</div>
+							<Card className="gap-0 py-0">
+								<CardContent className="px-2.5 py-1 sm:px-3">
+									<div className="text-[10px] sm:text-xs font-medium text-yellow-700 dark:text-yellow-400 uppercase leading-tight">Warning</div>
+									<div className="text-lg sm:text-xl font-bold text-yellow-700 dark:text-yellow-400 mt-0.5">{summary.warning}</div>
 								</CardContent>
 							</Card>
 
-							<Card>
-								<CardContent className="p-3 sm:p-4">
-									<div className="text-xs font-medium text-emerald-700 dark:text-emerald-400 uppercase">Reward</div>
-									<div className="text-xl sm:text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">{summary.reward}</div>
+							<Card className="gap-0 py-0">
+								<CardContent className="px-2.5 py-1 sm:px-3">
+									<div className="text-[10px] sm:text-xs font-medium text-emerald-700 dark:text-emerald-400 uppercase leading-tight">Reward</div>
+									<div className="text-lg sm:text-xl font-bold text-emerald-700 dark:text-emerald-400 mt-0.5">{summary.reward}</div>
 								</CardContent>
 							</Card>
 
-							<Card>
-								<CardContent className="p-3 sm:p-4">
-									<div className="text-xs font-medium text-red-700 dark:text-red-400 uppercase">Training</div>
-									<div className="text-xl sm:text-2xl font-bold text-red-700 dark:text-red-400 mt-1">{summary.training}</div>
+							<Card className="gap-0 py-0">
+								<CardContent className="px-2.5 py-1 sm:px-3">
+									<div className="text-[10px] sm:text-xs font-medium text-red-700 dark:text-red-400 uppercase leading-tight">Training</div>
+									<div className="text-lg sm:text-xl font-bold text-red-700 dark:text-red-400 mt-0.5">{summary.training}</div>
 								</CardContent>
 							</Card>
 
-							<Card>
-								<CardContent className="p-3 sm:p-4">
-									<div className="text-xs font-medium text-muted-foreground uppercase">Not Scored</div>
-									<div className="text-xl sm:text-2xl font-bold text-muted-foreground mt-1">{summary.not_scored}</div>
+							<Card className="gap-0 py-0">
+								<CardContent className="px-2.5 py-1 sm:px-3">
+									<div className="text-[10px] sm:text-xs font-medium text-muted-foreground uppercase leading-tight">Not Scored</div>
+									<div className="text-lg sm:text-xl font-bold text-muted-foreground mt-0.5">{summary.not_scored}</div>
 								</CardContent>
 							</Card>
 						</div>
 
 						{/* Main Card */}
-						<Card>
-							<CardHeader className="flex-col space-y-4">
-								<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 w-full">
-									<div>
-										<CardTitle className="text-xl sm:text-2xl">Evaluation Results</CardTitle>
-
-									</div>
-
-									<CardAction>
-										<Button
-											type="button"
-											variant="outline"
-											size="sm"
-											onClick={exportCsv}
-											disabled={summary.rows === 0}
-											className="w-full sm:w-auto"
-										>
-											<Download className="mr-1.5 h-4 w-4" />
-											Export CSV
-										</Button>
-									</CardAction>
-								</div>
-
+						<Card className="gap-0 py-0">
+							<CardHeader className="flex-col space-y-2 px-4 py-3">
 								{/* Filters Toolbar */}
-								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-2 w-full">
+								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8 gap-2 w-full">
 									<form
 										className="w-full"
 										onSubmit={(e) => {
@@ -381,7 +360,7 @@ export default function EvaluationResults({
 											<SelectValue placeholder="Form" />
 										</SelectTrigger>
 										<SelectContent>
-											<SelectItem value="all">All linked forms</SelectItem>
+											<SelectItem value="all">All forms</SelectItem>
 											{linkedForms.map((form) => (
 												<SelectItem key={form.id} value={String(form.id)}>
 													{form.title}
@@ -462,16 +441,27 @@ export default function EvaluationResults({
 										<FilterX className="mr-1.5 h-4 w-4" />
 										Reset
 									</Button>
+
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										onClick={exportCsv}
+										disabled={summary.rows === 0}
+										className="w-full"
+									>
+										<Download className="mr-1.5 h-4 w-4" />
+										Export CSV
+									</Button>
 								</div>
 							</CardHeader>
-							<hr />
-							<p className="text-sm text-muted-foreground mt-1 ml-6">
-								Employees scored on forms linked to <span className="font-medium text-foreground">{kpiName}</span>.
-								Pass is 75 or above. Fail from 60 to 74.9 is warning. Below 60 is training.
-							</p>
 
-							<CardContent className="p-2 sm:p-6">
-								<div className="overflow-x-auto -mx-2 sm:mx-0">
+							<CardContent className="space-y-2 px-4 pb-4 pt-2">
+								<p className="text-sm text-muted-foreground">
+									Employees scored on forms linked to <span className="font-medium text-foreground">{kpiName}</span>.
+									Pass is 75 or above. Fail from 60 to 74.9 is warning. Below 60 is training.
+								</p>
+								<div className="overflow-x-auto">
 									<div className="inline-block min-w-full align-middle">
 										<Table>
 											<TableHeader className="bg-slate-500 dark:bg-slate-700">
