@@ -47,7 +47,9 @@ class ChecklistSummaryReportController extends Controller
         $departments = Cache::remember('dashboard_departments', 3600, function () {
             return \App\Models\Department::select('id', 'name')
                 ->orderBy('name')
-                ->get();
+                ->get()
+                ->unique(fn ($d) => mb_strtolower(trim($d->name)))
+                ->values();
         });
 
         // Determine current fiscal month and year

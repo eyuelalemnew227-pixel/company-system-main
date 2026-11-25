@@ -115,6 +115,11 @@ class ChecklistScoringService
                         $targetDepts = json_decode($targetDepts, true);
                     }
                     $targetDeptIds = is_array($targetDepts) ? array_map('strval', $targetDepts) : [];
+                    $expandedTargetDeptIds = [];
+                    foreach ($targetDeptIds as $tId) {
+                        $expandedTargetDeptIds = array_merge($expandedTargetDeptIds, Department::getAliasedDepartmentIds($tId));
+                    }
+                    $expandedTargetDeptIds = array_unique(array_map('strval', $expandedTargetDeptIds));
 
                     foreach ($employeeScoresMatrix as $empKey => &$empScore) {
                         $isTargeted = false;
@@ -122,8 +127,8 @@ class ChecklistScoringService
 
                         if (!empty($ansTargetEmpIds)) {
                             $isTargeted = in_array($empIdStr, $ansTargetEmpIds, true);
-                        } elseif (!empty($targetDeptIds)) {
-                            $isTargeted = in_array((string) $empScore['department_id'], $targetDeptIds, true);
+                        } elseif (!empty($expandedTargetDeptIds)) {
+                            $isTargeted = in_array((string) $empScore['department_id'], $expandedTargetDeptIds, true);
                         } else {
                             $isTargeted = true;
                         }
@@ -203,8 +208,8 @@ class ChecklistScoringService
                 $empWeightedSum = 0;
                 $empWeightTotal = 0;
                 foreach ($empSectionScores[$empKey] as $sData) {
-                    if ($sData['total'] > 0) {
-                        $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                    if ($sData['total'] > 0 && $sData['weight'] !== null && (float) $sData['weight'] > 0) {
+                        $w = (float) $sData['weight'];
                         $pct = ($sData['earned'] / $sData['total']) * 100;
                         $empWeightedSum += $pct * $w;
                         $empWeightTotal += $w;
@@ -238,8 +243,8 @@ class ChecklistScoringService
                 $subWeightedSum = 0;
                 $subWeightTotal = 0;
                 foreach ($sectionScores as $sData) {
-                    if ($sData['total'] > 0) {
-                        $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                    if ($sData['total'] > 0 && $sData['weight'] !== null && (float) $sData['weight'] > 0) {
+                        $w = (float) $sData['weight'];
                         $pct = ($sData['earned'] / $sData['total']) * 100;
                         $subWeightedSum += $pct * $w;
                         $subWeightTotal += $w;
@@ -330,12 +335,17 @@ class ChecklistScoringService
                         $targetDepts = json_decode($targetDepts, true);
                     }
                     $targetDeptIds = is_array($targetDepts) ? array_map('strval', $targetDepts) : [];
+                    $expandedTargetDeptIds = [];
+                    foreach ($targetDeptIds as $tId) {
+                        $expandedTargetDeptIds = array_merge($expandedTargetDeptIds, Department::getAliasedDepartmentIds($tId));
+                    }
+                    $expandedTargetDeptIds = array_unique(array_map('strval', $expandedTargetDeptIds));
 
                     $isTargeted = false;
                     if (!empty($ansTargetEmpIds)) {
                         $isTargeted = in_array($empIdStr, $ansTargetEmpIds, true);
-                    } elseif (!empty($targetDeptIds)) {
-                        $isTargeted = in_array($empDeptIdStr, $targetDeptIds, true);
+                    } elseif (!empty($expandedTargetDeptIds)) {
+                        $isTargeted = in_array($empDeptIdStr, $expandedTargetDeptIds, true);
                     } else {
                         $isTargeted = true;
                     }
@@ -399,8 +409,8 @@ class ChecklistScoringService
             $empWeightedSum = 0;
             $empWeightTotal = 0;
             foreach ($empSectionScores as $sData) {
-                if ($sData['total'] > 0) {
-                    $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                if ($sData['total'] > 0 && $sData['weight'] !== null && (float) $sData['weight'] > 0) {
+                    $w = (float) $sData['weight'];
                     $pct = ($sData['earned'] / $sData['total']) * 100;
                     $empWeightedSum += $pct * $w;
                     $empWeightTotal += $w;
@@ -555,7 +565,11 @@ class ChecklistScoringService
                             $deptTargets = json_decode($deptTargets, true);
                         }
                         if (is_array($deptTargets) && !empty($deptTargets)) {
-                            $dSet = array_flip(array_map('strval', $deptTargets));
+                            $expandedDeptTargets = [];
+                            foreach ($deptTargets as $dT) {
+                                $expandedDeptTargets = array_merge($expandedDeptTargets, Department::getAliasedDepartmentIds($dT));
+                            }
+                            $dSet = array_flip(array_map('strval', $expandedDeptTargets));
                             foreach ($presentIds as $pId) {
                                 $pEmp = $employees->get((int) $pId) ?? $employees->get((string) $pId);
                                 if ($pEmp && isset($dSet[(string) $pEmp->department_id])) {
@@ -627,16 +641,22 @@ class ChecklistScoringService
                         $empWeightedSum = 0;
                         $empWeightTotal = 0;
                         foreach ($st['sections'] as $sData) {
-                            if ($sData['total'] > 0) {
-                                $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                            if ($sData['total'] > 0 && $sData['weight'] !== null && (float) $sData['weight'] > 0) {
+                                $w = (float) $sData['weight'];
                                 $pct = ($sData['passed'] / $sData['total']) * 100;
                                 $empWeightedSum += $pct * $w;
                                 $empWeightTotal += $w;
                             }
                         }
-                        $pct = $empWeightTotal > 0 ? round($empWeightedSum / $empWeightTotal, 1) : round(($st['passed'] / $st['total']) * 100, 1);
-                        $passedPoints = round(($pct / 100) * $empWeightTotal, 2);
-                        $totalPoints = round($empWeightTotal, 2);
+                        if ($empWeightTotal > 0) {
+                            $pct = round($empWeightedSum / $empWeightTotal, 1);
+                            $passedPoints = round(($pct / 100) * $empWeightTotal, 2);
+                            $totalPoints = round($empWeightTotal, 2);
+                        } else {
+                            $pct = round(($st['passed'] / $st['total']) * 100, 1);
+                            $passedPoints = $st['passed'];
+                            $totalPoints = $st['total'];
+                        }
                     } else {
                         $pct = round(($st['passed'] / $st['total']) * 100, 1);
                         $passedPoints = $st['passed'];
@@ -866,9 +886,12 @@ class ChecklistScoringService
                 continue;
             }
 
-            // Apply department filter
-            if ($deptIdFilter && $deptIdFilter !== 'all' && (string) ($data['department_id'] ?? '') !== (string) $deptIdFilter) {
-                continue;
+            // Apply department filter (supporting aliased departments such as duplicate Waiter)
+            if ($deptIdFilter && $deptIdFilter !== 'all') {
+                $allowedDeptIds = array_map('strval', Department::getAliasedDepartmentIds($deptIdFilter));
+                if (!in_array((string) ($data['department_id'] ?? ''), $allowedDeptIds, true)) {
+                    continue;
+                }
             }
 
             // Apply search filter (employee name, branch, or department)

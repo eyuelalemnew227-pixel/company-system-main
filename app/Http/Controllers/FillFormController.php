@@ -240,10 +240,16 @@ class FillFormController extends Controller
 
                     if (!empty($deptTargets)) {
                         $rosterForMatching = !empty($localRosterArr) ? $localRosterArr : $globalRosterArr;
+                        $expandedDeptTargets = [];
+                        foreach ($deptTargets as $dT) {
+                            $expandedDeptTargets = array_merge($expandedDeptTargets, \App\Models\Department::getAliasedDepartmentIds($dT));
+                        }
+                        $expandedDeptTargets = array_unique(array_map('strval', $expandedDeptTargets));
+
                         foreach ($rosterForMatching as $empIdStr) {
                             $emp = $employees->firstWhere('id', (int) $empIdStr);
                             if ($emp) {
-                                if (in_array((string) $emp->department_id, array_map('strval', $deptTargets), true)) {
+                                if (in_array((string) $emp->department_id, $expandedDeptTargets, true)) {
                                     $responsibleEmpIds[] = (string) $empIdStr;
                                 }
                             }

@@ -163,6 +163,11 @@ class FormSubmissionAdminController extends Controller
                         $targetDepts = json_decode($targetDepts, true);
                     }
                     $targetDeptIds = is_array($targetDepts) ? array_map('strval', $targetDepts) : [];
+                    $expandedTargetDeptIds = [];
+                    foreach ($targetDeptIds as $tId) {
+                        $expandedTargetDeptIds = array_merge($expandedTargetDeptIds, \App\Models\Department::getAliasedDepartmentIds($tId));
+                    }
+                    $expandedTargetDeptIds = array_unique(array_map('strval', $expandedTargetDeptIds));
 
                     foreach ($employeeScoresMatrix as $empKey => &$empScore) {
                         $isTargeted = false;
@@ -170,8 +175,8 @@ class FormSubmissionAdminController extends Controller
 
                         if (!empty($ansTargetEmpIds)) {
                             $isTargeted = in_array($empIdStr, $ansTargetEmpIds, true);
-                        } elseif (!empty($targetDeptIds)) {
-                            $isTargeted = in_array((string) $empScore['department_id'], $targetDeptIds, true);
+                        } elseif (!empty($expandedTargetDeptIds)) {
+                            $isTargeted = in_array((string) $empScore['department_id'], $expandedTargetDeptIds, true);
                         } else {
                             $isTargeted = true;
                         }
@@ -251,8 +256,8 @@ class FormSubmissionAdminController extends Controller
                 $empWeightedSum = 0;
                 $empWeightTotal = 0;
                 foreach ($empSectionScores[$empKey] as $sData) {
-                    if ($sData['total'] > 0) {
-                        $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                    if ($sData['total'] > 0 && $sData['weight'] !== null && (float) $sData['weight'] > 0) {
+                        $w = (float) $sData['weight'];
                         $pct = ($sData['earned'] / $sData['total']) * 100;
                         $empWeightedSum += $pct * $w;
                         $empWeightTotal += $w;
@@ -260,6 +265,8 @@ class FormSubmissionAdminController extends Controller
                 }
                 if ($empWeightTotal > 0) {
                     $empScore['percentage'] = round($empWeightedSum / $empWeightTotal, 1);
+                    $empScore['total_points'] = round($empWeightTotal, 2);
+                    $empScore['earned_points'] = round(($empScore['percentage'] / 100) * $empWeightTotal, 2);
                 } elseif ($empScore['total_points'] > 0) {
                     $empScore['percentage'] = round(($empScore['earned_points'] / $empScore['total_points']) * 100, 1);
                 }
@@ -284,8 +291,8 @@ class FormSubmissionAdminController extends Controller
                 $subWeightedSum = 0;
                 $subWeightTotal = 0;
                 foreach ($sectionScores as $sData) {
-                    if ($sData['total'] > 0) {
-                        $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                    if ($sData['total'] > 0 && $sData['weight'] !== null && (float) $sData['weight'] > 0) {
+                        $w = (float) $sData['weight'];
                         $pct = ($sData['earned'] / $sData['total']) * 100;
                         $subWeightedSum += $pct * $w;
                         $subWeightTotal += $w;
@@ -2182,12 +2189,17 @@ class FormSubmissionAdminController extends Controller
                         $targetDepts = json_decode($targetDepts, true);
                     }
                     $targetDeptIds = is_array($targetDepts) ? array_map('strval', $targetDepts) : [];
+                    $expandedTargetDeptIds = [];
+                    foreach ($targetDeptIds as $tId) {
+                        $expandedTargetDeptIds = array_merge($expandedTargetDeptIds, \App\Models\Department::getAliasedDepartmentIds($tId));
+                    }
+                    $expandedTargetDeptIds = array_unique(array_map('strval', $expandedTargetDeptIds));
 
                     $isTargeted = false;
                     if (!empty($ansTargetEmpIds)) {
                         $isTargeted = in_array($empIdStr, $ansTargetEmpIds, true);
-                    } elseif (!empty($targetDeptIds)) {
-                        $isTargeted = in_array($empDeptIdStr, $targetDeptIds, true);
+                    } elseif (!empty($expandedTargetDeptIds)) {
+                        $isTargeted = in_array($empDeptIdStr, $expandedTargetDeptIds, true);
                     } else {
                         $isTargeted = true;
                     }
@@ -2251,14 +2263,18 @@ class FormSubmissionAdminController extends Controller
             $empWeightedSum = 0;
             $empWeightTotal = 0;
             foreach ($empSectionScores as $sData) {
-                if ($sData['total'] > 0) {
-                    $w = ($sData['weight'] !== null && $sData['weight'] > 0) ? $sData['weight'] : 1.0;
+                if ($sData['total'] > 0 && $sData['weight'] !== null && (float) $sData['weight'] > 0) {
+                    $w = (float) $sData['weight'];
                     $pct = ($sData['earned'] / $sData['total']) * 100;
                     $empWeightedSum += $pct * $w;
                     $empWeightTotal += $w;
                 }
             }
             $pct = $empWeightTotal > 0 ? round($empWeightedSum / $empWeightTotal, 1) : null;
+            if ($empWeightTotal > 0 && $pct !== null) {
+                $totalPoints = round($empWeightTotal, 2);
+                $earnedPoints = round(($pct / 100) * $empWeightTotal, 2);
+            }
         } else {
             $pct = $totalPoints > 0 ? round(($earnedPoints / $totalPoints) * 100, 1) : null;
         }

@@ -531,7 +531,9 @@ export default function Show({
                                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
                                             {submission.calculated_score !== null && submission.calculated_score !== undefined && (
                                                 <div className="flex flex-col items-start sm:items-end justify-center bg-amber-50/60 border border-amber-200/80 rounded-lg px-4 py-2">
-                                                    <p className="text-xs text-amber-900 font-bold uppercase tracking-wider">Score</p>
+                                                    <p className="text-xs text-amber-900 font-bold uppercase tracking-wider">
+                                                        {submission.employee_scores && submission.employee_scores.length > 1 ? 'Average Score' : 'Score'}
+                                                    </p>
                                                     <span className={cn(
                                                         "text-2xl font-black mt-0.5",
                                                         Number(submission.calculated_score) >= 80 ? "text-emerald-700" :
@@ -564,6 +566,76 @@ export default function Show({
                                     </div>
                                 </CardContent>
                             </Card>
+
+                            {submission.employee_scores && submission.employee_scores.length > 0 && (
+                                <Card className="col-span-1 md:col-span-3 shadow-sm border-amber-900/10 overflow-hidden">
+                                    <CardHeader className="bg-amber-900/5 py-3.5 px-6 border-b border-amber-900/10 flex flex-row items-center justify-between">
+                                        <CardTitle className="text-base font-bold text-amber-950 flex items-center gap-2">
+                                            <User className="h-4 w-4 text-amber-700" />
+                                            Evaluated Staff Scores ({submission.employee_scores.length})
+                                        </CardTitle>
+                                        {submission.employee_scores.length > 1 && submission.calculated_score !== null && (
+                                            <span className="text-xs text-muted-foreground font-medium">
+                                                Average Score: <strong className="text-foreground">{submission.calculated_score}%</strong>
+                                            </span>
+                                        )}
+                                    </CardHeader>
+                                    <CardContent className="p-0 bg-white">
+                                        <div className="divide-y divide-gray-100">
+                                            {submission.employee_scores.map((empScore: any, idx: number) => {
+                                                const matchedEmp = employees?.find((e: any) => String(e.id) === String(empScore.id));
+                                                const deptId = empScore.department_id || matchedEmp?.department_id;
+                                                const matchedDept = departments?.find((d: any) => String(d.id) === String(deptId));
+                                                const deptName = matchedDept?.name || empScore.department_name || '—';
+                                                const scorePct = empScore.percentage !== null && empScore.percentage !== undefined ? Number(empScore.percentage) : null;
+
+                                                return (
+                                                    <div key={empScore.id || idx} className="p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-amber-50/20 transition-colors">
+                                                        <div className="flex items-center space-x-3.5">
+                                                            <div className="h-9 w-9 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center font-bold text-sm shrink-0 border border-amber-200">
+                                                                {(empScore.name || 'E').charAt(0).toUpperCase()}
+                                                            </div>
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className="font-semibold text-gray-900 text-sm">{empScore.name}</p>
+                                                                    {empScore.employee_code && (
+                                                                        <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 border border-gray-200">
+                                                                            {empScore.employee_code}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-xs text-gray-500 font-medium">Department: {deptName}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-4 self-end sm:self-center">
+                                                            {empScore.total_points > 0 && (
+                                                                <div className="text-right">
+                                                                    <p className="text-xs text-gray-400">Points</p>
+                                                                    <p className="text-xs font-semibold text-gray-700">
+                                                                        {empScore.earned_points ?? 0} / {empScore.total_points}
+                                                                    </p>
+                                                                </div>
+                                                            )}
+                                                            {scorePct !== null ? (
+                                                                <div className={cn(
+                                                                    "px-3 py-1 rounded-full text-sm font-bold border flex items-center",
+                                                                    scorePct >= 80 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                                                        scorePct >= 50 ? "bg-amber-50 text-amber-700 border-amber-200" :
+                                                                            "bg-red-50 text-red-700 border-red-200"
+                                                                )}>
+                                                                    {scorePct}%
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-xs text-gray-400 italic">No score</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
 
                             <div className="col-span-1 md:col-span-3 space-y-6">
                                 {visibleSections.length === 0 ? (
