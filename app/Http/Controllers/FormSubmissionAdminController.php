@@ -1785,7 +1785,7 @@ class FormSubmissionAdminController extends Controller
                 'end' => Carbon::parse($month->gregorian_end_date)->endOfDay()->timestamp,
             ])->values();
 
-            $seen = [];
+            // One result row per submission that names the employee (no employee|form|month collapse).
             $built = [];
             foreach ($submissions as $submission) {
                 $employeeScores = $submission->evaluation_score_snapshot;
@@ -1810,19 +1810,12 @@ class FormSubmissionAdminController extends Controller
 
                 $formId = $submission->formVersion?->form_id;
                 $formTitle = $submission->formVersion?->form?->title ?? 'Unknown form';
-                $monthKey = $matchedMonth['id'] ?? 'none';
 
                 foreach ($employeeScores as $score) {
                     $employeeId = $score['id'] ?? null;
                     if (! $employeeId || ! $formId) {
                         continue;
                     }
-
-                    $dedupeKey = $employeeId . '|' . $formId . '|' . $monthKey;
-                    if (isset($seen[$dedupeKey])) {
-                        continue;
-                    }
-                    $seen[$dedupeKey] = true;
 
                     $percentage = $score['percentage'] ?? null;
                     $outcome = $this->postAssessmentOutcome($percentage === null ? null : (float) $percentage);
@@ -1896,6 +1889,7 @@ class FormSubmissionAdminController extends Controller
                 ->sortBy([
                     ['employee_name', 'asc'],
                     ['form_title', 'asc'],
+                    ['submission_id', 'desc'],
                 ])
                 ->values();
         }
