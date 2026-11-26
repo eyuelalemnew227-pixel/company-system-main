@@ -967,6 +967,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 });
 
+// Standalone API Gateway matching https://kaldisbunnaet.com/api/api.php?endpoint=...&api_key=...
+Route::middleware(\App\Http\Middleware\FormsApiAuthMiddleware::class)->group(function () {
+    Route::any('/api/api.php', [\App\Http\Controllers\FormApiController::class, 'apiPhpGateway']);
+    Route::any('/api.php', [\App\Http\Controllers\FormApiController::class, 'apiPhpGateway']);
+});
+
 require __DIR__ . '/settings.php';
 require __DIR__ . '/budget.php';
 require __DIR__ . '/auth.php';

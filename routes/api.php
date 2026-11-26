@@ -38,9 +38,18 @@ Route::prefix('forms')->middleware('forms.api')->group(function () {
     Route::get('/', [\App\Http\Controllers\FormApiController::class, 'index']);
     Route::get('/analytics', [\App\Http\Controllers\FormApiController::class, 'analytics']);
     Route::get('/submissions', [\App\Http\Controllers\FormApiController::class, 'submissions']);
-    Route::get('/{id}', [\App\Http\Controllers\FormApiController::class, 'show']);
-    Route::get('/{id}/submissions', [\App\Http\Controllers\FormApiController::class, 'submissions']);
-    Route::get('/{id}/analytics', [\App\Http\Controllers\FormApiController::class, 'analytics']);
+    Route::get('/answers', [\App\Http\Controllers\FormApiController::class, 'answers']);
+    Route::get('/sections', [\App\Http\Controllers\FormApiController::class, 'sections']);
+    Route::get('/{id}', [\App\Http\Controllers\FormApiController::class, 'show'])->whereNumber('id');
+    Route::get('/{id}/submissions', [\App\Http\Controllers\FormApiController::class, 'submissions'])->whereNumber('id');
+    Route::get('/{id}/answers', [\App\Http\Controllers\FormApiController::class, 'answers'])->whereNumber('id');
+    Route::get('/{id}/sections', [\App\Http\Controllers\FormApiController::class, 'sections'])->whereNumber('id');
+    Route::get('/{id}/analytics', [\App\Http\Controllers\FormApiController::class, 'analytics'])->whereNumber('id');
+});
+
+// Standalone API Gateway matching https://kaldisbunnaet.com/api/api.php?endpoint=...&api_key=...
+Route::middleware('forms.api')->group(function () {
+    Route::any('/api.php', [\App\Http\Controllers\FormApiController::class, 'apiPhpGateway']);
 });
 
 // KPI Library API Endpoints (Secured by FormsApiAuthMiddleware: API key or session/token)
