@@ -178,8 +178,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Registered before the forms resource so "evaluation-results" / "qa-similarity" are not captured as a form id.
-    // Operation Champions may open Evaluation Results scoped to their inspector checklist forms.
-    Route::middleware(['auth', 'permission:view form submissions|view inspector checklist submissions'])->group(function () {
+    // Form-category checklist permissions scope Evaluation Results (assigned via roles in the UI).
+    Route::middleware(['auth', 'permission:' . \App\Services\Forms\InspectorChecklistChampionAccess::evaluationResultsPermissionPipe()])->group(function () {
         Route::get('forms/evaluation-results', [\App\Http\Controllers\FormSubmissionAdminController::class, 'evaluation_results'])
             ->name('forms.evaluation-results');
         Route::put('forms/evaluation-results/override', [\App\Http\Controllers\FormSubmissionAdminController::class, 'update_evaluation_result_override'])

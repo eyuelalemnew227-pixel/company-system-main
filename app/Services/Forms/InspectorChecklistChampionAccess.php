@@ -9,17 +9,35 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Operation-department champions (barista / cashier / janitor / display / waiter)
- * may view submissions for their matching inspector checklist forms.
+ * Operation checklist form access.
+ *
+ * Legacy (All Submissions etc.): one permission + position-based form scoping.
+ * Evaluation Results: six form-category permissions assigned via roles in the UI
+ * (no position sync). Legacy permission is kept temporarily for migration.
  */
 class InspectorChecklistChampionAccess
 {
     public const ROLE_NAME = 'Operation Champion';
 
+    /** @deprecated Kept temporarily for All Submissions / Checklist Summary migration. */
     public const PERMISSION_NAME = 'view inspector checklist submissions';
 
     /**
-     * Position keyword => substrings that identify matching inspector checklist form titles.
+     * Evaluation Results form-category permissions (manual role assignment).
+     *
+     * @var array<string, string>
+     */
+    public const EVALUATION_PERMISSIONS = [
+        'display' => 'view display checklist submissions',
+        'fastfood' => 'view fastfood checklist submissions',
+        'cashier' => 'view cashier checklist submissions',
+        'barista' => 'view barista checklist submissions',
+        'janitor' => 'view janitor checklist submissions',
+        'waiter' => 'view waiter checklist submissions',
+    ];
+
+    /**
+     * Category => substrings that identify matching inspector checklist form titles.
      *
      * @var array<string, list<string>>
      */
@@ -29,7 +47,81 @@ class InspectorChecklistChampionAccess
         'waiter' => ['ዌይተር', 'waiter'],
         'display' => ['ዲስፕሌይ', 'display'],
         'janitor' => ['ጃኒተር', 'janitor'],
+        'fastfood' => ['ፋስት ፉድ', 'ፋስትፉድ', 'fast food', 'fastfood'],
     ];
+
+    /**
+     * Spatie middleware / sidebar pipe for Evaluation Results access.
+     */
+    public static function evaluationResultsPermissionPipe(): string
+    {
+        return 'view form submissions|' . implode('|', array_values(self::EVALUATION_PERMISSIONS));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function evaluationPermissionNames(): array
+    {
+        return array_values(self::EVALUATION_PERMISSIONS);
+    }
+
+    public static function hasAnyEvaluationFormPermission(User $user): bool
+    {
+        foreach (self::evaluationPermissionNames() as $permission) {
+            if ($user->can($permission)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Form IDs unlocked by the user's Evaluation Results category permissions.
+     *
+     * @return list<int>
+     */
+    public static function accessibleFormIdsFromEvaluationPermissions(User $user): array
+    {
+        $types = [];
+        foreach (self::EVALUATION_PERMISSIONS as $type => $permission) {
+            if ($user->can($permission)) {
+                $types[] = $type;
+            }
+        }
+
+        if ($types === []) {
+            return [];
+        }
+
+        $keywords = [];
+        foreach ($types as $type) {
+            foreach (self::CHAMPION_FORM_KEYWORDS[$type] ?? [] as $keyword) {
+                $keywords[] = $keyword;
+            }
+        }
+        $keywords = array_values(array_unique($keywords));
+
+        return Form::query()
+            ->where(function ($query) use ($keywords) {
+                foreach ($keywords as $keyword) {
+                    $query->orWhere('title', 'like', '%' . $keyword . '%');
+                }
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public static function canAccessFormViaEvaluationPermissions(User $user, Form|int $form): bool
+    {
+        $formId = $form instanceof Form ? (int) $form->id : (int) $form;
+
+        return in_array($formId, self::accessibleFormIdsFromEvaluationPermissions($user), true);
+    }
 
     public static function isEligible(User $user): bool
     {

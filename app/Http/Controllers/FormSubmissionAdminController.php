@@ -1644,16 +1644,22 @@ class FormSubmissionAdminController extends Controller
             ->values();
 
         $user = auth()->user();
-        // Champions without full submission access only see their role's checklist forms.
+        // Evaluation Results scoping uses the six form-category permissions (not position sync).
         if (
             $user
             && ! $user->can('view form submissions')
-            && $user->can(InspectorChecklistChampionAccess::PERMISSION_NAME)
+            && InspectorChecklistChampionAccess::hasAnyEvaluationFormPermission($user)
         ) {
-            $championFormIds = InspectorChecklistChampionAccess::accessibleFormIds($user);
+            $championFormIds = InspectorChecklistChampionAccess::accessibleFormIdsFromEvaluationPermissions($user);
             $linkedForms = $linkedForms
                 ->filter(fn ($form) => in_array((int) $form->id, $championFormIds, true))
                 ->values();
+        } elseif (
+            $user
+            && ! $user->can('view form submissions')
+        ) {
+            // No full access and no category permission — nothing to show.
+            $linkedForms = collect();
         }
 
         $pageState = 'ready';
@@ -2056,8 +2062,7 @@ class FormSubmissionAdminController extends Controller
         if (
             $user
             && ! $user->can('view form submissions')
-            && $user->can(InspectorChecklistChampionAccess::PERMISSION_NAME)
-            && ! InspectorChecklistChampionAccess::canViewForm($user, (int) $validated['form_id'])
+            && ! InspectorChecklistChampionAccess::canAccessFormViaEvaluationPermissions($user, (int) $validated['form_id'])
         ) {
             abort(403, 'You can only update evaluation results for your assigned inspector checklist forms.');
         }

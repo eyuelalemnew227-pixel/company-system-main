@@ -360,6 +360,13 @@ class PermissionSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'view my form submissions']);
         Permission::firstOrCreate(['name' => 'view form submissions']);
         Permission::firstOrCreate(['name' => 'view inspector checklist submissions']);
+        // Evaluation Results form-category permissions (manual role assignment; not position-synced).
+        Permission::firstOrCreate(['name' => 'view display checklist submissions']);
+        Permission::firstOrCreate(['name' => 'view fastfood checklist submissions']);
+        Permission::firstOrCreate(['name' => 'view cashier checklist submissions']);
+        Permission::firstOrCreate(['name' => 'view barista checklist submissions']);
+        Permission::firstOrCreate(['name' => 'view janitor checklist submissions']);
+        Permission::firstOrCreate(['name' => 'view waiter checklist submissions']);
         Permission::firstOrCreate(['name' => 'delete form submissions']);
         Permission::firstOrCreate(['name' => 'export form submissions']);
         Permission::firstOrCreate(['name' => 'view kpi libraries']);

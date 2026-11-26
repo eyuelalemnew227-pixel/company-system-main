@@ -211,7 +211,7 @@ const baseSections: NavSection[] = [
     items: [
       { title: 'All Forms', href: '/forms', icon: ListChecks, permission: 'view forms' },
       { title: 'KPI Library', href: '/kpi-libraries', icon: Target, permission: 'view kpi libraries' },
-      { title: 'Evaluation Results', href: '/forms/evaluation-results', icon: GraduationCap, permission: 'view form submissions|view inspector checklist submissions' },
+      { title: 'Evaluation Results', href: '/forms/evaluation-results', icon: GraduationCap, permission: 'view form submissions|view display checklist submissions|view fastfood checklist submissions|view cashier checklist submissions|view barista checklist submissions|view janitor checklist submissions|view waiter checklist submissions' },
       { title: 'QA Similarity', href: '/forms/qa-similarity', icon: GitCompareArrows, permission: 'submit form as qa manager' },
       { title: 'Fill Forms', href: '/available-forms', icon: ClipboardCheck, permission: 'fill forms' },
       { title: 'My Submissions', href: '/my-submissions', icon: FileCheck, permission: 'view my form submissions' },
