@@ -1688,12 +1688,21 @@ class FormSubmissionAdminController extends Controller
         $formFilter = (string) $request->input('form_id', 'all');
         $statusFilter = (string) $request->input('status', 'all');
         $actionFilter = (string) $request->input('next_action', 'all');
+        $dateFromFilter = trim((string) $request->input('date_from', ''));
+        $dateToFilter = trim((string) $request->input('date_to', ''));
+        $hasDateRangeFilter = $dateFromFilter !== '' || $dateToFilter !== '';
+
+        // Date range is an explicit calendar filter; when present, do not default fiscal period.
         $yearFilter = $request->has('fiscal_year_id')
             ? (string) $request->input('fiscal_year_id', 'all')
-            : ($currentFiscalYear?->id ? (string) $currentFiscalYear->id : 'all');
+            : ($hasDateRangeFilter
+                ? 'all'
+                : ($currentFiscalYear?->id ? (string) $currentFiscalYear->id : 'all'));
         $monthFilter = $request->has('fiscal_month_id')
             ? (string) $request->input('fiscal_month_id', 'all')
-            : ($currentFiscalMonth?->id ? (string) $currentFiscalMonth->id : 'all');
+            : ($hasDateRangeFilter
+                ? 'all'
+                : ($currentFiscalMonth?->id ? (string) $currentFiscalMonth->id : 'all'));
 
         $trainingTypes = TrainingType::query()
             ->where('status', 'active')
@@ -1715,7 +1724,38 @@ class FormSubmissionAdminController extends Controller
             $submissionsQuery = FormSubmission::query()
                 ->whereHas('formVersion', fn ($query) => $query->whereIn('form_id', $formIds));
 
-            if ($monthFilter !== 'all' && ctype_digit($monthFilter)) {
+            // Explicit date range takes priority over fiscal year/month for created_at.
+            if ($hasDateRangeFilter) {
+                try {
+                    $rangeStart = $dateFromFilter !== ''
+                        ? Carbon::createFromFormat('Y-m-d', $dateFromFilter)->startOfDay()
+                        : null;
+                } catch (\Throwable) {
+                    $rangeStart = null;
+                    $dateFromFilter = '';
+                }
+
+                try {
+                    $rangeEnd = $dateToFilter !== ''
+                        ? Carbon::createFromFormat('Y-m-d', $dateToFilter)->endOfDay()
+                        : null;
+                } catch (\Throwable) {
+                    $rangeEnd = null;
+                    $dateToFilter = '';
+                }
+
+                if ($rangeStart && $rangeEnd && $rangeStart->gt($rangeEnd)) {
+                    [$rangeStart, $rangeEnd] = [$rangeEnd->copy()->startOfDay(), $rangeStart->copy()->endOfDay()];
+                    [$dateFromFilter, $dateToFilter] = [$rangeStart->toDateString(), $rangeEnd->toDateString()];
+                }
+
+                if ($rangeStart) {
+                    $submissionsQuery->where('created_at', '>=', $rangeStart);
+                }
+                if ($rangeEnd) {
+                    $submissionsQuery->where('created_at', '<=', $rangeEnd);
+                }
+            } elseif ($monthFilter !== 'all' && ctype_digit($monthFilter)) {
                 $month = $fiscalMonths->firstWhere('id', (int) $monthFilter);
                 if ($month) {
                     $submissionsQuery->whereBetween('created_at', [
@@ -1954,6 +1994,8 @@ class FormSubmissionAdminController extends Controller
                 'next_action' => $actionFilter,
                 'fiscal_year_id' => $yearFilter,
                 'fiscal_month_id' => $monthFilter,
+                'date_from' => $dateFromFilter,
+                'date_to' => $dateToFilter,
             ],
         ]);
     }

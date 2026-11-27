@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import TablePagination from '@/components/table-pagination';
 import { usePopup } from '@/hooks/use-popup';
-import { Download, FilterX, GraduationCap, Eye, Pencil } from 'lucide-react';
+import { Download, Filter, FilterX, GraduationCap, Eye, Pencil } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 
 type LinkedForm = { id: number; title: string };
@@ -61,6 +61,8 @@ type Filters = {
 	next_action: string;
 	fiscal_year_id: string;
 	fiscal_month_id: string;
+	date_from: string;
+	date_to: string;
 };
 
 type PageState = 'ready' | 'missing_kpi' | 'no_forms';
@@ -128,6 +130,8 @@ export default function EvaluationResults({
 	const { flash } = usePage<{ flash: { message?: string; error?: string } }>().props;
 	const { triggerPopup, PopupComponent } = usePopup();
 	const [searchInput, setSearchInput] = useState(filters.search);
+	const [dateFrom, setDateFrom] = useState(filters.date_from || '');
+	const [dateTo, setDateTo] = useState(filters.date_to || '');
 	const [editRow, setEditRow] = useState<ResultRow | null>(null);
 
 	const { data, setData, put, processing, errors, reset, clearErrors } = useForm({
@@ -153,6 +157,11 @@ export default function EvaluationResults({
 		setSearchInput(filters.search);
 	}, [filters.search]);
 
+	useEffect(() => {
+		setDateFrom(filters.date_from || '');
+		setDateTo(filters.date_to || '');
+	}, [filters.date_from, filters.date_to]);
+
 	const monthsForYear = useMemo(() => {
 		if (filters.fiscal_year_id === 'all') return fiscalMonths;
 		return fiscalMonths.filter((month) => String(month.fiscal_year_id) === filters.fiscal_year_id);
@@ -166,6 +175,8 @@ export default function EvaluationResults({
 			next_action: next.next_action ?? filters.next_action,
 			fiscal_year_id: next.fiscal_year_id ?? filters.fiscal_year_id,
 			fiscal_month_id: next.fiscal_month_id ?? filters.fiscal_month_id,
+			date_from: next.date_from ?? filters.date_from ?? '',
+			date_to: next.date_to ?? filters.date_to ?? '',
 		};
 
 		router.get('/forms/evaluation-results', params, {
@@ -175,7 +186,24 @@ export default function EvaluationResults({
 		});
 	}
 
+	function applyDateRange() {
+		applyFilters({
+			date_from: dateFrom,
+			date_to: dateTo,
+			fiscal_year_id: 'all',
+			fiscal_month_id: 'all',
+		});
+	}
+
+	function clearDateRange() {
+		setDateFrom('');
+		setDateTo('');
+		applyFilters({ date_from: '', date_to: '' });
+	}
+
 	function resetFilters() {
+		setDateFrom('');
+		setDateTo('');
 		router.get(
 			'/forms/evaluation-results',
 			{
@@ -185,6 +213,8 @@ export default function EvaluationResults({
 				next_action: 'all',
 				fiscal_year_id: 'all',
 				fiscal_month_id: 'all',
+				date_from: '',
+				date_to: '',
 			},
 			{ preserveState: true, preserveScroll: true, replace: true },
 		);
@@ -198,6 +228,8 @@ export default function EvaluationResults({
 			next_action: filters.next_action,
 			fiscal_year_id: filters.fiscal_year_id,
 			fiscal_month_id: filters.fiscal_month_id,
+			date_from: filters.date_from || '',
+			date_to: filters.date_to || '',
 			export: 'csv',
 		});
 		window.location.href = `/forms/evaluation-results?${params.toString()}`;
@@ -400,7 +432,16 @@ export default function EvaluationResults({
 
 									<Select
 										value={filters.fiscal_year_id}
-										onValueChange={(value) => applyFilters({ fiscal_year_id: value, fiscal_month_id: 'all' })}
+										onValueChange={(value) => {
+											setDateFrom('');
+											setDateTo('');
+											applyFilters({
+												fiscal_year_id: value,
+												fiscal_month_id: 'all',
+												date_from: '',
+												date_to: '',
+											});
+										}}
 									>
 										<SelectTrigger className="w-full">
 											<SelectValue placeholder="Fiscal year" />
@@ -417,7 +458,15 @@ export default function EvaluationResults({
 
 									<Select
 										value={filters.fiscal_month_id}
-										onValueChange={(value) => applyFilters({ fiscal_month_id: value })}
+										onValueChange={(value) => {
+											setDateFrom('');
+											setDateTo('');
+											applyFilters({
+												fiscal_month_id: value,
+												date_from: '',
+												date_to: '',
+											});
+										}}
 									>
 										<SelectTrigger className="w-full">
 											<SelectValue placeholder="Fiscal month" />
@@ -453,6 +502,42 @@ export default function EvaluationResults({
 										<Download className="mr-1.5 h-4 w-4" />
 										Export CSV
 									</Button>
+								</div>
+
+								<div className="flex flex-wrap items-center gap-2">
+									<span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+										Submission date
+									</span>
+									<Input
+										type="date"
+										value={dateFrom}
+										onChange={(e) => setDateFrom(e.target.value)}
+										onKeyDown={(e) => {
+											if (e.key === 'Enter') applyDateRange();
+										}}
+										className="w-[150px]"
+										aria-label="From date"
+									/>
+									<span className="text-xs text-muted-foreground">to</span>
+									<Input
+										type="date"
+										value={dateTo}
+										onChange={(e) => setDateTo(e.target.value)}
+										onKeyDown={(e) => {
+											if (e.key === 'Enter') applyDateRange();
+										}}
+										className="w-[150px]"
+										aria-label="To date"
+									/>
+									<Button type="button" size="sm" variant="outline" onClick={applyDateRange}>
+										<Filter className="mr-1.5 h-3.5 w-3.5" />
+										Apply dates
+									</Button>
+									{(dateFrom || dateTo || filters.date_from || filters.date_to) && (
+										<Button type="button" size="sm" variant="ghost" onClick={clearDateRange}>
+											Clear dates
+										</Button>
+									)}
 								</div>
 							</CardHeader>
 
